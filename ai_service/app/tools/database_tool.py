@@ -126,12 +126,32 @@ class DatabaseTool:
                     timeout=10.0,
                 )
                 if response.status_code == 200:
-                    res_json = response.json()
-                    print(f"\n[RAW DATA FROM SUPABASE]: {res_json}\n")
-                    return res_json
+                    return response.json()
                 else:
                     print(f"[Supabase Error]: {response.status_code} - {response.text}")
                     return []
         except Exception as e:
             print(f"[Network Error]: {str(e)}")
             return []
+
+    # 💡 [เพิ่มฟังก์ชันดึงไอเดียสำรองรายชิ้น]
+    def query_item_by_id(self, item_id: int) -> list:
+        """ดึงข้อมูลอุปกรณ์จาก ID ตรงๆ เพื่อประยุกต์ทำระบบประวัติย้อนหลังในฝั่ง Agent"""
+        sql_query = f"SELECT * FROM public.item_tb WHERE id = {item_id}"
+        try:
+            with httpx.Client() as client:
+                response = client.post(
+                    self.rpc_url,
+                    headers=self.headers,
+                    json={"query": sql_query},
+                    timeout=10.0,
+                )
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    print(
+                        f"[Supabase Fallback ID Query Error]: {response.status_code} - {response.text}"
+                    )
+        except Exception as e:
+            print(f"[Network Error in Fallback Query]: {str(e)}")
+        return []
