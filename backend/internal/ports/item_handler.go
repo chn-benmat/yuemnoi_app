@@ -1,4 +1,3 @@
-// internal/ports/item_handler.go
 package ports
 
 import (

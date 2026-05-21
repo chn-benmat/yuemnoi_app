@@ -9,19 +9,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Chanachai04/yuemnoi_app/backend/internal/adapters/service"
 	"github.com/Chanachai04/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/Chanachai04/yuemnoi_app/backend/internal/ports"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	// ตั้งค่าโหมดการทำงานของ Gin (gin.DebugMode สำหรับเทสต์ / gin.ReleaseMode สำหรับใช้งานจริง)
 	if os.Getenv("GIN_MODE") == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	} else {
@@ -32,17 +31,26 @@ func main() {
 	sbKey := os.Getenv("SUPABASE_ANON_KEY")
 	supabaseClient := supabase.InitSupabaseClient(sbURL, sbKey)
 
-	// ใช้ Logger และ Recovery Middleware (ป้องกันเซิร์ฟเวอร์พังเวลาเกิด Panic โค้ดเอ๋อ)
-	router := ports.SetupRouter(supabaseClient)
-
-	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      router,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+	aiServiceURL := os.Getenv("AI_SERVICE_URL")
+	if aiServiceURL == "" {
+		aiServiceURL = "http://localhost:8000"
 	}
 
-	// รัน Server
+	aiService := service.NewAIService(aiServiceURL)
+	aiHandler := ports.NewAIHandler(aiService)
+
+	router := ports.SetupRouter(supabaseClient, aiHandler)
+
+	// กำหนดค่า HTTP Server
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: router,
+		// ปรับเพิ่ม Read/Write Timeout เพื่อรองรับ LLM / Agent Pipeline ที่อาจใช้เวลาประมวลผลนานกว่า API ทั่วไป
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 90 * time.Second,
+	}
+
+	// รัน Server แบบ Background (Non-blocking)
 	go func() {
 		log.Printf("Server is starting on port %s...", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -50,9 +58,10 @@ func main() {
 		}
 	}()
 
+	// รอรับ Signal สำหรับการทำ Graceful Shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit // โค้ดจะหยุดนิ่งรอตรงนี้ จนกว่าคุณจะกด Ctrl+C ใน Terminal
+	<-quit
 	log.Println("Shutting down server...")
 
 	// เคลียร์ Request ที่ค้างอยู่ให้จบภายใน 5 วินาที

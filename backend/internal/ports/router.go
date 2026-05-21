@@ -1,14 +1,14 @@
-// internal/ports/router.go
 package ports
 
 import (
+	"net/http"
+
 	"github.com/Chanachai04/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/gin-gonic/gin"
 	supa "github.com/nedpals/supabase-go"
-	"net/http"
 )
 
-func SetupRouter(sbClient *supa.Client) *gin.Engine {
+func SetupRouter(sbClient *supa.Client, aiHandler *AIHandler) *gin.Engine {
 
 	// ใช้ Logger และ Recovery Middleware (ป้องกันเซิร์ฟเวอร์พังเวลาเกิด Panic โค้ดเอ๋อ)
 	router := gin.New()
@@ -50,6 +50,9 @@ func SetupRouter(sbClient *supa.Client) *gin.Engine {
 		{
 			rentals.POST("", rentalController.CreateRentalOrder)
 		}
+
+		// ทุกอย่างเกี่ยวกับ AI
+		v1.POST("/chat-ai", aiHandler.HandleChat)
 	}
 
 	return router
