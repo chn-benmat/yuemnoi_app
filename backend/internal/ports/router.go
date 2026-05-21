@@ -52,7 +52,10 @@ func SetupRouter(sbClient *supa.Client, aiHandler *AIHandler) *gin.Engine {
 		}
 
 		// ทุกอย่างเกี่ยวกับ AI
-		v1.POST("/chat-ai", aiHandler.HandleChat)
+		ai := v1.Group("/chat-ai")
+		{
+			ai.POST("", aiHandler.HandleChat)
+		}
 	}
 
 	return router
