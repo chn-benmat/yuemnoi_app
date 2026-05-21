@@ -190,7 +190,6 @@ class AgentExecutor:
                         "id": item_id,
                         "item_name": item.get("item_name"),
                         "price": item.get("price"),
-                        "price_display": f"{item.get('price')}/{unit}",
                         "unit": unit,
                         "image_url": cover_image,
                         "status": item.get("status", "available"),

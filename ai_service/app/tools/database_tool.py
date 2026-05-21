@@ -5,7 +5,6 @@ from config import settings
 
 class DatabaseTool:
     def __init__(self):
-        # เตรียม Header สำหรับต่อเข้า Supabase REST API
         self.headers = {
             "apikey": settings.SUPABASE_KEY,
             "Authorization": f"Bearer {settings.SUPABASE_KEY}",
@@ -32,14 +31,14 @@ class DatabaseTool:
             - updated_at: timestamp with time zone
 
         **กฎสำคัญในการเขียน SQL สำหรับตารางนี้:**
-        1. คอลัมน์ `price` เป็น INTEGER อยู่แล้ว สามารถใช้ตัวดำเนินการเปรียบเทียบเลขตรงๆ ได้เลย เช่น price <= 500, price > 1000
-        2. ค้นหาชื่อสินค้าให้ใช้คำสั่ง ILIKE ร่วมกับเครื่องหมาย % เพื่อให้ค้นหาได้ยืดหยุ่น เช่น item_name ILIKE '%sony%'
-        3. ตอบเฉพาะคำสั่ง SQL ดิบที่เป็นคำสั่ง SELECT เท่านั้น ห้ามใส่ Markdown block (```sql) และห้ามมีอธิบายภาษาคนเด็ดขาด
+        1. ทุกคำสั่ง SQL ที่เขียนขึ้นมา "ต้องใช้ SELECT * เสมอ" ห้ามระบุชื่อคอลัมน์เฉพาะเจาะจง (เช่น ห้ามใช้ SELECT item_name, price) เพราะระบบต้องการดึงข้อมูลทุกคอลัมน์ (รวมถึง id, category, description, item_image_url) ไปใช้แสดงผลการ์ดสินค้าบนหน้าจอ
+        2. คอลัมน์ `price` เป็น INTEGER อยู่แล้ว สามารถใช้ตัวดำเนินการเปรียบเทียบเลขตรงๆ ได้เลย เช่น price <= 500, price > 1000
+        3. ค้นหาชื่อสินค้าให้ใช้คำสั่ง ILIKE ร่วมกับเครื่องหมาย % เพื่อให้ค้นหาได้ยืดหยุ่น เช่น item_name ILIKE '%sony%'
+        4. ตอบเฉพาะคำสั่ง SQL ดิบที่เป็นคำสั่ง SELECT เท่านั้น ห้ามใส่ Markdown block (```sql) และห้ามมีอธิบายภาษาคนเด็ดขาด
         """
 
         system_prompt = f"คุณเป็นผู้เชี่ยวชาญด้าน PostgreSQL และจงเป็นผู้ช่วยเขียนคำสั่งคิวรีให้กับแอปพลิเคชัน 'yuemnoi' นี่คือโครงสร้างตารางและกฎที่คุณต้องทำตามอย่างเคร่งครัด:\n{table_schema}"
 
-        # ประกาศตัวแปรตั้งต้นเพื่อป้องกันปัญหา UnboundLocalError
         sql_command = ""
 
         try:
@@ -56,7 +55,7 @@ class DatabaseTool:
                             },
                         ],
                         "stream": False,
-                        "temperature": 0.0,  # ลดความสุ่มเพื่อให้ได้คำตอบที่แม่นยำ
+                        "temperature": 0.0,
                     },
                     timeout=15.0,
                 )
@@ -65,13 +64,12 @@ class DatabaseTool:
                     f"\n[DEBUG OLLAMA RESPONSE]: {json.dumps(result, indent=2, ensure_ascii=False)}\n"
                 )
 
-                # ดึงข้อความดิบออกจากโครงสร้าง JSON ของผู้บริการโมเดล
+                # ดึงข้อความดิบออกจากโครงสร้าง JSON
                 if "choices" in result and len(result["choices"]) > 0:
                     sql_command = (
                         result["choices"][0]["message"].get("content", "").strip()
                     )
                 else:
-                    # เผื่อ Ollama หรือ Backend ส่งมาในฟอร์แมตดั้งเดิม (Native Format)
                     sql_command = result.get("message", {}).get("content", "").strip()
 
             if not sql_command:
@@ -90,7 +88,6 @@ class DatabaseTool:
             if sql_command.lower().startswith("sql"):
                 sql_command = sql_command[3:].strip()
 
-            # ล้างเครื่องหมายเซมิโคลอนเพื่อป้องกัน 42601 บน Supabase RPC
             sql_command = sql_command.replace(";", "").strip()
             return sql_command
 
@@ -99,7 +96,6 @@ class DatabaseTool:
             return ""
 
     def query_items(self, user_query: str) -> list:
-        """รับคำถาม -> แปลงเป็น SQL -> ยิงไปดึงข้อมูลจาก Supabase RPC"""
         sql_query = self._generate_sql_via_qwen(user_query)
         print(f"[AI Generated SQL]: {sql_query}")
 
@@ -133,25 +129,3 @@ class DatabaseTool:
         except Exception as e:
             print(f"[Network Error]: {str(e)}")
             return []
-
-    # 💡 [เพิ่มฟังก์ชันดึงไอเดียสำรองรายชิ้น]
-    def query_item_by_id(self, item_id: int) -> list:
-        """ดึงข้อมูลอุปกรณ์จาก ID ตรงๆ เพื่อประยุกต์ทำระบบประวัติย้อนหลังในฝั่ง Agent"""
-        sql_query = f"SELECT * FROM public.item_tb WHERE id = {item_id}"
-        try:
-            with httpx.Client() as client:
-                response = client.post(
-                    self.rpc_url,
-                    headers=self.headers,
-                    json={"query": sql_query},
-                    timeout=10.0,
-                )
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    print(
-                        f"[Supabase Fallback ID Query Error]: {response.status_code} - {response.text}"
-                    )
-        except Exception as e:
-            print(f"[Network Error in Fallback Query]: {str(e)}")
-        return []
