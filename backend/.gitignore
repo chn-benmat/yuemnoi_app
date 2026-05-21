@@ -1,0 +1,14 @@
+.env
+.env.local
+*.pem
+*.key
+
+tmp/
+build-errors.log
+
+*.exe
+bin/
+main
+
+.DS_Store
+Thumbs.db
