@@ -1,9 +1,7 @@
-# main.py
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.agent.executor import AgentExecutor
 
@@ -28,15 +26,15 @@ class ChatRequest(BaseModel):
 agent_executor = AgentExecutor()
 
 
+class ChatInput(BaseModel):
+    query: str = Field(..., min_length=1, max_length=200, description="คำถามจากลูกค้า")
+
+
 @app.post("/api/ai/chat")
-async def stream_ai_response(request: ChatRequest):
-    """
-    Endpoint ตัวหลักสำหรับรับคำถามเรื่องการขอยืมอุปกรณ์
-    จะทำการส่งผ่านการประมวลผลออกไปในรูปแบบ Server-Sent Events (SSE) ตัวต่อตัว
-    """
-    return StreamingResponse(
-        agent_executor.run_pipeline(request.query), media_type="text/event-stream"
-    )
+async def stream_ai_response(payload: ChatRequest):
+    user_query = payload.query
+    res = await agent_executor.run_pipeline_non_stream(user_query)
+    return res
 
 
 if __name__ == "__main__":
