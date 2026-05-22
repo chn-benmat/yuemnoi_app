@@ -1,10 +1,6 @@
 class IntentRouter:
     @staticmethod
     def check_needs_google_verification(user_query: str) -> bool:
-        """
-        [วิธีที่ 3] วิเคราะห์ความตั้งใจของผู้ใช้
-        คอยสแกนคีย์เวิร์ดเด็ดที่ส่งผลต่อสเปคและการทำงานทางเทคนิคของอุปกรณ์
-        """
         keywords_requiring_verification = [
             "สเปค",
             "spec",

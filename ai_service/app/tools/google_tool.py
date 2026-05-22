@@ -14,7 +14,6 @@ class GoogleTool:
         }
 
     def search_spec(self, item_name: str, specific_query: str) -> str:
-        """ค้นหาข้อมูลสเปคและรีวิวบน Google เพื่อนำมา Re-check กับข้อมูลในฐานข้อมูล"""
         search_keyword = f"{item_name} official specs {specific_query}"
 
         payload = {
