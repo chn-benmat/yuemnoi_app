@@ -21,7 +21,6 @@
 
 Backend ของ Yuemnoi ถูกพัฒนาด้วยภาษา **Go** โดยใช้ **Gin** เป็น HTTP Framework หลัก และออกแบบตาม **Hexagonal Architecture (Ports & Adapters)** เพื่อให้สามารถแยกส่วนของ Business Logic ออกจาก Infrastructure ได้อย่างสะอาด สามารถเปลี่ยนฐานข้อมูลหรือ External Service ได้โดยไม่กระทบ Core Logic
 
-
 ---
 
 ## 📂 โครงสร้างโปรเจ็ค
@@ -64,7 +63,8 @@ backend/
 ### 🚀 `cmd/server/main.go` — จุดเริ่มต้น
 
 ไฟล์นี้ทำหน้าที่:
-- อ่านค่า **Environment Variables** (`PORT`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `AI_SERVICE_URL`)
+
+- อ่านค่า **Environment Variables** (`PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AI_SERVICE_URL`)
 - สร้าง **Supabase Client** และ **AI Service Adapter**
 - ตั้งค่า **HTTP Server** พร้อม Timeout ที่ปรับให้รองรับ LLM Pipeline (Write Timeout 90 วินาที)
 - รัน Server แบบ **Non-blocking** ด้วย Goroutine
@@ -76,11 +76,11 @@ backend/
 
 ชั้น Domain เป็นหัวใจหลักของระบบ ไม่พึ่งพา Framework หรือ Database ใดๆ
 
-| ไฟล์ | Struct หลัก | คำอธิบาย |
-|:-----|:------------|:---------|
-| `item.go` | `Item`, `Review` | โครงสร้างข้อมูลอุปกรณ์เช่า (ชื่อ, รูปภาพ, หมวดหมู่, สถานะ, ประเภท) และรีวิว |
-| `transaction.go` | `Wallet`, `Transaction` | กระเป๋าเงินของผู้ใช้และธุรกรรมการชำระเงิน (ฝาก/ถอน/จ่ายค่าเช่า) |
-| `user.go` | `Profile`, `Verification` | โปรไฟล์ผู้ใช้ (พิกัด GPS) และข้อมูลการยืนยันตัวตน KYC (NDID/ThaiD) |
+| ไฟล์             | Struct หลัก               | คำอธิบาย                                                                    |
+| :--------------- | :------------------------ | :-------------------------------------------------------------------------- |
+| `item.go`        | `Item`, `Review`          | โครงสร้างข้อมูลอุปกรณ์เช่า (ชื่อ, รูปภาพ, หมวดหมู่, สถานะ, ประเภท) และรีวิว |
+| `transaction.go` | `Wallet`, `Transaction`   | กระเป๋าเงินของผู้ใช้และธุรกรรมการชำระเงิน (ฝาก/ถอน/จ่ายค่าเช่า)             |
+| `user.go`        | `Profile`, `Verification` | โปรไฟล์ผู้ใช้ (พิกัด GPS) และข้อมูลการยืนยันตัวตน KYC (NDID/ThaiD)          |
 
 แต่ละไฟล์ประกาศ **Repository Interface** ไว้ด้วย เพื่อให้ชั้น Adapter ไปเขียน Implementation จริง:
 
@@ -97,15 +97,20 @@ type ItemRepository interface {
 ### 🔌 `internal/adapters/` — Infrastructure Layer
 
 #### `supabase/client.go`
+
 สร้างและตรวจสอบ **Supabase Client** ถ้า URL หรือ Key ว่างจะ **Fatal** ทันทีเพื่อป้องกันไม่ให้ระบบรันโดยไม่มีฐานข้อมูล
 
 #### `supabase/item_repository.go`
+
 Implement `domain.ItemRepository` โดยใช้ Supabase Go SDK:
+
 - **`Insert()`** — เพิ่มข้อมูลอุปกรณ์ใหม่ลงตาราง `item_tb`
 - **`FindAll()`** — ดึงข้อมูลอุปกรณ์เช่าทั้งหมด
 
 #### `service/ai_service.go`
+
 Adapter สำหรับติดต่อกับ **AI Service** (Python FastAPI):
+
 - ส่ง HTTP POST ไปยัง `/api/ai/chat` พร้อม Query และ Chat History
 - ตั้งค่า Connection Pool (MaxIdleConns: 100, Timeout: 60 วินาที)
 - Decode JSON Response และส่งกลับให้ Handler
@@ -115,17 +120,19 @@ Adapter สำหรับติดต่อกับ **AI Service** (Python Fas
 ### 🌐 `internal/ports/` — HTTP Handlers
 
 #### `router.go`
+
 จัดเส้นทาง API ทั้งหมดภายใต้ prefix `/api/v1`:
+
 - ตั้งค่า **CORS** ให้ Flutter เรียกใช้งานได้
 - ใช้ **Logger** และ **Recovery** Middleware
 
 #### API Endpoints
 
-| Method | Endpoint | Handler | คำอธิบาย |
-|:-------|:---------|:--------|:---------|
-| `GET` | `/api/v1/items` | `ItemHandler.GetAllItems` | ดึงรายการอุปกรณ์เช่าทั้งหมด |
-| `POST` | `/api/v1/rentals` | `RentalHandler.CreateRentalOrder` | สร้างใบจองเช่าอุปกรณ์ |
-| `POST` | `/api/v1/chat-ai` | `AIHandler.HandleChat` | ส่งข้อความแชทไปยัง AI และรับคำตอบ |
+| Method | Endpoint          | Handler                           | คำอธิบาย                          |
+| :----- | :---------------- | :-------------------------------- | :-------------------------------- |
+| `GET`  | `/api/v1/items`   | `ItemHandler.GetAllItems`         | ดึงรายการอุปกรณ์เช่าทั้งหมด       |
+| `POST` | `/api/v1/rentals` | `RentalHandler.CreateRentalOrder` | สร้างใบจองเช่าอุปกรณ์             |
+| `POST` | `/api/v1/chat-ai` | `AIHandler.HandleChat`            | ส่งข้อความแชทไปยัง AI และรับคำตอบ |
 
 ---
 
@@ -137,7 +144,7 @@ Adapter สำหรับติดต่อกับ **AI Service** (Python Fas
 GIN_MODE=debug                          # โหมด Gin (debug / release)
 PORT=8080                               # พอร์ตที่เซิร์ฟเวอร์จะรัน
 SUPABASE_URL=https://xxxxx.supabase.co  # URL ของ Supabase Project
-SUPABASE_ANON_KEY=eyJhbGciOi...         # Anon Key ของ Supabase
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...         # Anon Key ของ Supabase
 AI_SERVICE_URL=http://localhost:8000     # URL ของ AI Service (Python)
 ```
 
@@ -146,6 +153,7 @@ AI_SERVICE_URL=http://localhost:8000     # URL ของ AI Service (Python)
 ## 🚀 วิธีรันโปรเจ็ค
 
 ### ข้อกำหนดเบื้องต้น
+
 - [Go](https://go.dev/dl/) เวอร์ชัน 1.26 ขึ้นไป
 - [Air](https://github.com/air-verse/air) (สำหรับ Hot Reload ขณะพัฒนา)
 
@@ -179,17 +187,15 @@ go build -o ./tmp/main ./cmd/server/main.go
 
 ## 📚 เทคโนโลยีที่ใช้
 
-| เทคโนโลยี | เวอร์ชัน | วัตถุประสงค์ |
-|:-----------|:---------|:------------|
-| **Go** | 1.26 | ภาษาหลักในการพัฒนา |
-| **Gin** | 1.12 | HTTP Web Framework |
-| **Supabase Go** | 0.5.0 | SDK เชื่อมต่อฐานข้อมูล Supabase (PostgreSQL) |
-| **godotenv** | 1.5.1 | โหลดตัวแปรสภาพแวดล้อมจากไฟล์ `.env` |
-| **Air** | — | Hot Reload สำหรับ Development |
-| **JWT v5** | 5.3.1 | จัดการ JSON Web Token |
-| **Zap** | 1.28.0 | Structured Logging |
-| **gRPC** | 1.81.1 | รองรับการสื่อสารแบบ gRPC (สำรอง) |
+| เทคโนโลยี       | เวอร์ชัน | วัตถุประสงค์                                 |
+| :-------------- | :------- | :------------------------------------------- |
+| **Go**          | 1.26     | ภาษาหลักในการพัฒนา                           |
+| **Gin**         | 1.12     | HTTP Web Framework                           |
+| **Supabase Go** | 0.5.0    | SDK เชื่อมต่อฐานข้อมูล Supabase (PostgreSQL) |
+| **godotenv**    | 1.5.1    | โหลดตัวแปรสภาพแวดล้อมจากไฟล์ `.env`          |
+| **Air**         | —        | Hot Reload สำหรับ Development                |
+| **JWT v5**      | 5.3.1    | จัดการ JSON Web Token                        |
+| **Zap**         | 1.28.0   | Structured Logging                           |
+| **gRPC**        | 1.81.1   | รองรับการสื่อสารแบบ gRPC (สำรอง)             |
 
 ---
-
-
