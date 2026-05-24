@@ -26,3 +26,15 @@ func (h *ItemHandler) GetAllItems(c *gin.Context) {
 
 	c.JSON(http.StatusOK, items)
 }
+
+// [GET] /api/v1/items/:id - ดึงข้อมูลอุปกรณ์เช่าตาม ID
+func (h *ItemHandler) GetItemByID(c *gin.Context) {
+	id := c.Param("id")
+	item, err := h.repo.FindByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, item)
+}

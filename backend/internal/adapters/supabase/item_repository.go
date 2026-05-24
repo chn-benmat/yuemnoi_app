@@ -43,3 +43,20 @@ func (r *SupabaseItemRepository) FindAll(ctx context.Context) ([]domain.Item, er
 
 	return items, nil
 }
+
+// FindByID ดึงข้อมูลอุปกรณ์เช่าตาม ID จากตาราง item_tb
+func (r *SupabaseItemRepository) FindByID(ctx context.Context, id string) (*domain.Item, error) {
+	var items []domain.Item
+
+	// ดึงข้อมูล ระบุตาราง "item_tb" และเงื่อนไข Where id = ?
+	err := r.client.DB.From("item_tb").Select("*").Eq("id", id).Execute(&items)
+	if err != nil {
+		return nil, fmt.Errorf("supabase find by id failed: %w", err)
+	}
+
+	if len(items) == 0 {
+		return nil, fmt.Errorf("item with ID %s not found", id)
+	}
+
+	return &items[0], nil
+}
