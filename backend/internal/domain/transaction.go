@@ -7,7 +7,7 @@ import (
 
 // Wallet ตรงกับตาราง wallet_tb
 type Wallet struct {
-	ID        int64     `json:"id"`
+	ID        string    `json:"id"`
 	UserID    string    `json:"user_id"`
 	Amount    int       `json:"amount"` // ใน schema ตัวนี้เก็บเป็น integer null
 	CreatedAt time.Time `json:"created_at"`
@@ -16,7 +16,7 @@ type Wallet struct {
 
 // Transaction ตรงกับตาราง transaction_tb
 type Transaction struct {
-	ID        int64     `json:"id"`
+	ID        string    `json:"id"`
 	UserID    string    `json:"user_id"`
 	WalletID  int64     `json:"wallet_id"`
 	BookingID int64     `json:"booking_id"` // ผูกกับรายการจองเช่าอุปกรณ์
