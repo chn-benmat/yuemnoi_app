@@ -28,8 +28,11 @@ type Verification struct {
 type AuthRepository interface {
 	Login(ctx context.Context, email, password string) (string, error)
 	Register(ctx context.Context, email, password string) (string, error)
-	ChangePassword(ctx context.Context, email, newPassword string) error
-	Logout(ctx context.Context, accessToken string) error
+	ChangePassword(ctx context.Context, userToken, newPassword string) error
+	RequestResetOTP(ctx context.Context, email string) error
+	VerifyOTP(ctx context.Context, email, otpCode, newPassword string) error
+	IsEmailExists(ctx context.Context, email string) (bool, error)
+	Logout(ctx context.Context, userToken string) error
 }
 
 type UserRepository interface {

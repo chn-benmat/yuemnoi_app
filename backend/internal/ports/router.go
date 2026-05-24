@@ -35,20 +35,41 @@ func SetupRouter(sbClient *supa.Client, aiHandler *AIHandler) *gin.Engine {
 	// นำเข้าคอนโทรลเลอร์ต่างๆ
 	itemController := NewItemHandler(itemRepo)
 	rentalController := NewRentalHandler()
+	userController := NewUserHandler(supabase.NewSupabaseUserRepository(sbClient))
 
 	// จัดการกลุ่มเส้นทาง API
 	v1 := router.Group("/api/v1")
 	{
+		// ทุกอย่างเกี่ยวกับการยืนยันตัวตน (Authentication)
+		user := v1.Group("/auth")
+		{
+			// POST /api/v1/auth/register
+			user.POST("/register", userController.Register)
+			// POST /api/v1/auth/login
+			user.POST("/login", userController.Login)
+			// POST /api/v1/auth/change-password
+			user.POST("/change-password", userController.ChangePassword)
+			// POST /api/v1/auth/request-reset-otp
+			user.POST("/request-reset-otp", userController.RequestResetOTP)
+			// POST /api/v1/auth/verify-reset-otp
+			user.POST("/verify-reset-otp", userController.VerifyResetOTP)
+			// POST /api/v1/auth/logout
+			user.POST("/logout", userController.Logout)
+		}
 		// ทุกอย่างเกี่ยวกับ Items ปล่อยเช่า
 		items := v1.Group("/items")
 		{
-			items.GET("", itemController.GetAllItems) // GET /api/v1/items
+			// GET /api/v1/items
+			items.GET("", itemController.GetAllItems)
+			// GET /api/v1/items/:id
+			items.GET("/:id", itemController.GetItemByID)
 		}
 
 		// ทุกอย่างเกี่ยวกับการจอง (Rentals)
 		rentals := v1.Group("/rentals")
 		{
 			rentals.POST("", rentalController.CreateRentalOrder)
+
 		}
 
 		// ทุกอย่างเกี่ยวกับ AI
