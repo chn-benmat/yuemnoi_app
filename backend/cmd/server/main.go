@@ -28,7 +28,7 @@ func main() {
 	}
 
 	sbURL := os.Getenv("SUPABASE_URL")
-	sbKey := os.Getenv("SUPABASE_ANON_KEY")
+	sbKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
 	supabaseClient := supabase.InitSupabaseClient(sbURL, sbKey)
 
 	aiServiceURL := os.Getenv("AI_SERVICE_URL")
