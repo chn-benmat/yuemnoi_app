@@ -30,7 +30,7 @@ type AuthRepository interface {
 	Register(ctx context.Context, email, password string) (string, error)
 	ChangePassword(ctx context.Context, userToken, newPassword string) error
 	RequestResetOTP(ctx context.Context, email string) error
-	VerifyOTP(ctx context.Context, email, otpCode, newPassword string) error
+	VerifyOTP(ctx context.Context, email, otpCode string) error
 	IsEmailExists(ctx context.Context, email string) (bool, error)
 	Logout(ctx context.Context, userToken string) error
 }

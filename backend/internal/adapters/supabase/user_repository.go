@@ -93,7 +93,7 @@ func (r *SupabaseUserRepository) RequestResetOTP(ctx context.Context, email stri
 }
 
 // VerifyOTP: ตรวจสอบรหัส 8 หลัก
-func (r *SupabaseUserRepository) VerifyOTP(ctx context.Context, email, otpCode, newPassword string) error {
+func (r *SupabaseUserRepository) VerifyOTP(ctx context.Context, email, otpCode string) error {
 
 	credentials := supabase.VerifyEmailOtpCredentials{
 		Email: email,

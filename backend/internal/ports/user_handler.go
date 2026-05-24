@@ -180,12 +180,12 @@ func (h *UserHandler) VerifyResetOTP(c *gin.Context) {
 	var req UserVerifyOTPResetRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง รหัส OTP ต้องมีความยาว 6 หลัก"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง รหัส OTP ต้องมีความยาว 8 หลัก"})
 		return
 	}
 
 	// เรียกใช้เมธอดที่เราพิชิตตัวแปรอินเทอร์เฟซสำเร็จในรอบที่แล้ว
-	err := h.repo.VerifyOTP(c.Request.Context(), req.Email, req.OTPCode, req.NewPassword)
+	err := h.repo.VerifyOTP(c.Request.Context(), req.Email, req.OTPCode)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "การยืนยันรหัส OTP ล้มเหลว หรือรหัสหมดอายุ: " + err.Error()})
 		return
@@ -193,7 +193,7 @@ func (h *UserHandler) VerifyResetOTP(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  http.StatusOK,
-		"message": "ยืนยัน OTP และเปลี่ยนรหัสผ่านใหม่สำเร็จแล้ว",
+		"message": "ยืนยัน OTP เรียบร้อยแล้ว",
 	})
 }
 
