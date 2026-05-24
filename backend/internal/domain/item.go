@@ -7,7 +7,7 @@ import (
 
 // Item ตรงกับตาราง item_tb ในฐานข้อมูล Supabase
 type Item struct {
-	ID           int64     `json:"id"`
+	ID           string    `json:"id"`
 	UserID       string    `json:"user_id"`
 	ItemName     string    `json:"item_name"`
 	ItemImageUrl []string  `json:"item_image_url"`
@@ -21,7 +21,7 @@ type Item struct {
 
 // Review ตรงกับตาราง review_tb ในฐานข้อมูล Supabase
 type Review struct {
-	ID          int64     `json:"id"`
+	ID          string    `json:"id"`
 	UserID      string    `json:"user_id"`
 	ItemName    string    `json:"item_name"`
 	Rating      string    `json:"rating"` // การให้คะแนน
@@ -33,6 +33,6 @@ type Review struct {
 type ItemRepository interface {
 	Insert(ctx context.Context, item *Item) error
 	FindAll(ctx context.Context) ([]Item, error)
-	// GetByID(ctx context.Context, id int64) (*Item, error)
+	FindByID(ctx context.Context, id string) (*Item, error)
 	// InsertReview(ctx context.Context, review *Review) error
 }

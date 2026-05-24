@@ -15,10 +15,9 @@ func NewAIHandler(aiService *service.AIService) *AIHandler {
 	return &AIHandler{aiService: aiService}
 }
 
-// ChatRequest ปรับให้ตรงสเปกโครงสร้างข้อมูลที่ยิงมาจาก Postman หรือ Frontend
 type ChatRequest struct {
 	Query   string                `json:"query" binding:"required"`
-	History []service.ChatMessage `json:"history"` // ดึง Struct ChatMessage มาจากแพ็กเกจ service
+	History []service.ChatMessage `json:"history"`
 }
 
 // [POST] /api/v1/chat-ai - รับข้อความจากผู้ใช้และส่งต่อไปยัง AI Service
