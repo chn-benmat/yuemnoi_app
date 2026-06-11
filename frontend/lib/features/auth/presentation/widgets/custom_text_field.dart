@@ -4,7 +4,7 @@ import '../../../../core/constants/colors.dart';
 class CustomTextField extends StatelessWidget {
   final String label;
   final String hintText;
-  final IconData prefixIcon;
+  final IconData? prefixIcon;
   final bool obscureText;
   final Widget? suffixIcon;
   final TextEditingController? controller;
@@ -15,7 +15,7 @@ class CustomTextField extends StatelessWidget {
     super.key,
     required this.label,
     required this.hintText,
-    required this.prefixIcon,
+    this.prefixIcon,
     this.obscureText = false,
     this.suffixIcon,
     this.controller,
@@ -62,11 +62,13 @@ class CustomTextField extends StatelessWidget {
               color: Colors.black38,
               fontSize: 16,
             ),
-            prefixIcon: Icon(
-              prefixIcon,
-              color: AppColors.iconcolor,
-              size: 22,
-            ),
+            prefixIcon: prefixIcon != null
+                ? Icon(
+                    prefixIcon,
+                    color: AppColors.iconcolor,
+                    size: 22,
+                  )
+                : null,
             suffixIcon: suffixIcon,
             filled: true,
             fillColor: AppColors.textinput,

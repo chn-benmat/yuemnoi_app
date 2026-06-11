@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/features/splashscreen/presentation/pages/splashscreen.dart';
 import 'core/theme/app_theme.dart';
-import 'features/splashscreen/presentation/pages/splashscreen.dart';
 
 class YuemnoiApp extends StatelessWidget {
   const YuemnoiApp({super.key});
