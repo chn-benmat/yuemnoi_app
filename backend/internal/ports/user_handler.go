@@ -33,7 +33,7 @@ type UserRequestResetOTP struct {
 
 type UserVerifyOTPResetRequest struct {
 	Email       string `json:"email" binding:"required,email"`
-	OTPCode     string `json:"otp_code" binding:"required,len=8"`
+	OTPCode     string `json:"otp_code" binding:"required,len=6,numeric"`
 	NewPassword string `json:"new_password" binding:"required,min=6"`
 }
 
@@ -180,7 +180,7 @@ func (h *UserHandler) VerifyResetOTP(c *gin.Context) {
 	var req UserVerifyOTPResetRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง รหัส OTP ต้องมีความยาว 8 หลัก"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง รหัส OTP ต้องเป็นตัวเลข 6 หลัก"})
 		return
 	}
 

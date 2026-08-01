@@ -35,6 +35,10 @@ type AuthRepository interface {
 	Logout(ctx context.Context, userToken string) error
 }
 
+type TokenVerifier interface {
+	UserIDFromToken(ctx context.Context, userToken string) (string, error)
+}
+
 type UserRepository interface {
 	UpdateProfile(ctx context.Context, profile *Profile) error
 	GetProfileByUserID(ctx context.Context, userID string) (*Profile, error)

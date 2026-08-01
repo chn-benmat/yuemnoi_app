@@ -1,8 +1,6 @@
 import json
-import asyncio
 import httpx
 from config import settings
-from .router import IntentRouter
 from ..tools.database_tool import DatabaseTool
 from ..tools.google_tool import GoogleTool
 from typing import List, Optional
@@ -10,9 +8,16 @@ from typing import List, Optional
 
 class AgentExecutor:
     def __init__(self):
-        self.router = IntentRouter()
         self.db_tool = DatabaseTool()
         self.google_tool = GoogleTool()
+
+    async def _get_reference_context(
+        self, cleaned_query: str, db_results: list
+    ) -> tuple[str, str]:
+        if db_results:
+            return "", "using_supabase"
+
+        return await self.google_tool.search_spec(specific_query=cleaned_query)
 
     async def run_pipeline_non_stream(
         self, user_query: str, history: Optional[List[dict]] = None
@@ -73,13 +78,11 @@ class AgentExecutor:
             print(f"[DB Error]: {str(e)}")
             db_results = []
 
-        # สแกนหาข้อมูลบน Google สเปคเสริม
-        needs_google = self.router.check_needs_google_verification(cleaned_query)
-        google_context = ""
-
-        if needs_google and db_results:
-            target_item = db_results[0].get("item_name", "")
-            google_context = self.google_tool.search_spec(target_item, cleaned_query)
+        # ใช้ข้อมูล Supabase เป็นหลัก และค้น Google เฉพาะเมื่อไม่พบข้อมูลในฐานข้อมูล
+        google_context, search_status = await self._get_reference_context(
+            cleaned_query=cleaned_query,
+            db_results=db_results,
+        )
 
         # ตรรกะแปลงประวัติการแชท (Chat History Loop)
         formatted_history = ""
@@ -110,6 +113,8 @@ class AgentExecutor:
         1. สวมบทบาทเป็นผู้หญิงสุภาพ อบอุ่น นุ่มนวล ลงท้ายด้วย "ค่ะ" หรือ "คะ" ให้ถูกต้องตามหลักภาษาไทยเสมอ (ห้ามใช้คำว่า "ครับ")
         2. อ่านประวัติและเลือกตอบเฉพาะอุปกรณ์ในคลังระบบที่ตรงความต้องการของลูกค้าที่สุดเพียงชิ้นเดียวหรือตามที่คุยค้างไว้ ห้ามใช้คำว่า "ขาย"
         3. ตอบกลับเป็นรูปแบบ JSON โครงสร้างนี้เท่านั้น ห้ามเกริ่นนำภาษาคนนอกก้อน JSON เด็ดขาด: {{ "answer": "ข้อความแชทสุภาพที่คุยกับลูกค้า", "selected_item_id": ไอดีของสินค้าในคลังที่คุณเลือกตอบ (ระบุเป็นตัวเลข bigint หรือ null หากไม่เจอชิ้นที่ตรงเงื่อนไขเลย) }}
+        4. หากมีข้อมูลจากระบบ yuemnoi ให้ใช้ข้อมูลนั้นเป็นแหล่งหลักและห้ามอ้างว่าได้ตรวจสอบจาก Google
+        5. หากไม่มีข้อมูลจากระบบและมีข้อมูลจาก Google ให้ตรวจสอบอย่างน้อย 2 แหล่งก่อนนำมาอ้างอิง ให้ความสำคัญกับเว็บไซต์ผู้ผลิตหรือแหล่งข้อมูลทางการ หากแหล่งข้อมูลไม่ตรงกันหรือมีไม่ถึง 2 แหล่ง ให้แจ้งลูกค้าว่ายังยืนยันข้อมูลนั้นไม่ได้ ห้ามแต่งข้อมูลที่ไม่มีในแหล่งอ้างอิง
         """
 
         ai_answer = "ขออภัยค่ะ ระบบเกิดข้อผิดพลาดในการประมวลผลข้อความชั่วคราว"
@@ -119,7 +124,7 @@ class AgentExecutor:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    f"{settings.VLLM_ENDPOINT}/chat/completions",
+                    f"{settings.OLLAMA_ENDPOINT}/chat/completions",
                     json={
                         "model": settings.MODEL_NAME,
                         "messages": [{"role": "user", "content": final_prompt}],
@@ -201,9 +206,7 @@ class AgentExecutor:
         # ส่ง JSON
         return {
             "status": "success",
-            "search_status": (
-                "skipping_google" if not google_context else "checked_google"
-            ),
+            "search_status": search_status,
             "items_found": len(recommended_items),
             "answer": ai_answer,
             "recommended_items": recommended_items,

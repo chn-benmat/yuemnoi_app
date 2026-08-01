@@ -106,6 +106,9 @@ Implement `domain.ItemRepository` โดยใช้ Supabase Go SDK:
 
 - **`Insert()`** — เพิ่มข้อมูลอุปกรณ์ใหม่ลงตาราง `item_tb`
 - **`FindAll()`** — ดึงข้อมูลอุปกรณ์เช่าทั้งหมด
+- **`FindByID()`** — ดึงข้อมูลอุปกรณ์ตาม ID
+- **`Update()`** — แก้ไขข้อมูลโดยตรวจทั้ง ID และเจ้าของรายการ
+- **`Delete()`** — ลบข้อมูลโดยตรวจทั้ง ID และเจ้าของรายการ
 
 #### `service/ai_service.go`
 
@@ -131,8 +134,44 @@ Adapter สำหรับติดต่อกับ **AI Service** (Python Fas
 | Method | Endpoint          | Handler                           | คำอธิบาย                          |
 | :----- | :---------------- | :-------------------------------- | :-------------------------------- |
 | `GET`  | `/api/v1/items`   | `ItemHandler.GetAllItems`         | ดึงรายการอุปกรณ์เช่าทั้งหมด       |
+| `GET`  | `/api/v1/items/:id` | `ItemHandler.GetItemByID`       | ดึงข้อมูลอุปกรณ์ตาม ID             |
+| `POST` | `/api/v1/items`   | `ItemHandler.CreateItem`          | เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ |
+| `PUT`  | `/api/v1/items/:id` | `ItemHandler.UpdateItem`        | แก้ไขอุปกรณ์ของเจ้าของรายการ       |
+| `DELETE` | `/api/v1/items/:id` | `ItemHandler.DeleteItem`      | ลบอุปกรณ์ของเจ้าของรายการ          |
 | `POST` | `/api/v1/rentals` | `RentalHandler.CreateRentalOrder` | สร้างใบจองเช่าอุปกรณ์             |
 | `POST` | `/api/v1/chat-ai` | `AIHandler.HandleChat`            | ส่งข้อความแชทไปยัง AI และรับคำตอบ |
+
+คำสั่ง `POST`, `PUT` และ `DELETE` ของ Items ต้องส่ง Supabase access token:
+
+```http
+Authorization: Bearer <SUPABASE_ACCESS_TOKEN>
+Content-Type: application/json
+```
+
+ตัวอย่างเพิ่มอุปกรณ์:
+
+```json
+{
+  "item_name": "กล้องถ่ายวิดีโอ 4K",
+  "item_image_url": ["https://example.com/camera.jpg"],
+  "description": "กล้องพร้อมแบตเตอรี่และกระเป๋า",
+  "category": "camera",
+  "price": 2500,
+  "status": "available",
+  "type": "daily"
+}
+```
+
+ตัวอย่างแก้ไขเฉพาะบางฟิลด์:
+
+```json
+{
+  "price": 2200,
+  "status": "available"
+}
+```
+
+`user_id` จะถูกอ่านจาก access token โดย Backend และไม่รับค่าจาก request body
 
 ---
 
@@ -144,7 +183,7 @@ Adapter สำหรับติดต่อกับ **AI Service** (Python Fas
 GIN_MODE=debug                          # โหมด Gin (debug / release)
 PORT=8080                               # พอร์ตที่เซิร์ฟเวอร์จะรัน
 SUPABASE_URL=https://xxxxx.supabase.co  # URL ของ Supabase Project
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...         # Anon Key ของ Supabase
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi... # Service Role Key (ใช้เฉพาะ Backend ห้ามใส่ใน Flutter)
 AI_SERVICE_URL=http://localhost:8000     # URL ของ AI Service (Python)
 ```
 
@@ -156,6 +195,15 @@ AI_SERVICE_URL=http://localhost:8000     # URL ของ AI Service (Python)
 
 - [Go](https://go.dev/dl/) เวอร์ชัน 1.26 ขึ้นไป
 - [Air](https://github.com/air-verse/air) (สำหรับ Hot Reload ขณะพัฒนา)
+
+### ติดตั้ง Dependencies
+
+หลังจาก clone โปรเจกต์ ให้เข้าไปที่โฟลเดอร์ `backend` และติดตั้ง package ที่ระบุไว้ใน `go.mod` ด้วยคำสั่ง:
+
+```bash
+cd backend
+go mod tidy
+```
 
 ### รันด้วย Air (แนะนำสำหรับการพัฒนา)
 

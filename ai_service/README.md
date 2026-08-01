@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Qwen](https://img.shields.io/badge/Qwen_2.5-7B-7C3AED?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/Qwen)
+[![Qwen](https://img.shields.io/badge/Qwen_2.5-7B-7C3AED?style=for-the-badge&logo=ollama&logoColor=white)](https://ollama.com/library/qwen2.5)
 
 <br/>
 
@@ -29,7 +29,7 @@ AI Service ของ Yuemnoi เป็น **Agentic AI Pipeline** ที่อ�
 |:-------:|:-----|:-----------|
 | ① | **Guard & Filter** | ตรวจสอบความยาว, กรองคำถามทั่วไป/นอกเรื่องธุรกิจออก |
 | ② | **Database Query** | ใช้ Qwen แปลงภาษาคนเป็น SQL แล้วค้นข้อมูลอุปกรณ์จาก Supabase |
-| ③ | **Google Verification** | ถ้าคำถามเกี่ยวกับสเปคทางเทคนิค จะดึงข้อมูลเสริมจาก Google |
+| ③ | **Google Fallback** | ค้น Google เฉพาะเมื่อ Supabase ไม่พบข้อมูล แล้วส่งหลายแหล่งให้ AI ตรวจสอบก่อนตอบ |
 | ④ | **LLM Response** | รวมข้อมูลทั้งหมด + Chat History ส่งให้ Qwen สร้างคำตอบ JSON |
 | ⑤ | **Item Selection** | กรองเฉพาะอุปกรณ์ที่ AI เลือกส่งกลับไปแสดงผลเป็นการ์ด |
 
@@ -49,8 +49,7 @@ ai_service/
     ├── 📄 __init__.py
     │
     ├── 📁 agent/                         # 🧠 หน่วยสมองกลางของระบบ AI
-    │   ├── 📄 executor.py                #    AgentExecutor — ตัวควบคุม Pipeline หลัก
-    │   └── 📄 router.py                  #    IntentRouter — วิเคราะห์ความตั้งใจของผู้ใช้
+    │   └── 📄 executor.py                #    AgentExecutor — ตัวควบคุม Pipeline หลัก
     │
     └── 📁 tools/                         # 🔧 เครื่องมือที่ Agent ใช้ในการดึงข้อมูล
         ├── 📄 database_tool.py           #    DatabaseTool — แปลงภาษาคนเป็น SQL + ค้นฐานข้อมูล
@@ -92,9 +91,8 @@ async def stream_ai_response(payload: ChatRequest):
 | `SUPABASE_URL` | URL ของ Supabase Project | — (ต้องกำหนด) |
 | `SUPABASE_KEY` | API Key ของ Supabase | — (ต้องกำหนด) |
 | `SERPER_API_KEY` | API Key สำหรับ Serper.dev (Google Search) | — (ต้องกำหนด) |
-| `HF_TOKEN` | Token สำหรับดาวน์โหลดโมเดลจาก Hugging Face | — (ต้องกำหนด) |
-| `MODEL_NAME` | ชื่อโมเดล LLM ที่ใช้งาน | `Qwen/Qwen2.5-7B-Instruct` |
-| `VLLM_ENDPOINT` | Endpoint ของ vLLM Server | `http://localhost:8000/v1` |
+| `MODEL_NAME` | ชื่อโมเดล Ollama ที่ใช้งาน | `qwen2.5:7b` |
+| `OLLAMA_ENDPOINT` | OpenAI-compatible endpoint ของ Ollama | `http://localhost:11434/v1` |
 
 ---
 
@@ -115,12 +113,13 @@ async def stream_ai_response(payload: ChatRequest):
 - LLM จะแปลงคำถามเป็น SQL อัตโนมัติ (Text-to-SQL)
 
 #### 3. 🔍 Google Verification
-- ใช้ `IntentRouter` ตรวจสอบว่าคำถามต้องการข้อมูลสเปคทางเทคนิคหรือไม่
-- ถ้าต้องการ → เรียก `GoogleTool.search_spec()` ดึงข้อมูลสเปคเสริมจากเว็บ
+- ใช้ข้อมูลจาก Supabase โดยตรงเมื่อค้นพบสินค้า และไม่เรียก Google
+- เรียก `GoogleTool.search_spec()` เป็น fallback เมื่อ Supabase ไม่พบข้อมูล โดยไม่พึ่ง keyword
+- ส่งชื่อแหล่งข้อมูล URL และข้อมูลสรุปสูงสุด 5 แหล่งให้ AI ตรวจสอบก่อนตอบ
 
 #### 4. 💬 LLM Response Generation
 - รวม **ประวัติแชท** + **ข้อมูลจาก DB** + **ข้อมูลจาก Google** + **คำถามใหม่**
-- ส่ง Prompt ไปยัง **Qwen 2.5** ผ่าน vLLM Endpoint
+- ส่ง Prompt ไปยัง **Qwen 2.5 7B** ที่รันภายในเครื่องผ่าน Ollama
 - บังคับให้โมเดลตอบเป็น **JSON** รูปแบบ:
   ```json
   {
@@ -143,20 +142,13 @@ async def stream_ai_response(payload: ChatRequest):
   }
   ```
 
----
+ค่า `search_status` ที่เป็นไปได้:
 
-### 🔀 `app/agent/router.py` — IntentRouter
-
-ทำหน้าที่ **วิเคราะห์ความตั้งใจของผู้ใช้** ว่าคำถามนั้นต้องการข้อมูลสเปคจาก Google หรือไม่ โดยสแกนคีย์เวิร์ดที่บ่งบอกความต้องการเชิงเทคนิค:
-
-```python
-keywords_requiring_verification = [
-    "สเปค", "spec", "ถ่าย 4k", "กันน้ำ", "เล่นเกม",
-    "ไหวไหม", "รองรับ", "ของแท้ไหม", "เวอร์ชันไหน"
-]
-```
-
-ถ้าพบคีย์เวิร์ดเหล่านี้ → ระบบจะดึงข้อมูลจาก Google มาเป็นบริบทเสริมให้ AI ตอบได้แม่นยำขึ้น
+- `using_supabase` — พบข้อมูลใน Supabase และไม่ได้เรียก Google
+- `checked_google` — ค้นสำเร็จและมีแหล่งข้อมูลส่งให้ AI ตรวจสอบ
+- `google_no_results` — Google ไม่พบผลลัพธ์ที่ใช้เป็นบริบทได้
+- `google_search_failed` — เรียกบริการค้นหาไม่สำเร็จ
+- `skipping_google` — request ไม่ผ่านตัวกรองเบื้องต้น เช่น คำถามยาวเกินกำหนด
 
 ---
 
@@ -200,12 +192,9 @@ SUPABASE_KEY=eyJhbGciOi...
 # Google Search (Serper.dev)
 SERPER_API_KEY=your_serper_api_key
 
-# Hugging Face
-HF_TOKEN=hf_xxxxx
-
-# LLM Model Configuration
-MODEL_NAME=Qwen/Qwen2.5-7B-Instruct
-VLLM_ENDPOINT=http://localhost:8000/v1
+# Local LLM ผ่าน Ollama
+MODEL_NAME=qwen2.5:7b
+OLLAMA_ENDPOINT=http://localhost:11434/v1
 ```
 
 ---
@@ -214,7 +203,7 @@ VLLM_ENDPOINT=http://localhost:8000/v1
 
 ### ข้อกำหนดเบื้องต้น
 - [Python](https://www.python.org/downloads/) เวอร์ชัน 3.10 ขึ้นไป
-- [vLLM](https://docs.vllm.ai/) หรือ Ollama สำหรับรันโมเดล Qwen 2.5 ในเครื่อง
+- [Ollama](https://ollama.com/download) สำหรับรันโมเดล Qwen 2.5 7B ภายในเครื่อง
 - API Key จาก [Serper.dev](https://serper.dev/) สำหรับ Google Search
 
 ### ติดตั้ง Dependencies
@@ -232,11 +221,14 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### รัน vLLM Server (ต้องรันก่อน)
+### ดาวน์โหลดและรันโมเดล Local ด้วย Ollama
 
-```bash
-vllm serve Qwen/Qwen2.5-7B-Instruct --port 8000
+```powershell
+ollama pull qwen2.5:7b
+ollama run qwen2.5:7b
 ```
+
+Ollama เปิด API ที่ `http://localhost:11434` โดยค่าเริ่มต้น
 
 ### รัน AI Service
 
@@ -270,7 +262,7 @@ curl -X POST http://localhost:8000/api/ai/chat \
 | **Pydantic Settings** | 2.2.1 | จัดการ Configuration & Environment Variables |
 | **HTTPX** | 0.27.0 | HTTP Client แบบ Async/Sync |
 | **Qwen 2.5** | 7B-Instruct | โมเดลภาษาสำหรับสร้างคำตอบและแปลง Text-to-SQL |
-| **vLLM** | — | Inference Engine สำหรับเร่งความเร็วโมเดล |
+| **Ollama** | — | รัน Qwen 2.5 7B ภายในเครื่องและให้บริการ API ที่พอร์ต 11434 |
 | **Serper.dev** | — | Google Search API สำหรับดึงข้อมูลสเปค |
 | **Supabase** | — | ฐานข้อมูล PostgreSQL (ผ่าน REST API) |
 

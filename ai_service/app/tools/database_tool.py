@@ -44,7 +44,7 @@ class DatabaseTool:
         try:
             with httpx.Client() as client:
                 response = client.post(
-                    f"{settings.VLLM_ENDPOINT}/chat/completions",
+                    f"{settings.OLLAMA_ENDPOINT}/chat/completions",
                     json={
                         "model": settings.MODEL_NAME,
                         "messages": [

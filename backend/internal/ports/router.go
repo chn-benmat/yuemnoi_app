@@ -32,10 +32,11 @@ func SetupRouter(sbClient *supa.Client, aiHandler *AIHandler) *gin.Engine {
 	})
 
 	itemRepo := supabase.NewSupabaseItemRepository(sbClient)
+	authRepo := supabase.NewSupabaseUserRepository(sbClient)
 	// นำเข้าคอนโทรลเลอร์ต่างๆ
-	itemController := NewItemHandler(itemRepo)
+	itemController := NewItemHandler(itemRepo, authRepo)
 	rentalController := NewRentalHandler()
-	userController := NewUserHandler(supabase.NewSupabaseUserRepository(sbClient))
+	userController := NewUserHandler(authRepo)
 
 	// จัดการกลุ่มเส้นทาง API
 	v1 := router.Group("/api/v1")
@@ -61,8 +62,14 @@ func SetupRouter(sbClient *supa.Client, aiHandler *AIHandler) *gin.Engine {
 		{
 			// GET /api/v1/items
 			items.GET("", itemController.GetAllItems)
+			// POST /api/v1/items
+			items.POST("", itemController.CreateItem)
 			// GET /api/v1/items/:id
 			items.GET("/:id", itemController.GetItemByID)
+			// PUT /api/v1/items/:id
+			items.PUT("/:id", itemController.UpdateItem)
+			// DELETE /api/v1/items/:id
+			items.DELETE("/:id", itemController.DeleteItem)
 		}
 
 		// ทุกอย่างเกี่ยวกับการจอง (Rentals)

@@ -3,7 +3,6 @@ package supabase
 import (
 	"context"
 	"fmt"
-	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
 	"github.com/nedpals/supabase-go"
 	"strings"
 )
@@ -12,10 +11,22 @@ type SupabaseUserRepository struct {
 	client *supabase.Client
 }
 
-func NewSupabaseUserRepository(sbClient *supabase.Client) domain.AuthRepository {
+func NewSupabaseUserRepository(sbClient *supabase.Client) *SupabaseUserRepository {
 	return &SupabaseUserRepository{
 		client: sbClient,
 	}
+}
+
+func (r *SupabaseUserRepository) UserIDFromToken(ctx context.Context, userToken string) (string, error) {
+	user, err := r.client.Auth.User(ctx, userToken)
+	if err != nil {
+		return "", fmt.Errorf("invalid access token: %w", err)
+	}
+	if user == nil || user.ID == "" {
+		return "", fmt.Errorf("access token does not contain a user")
+	}
+
+	return user.ID, nil
 }
 
 // Login ตรวจสอบสิทธิ์ผ่าน Supabase Auth และส่ง Access Token กลับออกไป
@@ -80,7 +91,7 @@ func (r *SupabaseUserRepository) ChangePassword(ctx context.Context, userToken, 
 	return nil
 }
 
-// RequestResetOTP: สั่งให้ Supabase ส่งรหัส OTP 8 หลักไปที่อีเมลของผู้ใช้
+// RequestResetOTP: สั่งให้ Supabase ส่งรหัส OTP 6 หลักไปที่อีเมลของผู้ใช้
 func (r *SupabaseUserRepository) RequestResetOTP(ctx context.Context, email string) error {
 	cleanedEmail := strings.TrimSpace(email)
 
@@ -92,7 +103,7 @@ func (r *SupabaseUserRepository) RequestResetOTP(ctx context.Context, email stri
 	return nil
 }
 
-// VerifyOTP: ตรวจสอบรหัส 8 หลัก
+// VerifyOTP: ตรวจสอบรหัส 6 หลัก
 func (r *SupabaseUserRepository) VerifyOTP(ctx context.Context, email, otpCode string) error {
 
 	credentials := supabase.VerifyEmailOtpCredentials{

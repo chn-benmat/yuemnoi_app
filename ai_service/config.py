@@ -10,12 +10,9 @@ class Settings(BaseSettings):
     # ใช้ Serper.dev สำหรับดึงสเปคอุปกรณ์ภายนอก
     SERPER_API_KEY: str
 
-    # Token สำหรับดาวน์โหลดโมเดล Qwen จาก Hugging Face
-    HF_TOKEN: str
-
-    # เลือกขนาดโมเดล Qwen หรือรันผ่าน vLLM Local Endpoint
-    MODEL_NAME: str = "Qwen/Qwen2.5-7B-Instruct"
-    VLLM_ENDPOINT: str = "http://localhost:8000/v1"  # กรณีใช้ vLLM เร่งความเร็วโมเดล
+    # โมเดล Qwen ที่รันภายในเครื่องผ่าน Ollama
+    MODEL_NAME: str = "qwen2.5:7b"
+    OLLAMA_ENDPOINT: str = "http://localhost:11434/v1"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
