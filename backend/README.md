@@ -131,15 +131,15 @@ Adapter สำหรับติดต่อกับ **AI Service** (Python Fas
 
 #### API Endpoints
 
-| Method | Endpoint          | Handler                           | คำอธิบาย                          |
-| :----- | :---------------- | :-------------------------------- | :-------------------------------- |
-| `GET`  | `/api/v1/items`   | `ItemHandler.GetAllItems`         | ดึงรายการอุปกรณ์เช่าทั้งหมด       |
-| `GET`  | `/api/v1/items/:id` | `ItemHandler.GetItemByID`       | ดึงข้อมูลอุปกรณ์ตาม ID             |
-| `POST` | `/api/v1/items`   | `ItemHandler.CreateItem`          | เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ |
-| `PUT`  | `/api/v1/items/:id` | `ItemHandler.UpdateItem`        | แก้ไขอุปกรณ์ของเจ้าของรายการ       |
-| `DELETE` | `/api/v1/items/:id` | `ItemHandler.DeleteItem`      | ลบอุปกรณ์ของเจ้าของรายการ          |
-| `POST` | `/api/v1/rentals` | `RentalHandler.CreateRentalOrder` | สร้างใบจองเช่าอุปกรณ์             |
-| `POST` | `/api/v1/chat-ai` | `AIHandler.HandleChat`            | ส่งข้อความแชทไปยัง AI และรับคำตอบ |
+| Method   | Endpoint            | Handler                           | คำอธิบาย                            |
+| :------- | :------------------ | :-------------------------------- | :---------------------------------- |
+| `GET`    | `/api/v1/items`     | `ItemHandler.GetAllItems`         | ดึงรายการอุปกรณ์เช่าทั้งหมด         |
+| `GET`    | `/api/v1/items/:id` | `ItemHandler.GetItemByID`         | ดึงข้อมูลอุปกรณ์ตาม ID              |
+| `POST`   | `/api/v1/items`     | `ItemHandler.CreateItem`          | เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ |
+| `PUT`    | `/api/v1/items/:id` | `ItemHandler.UpdateItem`          | แก้ไขอุปกรณ์ของเจ้าของรายการ        |
+| `DELETE` | `/api/v1/items/:id` | `ItemHandler.DeleteItem`          | ลบอุปกรณ์ของเจ้าของรายการ           |
+| `POST`   | `/api/v1/rentals`   | `RentalHandler.CreateRentalOrder` | สร้างใบจองเช่าอุปกรณ์               |
+| `POST`   | `/api/v1/chat-ai`   | `AIHandler.HandleChat`            | ส่งข้อความแชทไปยัง AI และรับคำตอบ   |
 
 คำสั่ง `POST`, `PUT` และ `DELETE` ของ Items ต้องส่ง Supabase access token:
 
@@ -209,6 +209,7 @@ go mod tidy
 
 ```bash
 cd backend
+go install github.com/air-verse/air@latest
 air
 ```
 
