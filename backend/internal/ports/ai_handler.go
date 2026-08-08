@@ -3,26 +3,21 @@ package ports
 import (
 	"net/http"
 
-	"github.com/Chanachai04/yuemnoi_app/backend/internal/adapters/service"
+	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
 	"github.com/gin-gonic/gin"
 )
 
 type AIHandler struct {
-	aiService *service.AIService
+	aiService domain.AIService
 }
 
-func NewAIHandler(aiService *service.AIService) *AIHandler {
+func NewAIHandler(aiService domain.AIService) *AIHandler {
 	return &AIHandler{aiService: aiService}
-}
-
-type ChatRequest struct {
-	Query   string                `json:"query" binding:"required"`
-	History []service.ChatMessage `json:"history"`
 }
 
 // [POST] /api/v1/chat-ai - รับข้อความจากผู้ใช้และส่งต่อไปยัง AI Service
 func (h *AIHandler) HandleChat(c *gin.Context) {
-	var req ChatRequest
+	var req domain.ChatRequest
 	// 1. ตรวจสอบและถอดรหัส JSON Payload จาก HTTP Request
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})

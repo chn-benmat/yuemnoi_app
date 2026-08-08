@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../auth/presentation/pages/login.dart';
+import '../../../home/presentation/pages/home.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -12,21 +14,24 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                const LoginScreen(),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(opacity: animation, child: child);
-                },
-            transitionDuration: const Duration(milliseconds: 600),
-          ),
-        );
-      }
-    });
+    _openNextPage();
+  }
+
+  Future<void> _openNextPage() async {
+    await Future<void>.delayed(const Duration(seconds: 3));
+    final isAuthenticated = await AuthSession.restore();
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder<void>(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            isAuthenticated ? const HomeScreen() : const LoginScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 600),
+      ),
+    );
   }
 
   @override
@@ -39,7 +44,7 @@ class _SplashScreenState extends State<SplashScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF8F2EF5), Color(0xFF7400C9), Color(0xFF4C008A)],
+            colors: [Color(0xFF811CD9), Color(0xFF7400C9), Color(0xFFC185FF)],
             stops: [0.0, 0.5, 1.0],
           ),
         ),

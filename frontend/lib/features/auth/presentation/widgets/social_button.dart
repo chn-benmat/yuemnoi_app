@@ -21,7 +21,7 @@ class SocialButton extends StatelessWidget {
         child: OutlinedButton(
           onPressed: onPressed,
           style: OutlinedButton.styleFrom(
-            backgroundColor: AppColors.textinput,
+            backgroundColor: AppColors.bgFieldColor,
             side: BorderSide.none,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
@@ -31,18 +31,12 @@ class SocialButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(
-                iconPath,
-                width: 22,
-                height: 22,
-                fit: BoxFit.contain,
-              ),
+              Image.asset(iconPath, width: 22, height: 22, fit: BoxFit.contain),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
                   text,
                   style: const TextStyle(
-                    fontFamily: 'Kanit',
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,

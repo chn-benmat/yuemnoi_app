@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/constants/colors.dart';
 
 class CustomTextField extends StatelessWidget {
@@ -10,6 +11,7 @@ class CustomTextField extends StatelessWidget {
   final TextEditingController? controller;
   final String? Function(String?)? validator;
   final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
 
   const CustomTextField({
     super.key,
@@ -21,12 +23,13 @@ class CustomTextField extends StatelessWidget {
     this.controller,
     this.validator,
     this.keyboardType,
+    this.inputFormatters,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -34,15 +37,16 @@ class CustomTextField extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4.0, bottom: 8.0),
           child: Text(
             label,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ) ?? const TextStyle(
-              fontFamily: 'Kanit',
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
+            style:
+                theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.labelColor,
+                ) ??
+                const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.labelColor,
+                ),
           ),
         ),
         TextFormField(
@@ -50,29 +54,24 @@ class CustomTextField extends StatelessWidget {
           obscureText: obscureText,
           validator: validator,
           keyboardType: keyboardType,
-          style: const TextStyle(
-            fontFamily: 'Kanit',
-            fontSize: 16,
-            color: Colors.black87,
-          ),
+          inputFormatters: inputFormatters,
+          style: const TextStyle(fontSize: 16, color: Colors.black87),
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: const TextStyle(
-              fontFamily: 'Kanit',
-              color: Colors.black38,
+              color: AppColors.hintTextColor,
               fontSize: 16,
             ),
             prefixIcon: prefixIcon != null
-                ? Icon(
-                    prefixIcon,
-                    color: AppColors.iconcolor,
-                    size: 22,
-                  )
+                ? Icon(prefixIcon, color: AppColors.fieldIconColor, size: 22)
                 : null,
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: AppColors.textinput,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            fillColor: AppColors.bgFieldColor,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 16,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(30),
               borderSide: BorderSide.none,
@@ -84,28 +83,19 @@ class CustomTextField extends StatelessWidget {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(30),
               borderSide: const BorderSide(
-                color: AppColors.maincolor,
+                color: AppColors.primaryColor,
                 width: 1.5,
               ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(30),
-              borderSide: const BorderSide(
-                color: Colors.redAccent,
-                width: 1,
-              ),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(30),
-              borderSide: const BorderSide(
-                color: Colors.redAccent,
-                width: 1.5,
-              ),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
             ),
-            errorStyle: const TextStyle(
-              fontFamily: 'Kanit',
-              fontSize: 12,
-            ),
+            errorStyle: const TextStyle(fontSize: 12),
           ),
         ),
       ],

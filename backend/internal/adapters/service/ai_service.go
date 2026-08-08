@@ -7,29 +7,19 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
 )
 
-// ChatMessage ของ FastAPI
-type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// ChatRequest ที่ FastAPI ต้องการรับ
-type ChatRequest struct {
-	Query   string        `json:"query"`
-	History []ChatMessage `json:"history"`
-}
-
-// AIService เป็น Adapter สำหรับจัดการการติดต่อสื่อสารกับ AI Service
-type AIService struct {
+// aiService is the HTTP adapter for the domain AIService contract.
+type aiService struct {
 	baseURL    string
 	httpClient *http.Client
 }
 
-// NewAIService สร้าง Instance ใหม่ของ AIService พร้อมการตั้งค่า HTTP Client ที่ปลอดภัย
-func NewAIService(baseURL string) *AIService {
-	return &AIService{
+// NewAIService creates an HTTP-backed implementation of domain.AIService.
+func NewAIService(baseURL string) domain.AIService {
+	return &aiService{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			// ตั้งค่า Timeout รวมป้องกันไม่ให้ระบบค้างหาก AI Service ไม่ตอบกลับ
@@ -44,11 +34,11 @@ func NewAIService(baseURL string) *AIService {
 }
 
 // GetAIResponse ส่งคำถามและประวัติการคุยไปยัง AI Service และรับผลลัพธ์กลับมา
-func (s *AIService) GetAIResponse(ctx context.Context, query string, history []ChatMessage) (map[string]interface{}, error) {
+func (s *aiService) GetAIResponse(ctx context.Context, query string, history []domain.ChatMessage) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/api/ai/chat", s.baseURL)
 
 	// สร้าง Payload ตาม Schema ที่ FastAPI กำหนด
-	reqPayload := ChatRequest{
+	reqPayload := domain.ChatRequest{
 		Query:   query,
 		History: history,
 	}

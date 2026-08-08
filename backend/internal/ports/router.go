@@ -3,12 +3,15 @@ package ports
 import (
 	"net/http"
 
-	"github.com/Chanachai04/yuemnoi_app/backend/internal/adapters/supabase"
+	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
 	"github.com/gin-gonic/gin"
-	supa "github.com/nedpals/supabase-go"
 )
 
-func SetupRouter(sbClient *supa.Client, aiHandler *AIHandler) *gin.Engine {
+func SetupRouter(
+	itemRepo domain.ItemRepository,
+	authGateway domain.AuthGateway,
+	aiService domain.AIService,
+) *gin.Engine {
 
 	// ใช้ Logger และ Recovery Middleware (ป้องกันเซิร์ฟเวอร์พังเวลาเกิด Panic โค้ดเอ๋อ)
 	router := gin.New()
@@ -31,12 +34,16 @@ func SetupRouter(sbClient *supa.Client, aiHandler *AIHandler) *gin.Engine {
 
 	})
 
-	itemRepo := supabase.NewSupabaseItemRepository(sbClient)
-	authRepo := supabase.NewSupabaseUserRepository(sbClient)
+	// Health check สำหรับ Docker และระบบเฝ้าระวัง โดยไม่เปิดเผยข้อมูลภายใน
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
 	// นำเข้าคอนโทรลเลอร์ต่างๆ
-	itemController := NewItemHandler(itemRepo, authRepo)
+	itemController := NewItemHandler(itemRepo, authGateway)
 	rentalController := NewRentalHandler()
-	userController := NewUserHandler(authRepo)
+	userController := NewUserHandler(authGateway)
+	aiHandler := NewAIHandler(aiService)
 
 	// จัดการกลุ่มเส้นทาง API
 	v1 := router.Group("/api/v1")
@@ -48,12 +55,14 @@ func SetupRouter(sbClient *supa.Client, aiHandler *AIHandler) *gin.Engine {
 			user.POST("/register", userController.Register)
 			// POST /api/v1/auth/login
 			user.POST("/login", userController.Login)
+			// POST /api/v1/auth/google-profile
+			user.POST("/google-profile", userController.SyncGoogleProfileImage)
 			// POST /api/v1/auth/change-password
 			user.POST("/change-password", userController.ChangePassword)
-			// POST /api/v1/auth/request-reset-otp
-			user.POST("/request-reset-otp", userController.RequestResetOTP)
-			// POST /api/v1/auth/verify-reset-otp
-			user.POST("/verify-reset-otp", userController.VerifyResetOTP)
+			// POST /api/v1/auth/send-otp
+			user.POST("/send-otp", userController.SendOTP)
+			// POST /api/v1/auth/verify-otp
+			user.POST("/verify-otp", userController.VerifyResetOTP)
 			// POST /api/v1/auth/logout
 			user.POST("/logout", userController.Logout)
 		}

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class AppTextStyles {
   AppTextStyles._();
 
-  static const String fontFamily = 'Kanit';
+  static const String fontFamily = 'Prompt';
 
   static const TextStyle headingLarge = TextStyle(
     fontFamily: fontFamily,

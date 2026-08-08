@@ -34,6 +34,11 @@ app.add_middleware(
 )
 
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+
 class ChatMessage(BaseModel):
     role: str = Field(..., description="บทบาทผู้ส่ง: 'user' หรือ 'assistant'")
     content: str = Field(..., description="ข้อความแชท")

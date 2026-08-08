@@ -16,26 +16,6 @@ type ItemHandler struct {
 	tokenVerifier domain.TokenVerifier
 }
 
-type CreateItemRequest struct {
-	ItemName     string   `json:"item_name" binding:"required,min=1,max=150"`
-	ItemImageURL []string `json:"item_image_url" binding:"omitempty,dive,max=2048"`
-	Description  string   `json:"description" binding:"required,min=1,max=2000"`
-	Category     string   `json:"category" binding:"omitempty,max=100"`
-	Price        int      `json:"price" binding:"required,gt=0"`
-	Status       string   `json:"status" binding:"omitempty,max=50"`
-	Type         string   `json:"type" binding:"omitempty,max=100"`
-}
-
-type UpdateItemRequest struct {
-	ItemName     *string   `json:"item_name" binding:"omitempty,min=1,max=150"`
-	ItemImageURL *[]string `json:"item_image_url" binding:"omitempty,dive,max=2048"`
-	Description  *string   `json:"description" binding:"omitempty,min=1,max=2000"`
-	Category     *string   `json:"category" binding:"omitempty,max=100"`
-	Price        *int      `json:"price" binding:"omitempty,gt=0"`
-	Status       *string   `json:"status" binding:"omitempty,max=50"`
-	Type         *string   `json:"type" binding:"omitempty,max=100"`
-}
-
 func NewItemHandler(r domain.ItemRepository, tokenVerifier domain.TokenVerifier) *ItemHandler {
 	return &ItemHandler{
 		repo:          r,
@@ -114,7 +94,7 @@ func (h *ItemHandler) CreateItem(c *gin.Context) {
 		return
 	}
 
-	var req CreateItemRequest
+	var req domain.CreateItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลอุปกรณ์ไม่ถูกต้อง: " + err.Error()})
 		return
@@ -149,7 +129,7 @@ func (h *ItemHandler) UpdateItem(c *gin.Context) {
 		return
 	}
 
-	var req UpdateItemRequest
+	var req domain.UpdateItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลอุปกรณ์ไม่ถูกต้อง: " + err.Error()})
 		return
