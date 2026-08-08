@@ -1,4 +1,5 @@
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -6,7 +7,22 @@ from typing import List, Optional
 
 from app.agent.executor import AgentExecutor
 
-app = FastAPI(title="yuemnoi AI Core Service", version="1.0.0")
+
+agent_executor = AgentExecutor()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await agent_executor.warmup_model()
+    yield
+    await agent_executor.aclose()
+
+
+app = FastAPI(
+    title="yuemnoi AI Core Service",
+    version="1.1.0",
+    lifespan=lifespan,
+)
 
 # เปิดสิทธิ์ CORS
 app.add_middleware(
@@ -28,12 +44,8 @@ class ChatRequest(BaseModel):
         ..., min_length=1, max_length=200, description="คำถามล่าสุดจากลูกค้า"
     )
     history: Optional[List[ChatMessage]] = Field(
-        default=[], description="ประวัติการสนทนาก่อนหน้านี้ทั้งหมด"
+        default_factory=list, description="ประวัติการสนทนาก่อนหน้านี้ทั้งหมด"
     )
-
-
-# เรียกโครงสร้างตัวรัน Pipeline ขึ้นมาเตรียมไว้
-agent_executor = AgentExecutor()
 
 
 @app.post("/api/ai/chat")

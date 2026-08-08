@@ -4,7 +4,8 @@ from config import settings
 
 
 class GoogleTool:
-    def __init__(self):
+    def __init__(self, client: httpx.AsyncClient):
+        self.client = client
         self.api_url = "https://google.serper.dev/search"
         self.headers = {
             "X-API-KEY": settings.SERPER_API_KEY,
@@ -25,12 +26,11 @@ class GoogleTool:
         }
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.api_url, headers=self.headers, json=payload, timeout=10.0
-                )
-                response.raise_for_status()
-                results = response.json()
+            response = await self.client.post(
+                self.api_url, headers=self.headers, json=payload, timeout=10.0
+            )
+            response.raise_for_status()
+            results = response.json()
 
             sources = []
             for result in results.get("organic", [])[:5]:

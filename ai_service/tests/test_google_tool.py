@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 
 from app.tools.google_tool import GoogleTool
 
@@ -48,8 +47,7 @@ class GoogleToolTest(unittest.IsolatedAsyncioTestCase):
         )
         client = FakeAsyncClient(response)
 
-        with patch("app.tools.google_tool.httpx.AsyncClient", return_value=client):
-            context, status = await GoogleTool().search_spec("ถ่าย 4k")
+        context, status = await GoogleTool(client).search_spec("ถ่าย 4k")
 
         self.assertEqual(status, "checked_google")
         self.assertIn("https://example.com/specs", context)
@@ -59,8 +57,7 @@ class GoogleToolTest(unittest.IsolatedAsyncioTestCase):
     async def test_reports_when_google_has_no_results(self):
         client = FakeAsyncClient(FakeResponse({"organic": []}))
 
-        with patch("app.tools.google_tool.httpx.AsyncClient", return_value=client):
-            context, status = await GoogleTool().search_spec("ถ่าย 4k")
+        context, status = await GoogleTool(client).search_spec("ถ่าย 4k")
 
         self.assertEqual(context, "")
         self.assertEqual(status, "google_no_results")
@@ -68,8 +65,7 @@ class GoogleToolTest(unittest.IsolatedAsyncioTestCase):
     async def test_reports_google_failure(self):
         client = FakeAsyncClient(FakeResponse(error=RuntimeError("service unavailable")))
 
-        with patch("app.tools.google_tool.httpx.AsyncClient", return_value=client):
-            context, status = await GoogleTool().search_spec("ถ่าย 4k")
+        context, status = await GoogleTool(client).search_spec("ถ่าย 4k")
 
         self.assertEqual(context, "")
         self.assertEqual(status, "google_search_failed")
