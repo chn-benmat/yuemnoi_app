@@ -32,9 +32,8 @@ type UserRequestResetOTP struct {
 }
 
 type UserVerifyOTPResetRequest struct {
-	Email       string `json:"email" binding:"required,email"`
-	OTPCode     string `json:"otp_code" binding:"required,len=6,numeric"`
-	NewPassword string `json:"new_password" binding:"required,min=6"`
+	Email   string `json:"email" binding:"required,email"`
+	OTPCode string `json:"otp_code" binding:"required,len=6,numeric"`
 }
 
 func NewUserHandler(r domain.AuthRepository) *UserHandler {
