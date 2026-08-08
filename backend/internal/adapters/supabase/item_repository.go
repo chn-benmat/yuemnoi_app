@@ -12,18 +12,18 @@ import (
 )
 
 // เป็นตัวแทนในการทำงานกับตาราง item_tb และ review_tb
-type SupabaseItemRepository struct {
+type supabaseItemRepository struct {
 	client *supabase.Client
 }
 
 func NewSupabaseItemRepository(sbClient *supabase.Client) domain.ItemRepository {
-	return &SupabaseItemRepository{
+	return &supabaseItemRepository{
 		client: sbClient,
 	}
 }
 
 // Insert เพิ่มข้อมูลอุปกรณ์เช่าใหม่ลงในตาราง item_tb
-func (r *SupabaseItemRepository) Insert(ctx context.Context, item *domain.Item) (*domain.Item, error) {
+func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item) (*domain.Item, error) {
 	var items []domain.Item
 	payload := map[string]interface{}{
 		"user_id":     item.UserID,
@@ -50,7 +50,7 @@ func (r *SupabaseItemRepository) Insert(ctx context.Context, item *domain.Item) 
 }
 
 // FindAll ดึงข้อมูลอุปกรณ์เช่าทั้งหมดจากตาราง item_tb
-func (r *SupabaseItemRepository) FindAll(ctx context.Context) ([]domain.Item, error) {
+func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.Item, error) {
 	var items []domain.Item
 
 	// ดึงข้อมูล ระบุตาราง "item_tb"
@@ -63,7 +63,7 @@ func (r *SupabaseItemRepository) FindAll(ctx context.Context) ([]domain.Item, er
 }
 
 // FindByID ดึงข้อมูลอุปกรณ์เช่าตาม ID จากตาราง item_tb
-func (r *SupabaseItemRepository) FindByID(ctx context.Context, id int64) (*domain.Item, error) {
+func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domain.Item, error) {
 	var items []domain.Item
 
 	err := r.client.DB.From("item_tb").Select("*").Eq("id", strconv.FormatInt(id, 10)).ExecuteWithContext(ctx, &items)
@@ -78,7 +78,7 @@ func (r *SupabaseItemRepository) FindByID(ctx context.Context, id int64) (*domai
 	return &items[0], nil
 }
 
-func (r *SupabaseItemRepository) Update(
+func (r *supabaseItemRepository) Update(
 	ctx context.Context,
 	id int64,
 	userID string,
@@ -101,7 +101,7 @@ func (r *SupabaseItemRepository) Update(
 	return &items[0], nil
 }
 
-func (r *SupabaseItemRepository) Delete(ctx context.Context, id int64, userID string) error {
+func (r *supabaseItemRepository) Delete(ctx context.Context, id int64, userID string) error {
 	var ownedItems []domain.Item
 	idValue := strconv.FormatInt(id, 10)
 

@@ -1,23 +1,33 @@
 package supabase
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/nedpals/supabase-go"
+	"net/http"
 	"strings"
+	"time"
+
+	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
+	"github.com/nedpals/supabase-go"
 )
 
-type SupabaseUserRepository struct {
-	client *supabase.Client
+const profileBucket = "profile_bk"
+
+type supabaseUserRepository struct {
+	client     *supabase.Client
+	authAPIKey string
 }
 
-func NewSupabaseUserRepository(sbClient *supabase.Client) *SupabaseUserRepository {
-	return &SupabaseUserRepository{
-		client: sbClient,
+func NewSupabaseUserRepository(sbClient *supabase.Client, authAPIKey string) domain.AuthGateway {
+	return &supabaseUserRepository{
+		client:     sbClient,
+		authAPIKey: authAPIKey,
 	}
 }
 
-func (r *SupabaseUserRepository) UserIDFromToken(ctx context.Context, userToken string) (string, error) {
+func (r *supabaseUserRepository) UserIDFromToken(ctx context.Context, userToken string) (string, error) {
 	user, err := r.client.Auth.User(ctx, userToken)
 	if err != nil {
 		return "", fmt.Errorf("invalid access token: %w", err)
@@ -29,109 +39,356 @@ func (r *SupabaseUserRepository) UserIDFromToken(ctx context.Context, userToken 
 	return user.ID, nil
 }
 
+// SyncGoogleProfileImage copies the Google avatar URL from Supabase Auth
+// metadata into the application's profile row.
+func (r *supabaseUserRepository) SyncGoogleProfileImage(ctx context.Context, userToken string) (string, error) {
+	user, err := r.client.Auth.User(ctx, userToken)
+	if err != nil {
+		return "", fmt.Errorf("invalid access token: %w", err)
+	}
+	if user == nil || user.ID == "" {
+		return "", fmt.Errorf("access token does not contain a user")
+	}
+
+	imageURL := googleProfileImageURL(user.UserMetadata)
+	if imageURL == "" {
+		return "", fmt.Errorf("Google profile image URL was not found")
+	}
+
+	var updated []map[string]interface{}
+	err = r.client.DB.From("profile_tb").
+		Update(map[string]interface{}{"user_image_url": imageURL}).
+		Eq("user_id", user.ID).
+		ExecuteWithContext(ctx, &updated)
+	if err != nil {
+		return "", fmt.Errorf("failed to save Google profile image URL: %w", err)
+	}
+	if len(updated) == 0 {
+		return "", fmt.Errorf("profile was not found for user %s", user.ID)
+	}
+
+	return imageURL, nil
+}
+
+func googleProfileImageURL(metadata map[string]interface{}) string {
+	for _, key := range []string{"avatar_url", "picture"} {
+		if value, ok := metadata[key].(string); ok {
+			if imageURL := strings.TrimSpace(value); imageURL != "" {
+				return imageURL
+			}
+		}
+
+	}
+
+	return ""
+}
+
 // Login ตรวจสอบสิทธิ์ผ่าน Supabase Auth และส่ง Access Token กลับออกไป
-func (r *SupabaseUserRepository) Login(ctx context.Context, email, password string) (string, error) {
+func (r *supabaseUserRepository) Login(ctx context.Context, email, password string) (*domain.AuthTokens, error) {
 	// 1. เรียกใช้ client.Auth ให้ถูกจุด และส่ง UserCredentials
 	resp, err := r.client.Auth.SignIn(ctx, supabase.UserCredentials{
 		Email:    email,
 		Password: password,
 	})
 	if err != nil {
-		return "", fmt.Errorf("supabase login failed: %w", err)
+		return nil, fmt.Errorf("supabase login failed: %w", err)
 	}
 
 	// 2. ตรวจสอบว่าได้ Token กลับมาจริงไหม ป้องกันกรณีเกิดความผิดพลาดภายใน
 	if resp.AccessToken == "" {
-		return "", fmt.Errorf("authentication succeeded but no access token returned")
+		return nil, fmt.Errorf("authentication succeeded but no access token returned")
+	}
+	if resp.RefreshToken == "" {
+		return nil, fmt.Errorf("authentication succeeded but no refresh token returned")
 	}
 
-	// 3. คืนค่า AccessToken กลับไป (ตรงตาม signature string, error)
-	return resp.AccessToken, nil
+	return &domain.AuthTokens{
+		AccessToken:  resp.AccessToken,
+		RefreshToken: resp.RefreshToken,
+	}, nil
 }
 
-// Register สร้างบัญชีผู้ใช้ใหม่ผ่าน Supabase Auth และส่ง Access Token กลับออกไป
-func (r *SupabaseUserRepository) Register(ctx context.Context, email, password string) (string, error) {
-	resp, err := r.client.Auth.SignUp(ctx, supabase.UserCredentials{
-		Email:    email,
-		Password: password,
+// Register creates the Auth user, uploads an optional profile image, and stores
+// its public URL in profile_tb.
+func (r *supabaseUserRepository) Register(ctx context.Context, user domain.RegisterUser) (*domain.RegisterResult, error) {
+	emailExists, err := r.IsEmailExists(ctx, user.Email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check whether email is already registered: %w", err)
+	}
+	if emailExists {
+		return nil, fmt.Errorf("email already registered")
+	}
+
+	password := user.Password
+	resp, err := r.client.Admin.CreateUser(ctx, supabase.AdminUserParams{
+		Email:        user.Email,
+		Phone:        user.Phone,
+		Password:     &password,
+		EmailConfirm: true,
+		PhoneConfirm: true,
+		UserMetadata: supabase.JSONMap{
+			"display_name": user.DisplayName,
+			"phone":        user.Phone,
+		},
 	})
 
 	if err != nil {
 		// ดักจับ Error ที่เกิดจากการพยายามลงทะเบียนด้วยอีเมลที่มีอยู่แล้วในระบบ
 		if strings.Contains(strings.ToLower(err.Error()), "already registered") ||
 			strings.Contains(strings.ToLower(err.Error()), "already exists") {
-			return "", fmt.Errorf("email already registered") // ส่ง Error Code เฉพาะของเรากลับไป
+			return nil, fmt.Errorf("email already registered") // ส่ง Error Code เฉพาะของเรากลับไป
 		}
 
-		return "", fmt.Errorf("supabase registration failed: %w", err)
+		return nil, fmt.Errorf("supabase registration failed: %w", err)
 	}
 
-	// ป้องกันกรณีที่ Supabase ส่งค่ากลับมาเป็น nil
-	if resp == nil {
-		return "", fmt.Errorf("registration succeeded but response is nil")
+	if resp == nil || resp.ID == "" {
+		return nil, fmt.Errorf("registration succeeded but no user ID returned")
 	}
-	if resp.ID == "" {
-		// ถ้าหา ID ไม่เจอจริงๆ แต่ไม่มี error ให้ลองสืบค้นผ่านฟิลด์อื่น
-		return "REGISTRATION_SUCCESS_PENDING_CONFIRMATION", nil
+
+	return r.completeRegistration(ctx, user, resp.ID)
+}
+
+func (r *supabaseUserRepository) completeRegistration(ctx context.Context, user domain.RegisterUser, userID string) (*domain.RegisterResult, error) {
+	result := &domain.RegisterResult{UserID: userID}
+	if user.ProfileImage == nil {
+		return result, nil
 	}
-	// คืนค่า User.ID (string) กลับไปแทน เพื่อยืนยันว่าสร้างบัญชีบน Supabase สำเร็จแล้ว
-	return resp.ID, nil
+
+	objectPath := fmt.Sprintf("profile-%s-%d%s", userID, time.Now().UTC().UnixNano(), user.ProfileImage.Extension)
+	_, err := r.uploadProfileImage(objectPath, user.ProfileImage)
+	if err != nil {
+		return nil, err
+	}
+
+	publicURL := r.client.Storage.From(profileBucket).GetPublicUrl(objectPath).SignedUrl
+	if publicURL == "" {
+		r.removeProfileImage(objectPath)
+		return nil, fmt.Errorf("profile image uploaded but public URL was not returned")
+	}
+
+	var updated []map[string]interface{}
+	err = r.client.DB.From("profile_tb").
+		Update(map[string]interface{}{"user_image_url": publicURL}).
+		Eq("user_id", userID).
+		ExecuteWithContext(ctx, &updated)
+	if err != nil {
+		r.removeProfileImage(objectPath)
+		return nil, fmt.Errorf("failed to save profile image URL: %w", err)
+	}
+	if len(updated) == 0 {
+		r.removeProfileImage(objectPath)
+		return nil, fmt.Errorf("profile row was not created for the registered user")
+	}
+
+	result.UserImageURL = publicURL
+	return result, nil
+}
+
+func (r *supabaseUserRepository) uploadProfileImage(path string, image *domain.ProfileImage) (response supabase.FileResponse, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("profile image upload failed: %v", recovered)
+		}
+	}()
+
+	response = r.client.Storage.From(profileBucket).Upload(
+		path,
+		bytes.NewReader(image.Data),
+		&supabase.FileUploadOptions{
+			CacheControl: "3600",
+			ContentType:  image.ContentType,
+			MimeType:     image.ContentType,
+		},
+	)
+	if response.Key == "" {
+		if response.Message == "" {
+			response.Message = "Supabase Storage did not return an object key"
+		}
+		return response, fmt.Errorf("profile image upload failed: %s", response.Message)
+	}
+
+	return response, nil
+}
+
+func (r *supabaseUserRepository) removeProfileImage(path string) {
+	defer func() {
+		_ = recover()
+	}()
+	r.client.Storage.From(profileBucket).Remove([]string{path})
 }
 
 // ChangePassword เปลี่ยนรหัสผ่านของผู้ใช้ผ่าน Supabase Auth
-func (r *SupabaseUserRepository) ChangePassword(ctx context.Context, userToken, newPassword string) error {
-	updateData := map[string]interface{}{
+func (r *supabaseUserRepository) ChangePassword(ctx context.Context, userToken, newPassword string) error {
+	payload, err := json.Marshal(map[string]string{
 		"password": newPassword,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to encode password update request: %w", err)
 	}
-	_, err := r.client.Auth.UpdateUser(ctx, userToken, updateData)
+
+	requestURL := strings.TrimRight(r.client.BaseURL, "/") + "/" + supabase.AuthEndpoint + "/user"
+	request, err := http.NewRequestWithContext(ctx, http.MethodPut, requestURL, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create password update request: %w", err)
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("apikey", r.authAPIKey)
+	request.Header.Set("Authorization", "Bearer "+userToken)
+
+	response, err := r.client.HTTPClient.Do(request)
 	if err != nil {
 		return fmt.Errorf("supabase update password failed: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return decodeAuthAPIError(response)
 	}
 
 	return nil
 }
 
-// RequestResetOTP: สั่งให้ Supabase ส่งรหัส OTP 6 หลักไปที่อีเมลของผู้ใช้
-func (r *SupabaseUserRepository) RequestResetOTP(ctx context.Context, email string) error {
-	cleanedEmail := strings.TrimSpace(email)
+// decodeAuthAPIError supports both the current GoTrue error shape
+// (error_code/msg) and older shapes used by Supabase Auth clients. The
+// supabase-go v0.5.0 UpdateUser implementation only decodes "message", which
+// turns valid error responses such as bad_jwt into an empty error string.
+func decodeAuthAPIError(response *http.Response) error {
+	var body struct {
+		Code             json.RawMessage `json:"code"`
+		ErrorCode        string          `json:"error_code"`
+		Message          string          `json:"message"`
+		Msg              string          `json:"msg"`
+		ErrorDescription string          `json:"error_description"`
+		Error            string          `json:"error"`
+	}
 
-	err := r.client.Auth.ResetPasswordForEmail(ctx, cleanedEmail, "")
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		return fmt.Errorf("supabase update password failed: HTTP %d", response.StatusCode)
+	}
+
+	message := firstNonEmpty(
+		body.Msg,
+		body.Message,
+		body.ErrorDescription,
+		body.Error,
+		body.ErrorCode,
+		string(body.Code),
+	)
+	if message == "" {
+		message = http.StatusText(response.StatusCode)
+	}
+
+	code := firstNonEmpty(body.ErrorCode, normalizedJSONValue(body.Code))
+	if code != "" && !strings.Contains(strings.ToLower(message), strings.ToLower(code)) {
+		message = code + ": " + message
+	}
+
+	return fmt.Errorf("supabase update password failed: %s", message)
+}
+
+func normalizedJSONValue(value json.RawMessage) string {
+	if len(value) == 0 {
+		return ""
+	}
+
+	var text string
+	if err := json.Unmarshal(value, &text); err == nil {
+		return strings.TrimSpace(text)
+	}
+
+	return strings.Trim(strings.TrimSpace(string(value)), `"`)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+// SendOTP asks Supabase to send the passwordless Magic Link email template.
+// That template can contain either a magic link or the six-digit {{ .Token }}.
+func (r *supabaseUserRepository) SendOTP(ctx context.Context, email string) error {
+	cleanedEmail := strings.TrimSpace(email)
+	payload, err := json.Marshal(map[string]interface{}{
+		"email":       cleanedEmail,
+		"create_user": false,
+	})
 	if err != nil {
-		return fmt.Errorf("failed to send reset OTP to email: %w", err)
+		return fmt.Errorf("failed to encode magic link or OTP request: %w", err)
+	}
+
+	requestURL := strings.TrimRight(r.client.BaseURL, "/") + "/" + supabase.AuthEndpoint + "/otp"
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create magic link or OTP request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("apikey", r.authAPIKey)
+
+	response, err := r.client.HTTPClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("failed to send magic link or OTP to email: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		var authError struct {
+			Message string `json:"message"`
+			Msg     string `json:"msg"`
+		}
+		if decodeErr := json.NewDecoder(response.Body).Decode(&authError); decodeErr != nil {
+			return fmt.Errorf("failed to send magic link or OTP to email: Supabase returned HTTP %d", response.StatusCode)
+		}
+		message := authError.Message
+		if message == "" {
+			message = authError.Msg
+		}
+		if message == "" {
+			message = http.StatusText(response.StatusCode)
+		}
+		return fmt.Errorf("failed to send magic link or OTP to email: %s", message)
 	}
 
 	return nil
 }
 
 // VerifyOTP: ตรวจสอบรหัส 6 หลัก
-func (r *SupabaseUserRepository) VerifyOTP(ctx context.Context, email, otpCode string) error {
+func (r *supabaseUserRepository) VerifyOTP(ctx context.Context, email, otpCode string) (*domain.AuthTokens, error) {
 
 	credentials := supabase.VerifyEmailOtpCredentials{
 		Email: email,
 		Token: otpCode,
-		Type:  "recovery",
+		Type:  supabase.EmailOtpTypeEmail,
 	}
 
 	resp, err := r.client.Auth.VerifyOtp(ctx, credentials)
 	if err != nil {
-		return fmt.Errorf("invalid or expired OTP code: %w", err)
+		return nil, fmt.Errorf("invalid or expired OTP code: %w", err)
 	}
 
 	// ตรวจสอบ Token ชั่วคราวที่ได้กลับมา
 	if resp == nil || resp.AccessToken == "" {
-		return fmt.Errorf("OTP verified but failed to generate access token")
+		return nil, fmt.Errorf("OTP verified but failed to generate access token")
 	}
 
-	return nil
+	return &domain.AuthTokens{
+		AccessToken:  resp.AccessToken,
+		RefreshToken: resp.RefreshToken,
+	}, nil
 }
 
-func (r *SupabaseUserRepository) IsEmailExists(ctx context.Context, email string) (bool, error) {
+func (r *supabaseUserRepository) IsEmailExists(ctx context.Context, email string) (bool, error) {
 	// สร้างตัวแปร Boolean มารองรับผลลัพธ์ขากลับจาก RPC
 	var isExists bool
 
 	err := r.client.DB.Rpc("check_email_exists", map[string]interface{}{
 		"search_email": strings.TrimSpace(email),
-	}).Execute(&isExists)
+	}).ExecuteWithContext(ctx, &isExists)
 
 	if err != nil {
 		return false, fmt.Errorf("rpc query error on check_email_exists: %w", err)
@@ -141,7 +398,7 @@ func (r *SupabaseUserRepository) IsEmailExists(ctx context.Context, email string
 }
 
 // Logout ออกจากระบบโดยการลบ Session ผ่าน Supabase Auth
-func (r *SupabaseUserRepository) Logout(ctx context.Context, accessToken string) error {
+func (r *supabaseUserRepository) Logout(ctx context.Context, accessToken string) error {
 	err := r.client.Auth.SignOut(ctx, accessToken)
 	if err != nil {
 		return fmt.Errorf("supabase logout failed: %w", err)

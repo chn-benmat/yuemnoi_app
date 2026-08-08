@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/colors.dart';
+import '../../data/datasources/auth_remote_data_source.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
-  const ChangePasswordScreen({super.key});
+  const ChangePasswordScreen({super.key, required this.accessToken});
+
+  final String accessToken;
 
   @override
   State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
@@ -14,34 +17,62 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _authRemoteDataSource = AuthRemoteDataSource();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
+    _authRemoteDataSource.close();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
+  Future<void> _submit() async {
+    if (_isLoading || !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() => _isLoading = true);
+
+    try {
+      await _authRemoteDataSource.changePassword(
+        accessToken: widget.accessToken,
+        newPassword: _passwordController.text,
+      );
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            'เปลี่ยนรหัสผ่านสำเร็จแล้ว',
-            style: TextStyle(fontFamily: 'Kanit'),
-          ),
-          backgroundColor: AppColors.maincolor,
+          content: const Text('เปลี่ยนรหัสผ่านสำเร็จแล้ว'),
+          backgroundColor: AppColors.primaryColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
         ),
       );
-      
+
       // นำทางกลับไปยังหน้า Login (โดยการล้าง Stack ทั้งหมดออกไปจนถึงหน้าแรกสุด หรือหน้าระดับบนสุด)
       Navigator.of(context).popUntil((route) => route.isFirst);
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(error.message),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -52,7 +83,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: AppColors.maincolor,
+        backgroundColor: AppColors.primaryColor,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
@@ -64,7 +95,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         title: const Text(
           'เปลี่ยนรหัสผ่านใหม่',
           style: TextStyle(
-            fontFamily: 'Kanit',
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -82,35 +112,34 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 const SizedBox(height: 20),
                 Text(
                   'ตั้งค่ารหัสผ่านใหม่',
-                  style: theme.textTheme.headlineLarge?.copyWith(
-                    color: Colors.black,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ) ?? const TextStyle(
-                    fontFamily: 'Kanit',
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
+                  style:
+                      theme.textTheme.headlineLarge?.copyWith(
+                        color: Colors.black,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ) ??
+                      const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
                 Text(
                   'กรุณากรอกรหัสผ่านใหม่ที่ต้องการใช้งาน',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: Colors.black54,
-                    fontSize: 15,
-                  ) ?? const TextStyle(
-                    fontFamily: 'Kanit',
-                    fontSize: 15,
-                    color: Colors.black54,
-                  ),
+                  style:
+                      theme.textTheme.bodyLarge?.copyWith(
+                        color: Colors.black54,
+                        fontSize: 15,
+                      ) ??
+                      const TextStyle(fontSize: 15, color: Colors.black54),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 48),
                 CustomTextField(
                   label: 'รหัสผ่านใหม่',
-                  hintText: '........',
+                  hintText: 'กรุณากรอกรหัสผ่านใหม่',
                   obscureText: _obscurePassword,
                   controller: _passwordController,
                   suffixIcon: IconButton(
@@ -118,7 +147,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       _obscurePassword
                           ? Icons.visibility_outlined
                           : Icons.visibility_off_outlined,
-                      color: AppColors.iconcolor,
+                      color: AppColors.fieldIconColor,
                     ),
                     onPressed: () {
                       setState(() {
@@ -139,7 +168,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 const SizedBox(height: 24),
                 CustomTextField(
                   label: 'ยืนยันรหัสผ่านใหม่',
-                  hintText: '........',
+                  hintText: 'กรอกรหัสยืนยันผ่านใหม่',
                   obscureText: _obscureConfirmPassword,
                   controller: _confirmPasswordController,
                   suffixIcon: IconButton(
@@ -147,7 +176,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       _obscureConfirmPassword
                           ? Icons.visibility_outlined
                           : Icons.visibility_off_outlined,
-                      color: AppColors.iconcolor,
+                      color: AppColors.fieldIconColor,
                     ),
                     onPressed: () {
                       setState(() {
@@ -168,6 +197,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 const SizedBox(height: 48),
                 CustomButton(
                   text: 'เปลี่ยนรหัสผ่าน',
+                  isLoading: _isLoading,
                   onPressed: _submit,
                 ),
               ],

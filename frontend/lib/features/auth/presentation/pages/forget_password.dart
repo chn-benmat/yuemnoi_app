@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/colors.dart';
+import '../../data/datasources/auth_remote_data_source.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
 import 'one_time_verification.dart';
@@ -13,23 +14,51 @@ class ForgetPasswordScreen extends StatefulWidget {
 
 class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailPhoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _authRemoteDataSource = AuthRemoteDataSource();
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    _emailPhoneController.dispose();
+    _authRemoteDataSource.close();
+    _emailController.dispose();
     super.dispose();
   }
 
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
-      // นำทางไปยังหน้า OTP Verification
-      Navigator.push(
+  Future<void> _submit() async {
+    if (_isLoading || !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() => _isLoading = true);
+
+    try {
+      await _authRemoteDataSource.sendOtp(email: _emailController.text);
+
+      if (!mounted) return;
+      await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => const OneTimeVerificationScreen(),
+          builder: (context) =>
+              OneTimeVerificationScreen(email: _emailController.text.trim()),
         ),
       );
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(error.message),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -40,7 +69,7 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: AppColors.maincolor,
+        backgroundColor: AppColors.primaryColor,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
@@ -52,7 +81,6 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
         title: const Text(
           'ลืมรหัสผ่าน',
           style: TextStyle(
-            fontFamily: 'Kanit',
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -67,43 +95,55 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 20),
+                const SizedBox(height: 48),
+
+                Center(
+                  child: Container(
+                    height: 132,
+                    width: 132,
+                    decoration: const BoxDecoration(color: Colors.transparent),
+                    child: Image.asset(
+                      'assets/images/overlay.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 48),
                 Text(
                   'กู้คืนรหัสผ่าน',
-                  style: theme.textTheme.headlineLarge?.copyWith(
-                    color: Colors.black,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ) ?? const TextStyle(
-                    fontFamily: 'Kanit',
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
+                  style:
+                      theme.textTheme.headlineLarge?.copyWith(
+                        color: Colors.black,
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                      ) ??
+                      const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'กรุณากรอกอีเมลหรือเบอร์โทรศัพท์ของคุณเพื่อรับรหัส OTP สำหรับตั้งค่ารหัสผ่านใหม่',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: Colors.black54,
-                    fontSize: 15,
-                  ) ?? const TextStyle(
-                    fontFamily: 'Kanit',
-                    fontSize: 15,
-                    color: Colors.black54,
-                  ),
+                  'กรุณากรอกอีเมลเพื่อรับรหัส OTP สำหรับตั้งค่ารหัสผ่านใหม่',
+                  style:
+                      theme.textTheme.bodyLarge?.copyWith(
+                        color: Colors.black54,
+                        fontSize: 15,
+                      ) ??
+                      const TextStyle(fontSize: 15, color: Colors.black54),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 48),
                 CustomTextField(
-                  label: 'อีเมล / เบอร์โทรศัพท์',
-                  hintText: 'กรอกอีเมล หรือ เบอร์โทรศัพท์',
-                  controller: _emailPhoneController,
+                  label: 'อีเมล',
+                  hintText: 'กรุณากรอกอีเมล',
+                  controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'กรุณากรอกอีเมลหรือเบอร์โทรศัพท์';
+                      return 'กรุณากรอกอีเมล';
                     }
                     return null;
                   },
@@ -111,6 +151,7 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
                 const SizedBox(height: 48),
                 CustomButton(
                   text: 'ส่งรหัส OTP',
+                  isLoading: _isLoading,
                   onPressed: _submit,
                 ),
               ],
