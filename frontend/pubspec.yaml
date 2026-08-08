@@ -21,6 +21,9 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/images/yuemnoi.png"
+  adaptive_icon_background: "#9251D0"
+  adaptive_icon_foreground: "assets/images/yuemnoi.png"
+  adaptive_icon_foreground_inset: 16
   remove_alpha_ios: true
 
 flutter:
