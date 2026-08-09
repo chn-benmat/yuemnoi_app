@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/features/splashscreen/presentation/pages/splashscreen.dart';
+
+import 'core/navigation/app_routes.dart';
 import 'core/theme/app_theme.dart';
 
 class YuemnoiApp extends StatelessWidget {
-  const YuemnoiApp({super.key});
+  const YuemnoiApp({super.key, this.initialRoute = AppRoutes.login});
+
+  final String initialRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -12,7 +15,14 @@ class YuemnoiApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       themeMode: ThemeMode.light,
       debugShowCheckedModeBanner: false,
-      home: const SplashScreen(),
+      initialRoute: initialRoute,
+      onGenerateInitialRoutes: (routeName) {
+        final route = AppRoutes.onGenerateRoute(RouteSettings(name: routeName));
+        return route == null
+            ? const <Route<dynamic>>[]
+            : <Route<dynamic>>[route];
+      },
+      onGenerateRoute: (settings) => AppRoutes.onGenerateRoute(settings),
     );
   }
 }

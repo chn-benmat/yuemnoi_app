@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../../core/constants/colors.dart';
 
-class CustomTextField extends StatelessWidget {
+import '../constants/colors.dart';
+
+class AppTextFormField extends StatelessWidget {
   final String label;
   final String hintText;
   final IconData? prefixIcon;
@@ -13,7 +14,7 @@ class CustomTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
 
-  const CustomTextField({
+  const AppTextFormField({
     super.key,
     required this.label,
     required this.hintText,

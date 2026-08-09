@@ -2,9 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/widgets/responsive_app_bar_title.dart';
+import '../../../../core/widgets/responsive_page_body.dart';
+import '../../../../core/widgets/app_primary_button.dart';
 import '../../data/datasources/auth_remote_data_source.dart';
-import '../widgets/custom_button.dart';
-import 'change_password.dart';
 
 class OneTimeVerificationScreen extends StatefulWidget {
   const OneTimeVerificationScreen({super.key, required this.email});
@@ -101,12 +103,9 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
       );
 
       if (!mounted) return;
-      await Navigator.push(
+      await AppRoutes.openChangePassword(
         context,
-        MaterialPageRoute(
-          builder: (context) =>
-              ChangePasswordScreen(accessToken: tokens.accessToken),
-        ),
+        accessToken: tokens.accessToken,
       );
     } on AuthApiException catch (error) {
       if (!mounted) return;
@@ -182,168 +181,169 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
             Navigator.pop(context);
           },
         ),
-        title: const Text(
-          'เปลี่ยนรหัสผ่าน',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
+        title: const ResponsiveAppBarTitle('เปลี่ยนรหัสผ่าน'),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 20),
-              // ภาพ Smartphone Illustration
-              Center(
-                child: Container(
-                  height: 200,
-                  width: 200,
-                  decoration: const BoxDecoration(color: Colors.transparent),
-                  child: Image.asset(
-                    'assets/images/smartphone.png',
-                    fit: BoxFit.contain,
-                  ),
+      body: ResponsivePageBody(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 20),
+            // ภาพ Smartphone Illustration
+            Center(
+              child: Container(
+                height: 200,
+                width: 200,
+                decoration: const BoxDecoration(color: Colors.transparent),
+                child: Image.asset(
+                  'assets/images/smartphone.png',
+                  fit: BoxFit.contain,
                 ),
               ),
-              const SizedBox(height: 48),
-              // หัวข้อหลัก
-              Text(
-                'ยืนยันรหัสOTP',
-                style:
-                    theme.textTheme.headlineLarge?.copyWith(
-                      color: Colors.black,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ) ??
-                    const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              // คำอธิบายเพิ่มเติม
-              Text(
-                'กรุณากรอกรหัส OTP ที่ส่งไปยังอีเมลของคุณ',
-                style:
-                    theme.textTheme.bodyLarge?.copyWith(
-                      color: Colors.black54,
-                      fontSize: 16,
-                    ) ??
-                    const TextStyle(fontSize: 16, color: Colors.black54),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              // ช่องกรอกรหัส OTP 6 หลัก
-              Row(
-                children: [
-                  for (var index = 0; index < 6; index++) ...[
-                    if (index > 0) const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: AppColors.bgFieldColor,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        alignment: Alignment.center,
-                        child: TextField(
-                          controller: _controllers[index],
-                          focusNode: _focusNodes[index],
-                          onChanged: (value) {
-                            if (value.isNotEmpty) {
-                              if (index < 5) {
-                                _focusNodes[index + 1].requestFocus();
-                              } else {
-                                _focusNodes[index].unfocus();
-                              }
-                            } else {
-                              if (index > 0) {
-                                _focusNodes[index - 1].requestFocus();
-                              }
-                            }
-                          },
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
+            ),
+            const SizedBox(height: 48),
+            // หัวข้อหลัก
+            Text(
+              'ยืนยันรหัสOTP',
+              style:
+                  theme.textTheme.headlineLarge?.copyWith(
+                    color: Colors.black,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ) ??
+                  const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            // คำอธิบายเพิ่มเติม
+            Text(
+              'กรุณากรอกรหัส OTP ที่ส่งไปยังอีเมลของคุณ',
+              style:
+                  theme.textTheme.bodyLarge?.copyWith(
+                    color: Colors.black54,
+                    fontSize: 16,
+                  ) ??
+                  const TextStyle(fontSize: 16, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            // ช่องกรอกรหัส OTP 6 หลัก
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final spacing = constraints.maxWidth < 320 ? 4.0 : 8.0;
+                final itemWidth = ((constraints.maxWidth - (spacing * 5)) / 6)
+                    .clamp(28.0, 56.0);
+                final itemHeight = itemWidth.clamp(48.0, 64.0);
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var index = 0; index < 6; index++) ...[
+                      if (index > 0) SizedBox(width: spacing),
+                      SizedBox(
+                        width: itemWidth,
+                        height: itemHeight,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.bgFieldColor,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          maxLength: 1,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          decoration: InputDecoration(
-                            counterText: '',
-                            border: InputBorder.none,
-                            hintText: '-',
-                            hintStyle: TextStyle(
+                          alignment: Alignment.center,
+                          child: TextField(
+                            controller: _controllers[index],
+                            focusNode: _focusNodes[index],
+                            onChanged: (value) {
+                              if (value.isNotEmpty) {
+                                if (index < 5) {
+                                  _focusNodes[index + 1].requestFocus();
+                                } else {
+                                  _focusNodes[index].unfocus();
+                                }
+                              } else {
+                                if (index > 0) {
+                                  _focusNodes[index - 1].requestFocus();
+                                }
+                              }
+                            },
+                            style: const TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.hintTextColor,
+                              color: Colors.black,
+                            ),
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            textAlignVertical: TextAlignVertical.center,
+                            maxLength: 1,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            decoration: InputDecoration(
+                              contentPadding: EdgeInsets.zero,
+                              counterText: '',
+                              border: InputBorder.none,
+                              hintText: '-',
+                              hintStyle: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.hintTextColor,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
-              ),
-              const SizedBox(height: 32),
-              // นับเวลาถอยหลังส่งรหัสใหม่ / ปุ่มส่งรหัสอีกครั้ง
-              Center(
-                child: _canResend
-                    ? TextButton(
-                        onPressed: _isResending ? null : _resendOtp,
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                        ),
-                        child: _isResending
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'ส่งรหัสอีกครั้ง',
-                                style: TextStyle(
-                                  color: AppColors.primaryColor,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                      )
-                    : Text(
-                        'ส่งรหัส OTP ใหม่ในอีก ${_secondsRemaining}s',
-                        style: const TextStyle(
-                          color: Colors.black87,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                );
+              },
+            ),
+            const SizedBox(height: 32),
+            // นับเวลาถอยหลังส่งรหัสใหม่ / ปุ่มส่งรหัสอีกครั้ง
+            Center(
+              child: _canResend
+                  ? TextButton(
+                      onPressed: _isResending ? null : _resendOtp,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
                         ),
                       ),
-              ),
-              const SizedBox(height: 48),
-              // ปุ่มกดยืนยันการอัปเดตรหัสผ่าน
-              CustomButton(
-                text: 'ยืนยัน',
-                isLoading: _isVerifying,
-                onPressed: _submitOtp,
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+                      child: _isResending
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text(
+                              'ส่งรหัสอีกครั้ง',
+                              style: TextStyle(
+                                color: AppColors.primaryColor,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    )
+                  : Text(
+                      'ส่งรหัส OTP ใหม่ในอีก ${_secondsRemaining}s',
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 48),
+            // ปุ่มกดยืนยันการอัปเดตรหัสผ่าน
+            AppPrimaryButton(
+              text: 'ยืนยัน',
+              isLoading: _isVerifying,
+              onPressed: _submitOtp,
+            ),
+            const SizedBox(height: 24),
+          ],
         ),
       ),
     );
