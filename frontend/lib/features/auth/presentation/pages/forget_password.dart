@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/widgets/responsive_app_bar_title.dart';
+import '../../../../core/widgets/responsive_page_body.dart';
+import '../../../../core/widgets/app_primary_button.dart';
+import '../../../../core/widgets/app_text_form_field.dart';
 import '../../data/datasources/auth_remote_data_source.dart';
-import '../widgets/custom_text_field.dart';
-import '../widgets/custom_button.dart';
-import 'one_time_verification.dart';
 
 class ForgetPasswordScreen extends StatefulWidget {
   const ForgetPasswordScreen({super.key});
@@ -37,12 +39,9 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
       await _authRemoteDataSource.sendOtp(email: _emailController.text);
 
       if (!mounted) return;
-      await Navigator.push(
+      await AppRoutes.openOtpVerification(
         context,
-        MaterialPageRoute(
-          builder: (context) =>
-              OneTimeVerificationScreen(email: _emailController.text.trim()),
-        ),
+        email: _emailController.text.trim(),
       );
     } on AuthApiException catch (error) {
       if (!mounted) return;
@@ -78,84 +77,74 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
             Navigator.pop(context);
           },
         ),
-        title: const Text(
-          'ลืมรหัสผ่าน',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
+        title: const ResponsiveAppBarTitle('ลืมรหัสผ่าน'),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 48),
+      body: ResponsivePageBody(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 48),
 
-                Center(
-                  child: Container(
-                    height: 132,
-                    width: 132,
-                    decoration: const BoxDecoration(color: Colors.transparent),
-                    child: Image.asset(
-                      'assets/images/overlay.png',
-                      fit: BoxFit.contain,
-                    ),
+              Center(
+                child: Container(
+                  height: 132,
+                  width: 132,
+                  decoration: const BoxDecoration(color: Colors.transparent),
+                  child: Image.asset(
+                    'assets/images/overlay.png',
+                    fit: BoxFit.contain,
                   ),
                 ),
-                const SizedBox(height: 48),
-                Text(
-                  'กู้คืนรหัสผ่าน',
-                  style:
-                      theme.textTheme.headlineLarge?.copyWith(
-                        color: Colors.black,
-                        fontSize: 40,
-                        fontWeight: FontWeight.bold,
-                      ) ??
-                      const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'กรุณากรอกอีเมลเพื่อรับรหัส OTP สำหรับตั้งค่ารหัสผ่านใหม่',
-                  style:
-                      theme.textTheme.bodyLarge?.copyWith(
-                        color: Colors.black54,
-                        fontSize: 15,
-                      ) ??
-                      const TextStyle(fontSize: 15, color: Colors.black54),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
-                CustomTextField(
-                  label: 'อีเมล',
-                  hintText: 'กรุณากรอกอีเมล',
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'กรุณากรอกอีเมล';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 48),
-                CustomButton(
-                  text: 'ส่งรหัส OTP',
-                  isLoading: _isLoading,
-                  onPressed: _submit,
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 48),
+              Text(
+                'กู้คืนรหัสผ่าน',
+                style:
+                    theme.textTheme.headlineLarge?.copyWith(
+                      color: Colors.black,
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold,
+                    ) ??
+                    const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'กรุณากรอกอีเมลเพื่อรับรหัส OTP สำหรับตั้งค่ารหัสผ่านใหม่',
+                style:
+                    theme.textTheme.bodyLarge?.copyWith(
+                      color: Colors.black54,
+                      fontSize: 15,
+                    ) ??
+                    const TextStyle(fontSize: 15, color: Colors.black54),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 48),
+              AppTextFormField(
+                label: 'อีเมล',
+                hintText: 'กรุณากรอกอีเมล',
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'กรุณากรอกอีเมล';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 48),
+              AppPrimaryButton(
+                text: 'ส่งรหัส OTP',
+                isLoading: _isLoading,
+                onPressed: _submit,
+              ),
+            ],
           ),
         ),
       ),

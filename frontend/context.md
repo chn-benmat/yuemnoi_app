@@ -29,5 +29,4 @@
 
 ## 5. Current Status & Next Steps
 - ในตอนนี้จะทำเพียงแต่ frontend ไปก่อน โดยใช้ภาษาDart และ Framework Flutter
-- ตอนนี้ทำส่วนหน้าบ้านของฟีเจอร์ splashscreen เสร็จแล้ว
 - ตอนนี้ทำส่วนหน้าบ้านของฟีเจอร์ authentication เสร็จแล้ว

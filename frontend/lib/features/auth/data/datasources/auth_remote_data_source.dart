@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 const invalidOtpMessage = 'รหัส OTP ผิด กรุณาลองใส่ใหม่';
@@ -37,24 +38,24 @@ class AuthRemoteDataSource {
   AuthRemoteDataSource({http.Client? client})
     : _client = client ?? http.Client();
 
-  static final Uri _loginUri = Uri.parse(
-    'https://my-computer.tail38bb18.ts.net/api/v1/auth/login',
-  );
-  static final Uri _registerUri = Uri.parse(
-    'https://my-computer.tail38bb18.ts.net/api/v1/auth/register',
-  );
-  static final Uri _sendOtpUri = Uri.parse(
-    'https://my-computer.tail38bb18.ts.net/api/v1/auth/send-otp',
-  );
-  static final Uri _verifyOtpUri = Uri.parse(
-    'https://my-computer.tail38bb18.ts.net/api/v1/auth/verify-otp',
-  );
-  static final Uri _changePasswordUri = Uri.parse(
-    'https://my-computer.tail38bb18.ts.net/api/v1/auth/change-password',
-  );
-  static final Uri _googleProfileUri = Uri.parse(
-    'https://my-computer.tail38bb18.ts.net/api/v1/auth/google-profile',
-  );
+  static Uri _apiUri(String path) {
+    final apiUrl = (dotenv.env['API_URL']?.trim() ?? '').replaceFirst(
+      RegExp(r'/+$'),
+      '',
+    );
+    if (apiUrl.isEmpty) {
+      throw StateError('API_URL is not configured in .env.local.');
+    }
+
+    return Uri.parse('$apiUrl$path');
+  }
+
+  static Uri get _loginUri => _apiUri('/api/v1/auth/login');
+  static Uri get _registerUri => _apiUri('/api/v1/auth/register');
+  static Uri get _sendOtpUri => _apiUri('/api/v1/auth/send-otp');
+  static Uri get _verifyOtpUri => _apiUri('/api/v1/auth/verify-otp');
+  static Uri get _changePasswordUri => _apiUri('/api/v1/auth/change-password');
+  static Uri get _googleProfileUri => _apiUri('/api/v1/auth/google-profile');
   static const Duration _requestTimeout = Duration(seconds: 20);
 
   final http.Client _client;

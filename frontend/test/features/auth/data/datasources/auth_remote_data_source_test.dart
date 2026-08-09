@@ -1,11 +1,18 @@
 import 'dart:convert';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:frontend/features/auth/data/datasources/auth_remote_data_source.dart';
 
 void main() {
+  setUpAll(() {
+    dotenv.loadFromString(
+      envString: 'API_URL=https://my-computer.tail38bb18.ts.net/',
+    );
+  });
+
   test('verifyOtp shows an invalid message when the OTP is wrong', () async {
     final dataSource = AuthRemoteDataSource(
       client: MockClient(
