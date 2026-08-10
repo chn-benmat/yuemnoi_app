@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/responsive_app_bar_title.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_form_field.dart';
-import '../../data/datasources/auth_remote_data_source.dart';
+import '../bloc/auth_bloc.dart';
+import '../bloc/auth_event.dart';
+import '../bloc/auth_state.dart';
 
 class ForgetPasswordScreen extends StatefulWidget {
   const ForgetPasswordScreen({super.key});
@@ -17,55 +20,68 @@ class ForgetPasswordScreen extends StatefulWidget {
 class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _authRemoteDataSource = AuthRemoteDataSource();
   bool _isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    // รีเซ็ตสถานะ BLoC เมื่อเข้าหน้านี้
+    context.read<AuthBloc>().add(const AuthResetState());
+  }
+
+  @override
   void dispose() {
-    _authRemoteDataSource.close();
     _emailController.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  void _submit() {
     if (_isLoading || !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
     FocusScope.of(context).unfocus();
-    setState(() => _isLoading = true);
+    context.read<AuthBloc>().add(AuthSendOtpRequested(email: _emailController.text.trim()));
+  }
 
-    try {
-      await _authRemoteDataSource.sendOtp(email: _emailController.text);
-
-      if (!mounted) return;
-      await AppRoutes.openOtpVerification(
-        context,
-        email: _emailController.text.trim(),
+  void _showMessage(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
-    } on AuthApiException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(error.message),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is SendOtpLoading) {
+          setState(() {
+            _isLoading = true;
+          });
+        } else if (state is SendOtpSuccess) {
+          setState(() {
+            _isLoading = false;
+          });
+          AppRoutes.openOtpVerification(
+            context,
+            email: _emailController.text.trim(),
+          );
+        } else if (state is SendOtpFailure) {
+          setState(() {
+            _isLoading = false;
+          });
+          _showMessage(state.message, isError: true);
+        }
+      },
+      child: Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
@@ -148,6 +164,7 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
