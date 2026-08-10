@@ -1,16 +1,15 @@
-import 'dart:async';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthApiException;
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_form_field.dart';
-import '../../data/datasources/auth_remote_data_source.dart';
+import '../bloc/auth_bloc.dart';
+import '../bloc/auth_event.dart';
+import '../bloc/auth_state.dart';
+import '../widgets/auth_divider.dart';
 import '../widgets/social_button.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -24,120 +23,29 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _authRemoteDataSource = AuthRemoteDataSource();
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _isGoogleLoading = false;
-  bool _signInHandled = false;
-  StreamSubscription<AuthState>? _authStateSubscription;
 
   @override
   void initState() {
     super.initState();
+    // รีเซ็ตสถานะ BLoC เมื่อเปิดหน้านี้ขึ้นมาใหม่
+    context.read<AuthBloc>().add(const AuthResetState());
 
-    if (!SupabaseConfig.isInitialized) return;
-
-    _authStateSubscription = SupabaseConfig.client.auth.onAuthStateChange
-        .listen((authState) {
-          if (authState.event == AuthChangeEvent.signedIn &&
-              authState.session != null) {
-            _completeSignIn(authState.session!);
-          }
-        }, onError: _handleAuthStateError);
-
-    final existingSession = SupabaseConfig.client.auth.currentSession;
-    if (existingSession != null && !existingSession.isExpired) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _completeSignIn(existingSession);
-      });
-    }
-  }
-
-  Future<void> _loginWithGoogle() async {
-    if (_isGoogleLoading) return;
-
-    if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized) {
-      _showMessage(
-        'ยังไม่ได้ตั้งค่า Supabase Publishable key สำหรับแอป',
-        isError: true,
-      );
-      return;
-    }
-
-    setState(() => _isGoogleLoading = true);
-
-    try {
-      final launched = await SupabaseConfig.client.auth.signInWithOAuth(
-        OAuthProvider.google,
-        redirectTo: kIsWeb ? null : SupabaseConfig.oauthRedirectUrl,
-        authScreenLaunchMode: kIsWeb
-            ? LaunchMode.platformDefault
-            : LaunchMode.externalApplication,
-        queryParams: const {'prompt': 'select_account'},
-      );
-
-      if (!launched && mounted) {
-        _showMessage('ไม่สามารถเปิดหน้าล็อกอิน Google ได้', isError: true);
-      }
-    } on AuthException catch (error) {
-      if (mounted) {
-        _showMessage(error.message, isError: true);
-      }
-    } catch (_) {
-      if (mounted) {
-        _showMessage(
-          'เกิดข้อผิดพลาดระหว่างเปิด Google Login กรุณาลองใหม่',
-          isError: true,
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isGoogleLoading = false);
+    // ตรวจสอบเซสชันที่มีอยู่แล้วเมื่อเริ่มต้นใช้งานแอป
+    if (SupabaseConfig.isInitialized) {
+      final existingSession = SupabaseConfig.client.auth.currentSession;
+      if (existingSession != null && !existingSession.isExpired) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          context.read<AuthBloc>().add(AuthAuthStateChanged(existingSession));
+        });
       }
     }
   }
 
-  Future<void> _completeSignIn(Session session) async {
-    if (!mounted || _signInHandled) return;
-
-    _signInHandled = true;
-    AuthSession.saveAccessToken(session.accessToken);
-
-    try {
-      if (_signedInWithGoogle(session.user.appMetadata)) {
-        await _authRemoteDataSource.syncGoogleProfileImage(
-          accessToken: session.accessToken,
-        );
-      }
-    } on AuthApiException catch (error) {
-      _signInHandled = false;
-      if (mounted) {
-        _showMessage(error.message, isError: true);
-      }
-      return;
-    }
-
-    if (!mounted) return;
-    _goToHome();
-  }
-
-  bool _signedInWithGoogle(Map<String, dynamic> appMetadata) {
-    if (appMetadata['provider'] == 'google') return true;
-
-    final providers = appMetadata['providers'];
-    return providers is List && providers.contains('google');
-  }
-
-  void _handleAuthStateError(Object error, StackTrace stackTrace) {
-    if (!mounted) return;
-
-    setState(() => _isGoogleLoading = false);
-    _showMessage(
-      error is AuthException
-          ? error.message
-          : 'ไม่สามารถตรวจสอบสถานะการเข้าสู่ระบบได้',
-      isError: true,
-    );
+  void _loginWithGoogle() {
+    context.read<AuthBloc>().add(const AuthGoogleLoginRequested());
   }
 
   void _goToHome() {
@@ -160,55 +68,22 @@ class _LoginScreenState extends State<LoginScreen> {
       );
   }
 
-  Future<void> _login() async {
-    if (_isLoading || !(_formKey.currentState?.validate() ?? false)) {
+  void _login() {
+    if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
     FocusScope.of(context).unfocus();
-    setState(() => _isLoading = true);
-
-    try {
-      final tokens = await _authRemoteDataSource.login(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
-      final authResponse = await SupabaseConfig.client.auth.setSession(
-        tokens.refreshToken,
-        accessToken: tokens.accessToken,
-      );
-      final session = authResponse.session;
-      if (session == null) {
-        throw const AuthApiException('ไม่สามารถบันทึก Session ได้');
-      }
-
-      if (!mounted) return;
-      _completeSignIn(session);
-    } on AuthApiException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(error.message),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
+    context.read<AuthBloc>().add(
+          AuthLoginRequested(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
           ),
         );
-    } on AuthException catch (error) {
-      if (!mounted) return;
-      _showMessage(error.message, isError: true);
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
   }
 
   @override
   void dispose() {
-    _authStateSubscription?.cancel();
-    _authRemoteDataSource.close();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -218,7 +93,33 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is LoginLoading) {
+          setState(() {
+            _isLoading = true;
+            _isGoogleLoading = false;
+          });
+        } else if (state is GoogleLoginLoading) {
+          setState(() {
+            _isLoading = false;
+            _isGoogleLoading = true;
+          });
+        } else if (state is LoginSuccess || state is GoogleLoginSuccess) {
+          setState(() {
+            _isLoading = false;
+            _isGoogleLoading = false;
+          });
+          _goToHome();
+        } else if (state is LoginFailure) {
+          setState(() {
+            _isLoading = false;
+            _isGoogleLoading = false;
+          });
+          _showMessage(state.message, isError: true);
+        }
+      },
+      child: Scaffold(
       backgroundColor: Colors.white,
       body: ResponsivePageBody(
         child: Form(
@@ -331,33 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: _login,
               ),
               const SizedBox(height: 32),
-              Row(
-                children: [
-                  Expanded(
-                    child: Divider(
-                      color: AppColors.primaryColor.withValues(alpha: 0.3),
-                      thickness: 1,
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      'หรือ',
-                      style: TextStyle(
-                        color: Colors.black54,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Divider(
-                      color: AppColors.primaryColor.withValues(alpha: 0.3),
-                      thickness: 1,
-                    ),
-                  ),
-                ],
-              ),
+              const AuthDivider(),
               const SizedBox(height: 32),
               SocialButton(
                 text: _isGoogleLoading ? 'กำลังเปิด Google...' : 'Google',
@@ -393,6 +268,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

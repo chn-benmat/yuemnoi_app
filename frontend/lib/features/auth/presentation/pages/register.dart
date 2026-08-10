@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/colors.dart';
@@ -7,7 +8,10 @@ import '../../../../core/widgets/responsive_app_bar_title.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_form_field.dart';
-import '../../data/datasources/auth_remote_data_source.dart';
+import '../bloc/auth_bloc.dart';
+import '../bloc/auth_event.dart';
+import '../bloc/auth_state.dart';
+import '../widgets/register_profile_image_picker.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -23,7 +27,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _authRemoteDataSource = AuthRemoteDataSource();
   final _imagePicker = ImagePicker();
 
   bool _obscurePassword = true;
@@ -31,6 +34,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    // รีเซ็ตสถานะ BLoC เมื่อเข้าหน้านี้
+    context.read<AuthBloc>().add(const AuthResetState());
+  }
 
   Future<void> _pickProfileImage() async {
     if (_isLoading) return;
@@ -62,36 +72,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Future<void> _register() async {
+  void _register() {
     if (_isLoading || !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
     FocusScope.of(context).unfocus();
-    setState(() => _isLoading = true);
-
-    try {
-      await _authRemoteDataSource.register(
-        displayName: _nameController.text,
-        email: _emailController.text,
-        phone: _phoneController.text,
-        password: _passwordController.text,
-        confirmPassword: _confirmPasswordController.text,
-        imageBytes: _profileImageBytes,
-        imageFileName: _profileImage?.name,
-      );
-
-      if (!mounted) return;
-      _showMessage('สร้างบัญชีสำเร็จ สามารถเข้าสู่ระบบได้เลย');
-      Navigator.pop(context, true);
-    } on AuthApiException catch (error) {
-      if (!mounted) return;
-      _showMessage(error.message, isError: true);
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+    context.read<AuthBloc>().add(
+          AuthRegisterRequested(
+            displayName: _nameController.text.trim(),
+            email: _emailController.text.trim(),
+            phone: _phoneController.text.trim(),
+            password: _passwordController.text,
+            confirmPassword: _confirmPasswordController.text,
+            imageBytes: _profileImageBytes,
+            imageFileName: _profileImage?.name,
+          ),
+        );
   }
 
   void _showMessage(String message, {bool isError = false}) {
@@ -110,7 +107,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    _authRemoteDataSource.close();
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -121,7 +117,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is RegisterLoading) {
+          setState(() {
+            _isLoading = true;
+          });
+        } else if (state is RegisterSuccess) {
+          setState(() {
+            _isLoading = false;
+          });
+          _showMessage('สร้างบัญชีสำเร็จ สามารถเข้าสู่ระบบได้เลย');
+          Navigator.pop(context, true);
+        } else if (state is RegisterFailure) {
+          setState(() {
+            _isLoading = false;
+          });
+          _showMessage(state.message, isError: true);
+        }
+      },
+      child: Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryColor,
@@ -144,80 +159,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               const SizedBox(height: 16),
               // Optional profile photo picker
-              Center(
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      onTap: _pickProfileImage,
-                      child: Stack(
-                        children: [
-                          Container(
-                            width: 120,
-                            height: 120,
-                            decoration: BoxDecoration(
-                              color: AppColors.bgFieldColor,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: const Color(0xFFE2E5E7),
-                                width: 1.5,
-                              ),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: _profileImageBytes == null
-                                ? const Icon(
-                                    Icons.person_outline_rounded,
-                                    size: 56,
-                                    color: AppColors.labelColor,
-                                  )
-                                : Image.memory(
-                                    _profileImageBytes!,
-                                    fit: BoxFit.cover,
-                                  ),
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryColor,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2.5,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Icon(
-                                _profileImageBytes == null
-                                    ? Icons.add
-                                    : Icons.edit,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'เพิ่มรูปโปรไฟล์',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF555555),
-                      ),
-                    ),
-                  ],
-                ),
+              RegisterProfileImagePicker(
+                profileImageBytes: _profileImageBytes,
+                onTap: _pickProfileImage,
               ),
               const SizedBox(height: 24),
               // Name Field
@@ -369,6 +313,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
