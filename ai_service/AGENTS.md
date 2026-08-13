@@ -37,12 +37,9 @@ These instructions apply to everything under `ai_service/`.
 - Keep dependencies pinned in `requirements.txt`; change it only when a dependency is necessary.
 - Add focused tests for changed routing, validation, response shaping, or tool behavior. If introducing a test runner, do so only when the task explicitly requires it.
 
-## Verification
+## Development Rules
 
-Run from `ai_service/`:
+- Write code comments in clear, easy-to-understand Thai.
+- Create all new test files inside the `tests/` directory.
 
-```powershell
-python -m compileall main.py config.py app
-```
-
-No formatter, linter, or test runner is currently declared in the repository. Do not invent commands or add tooling just for verification. When the required environment and local services are available, use `python main.py` and verify `GET /health` plus the affected chat scenarios. Report checks that could not run.
+No formatter, linter, or test runner is currently declared in the repository. Do not invent commands or add tooling just for verification. Report checks that could not run.

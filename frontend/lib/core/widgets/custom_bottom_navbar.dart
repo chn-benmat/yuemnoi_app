@@ -40,7 +40,9 @@ class CustomBottomNavbar extends StatelessWidget {
             iconSize: 24,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(milliseconds: 300),
-            tabBackgroundColor: const Color(0xFFF3E8FF), // Light purple for active pill
+            tabBackgroundColor: const Color(
+              0xFFF3E8FF,
+            ), // Light purple for active pill
             color: const Color(0xFF8E8E93), // Medium grey for inactive icons
             selectedIndex: selectedIndex,
             onTabChange: onTabChange,
@@ -52,19 +54,28 @@ class CustomBottomNavbar extends StatelessWidget {
             ),
             tabs: [
               GButton(
-                icon: selectedIndex == 0 ? Icons.home_rounded : Icons.home_outlined,
+                icon: selectedIndex == 0
+                    ? Icons.home_rounded
+                    : Icons.home_outlined,
                 text: 'หน้าหลัก',
               ),
               GButton(
-                icon: selectedIndex == 1 ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded,
+                key: const ValueKey('nav-chat'),
+                icon: selectedIndex == 1
+                    ? Icons.chat_bubble_rounded
+                    : Icons.chat_bubble_outline_rounded,
                 text: 'แชท',
               ),
               GButton(
-                icon: selectedIndex == 2 ? Icons.account_balance_wallet_rounded : Icons.account_balance_wallet_outlined,
+                icon: selectedIndex == 2
+                    ? Icons.account_balance_wallet_rounded
+                    : Icons.account_balance_wallet_outlined,
                 text: 'เงินในบัญชี',
               ),
               GButton(
-                icon: selectedIndex == 3 ? Icons.person_rounded : Icons.person_outline_rounded,
+                icon: selectedIndex == 3
+                    ? Icons.person_rounded
+                    : Icons.person_outline_rounded,
                 text: 'โปรไฟล์',
               ),
             ],

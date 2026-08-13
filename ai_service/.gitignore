@@ -2,5 +2,7 @@
 .env.local
 __pycache__/
 .venv/
+
 tests/
 test/
+.serena/

@@ -145,22 +145,25 @@ Adapter สำหรับติดต่อกับ **AI Service** (Python Fas
 
 ```http
 Authorization: Bearer <SUPABASE_ACCESS_TOKEN>
-Content-Type: application/json
 ```
 
-ตัวอย่างเพิ่มอุปกรณ์:
+การเพิ่มอุปกรณ์ใช้ `multipart/form-data` และแนบรูปด้วยชื่อฟิลด์ `images` ได้สูงสุด 5 รูป
+(JPEG, PNG หรือ WebP รูปละไม่เกิน 5 MB):
 
-```json
-{
-  "item_name": "กล้องถ่ายวิดีโอ 4K",
-  "item_image_url": ["https://example.com/camera.jpg"],
-  "description": "กล้องพร้อมแบตเตอรี่และกระเป๋า",
-  "category": "กล้อง",
-  "price": 2500,
-  "status": "available",
-  "type": "daily"
-}
+```bash
+curl -X POST http://localhost:8080/api/v1/items \
+  -H "Authorization: Bearer <SUPABASE_ACCESS_TOKEN>" \
+  -F "item_name=กล้องถ่ายวิดีโอ 4K" \
+  -F "description=กล้องพร้อมแบตเตอรี่และกระเป๋า" \
+  -F "category=กล้อง" \
+  -F "price=2500" \
+  -F "type=รายวัน" \
+  -F "images=@camera-front.jpg" \
+  -F "images=@camera-back.jpg"
 ```
+
+Backend จะสร้างรายการด้วยสถานะ `pending` อัตโนมัติ อัปโหลดรูปไปที่ bucket
+`item_bk` ภายใต้ path `{item_id}/...` และบันทึก public URL ลง `item_tb.item_image_url`
 
 ตัวอย่างแก้ไขเฉพาะบางฟิลด์:
 

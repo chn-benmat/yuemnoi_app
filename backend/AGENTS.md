@@ -29,18 +29,10 @@ These instructions apply to everything under `backend/`.
 - Make the smallest change that preserves the current package boundaries and constructor-based dependency injection.
 - Return errors with useful context while avoiding secret or internal-detail leakage in client responses.
 - Use standard-library facilities where practical and do not add dependencies unless the task requires them.
-- Add focused table-driven or `httptest` tests beside the package being changed. Do not require live Supabase or AI services in unit tests.
+- Add focused table-driven or `httptest` tests. Do not require live Supabase or AI services in unit tests.
 - Do not edit `go.mod` or `go.sum` unless dependencies actually change.
 
-## Verification
+## Development Rules
 
-Run from `backend/`:
-
-```powershell
-gofmt -w <changed-go-files>
-go test ./...
-go vet ./...
-go build ./cmd/server
-```
-
-Use `go run ./cmd/server` for a local server only when the required environment variables are available. Report any checks that could not run.
+- Write code comments in clear, easy-to-understand Thai.
+- Create all new test files inside the `tests/` directory.

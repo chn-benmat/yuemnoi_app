@@ -1,4 +1,7 @@
 test/
+.qa/
+design-qa.md
+.serena/
 
 # Miscellaneous
 *.class

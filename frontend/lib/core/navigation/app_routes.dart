@@ -12,16 +12,25 @@ import '../../features/chatbot/data/repositories/chatbot_repository_impl.dart';
 import '../../features/chatbot/domain/usecases/send_chat_message_usecase.dart';
 import '../../features/chatbot/presentation/bloc/chatbot_bloc.dart';
 import '../../features/chatbot/presentation/pages/chat_bot.dart';
+import '../../features/chat/domain/entities/chat_conversation.dart';
+import '../../features/chat/presentation/pages/chat_detail.dart';
 import '../../features/home/presentation/pages/home.dart';
+import '../../features/rental_item/data/datasources/rental_item_remote_data_source.dart';
+import '../../features/rental_item/data/repositories/rental_item_repository_impl.dart';
+import '../../features/rental_item/domain/usecases/create_rental_item_usecase.dart';
+import '../../features/rental_item/presentation/bloc/rental_item_bloc.dart';
+import '../../features/rental_item/presentation/pages/add_rental_item.dart';
 
 abstract final class AppRoutes {
   static const login = '/login';
   static const home = '/home';
   static const chatbot = '/chatbot';
+  static const chatDetail = '/chat/detail';
   static const register = '/register';
   static const forgotPassword = '/forgot-password';
   static const otpVerification = '/otp-verification';
   static const changePassword = '/change-password';
+  static const addRentalItem = '/rental-items/add';
 
   static GoRouter createRouter({String initialLocation = login}) {
     return GoRouter(
@@ -57,6 +66,29 @@ abstract final class AppRoutes {
                 ),
               ),
               child: const ChatBotScreen(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: chatDetail,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: ChatDetailScreen(
+              conversation: _requiredConversationExtra(state),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: addRentalItem,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: BlocProvider(
+              create: (context) => RentalItemBloc(
+                createItem: CreateRentalItemUseCase(
+                  RentalItemRepositoryImpl(RentalItemRemoteDataSource()),
+                ),
+              ),
+              child: const AddRentalItemScreen(),
             ),
           ),
         ),
@@ -104,6 +136,17 @@ abstract final class AppRoutes {
     return context.push<void>(chatbot);
   }
 
+  static Future<void> openAddRentalItem(BuildContext context) {
+    return context.push<void>(addRentalItem);
+  }
+
+  static Future<void> openConversation(
+    BuildContext context, {
+    required ChatConversation conversation,
+  }) {
+    return context.push<void>(chatDetail, extra: conversation);
+  }
+
   static void goToLogin(BuildContext context) {
     context.go(login);
   }
@@ -144,6 +187,17 @@ abstract final class AppRoutes {
       value,
       argumentName,
       'Route ${state.uri.path} requires a non-empty String extra.',
+    );
+  }
+
+  static ChatConversation _requiredConversationExtra(GoRouterState state) {
+    final value = state.extra;
+    if (value is ChatConversation) return value;
+
+    throw ArgumentError.value(
+      value,
+      'conversation',
+      'Route ${state.uri.path} requires a ChatConversation extra.',
     );
   }
 }

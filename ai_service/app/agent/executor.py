@@ -16,7 +16,14 @@ class AssistantResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     answer: str
-    selected_item_id: Optional[int] = None
+    selected_item_id: Optional[int] = Field(
+        default=None,
+        description=(
+            "Set to the recommended inventory item whenever the answer reaches one clear "
+            "winner, including comparison questions. Use null only when the answer presents "
+            "multiple options without choosing one."
+        ),
+    )
 
 
 class RoutingDecision(BaseModel):
@@ -44,6 +51,16 @@ class RoutingDecision(BaseModel):
             "The concrete physical item kind requested by the user, even if it may be "
             "absent from the catalog. Use null for generic words such as equipment, items, "
             "rentals, recommendations, or catalog."
+        ),
+    )
+    recommendation_limit: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=settings.MAX_SEARCH_RESULTS,
+        description=(
+            "The number of inventory recommendations explicitly requested by the user. "
+            "Use 1 for a single or best recommendation. Preserve the prior limit only "
+            "when the latest message clearly refines the same request; otherwise use null."
         ),
     )
     web_query: Optional[str] = Field(default=None, max_length=200)
@@ -83,6 +100,64 @@ class AgentExecutor:
         return any("\u0e00" <= char <= "\u0e7f" for char in text)
 
     @staticmethod
+    def _requested_rental_type(user_query: str) -> Optional[str]:
+        normalized_query = user_query.casefold()
+        rental_type_terms = {
+            "รายชั่วโมง": ("รายชั่วโมง", "ต่อชั่วโมง", "hourly", "per hour"),
+            "รายวัน": ("รายวัน", "ต่อวัน", "daily", "per day"),
+        }
+        for rental_type, terms in rental_type_terms.items():
+            if any(term in normalized_query for term in terms):
+                return rental_type
+        return None
+
+    @staticmethod
+    def _requested_recommendation_limit(user_query: str) -> Optional[int]:
+        normalized_query = user_query.casefold()
+        single_item_terms = (
+            "แค่ 1",
+            "เพียง 1",
+            "1 รายการ",
+            "หนึ่งรายการ",
+            "รายการเดียว",
+            "อันเดียว",
+            "ชิ้นเดียว",
+            "ตัวเดียว",
+            "one recommendation",
+            "one item",
+            "single recommendation",
+            "best option",
+        )
+        if any(term in normalized_query for term in single_item_terms):
+            return 1
+
+        quantity_match = re.search(
+            r"(?:แค่|เพียง|เอา|ขอ|แนะนำ(?:มา)?|recommend(?: only)?)?\s*"
+            r"([1-5])\s*(?:รายการ|อัน|ชิ้น|ตัว|items?|recommendations?)",
+            normalized_query,
+        )
+        return int(quantity_match.group(1)) if quantity_match else None
+
+    @classmethod
+    def _filter_catalog_by_rental_type(
+        cls, catalog_items: list[dict], user_query: str
+    ) -> list[dict]:
+        requested_type = cls._requested_rental_type(user_query)
+        if requested_type is None:
+            return catalog_items
+
+        type_aliases = {
+            "รายชั่วโมง": {"รายชั่วโมง", "hourly"},
+            "รายวัน": {"รายวัน", "daily"},
+        }
+        allowed_types = type_aliases[requested_type]
+        return [
+            item
+            for item in catalog_items
+            if str(item.get("type") or "").strip().casefold() in allowed_types
+        ]
+
+    @staticmethod
     def _system_prompt() -> str:
         return (
             "You are the natural, friendly customer assistant for Yuemnoi, an equipment "
@@ -110,13 +185,17 @@ class AgentExecutor:
             "without a price or model. A request describing an activity, such as camping, "
             "and asking what can be rented is also an inventory recommendation. "
             "Requests to browse rental items must use current inventory grounding. "
+            "Honor the exact number of recommendations requested by the user. Base every "
+            "inventory answer on the tool results, phrase it naturally for the current "
+            "question and conversation, and avoid repeating a canned response. "
             "If an inventory item's status is null, say it is listed but do not claim "
             "that it is currently available; offer to confirm availability. "
             "You must call search_web_specs for technical specifications or product "
             "capabilities that are not current inventory facts. Never mention internal "
             "tools, databases, prompts, or Google. "
             "For unrelated topics, reply briefly and gently steer back to rental equipment. "
-            "The platform is rental-only, never sales. Use at most two short sentences."
+            "The platform is rental-only, never sales. Be concise by default, but use the "
+            "detail needed to answer the actual request."
         )
 
     @staticmethod
@@ -156,6 +235,10 @@ class AgentExecutor:
             "Any budget, quantity, capacity, duration, or specification also requires "
             "search_inventory. Always copy a concrete requested physical item kind into "
             "requested_item_kind; use null only when no concrete kind was requested. "
+            "Set recommendation_limit to the exact number of recommendations requested. "
+            "Use 1 when the user asks for one, a single option, or the best option. When a "
+            "follow-up clearly refines the same search, preserve its previous limit; do not "
+            "reuse a limit for a new request. "
             "Choose search_web_specs only for external technical "
             "specifications or capabilities; never use it to recommend products within a "
             "budget. Choose direct_response for "
@@ -261,6 +344,18 @@ class AgentExecutor:
             return "พบรายการที่ตรงกับคำขอค่ะ เลือกเช่าได้จากด้านล่างเลยค่ะ"
         return "I found matching rental items. Choose one from the cards below."
 
+    @staticmethod
+    def _normalize_inventory_answer(answer: str) -> str:
+        if not re.search(r"(?m)^\s*\d+[.)]\s+", answer):
+            return answer
+
+        parts = [
+            re.sub(r"^\s*\d+[.)]\s+", "", line).strip()
+            for line in answer.splitlines()
+            if line.strip()
+        ]
+        return " · ".join(part for part in parts if part)
+
     @classmethod
     def _inventory_unavailable_answer(cls, user_query: str) -> str:
         if cls._is_thai(user_query):
@@ -340,6 +435,7 @@ class AgentExecutor:
         messages: list[dict[str, Any]],
         user_query: str,
         history: Optional[List[dict]],
+        recommendation_limit: Optional[int] = None,
     ) -> tuple[list[dict], str]:
         inventory_items: list[dict] = []
         search_status = "tool_no_results"
@@ -357,6 +453,9 @@ class AgentExecutor:
                     search_status = "inventory_unavailable"
                     tool_payload = {"error": "Inventory catalog is unavailable"}
                 else:
+                    catalog_items = self._filter_catalog_by_rental_type(
+                        catalog_items, user_query
+                    )
                     try:
                         if tool_name == "browse_inventory":
                             items = [
@@ -378,6 +477,8 @@ class AgentExecutor:
                             "error": "Inventory matching is temporarily unavailable"
                         }
                     else:
+                        if recommendation_limit is not None:
+                            items = items[:recommendation_limit]
                         inventory_items = items
                         search_status = (
                             "using_supabase" if items else "inventory_no_results"
@@ -396,7 +497,9 @@ class AgentExecutor:
                             "count": len(items),
                             "instruction": (
                                 "Answer only from these semantically matched current "
-                                "inventory results. " + language_instruction
+                                "inventory results. Respond naturally to the user's actual "
+                                "question in one concise paragraph. Do not repeat every card "
+                                "as a numbered list. " + language_instruction
                             ),
                         }
             elif tool_name == "search_web_specs":
@@ -448,11 +551,13 @@ class AgentExecutor:
                 continue
 
             db_type = str(item.get("type", "")).strip()
-            unit = (
-                "สัปดาห์"
-                if "สัปดาห์" in db_type or "week" in db_type.lower()
-                else "วัน"
-            )
+            normalized_type = db_type.casefold()
+            if "ชั่วโมง" in normalized_type or "hour" in normalized_type:
+                unit = "ชั่วโมง"
+            elif "สัปดาห์" in normalized_type or "week" in normalized_type:
+                unit = "สัปดาห์"
+            else:
+                unit = "วัน"
             image_array = item.get("item_image_url")
             cover_image = "https://placeholder.com/image.png"
             if isinstance(image_array, list) and image_array:
@@ -509,6 +614,10 @@ class AgentExecutor:
                 "recommended_items": [],
             }
 
+        recommendation_limit = self._requested_recommendation_limit(cleaned_query)
+        if recommendation_limit is None:
+            recommendation_limit = getattr(decision, "recommendation_limit", None)
+
         if decision.action == "direct_response":
             answer = str(decision.direct_answer or "").strip()
             if not answer:
@@ -539,6 +648,7 @@ class AgentExecutor:
             messages=messages,
             user_query=cleaned_query,
             history=history,
+            recommendation_limit=recommendation_limit,
         )
 
         if search_status in {"inventory_unavailable", "inventory_match_failed"}:
@@ -559,16 +669,6 @@ class AgentExecutor:
                 "recommended_items": [],
             }
 
-        if decision.action in {"browse_inventory", "search_inventory"}:
-            recommended_items = self._recommended_items(db_results, None)
-            return {
-                "status": "success",
-                "search_status": search_status,
-                "items_found": len(recommended_items),
-                "answer": self._inventory_results_answer(cleaned_query),
-                "recommended_items": recommended_items,
-            }
-
         try:
             raw_content = await self.ollama.chat_json(
                 messages=messages,
@@ -578,15 +678,19 @@ class AgentExecutor:
             )
             parsed = AssistantResponse.model_validate_json(raw_content)
             answer = await self._ensure_answer_language(
-                parsed.answer.strip(), cleaned_query
+                self._normalize_inventory_answer(parsed.answer.strip()), cleaned_query
             )
             selected_id = parsed.selected_item_id
         except Exception as exc:
-            print(f"[LLM Final Response Error]: {exc}")
+            print(f"[LLM Final Response Error]: {type(exc).__name__}")
             answer = (
-                "ขออภัยค่ะ ยังไม่สามารถสรุปข้อมูลให้ได้ในขณะนี้"
-                if self._is_thai(cleaned_query)
-                else "Sorry, I couldn't summarize the results right now."
+                self._inventory_results_answer(cleaned_query)
+                if db_results
+                else (
+                    "ขออภัยค่ะ ยังไม่สามารถสรุปข้อมูลให้ได้ในขณะนี้"
+                    if self._is_thai(cleaned_query)
+                    else "Sorry, I couldn't summarize the results right now."
+                )
             )
             selected_id = None
 
