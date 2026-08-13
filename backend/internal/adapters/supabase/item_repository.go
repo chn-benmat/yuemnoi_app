@@ -1,15 +1,19 @@
 package supabase
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
 	"github.com/nedpals/supabase-go"
 	postgrest "github.com/nedpals/supabase-go/postgrest/pkg"
 )
+
+const itemBucket = "item_bk"
 
 // เป็นตัวแทนในการทำงานกับตาราง item_tb และ review_tb
 type supabaseItemRepository struct {
@@ -23,7 +27,7 @@ func NewSupabaseItemRepository(sbClient *supabase.Client) domain.ItemRepository 
 }
 
 // Insert เพิ่มข้อมูลอุปกรณ์เช่าใหม่ลงในตาราง item_tb
-func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item) (*domain.Item, error) {
+func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, images []domain.ItemImage) (*domain.Item, error) {
 	var items []domain.Item
 	payload := map[string]interface{}{
 		"user_id":     item.UserID,
@@ -46,7 +50,66 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item) 
 		return nil, fmt.Errorf("supabase insert returned no item")
 	}
 
-	return &items[0], nil
+	created := &items[0]
+	if len(images) == 0 {
+		return created, nil
+	}
+
+	paths := make([]string, 0, len(images))
+	urls := make([]string, 0, len(images))
+	for index, image := range images {
+		objectPath := fmt.Sprintf("%d/%d-%d%s", created.ID, time.Now().UnixNano(), index, image.Extension)
+		if err := r.uploadItemImage(objectPath, image); err != nil {
+			r.rollbackCreatedItem(created, paths)
+			return nil, err
+		}
+		paths = append(paths, objectPath)
+		urls = append(urls, r.client.Storage.From(itemBucket).GetPublicUrl(objectPath).SignedUrl)
+	}
+
+	updated, err := r.Update(ctx, created.ID, created.UserID, map[string]interface{}{
+		"item_image_url": urls,
+		"updated_at":     time.Now().UTC(),
+	})
+	if err != nil {
+		r.rollbackCreatedItem(created, paths)
+		return nil, fmt.Errorf("save item image URLs failed: %w", err)
+	}
+	return updated, nil
+}
+
+func (r *supabaseItemRepository) uploadItemImage(path string, image domain.ItemImage) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("item image upload failed: %v", recovered)
+		}
+	}()
+
+	response := r.client.Storage.From(itemBucket).Upload(
+		path,
+		bytes.NewReader(image.Data),
+		&supabase.FileUploadOptions{
+			CacheControl: "3600",
+			ContentType:  image.ContentType,
+			MimeType:     image.ContentType,
+		},
+	)
+	if response.Key == "" {
+		return fmt.Errorf("item image upload failed: %s", response.Message)
+	}
+	return nil
+}
+
+func (r *supabaseItemRepository) rollbackCreatedItem(item *domain.Item, paths []string) {
+	if len(paths) > 0 {
+		func() {
+			defer func() {
+				_ = recover()
+			}()
+			r.client.Storage.From(itemBucket).Remove(paths)
+		}()
+	}
+	_ = r.Delete(context.Background(), item.ID, item.UserID)
 }
 
 // FindAll ดึงข้อมูลอุปกรณ์เช่าทั้งหมดจากตาราง item_tb

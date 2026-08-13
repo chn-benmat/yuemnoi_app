@@ -26,6 +26,13 @@ type Item struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// ItemImage คือไฟล์รูปอุปกรณ์ที่ผ่านการตรวจสอบจาก HTTP handler แล้ว
+type ItemImage struct {
+	Data        []byte
+	ContentType string
+	Extension   string
+}
+
 // Review ตรงกับตาราง review_tb ในฐานข้อมูล Supabase
 type Review struct {
 	ID          string    `json:"id"`
@@ -38,13 +45,12 @@ type Review struct {
 }
 
 type CreateItemRequest struct {
-	ItemName     string   `json:"item_name" binding:"required,min=1,max=150"`
-	ItemImageURL []string `json:"item_image_url" binding:"omitempty,dive,max=2048"`
-	Description  string   `json:"description" binding:"required,min=1,max=2000"`
-	Category     string   `json:"category" binding:"omitempty,max=100"`
-	Price        int      `json:"price" binding:"required,gt=0"`
-	Status       string   `json:"status" binding:"omitempty,max=50"`
-	Type         string   `json:"type" binding:"omitempty,max=100"`
+	ItemName     string   `json:"item_name" form:"item_name" binding:"required,min=1,max=150"`
+	ItemImageURL []string `json:"item_image_url" form:"item_image_url" binding:"omitempty,dive,max=2048"`
+	Description  string   `json:"description" form:"description" binding:"required,min=1,max=2000"`
+	Category     string   `json:"category" form:"category" binding:"required,min=1,max=100"`
+	Price        int      `json:"price" form:"price" binding:"required,gt=0"`
+	Type         string   `json:"type" form:"type" binding:"required,oneof=รายวัน รายชั่วโมง"`
 }
 
 type UpdateItemRequest struct {
@@ -58,7 +64,7 @@ type UpdateItemRequest struct {
 }
 
 type ItemRepository interface {
-	Insert(ctx context.Context, item *Item) (*Item, error)
+	Insert(ctx context.Context, item *Item, images []ItemImage) (*Item, error)
 	FindAll(ctx context.Context) ([]Item, error)
 	FindByID(ctx context.Context, id int64) (*Item, error)
 	Update(ctx context.Context, id int64, userID string, fields map[string]interface{}) (*Item, error)

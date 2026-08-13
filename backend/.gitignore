@@ -12,3 +12,7 @@ main
 
 .DS_Store
 Thumbs.db
+
+tests/
+test/
+.serena/

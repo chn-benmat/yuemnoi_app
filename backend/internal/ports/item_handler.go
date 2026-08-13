@@ -2,13 +2,22 @@ package ports
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
 	"github.com/gin-gonic/gin"
+)
+
+const (
+	maxItemImages    = 5
+	maxItemImageSize = 5 << 20
 )
 
 type ItemHandler struct {
@@ -95,27 +104,94 @@ func (h *ItemHandler) CreateItem(c *gin.Context) {
 	}
 
 	var req domain.CreateItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลอุปกรณ์ไม่ถูกต้อง: " + err.Error()})
+		return
+	}
+
+	images, err := itemImagesFromRequest(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	item, err := h.repo.Insert(c.Request.Context(), &domain.Item{
 		UserID:       userID,
-		ItemName:     req.ItemName,
+		ItemName:     strings.TrimSpace(req.ItemName),
 		ItemImageURL: req.ItemImageURL,
-		Description:  req.Description,
-		Category:     req.Category,
+		Description:  strings.TrimSpace(req.Description),
+		Category:     strings.TrimSpace(req.Category),
 		Price:        req.Price,
-		Status:       req.Status,
+		Status:       "pending",
 		Type:         req.Type,
-	})
+	}, images)
 	if err != nil {
 		writeItemError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusCreated, item)
+}
+
+func itemImagesFromRequest(c *gin.Context) ([]domain.ItemImage, error) {
+	if !strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
+		return nil, nil
+	}
+
+	form, err := c.MultipartForm()
+	if err != nil {
+		return nil, fmt.Errorf("ไม่สามารถอ่านรูปอุปกรณ์ได้")
+	}
+	headers := form.File["images"]
+	if len(headers) > maxItemImages {
+		return nil, fmt.Errorf("เพิ่มรูปอุปกรณ์ได้ไม่เกิน %d รูป", maxItemImages)
+	}
+
+	images := make([]domain.ItemImage, 0, len(headers))
+	for _, header := range headers {
+		image, err := readItemImage(header)
+		if err != nil {
+			return nil, err
+		}
+		images = append(images, *image)
+	}
+	return images, nil
+}
+
+func readItemImage(header *multipart.FileHeader) (*domain.ItemImage, error) {
+	if header.Size <= 0 {
+		return nil, fmt.Errorf("ไฟล์รูปอุปกรณ์ว่างเปล่า")
+	}
+	if header.Size > maxItemImageSize {
+		return nil, fmt.Errorf("รูปอุปกรณ์แต่ละรูปต้องมีขนาดไม่เกิน 5 MB")
+	}
+
+	file, err := header.Open()
+	if err != nil {
+		return nil, fmt.Errorf("ไม่สามารถเปิดรูปอุปกรณ์ได้")
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxItemImageSize+1))
+	if err != nil {
+		return nil, fmt.Errorf("ไม่สามารถอ่านรูปอุปกรณ์ได้")
+	}
+	if len(data) > maxItemImageSize {
+		return nil, fmt.Errorf("รูปอุปกรณ์แต่ละรูปต้องมีขนาดไม่เกิน 5 MB")
+	}
+
+	contentType := http.DetectContentType(data)
+	extensionByContentType := map[string]string{
+		"image/jpeg": ".jpg",
+		"image/png":  ".png",
+		"image/webp": ".webp",
+	}
+	extension, ok := extensionByContentType[contentType]
+	if !ok {
+		return nil, fmt.Errorf("รูปอุปกรณ์ต้องเป็นไฟล์ JPEG, PNG หรือ WebP")
+	}
+
+	return &domain.ItemImage{Data: data, ContentType: contentType, Extension: extension}, nil
 }
 
 // [PUT] /api/v1/items/:id - แก้ไขอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ

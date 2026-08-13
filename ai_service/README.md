@@ -116,9 +116,9 @@ async def stream_ai_response(payload: ChatRequest):
 #### 2. 🗄️ Database Query
 
 - Qwen เลือกเรียก `search_inventory` เองเมื่อคำถามต้องใช้ข้อมูลสินค้าปัจจุบัน
-- tool รับ typed arguments เช่น category, search_text, min_price และ max_price
-- backend ตรวจสอบ arguments ด้วย Pydantic ก่อนค้น Supabase ผ่าน PostgREST
-- จำกัดผลลัพธ์ไม่เกิน 5 รายการและเลือกเฉพาะคอลัมน์ที่จำเป็น
+- tool โหลด catalog ปัจจุบันจาก Supabase โดยไม่ผูกกับชื่อ category ภาษาใดภาษาหนึ่ง
+- Qwen วิเคราะห์ความหมาย หมวดหมู่ ราคา และข้อจำกัดจากข้อความผู้ใช้เทียบกับ catalog จริง
+- ระบบรับเฉพาะ ID ที่มีอยู่ใน catalog และคืนผลว่างเมื่อไม่มีรายการตรง เพื่อป้องกันการแต่งสินค้า
 
 #### 3. 🔍 Google Verification
 
@@ -129,7 +129,7 @@ async def stream_ai_response(payload: ChatRequest):
 #### 4. 💬 LLM Response Generation
 
 - รอบแรกส่งประวัติแชทล่าสุดไม่เกิน 6 ข้อความให้ Qwen ตัดสินใจด้วย structured semantic routing เพียงครั้งเดียว
-- บทสนทนาทั่วไปใช้คำตอบจาก routing ได้ทันที ส่วนคำถามสินค้า/สเปกจึงค่อยส่งผลจริงให้ Qwen เรียบเรียงรอบสุดท้าย
+- บทสนทนาทั่วไปใช้คำตอบจาก routing ได้ทันที ส่วน inventory คืนข้อความเกริ่นสั้นและรายการจริงเป็นการ์ดโดยไม่สร้างลิสต์ข้อความซ้ำ
 - ปิด thinking, จำกัด output และบังคับคำตอบหลัง tool ด้วย JSON schema รูปแบบ:
   ```json
   {
@@ -140,7 +140,7 @@ async def stream_ai_response(payload: ChatRequest):
 
 #### 5. 📦 Item Selection & Response
 
-- กรองอุปกรณ์ตาม `selected_item_id` ที่ AI เลือก
+- คืนอุปกรณ์ที่ผ่าน semantic matching เป็น `recommended_items` สำหรับแสดงเป็นการ์ด
 - จัดรูปแบบข้อมูลรูปภาพ, ราคา, หน่วย (วัน/สัปดาห์)
 - ส่ง Response กลับ:
   ```json
@@ -173,17 +173,17 @@ async def stream_ai_response(payload: ChatRequest):
 เครื่องมือค้นหาอุปกรณ์ในฐานข้อมูล Supabase ที่ถูกเรียกโดย Qwen:
 
 1. **Tool Selection** — Qwen ตัดสินใจจากความหมายและประวัติสนทนาโดยไม่มี keyword router
-2. **Semantic Filters** — Qwen แปลงคำพ้อง คำอธิบายการใช้งาน และบริบทจากข้อความก่อนหน้าเป็นหมวดมาตรฐาน เช่น “จะไปนอนป่า” → `camping` โดยไม่บังคับให้ผู้ใช้พิมพ์คำตายตัว
-3. **Typed Arguments** — Pydantic ตรวจสอบชื่อสินค้า หมวดหมู่ และช่วงราคา
-4. **Flexible Text Search** — คำค้นหลายคำถูกค้นแยกเป็นคำสำคัญ ไม่ต้องตรงกับวลีในฐานข้อมูลทั้งประโยค
-5. **Safe Query** — backend สร้าง PostgREST filters เองและไม่รับ SQL ดิบจากโมเดล
+2. **Catalog Grounding** — โหลดชื่อ คำอธิบาย category ราคา สถานะ และหน่วยเช่าจาก `item_tb`
+3. **Semantic Matching** — Qwen เทียบความหมายและข้อจำกัดโดยตรง จึงรองรับ category ภาษาไทยและคำพูดหลายรูปแบบโดยไม่ใช้ keyword mapping
+4. **Validated IDs** — Pydantic ตรวจโครงสร้างผลลัพธ์และระบบตัด ID ที่ไม่มีอยู่จริงออก
+5. **Safe Query** — AI ไม่สามารถส่ง SQL หรือสร้างข้อมูลสินค้าใหม่เองได้
 
 ```
-คำถาม: "มีกล้อง Sony ราคาไม่เกิน 500 บาทไหม?"
+คำถาม: "เช่ากล้องราคาไม่เกิน 2,000 บาท"
     ↓ Qwen calls search_inventory
-Filters: category=camera, search_text=sony, max_price=500, limit=5
-    ↓ Execute via Supabase PostgREST
-ผลลัพธ์: [{ id: 42, item_name: "กล้อง Sony RX100 IV", price: 450, ... }]
+Catalog: [{ id: 9, category: "กล้อง", price: 1500, ... }, ...]
+    ↓ Qwen selects only matching catalog IDs
+ผลลัพธ์: [{ id: 9, item_name: "กล้อง Sony A7 IV พร้อมเลนส์ 24-70mm", price: 1500, ... }]
 ```
 
 #### `google_tool.py` — GoogleTool

@@ -36,6 +36,7 @@ class OllamaClient:
         schema: dict[str, Any],
         max_tokens: int,
         timeout: float,
+        think: bool = False,
     ) -> str:
         response = await self.client.post(
             self.api_url,
@@ -43,7 +44,7 @@ class OllamaClient:
                 "model": settings.MODEL_NAME,
                 "messages": messages,
                 "stream": False,
-                "think": False,
+                "think": think,
                 "keep_alive": settings.OLLAMA_KEEP_ALIVE,
                 "format": schema,
                 "options": {

@@ -1,14 +1,148 @@
+import json
+import logging
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, List, Optional
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.agent.executor import AgentExecutor
 
 
 agent_executor = AgentExecutor()
+logger = logging.getLogger("uvicorn.error")
+
+MAX_LOGGED_BODY_CHARS = 16 * 1024
+SENSITIVE_LOG_KEY_FRAGMENTS = (
+    "authorization",
+    "password",
+    "token",
+    "otp",
+    "secret",
+    "api_key",
+    "apikey",
+    "email",
+    "phone",
+    "full_name",
+    "fullname",
+    "display_name",
+    "displayname",
+    "user_id",
+    "userid",
+    "user_image",
+    "profile_image",
+    "owner_id",
+    "ownerid",
+    "latitude",
+    "longitude",
+    "address",
+    "service_role",
+    "supabase_key",
+    "serper_api",
+)
+
+
+def _is_sensitive_log_key(key: str) -> bool:
+    normalized_key = key.lower()
+    return any(
+        fragment in normalized_key for fragment in SENSITIVE_LOG_KEY_FRAGMENTS
+    )
+
+
+def _redact_sensitive_log_values(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: (
+                "[REDACTED]"
+                if _is_sensitive_log_key(str(key))
+                else _redact_sensitive_log_values(child)
+            )
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_sensitive_log_values(child) for child in value]
+    return value
+
+
+def _safe_body_for_log(body: bytes, content_type: str) -> str:
+    if not body:
+        return "<empty>"
+    if "json" not in content_type.lower():
+        return f"<non-JSON body omitted: {len(body)} bytes>"
+
+    try:
+        payload = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return f"<invalid JSON body omitted: {len(body)} bytes>"
+
+    serialized = json.dumps(
+        _redact_sensitive_log_values(payload),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    if len(serialized) > MAX_LOGGED_BODY_CHARS:
+        return serialized[:MAX_LOGGED_BODY_CHARS] + "...<truncated>"
+    return serialized
+
+
+class RequestResponseLoggingMiddleware:
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_body = bytearray()
+        response_body = bytearray()
+        response_status: int | str = "unhandled_exception"
+        response_content_type = ""
+
+        async def receive_with_logging() -> Message:
+            message = await receive()
+            if message["type"] == "http.request":
+                request_body.extend(message.get("body", b""))
+            return message
+
+        async def send_with_logging(message: Message) -> None:
+            nonlocal response_status, response_content_type
+            if message["type"] == "http.response.start":
+                response_status = message["status"]
+                headers = {
+                    key.decode("latin-1").lower(): value.decode("latin-1")
+                    for key, value in message.get("headers", [])
+                }
+                response_content_type = headers.get("content-type", "")
+            elif message["type"] == "http.response.body":
+                response_body.extend(message.get("body", b""))
+            await send(message)
+
+        try:
+            await self.app(scope, receive_with_logging, send_with_logging)
+        finally:
+            request_headers = {
+                key.decode("latin-1").lower(): value.decode("latin-1")
+                for key, value in scope.get("headers", [])
+            }
+            logger.info(
+                "ai_http method=%s path=%s status=%s request_body=%s response_body=%s",
+                scope.get("method", ""),
+                scope.get("path", ""),
+                response_status,
+                _safe_body_for_log(
+                    bytes(request_body),
+                    request_headers.get("content-type", ""),
+                ),
+                _safe_body_for_log(bytes(response_body), response_content_type),
+            )
 
 
 @asynccontextmanager
@@ -32,6 +166,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestResponseLoggingMiddleware)
 
 
 @app.get("/health")

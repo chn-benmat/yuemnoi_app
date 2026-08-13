@@ -90,7 +90,7 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
-            Navigator.pop(context);
+            AppRoutes.pop(context);
           },
         ),
         title: const ResponsiveAppBarTitle('ลืมรหัสผ่าน'),

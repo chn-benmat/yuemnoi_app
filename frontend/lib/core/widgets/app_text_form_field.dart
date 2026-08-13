@@ -2,60 +2,55 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../constants/colors.dart';
+import 'app_field_label.dart';
 
 class AppTextFormField extends StatelessWidget {
   final String label;
-  final String hintText;
+  final String? hintText;
   final IconData? prefixIcon;
+  final Widget? prefix;
   final bool obscureText;
   final Widget? suffixIcon;
   final TextEditingController? controller;
   final String? Function(String?)? validator;
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
+  final Key? fieldKey;
+  final int maxLines;
+  final int? minLines;
 
   const AppTextFormField({
     super.key,
     required this.label,
-    required this.hintText,
+    this.hintText,
     this.prefixIcon,
+    this.prefix,
     this.obscureText = false,
     this.suffixIcon,
     this.controller,
     this.validator,
     this.keyboardType,
     this.inputFormatters,
-  });
+    this.fieldKey,
+    this.maxLines = 1,
+    this.minLines,
+  }) : assert(prefixIcon == null || prefix == null);
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4.0, bottom: 8.0),
-          child: Text(
-            label,
-            style:
-                theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.labelColor,
-                ) ??
-                const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.labelColor,
-                ),
-          ),
-        ),
+        AppFieldLabel(text: label),
         TextFormField(
+          key: fieldKey,
           controller: controller,
           obscureText: obscureText,
           validator: validator,
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
+          maxLines: maxLines,
+          minLines: minLines,
           style: const TextStyle(fontSize: 16, color: Colors.black87),
           decoration: InputDecoration(
             hintText: hintText,
@@ -63,7 +58,20 @@ class AppTextFormField extends StatelessWidget {
               color: AppColors.hintTextColor,
               fontSize: 16,
             ),
-            prefixIcon: prefixIcon != null
+            prefixIcon: prefix != null
+                ? Padding(
+                    padding: const EdgeInsetsDirectional.only(
+                      start: 20,
+                      end: 12,
+                    ),
+                    child: Align(
+                      alignment: Alignment.center,
+                      widthFactor: 1,
+                      heightFactor: 1,
+                      child: prefix,
+                    ),
+                  )
+                : prefixIcon != null
                 ? Icon(prefixIcon, color: AppColors.fieldIconColor, size: 22)
                 : null,
             suffixIcon: suffixIcon,
