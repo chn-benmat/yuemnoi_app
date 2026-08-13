@@ -16,6 +16,7 @@ import (
 )
 
 func main() {
+	// Trigger air rebuild after port change to 8081
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
