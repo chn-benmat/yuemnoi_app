@@ -187,7 +187,7 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () {
-              Navigator.pop(context);
+              AppRoutes.pop(context);
             },
           ),
           title: const ResponsiveAppBarTitle('เปลี่ยนรหัสผ่าน'),

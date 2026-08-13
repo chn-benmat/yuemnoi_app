@@ -16,6 +16,7 @@ func SetupRouter(
 	// ใช้ Logger และ Recovery Middleware (ป้องกันเซิร์ฟเวอร์พังเวลาเกิด Panic โค้ดเอ๋อ)
 	router := gin.New()
 	router.Use(gin.Logger())
+	router.Use(responseLoggingMiddleware())
 	router.Use(gin.Recovery())
 
 	// ตั้งค่า CORS  เพื่อให้ Flutter ยิงเข้ามาหาได้ไม่ติดบล็อก

@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/responsive_app_bar_title.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
 import '../../../../core/widgets/app_primary_button.dart';
@@ -128,7 +129,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             _isLoading = false;
           });
           _showMessage('สร้างบัญชีสำเร็จ สามารถเข้าสู่ระบบได้เลย');
-          Navigator.pop(context, true);
+          AppRoutes.pop(context, true);
         } else if (state is RegisterFailure) {
           setState(() {
             _isLoading = false;
@@ -145,7 +146,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
-            Navigator.pop(context);
+            AppRoutes.pop(context);
           },
         ),
         title: const ResponsiveAppBarTitle('สมัครสมาชิก'),
@@ -295,7 +296,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   GestureDetector(
                     onTap: () {
-                      Navigator.pop(context);
+                      AppRoutes.pop(context);
                     },
                     child: const Text(
                       'เข้าสู่ระบบ',

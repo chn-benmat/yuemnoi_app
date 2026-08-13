@@ -3,16 +3,12 @@ import re
 from typing import Any, List, Literal, Optional
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from config import settings
+from .inventory_grounding import InventoryGrounder, InventoryGroundingError
 from ..llm.ollama_client import OllamaClient
-from ..tools.database_tool import (
-    INVENTORY_CATEGORIES,
-    DatabaseTool,
-    InventoryCategory,
-    ItemSearchFilters,
-)
+from ..tools.database_tool import DatabaseTool, InventoryCatalogError
 from ..tools.google_tool import GoogleTool
 
 
@@ -28,21 +24,30 @@ class RoutingDecision(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["direct_response", "search_inventory", "search_web_specs"]
-    search_text: Optional[str] = Field(max_length=80)
-    category: Optional[InventoryCategory]
-    specific_item: bool
-    min_price: Optional[int] = Field(ge=0, le=1_000_000)
-    max_price: Optional[int] = Field(ge=0, le=1_000_000)
-    limit: int = Field(default=5, ge=1, le=5)
-    list_all: bool
-    web_query: Optional[str] = Field(max_length=200)
-    direct_answer: Optional[str] = Field(max_length=500)
-
-    @field_validator("min_price", "max_price", mode="before")
-    @classmethod
-    def _zero_price_means_unspecified(cls, value: Any) -> Any:
-        return None if value is None or value == "" or value == 0 or value == "0" else value
+    action: Literal[
+        "direct_response",
+        "browse_inventory",
+        "search_inventory",
+        "search_web_specs",
+    ] = Field(
+        description=(
+            "Use browse_inventory only for a generic request to list the catalog with no "
+            "named physical item, product type, use case, budget, capacity, or other "
+            "constraint. If any such detail exists, use search_inventory even when the "
+            "requested item may not exist in the catalog."
+        )
+    )
+    requested_item_kind: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description=(
+            "The concrete physical item kind requested by the user, even if it may be "
+            "absent from the catalog. Use null for generic words such as equipment, items, "
+            "rentals, recommendations, or catalog."
+        ),
+    )
+    web_query: Optional[str] = Field(default=None, max_length=200)
+    direct_answer: Optional[str] = Field(default=None, max_length=500)
 
 
 class RewrittenAnswer(BaseModel):
@@ -53,13 +58,13 @@ class RewrittenAnswer(BaseModel):
 
 class AgentExecutor:
     BRAND_NAME = "Yuemnoi"
-    INVENTORY_CATEGORIES = INVENTORY_CATEGORIES
 
     def __init__(self):
         self.http_client = httpx.AsyncClient(
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10)
         )
         self.ollama = OllamaClient(self.http_client)
+        self.inventory_grounder = InventoryGrounder(self.ollama)
         self.db_tool = DatabaseTool(self.http_client)
         self.google_tool = GoogleTool(self.http_client)
 
@@ -104,8 +109,7 @@ class AgentExecutor:
             "A question asking whether Yuemnoi has an item is an inventory request even "
             "without a price or model. A request describing an activity, such as camping, "
             "and asking what can be rented is also an inventory recommendation. "
-            "The Thai question 'มีอะไรให้เช่าบ้าง' and equivalent requests to browse all "
-            "rental items must call search_inventory with list_all=true. "
+            "Requests to browse rental items must use current inventory grounding. "
             "If an inventory item's status is null, say it is listed but do not claim "
             "that it is currently available; offer to confirm availability. "
             "You must call search_web_specs for technical specifications or product "
@@ -114,101 +118,6 @@ class AgentExecutor:
             "For unrelated topics, reply briefly and gently steer back to rental equipment. "
             "The platform is rental-only, never sales. Use at most two short sentences."
         )
-
-    @staticmethod
-    def _tool_definitions() -> list[dict[str, Any]]:
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "search_inventory",
-                    "description": (
-                        "MUST be called before any claim about Yuemnoi rental products, "
-                        "categories, brands, models, prices, availability, comparisons, "
-                        "activities, or recommendations. Use list_all=true only for an "
-                        "explicit request to browse all inventory, including the Thai "
-                        "question มีอะไรให้เช่าบ้าง."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "search_text": {
-                                "type": ["string", "null"],
-                                "description": (
-                                    "A concise product, brand, or model search phrase inferred "
-                                    "from the request. Normalize or translate when useful. This "
-                                    "is required when the user names a specific kind of item but "
-                                    "none of the canonical categories fits. Do not put general "
-                                    "activity wording here when category already captures it."
-                                ),
-                            },
-                            "category": {
-                                "type": ["string", "null"],
-                                "enum": [*INVENTORY_CATEGORIES, None],
-                                "description": (
-                                    "Infer the closest inventory category from the user's "
-                                    "meaning and conversation context. It does not need to be "
-                                    "written literally by the user. Use null when no category "
-                                    "clearly fits."
-                                ),
-                            },
-                            "specific_item": {
-                                "type": "boolean",
-                                "description": (
-                                    "True only when search_text identifies a particular brand, "
-                                    "model, named product, or product subtype to match. False for "
-                                    "general categories and activity or use-case descriptions."
-                                ),
-                            },
-                            "min_price": {"type": ["integer", "null"], "minimum": 0},
-                            "max_price": {"type": ["integer", "null"], "minimum": 0},
-                            "limit": {
-                                "type": "integer",
-                                "minimum": 1,
-                                "maximum": settings.MAX_SEARCH_RESULTS,
-                            },
-                            "list_all": {
-                                "type": "boolean",
-                                "description": (
-                                    "True only for the entire catalog, when the user does not "
-                                    "name or describe any particular item, category, activity, "
-                                    "brand, or model. A yes/no question about a specific item is "
-                                    "always false, even when category is null."
-                                ),
-                            },
-                        },
-                        "required": [
-                            "search_text",
-                            "category",
-                            "specific_item",
-                            "min_price",
-                            "max_price",
-                            "list_all",
-                        ],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "search_web_specs",
-                    "description": (
-                        "MUST be called for technical product specifications or capabilities. "
-                        "Never use it for inventory, rental prices, or availability."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Specific product and specification question",
-                            }
-                        },
-                        "required": ["query"],
-                    },
-                },
-            },
-        ]
 
     @staticmethod
     def _conversation_messages(
@@ -235,49 +144,26 @@ class AgentExecutor:
         cls, user_query: str, history: Optional[List[dict]]
     ) -> list[dict[str, Any]]:
         prompt = (
-            "Classify the latest request for Yuemnoi using only the provided JSON schema. "
-            "Choose search_inventory for every request about rental products, what Yuemnoi "
-            "has, price, availability, category, brand, model, comparison, activity-based "
-            "recommendation, or current inventory. Never classify an inventory claim as "
-            "direct_response. Choose search_web_specs for technical specifications or "
-            "product capabilities that do not ask inventory, rental price, or availability. "
-            "A product or model name by itself does not make a request an inventory search. "
-            "If the user asks whether a product can do something, or asks about resolution, "
-            "battery, dimensions, compatibility, or other specifications, choose "
-            "search_web_specs unless the same request explicitly asks to rent it, check its "
-            "availability, or get its rental price. Example: 'Sony A7 III ถ่ายวิดีโอ 4K "
-            "ได้ไหม' => search_web_specs with that exact model and question in web_query. "
-            "Choose direct_response only for greetings, thanks, identity, unrelated topics, "
-            "or a follow-up fully answerable from conversation history. Infer category from "
-            "the request's meaning and conversation history, even when the user uses a synonym, "
-            "describes a use case, or omits the product in a follow-up. Use only one of these "
-            f"canonical categories: {', '.join(INVENTORY_CATEGORIES)}. Use category=null when "
-            "none clearly fits; never force an unrelated category. search_text may normalize "
-            "or translate explicit product, brand, and model wording into terms likely to occur "
-            "in inventory names. When category already captures a general use case, prefer "
-            "search_text=null so the database can return the whole relevant category. Set "
-            "specific_item=true only for a particular brand, model, named product, or product "
-            "subtype; set it false for a general category or use case. For example, 'Sony A7' "
-            "is specific, while 'นอนป่า', 'ถ่ายตอนวิ่ง', and 'กล้อง' are not. "
-            "Set list_all=true only for a request to browse the entire catalog with no specific "
-            "item, category, activity, brand, or model. Questions such as 'Do you rent cars?' "
-            "or 'มีรถยนต์ให้เช่าไหม' are filtered inventory requests: keep category=null, put "
-            "the requested product in search_text, and set list_all=false. Never turn an unknown "
-            "product into list_all. "
-            "Example: มีอะไรให้เช่าบ้าง => action=search_inventory, list_all=true, "
-            "category=null, search_text=null. Example: จะไปนอนป่าสองคืน มีอะไรเหมาะบ้าง => "
-            "action=search_inventory, category=camping, search_text=null. "
-            "Extract min_price and "
-            "max_price only from explicit money constraints. Counts of people or items, "
-            "model numbers, resolution, fps, and dates are never prices. "
-            "Set direct_answer=null for both search actions. For direct_response, set "
-            "direct_answer to the complete natural reply and do not make inventory claims. "
-            "Reply in the language of the latest message. In Thai, speak as a polite woman "
-            "using ค่ะ or คะ and never ครับ; always spell the brand Yuemnoi in Latin letters. "
-            "For a greeting, simply greet the user and ask how you can help; never claim that "
-            "items, categories, or every type of equipment are available without an inventory "
-            "search. Use a professional friendly tone without stretched or playful spellings. "
-            "In English, use English only. Keep the reply to at most two short sentences."
+            "Classify the latest request by meaning and conversation context. Choose "
+            "browse_inventory when the user broadly asks what can be rented or requests "
+            "general recommendations without naming an item kind, use case, or constraint. "
+            "Choose search_inventory when the user asks whether a particular rental item "
+            "exists, its price or availability, comparisons, or recommendations for a "
+            "specific use case. Yuemnoi is rental-only, so treat a product recommendation with a "
+            "price budget as a current rental-inventory request even when the user omits "
+            "the word rent. A named physical object such as an item absent from the catalog "
+            "must still use search_inventory, never browse_inventory or direct_response. "
+            "Any budget, quantity, capacity, duration, or specification also requires "
+            "search_inventory. Always copy a concrete requested physical item kind into "
+            "requested_item_kind; use null only when no concrete kind was requested. "
+            "Choose search_web_specs only for external technical "
+            "specifications or capabilities; never use it to recommend products within a "
+            "budget. Choose direct_response for "
+            "conversation that needs neither current inventory nor external specifications. "
+            "For search_web_specs, preserve the user's complete technical question in "
+            "web_query. For direct_response, provide the complete natural reply in "
+            "direct_answer without making claims about current inventory. Reply in the "
+            "language of the latest user message."
         )
         messages: list[dict[str, Any]] = [{"role": "system", "content": prompt}]
         for message in (history or [])[-settings.MAX_HISTORY_MESSAGES :]:
@@ -299,31 +185,25 @@ class AgentExecutor:
         raw_decision = await self.ollama.chat_json(
             messages=self._routing_messages(user_query, history),
             schema=RoutingDecision.model_json_schema(),
-            max_tokens=220,
+            max_tokens=settings.ROUTING_MAX_TOKENS,
             timeout=30.0,
         )
-        return RoutingDecision.model_validate_json(raw_decision)
+        decision = RoutingDecision.model_validate_json(raw_decision)
+        if decision.action == "browse_inventory" and decision.requested_item_kind:
+            return decision.model_copy(update={"action": "search_inventory"})
+        return decision
 
     @staticmethod
     def _decision_tool_calls(
         decision: RoutingDecision, user_query: str
     ) -> list[dict[str, Any]]:
-        if decision.action == "search_inventory":
-            arguments = {
-                "search_text": decision.search_text,
-                "category": decision.category,
-                "specific_item": decision.specific_item,
-                "min_price": decision.min_price,
-                "max_price": decision.max_price,
-                "limit": decision.limit,
-                "list_all": decision.list_all,
-            }
+        if decision.action in {"browse_inventory", "search_inventory"}:
             return [
                 {
                     "id": "route-inventory",
                     "function": {
-                        "name": "search_inventory",
-                        "arguments": arguments,
+                        "name": decision.action,
+                        "arguments": {},
                     },
                 }
             ]
@@ -370,30 +250,22 @@ class AgentExecutor:
         return {}
 
     @classmethod
-    def _ground_inventory_arguments(
-        cls, arguments: dict[str, Any], user_query: str
-    ) -> dict[str, Any]:
-        raw_search_text = arguments.get("search_text")
-        search_text = (
-            DatabaseTool._safe_filter_text(raw_search_text)
-            if isinstance(raw_search_text, str)
-            else None
-        )
-        category = arguments.get("category")
-        if category not in INVENTORY_CATEGORIES:
-            category = None
-        if category and not bool(arguments.get("specific_item")):
-            search_text = None
+    def _inventory_no_results_answer(cls, user_query: str) -> str:
+        if cls._is_thai(user_query):
+            return "ขออภัยค่ะ ตอนนี้ไม่พบรายการให้เช่าที่ตรงกับคำขอนี้"
+        return "Sorry, there are currently no rental items matching your request."
 
-        return {
-            "search_text": search_text,
-            "category": category,
-            "min_price": arguments.get("min_price"),
-            "max_price": arguments.get("max_price"),
-            "limit": arguments.get("limit", 5),
-            # A specific semantic filter always wins over an accidental broad search.
-            "list_all": bool(arguments.get("list_all")) and not search_text and not category,
-        }
+    @classmethod
+    def _inventory_results_answer(cls, user_query: str) -> str:
+        if cls._is_thai(user_query):
+            return "พบรายการที่ตรงกับคำขอค่ะ เลือกเช่าได้จากด้านล่างเลยค่ะ"
+        return "I found matching rental items. Choose one from the cards below."
+
+    @classmethod
+    def _inventory_unavailable_answer(cls, user_query: str) -> str:
+        if cls._is_thai(user_query):
+            return "ขออภัยค่ะ ระบบค้นหารายการเช่ายังไม่พร้อมใช้งานชั่วคราว"
+        return "Sorry, inventory search is temporarily unavailable."
 
     @classmethod
     def _normalize_answer_style(cls, answer: str, user_query: str) -> str:
@@ -452,7 +324,7 @@ class AgentExecutor:
                     },
                 ],
                 schema=RewrittenAnswer.model_json_schema(),
-                max_tokens=160,
+                max_tokens=settings.LANGUAGE_REPAIR_MAX_TOKENS,
                 timeout=25.0,
             )
             rewritten = RewrittenAnswer.model_validate_json(raw_rewrite).answer.strip()
@@ -467,6 +339,7 @@ class AgentExecutor:
         tool_calls: list[dict[str, Any]],
         messages: list[dict[str, Any]],
         user_query: str,
+        history: Optional[List[dict]],
     ) -> tuple[list[dict], str]:
         inventory_items: list[dict] = []
         search_status = "tool_no_results"
@@ -476,33 +349,56 @@ class AgentExecutor:
             tool_name = function.get("name", "")
             arguments = self._parse_tool_arguments(tool_call)
 
-            if tool_name == "search_inventory":
-                arguments = self._ground_inventory_arguments(arguments, user_query)
+            if tool_name in {"browse_inventory", "search_inventory"}:
                 try:
-                    filters = ItemSearchFilters.model_validate(arguments)
-                except Exception as exc:
-                    print(f"[Inventory Tool Arguments Error]: {exc}")
-                    filters = ItemSearchFilters()
-
-                items = await self.db_tool.search_items(filters)
-                inventory_items = items
-                search_status = "using_supabase" if items else "inventory_no_results"
-                language_instruction = (
-                    "Reply in Thai with polite feminine particles."
-                    if self._is_thai(user_query)
-                    else (
-                        "Reply in English only. Translate generic Thai product wording "
-                        "into English while preserving brand names, model names, and prices."
-                    )
-                )
-                tool_payload: Any = {
-                    "items": self._compact_items(items),
-                    "count": len(items),
-                    "instruction": (
-                        "Answer only from these current inventory results. "
-                        + language_instruction
-                    ),
-                }
+                    catalog_items = await self.db_tool.list_items()
+                except InventoryCatalogError as exc:
+                    print(f"[Inventory Catalog Error]: {exc}")
+                    search_status = "inventory_unavailable"
+                    tool_payload = {"error": "Inventory catalog is unavailable"}
+                else:
+                    try:
+                        if tool_name == "browse_inventory":
+                            items = [
+                                item
+                                for item in catalog_items
+                                if str(item.get("status") or "").casefold()
+                                == "available"
+                            ][: settings.MAX_SEARCH_RESULTS]
+                        else:
+                            items = await self.inventory_grounder.match(
+                                user_query=user_query,
+                                history=history,
+                                catalog_items=catalog_items,
+                            )
+                    except InventoryGroundingError as exc:
+                        print(f"[Inventory Grounding Error]: {exc}")
+                        search_status = "inventory_match_failed"
+                        tool_payload = {
+                            "error": "Inventory matching is temporarily unavailable"
+                        }
+                    else:
+                        inventory_items = items
+                        search_status = (
+                            "using_supabase" if items else "inventory_no_results"
+                        )
+                        language_instruction = (
+                            "Reply in Thai with polite feminine particles."
+                            if self._is_thai(user_query)
+                            else (
+                                "Reply in English only. Translate generic Thai product "
+                                "wording into English while preserving brand names, model "
+                                "names, and prices."
+                            )
+                        )
+                        tool_payload = {
+                            "items": self._compact_items(items),
+                            "count": len(items),
+                            "instruction": (
+                                "Answer only from these semantically matched current "
+                                "inventory results. " + language_instruction
+                            ),
+                        }
             elif tool_name == "search_web_specs":
                 query = str(arguments.get("query") or user_query)[:200]
                 context, web_status = await self.google_tool.search_spec(query)
@@ -552,7 +448,11 @@ class AgentExecutor:
                 continue
 
             db_type = str(item.get("type", "")).strip()
-            unit = "สัปดาห์" if "สัปดาห์" in db_type or "week" in db_type.lower() else "วัน"
+            unit = (
+                "สัปดาห์"
+                if "สัปดาห์" in db_type or "week" in db_type.lower()
+                else "วัน"
+            )
             image_array = item.get("item_image_url")
             cover_image = "https://placeholder.com/image.png"
             if isinstance(image_array, list) and image_array:
@@ -638,13 +538,42 @@ class AgentExecutor:
             tool_calls=tool_calls,
             messages=messages,
             user_query=cleaned_query,
+            history=history,
         )
+
+        if search_status in {"inventory_unavailable", "inventory_match_failed"}:
+            return {
+                "status": "failed",
+                "search_status": search_status,
+                "items_found": 0,
+                "answer": self._inventory_unavailable_answer(cleaned_query),
+                "recommended_items": [],
+            }
+
+        if decision.action in {"browse_inventory", "search_inventory"} and not db_results:
+            return {
+                "status": "success",
+                "search_status": "inventory_no_results",
+                "items_found": 0,
+                "answer": self._inventory_no_results_answer(cleaned_query),
+                "recommended_items": [],
+            }
+
+        if decision.action in {"browse_inventory", "search_inventory"}:
+            recommended_items = self._recommended_items(db_results, None)
+            return {
+                "status": "success",
+                "search_status": search_status,
+                "items_found": len(recommended_items),
+                "answer": self._inventory_results_answer(cleaned_query),
+                "recommended_items": recommended_items,
+            }
 
         try:
             raw_content = await self.ollama.chat_json(
                 messages=messages,
                 schema=AssistantResponse.model_json_schema(),
-                max_tokens=220,
+                max_tokens=settings.FINAL_RESPONSE_MAX_TOKENS,
                 timeout=35.0,
             )
             parsed = AssistantResponse.model_validate_json(raw_content)

@@ -13,4 +13,6 @@ class AppColors {
   static const Color labelColor = Color(0xFF595C5D);
   // สี hintText ของ Field
   static const Color hintTextColor = Color(0xFFABADAE);
+  static const Color gradient1 = Color(0xFF811CD9);
+  static const Color gradient2 = Color(0xFFC185FF);
 }

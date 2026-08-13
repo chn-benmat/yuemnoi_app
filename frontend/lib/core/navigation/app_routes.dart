@@ -1,111 +1,149 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/pages/change_password.dart';
 import '../../features/auth/presentation/pages/forget_password.dart';
 import '../../features/auth/presentation/pages/login.dart';
 import '../../features/auth/presentation/pages/one_time_verification.dart';
 import '../../features/auth/presentation/pages/register.dart';
+import '../../features/chatbot/data/datasources/chatbot_remote_data_source.dart';
+import '../../features/chatbot/data/repositories/chatbot_repository_impl.dart';
+import '../../features/chatbot/domain/usecases/send_chat_message_usecase.dart';
+import '../../features/chatbot/presentation/bloc/chatbot_bloc.dart';
+import '../../features/chatbot/presentation/pages/chat_bot.dart';
 import '../../features/home/presentation/pages/home.dart';
 
 abstract final class AppRoutes {
   static const login = '/login';
   static const home = '/home';
+  static const chatbot = '/chatbot';
   static const register = '/register';
   static const forgotPassword = '/forgot-password';
   static const otpVerification = '/otp-verification';
   static const changePassword = '/change-password';
 
-  static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
-    switch (settings.name) {
-      case login:
-        return _fadeRoute<void>(settings, const LoginScreen());
-      case home:
-        return _fadeRoute<void>(settings, const HomeScreen());
-      case register:
-        return _materialRoute<bool>(settings, const RegisterScreen());
-      case forgotPassword:
-        return _materialRoute<void>(settings, const ForgetPasswordScreen());
-      case otpVerification:
-        return _materialRoute<void>(
-          settings,
-          OneTimeVerificationScreen(
-            email: _requiredStringArgument(settings, 'email'),
+  static GoRouter createRouter({String initialLocation = login}) {
+    return GoRouter(
+      initialLocation: initialLocation,
+      routes: [
+        GoRoute(
+          path: login,
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
+            key: state.pageKey,
+            child: const LoginScreen(),
+            transitionDuration: const Duration(milliseconds: 600),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
           ),
-        );
-      case changePassword:
-        return _materialRoute<void>(
-          settings,
-          ChangePasswordScreen(
-            accessToken: _requiredStringArgument(settings, 'accessToken'),
+        ),
+        GoRoute(
+          path: home,
+          pageBuilder: (context, state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: const HomeScreen(),
           ),
-        );
-      default:
-        return null;
-    }
+        ),
+        GoRoute(
+          path: chatbot,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: BlocProvider(
+              create: (context) => ChatbotBloc(
+                sendMessage: SendChatMessageUseCase(
+                  ChatbotRepositoryImpl(ChatbotRemoteDataSource()),
+                ),
+              ),
+              child: const ChatBotScreen(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: register,
+          pageBuilder: (context, state) => MaterialPage<bool>(
+            key: state.pageKey,
+            child: const RegisterScreen(),
+          ),
+        ),
+        GoRoute(
+          path: forgotPassword,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: const ForgetPasswordScreen(),
+          ),
+        ),
+        GoRoute(
+          path: otpVerification,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: OneTimeVerificationScreen(
+              email: _requiredStringExtra(state, 'email'),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: changePassword,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: ChangePasswordScreen(
+              accessToken: _requiredStringExtra(state, 'accessToken'),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   static void goToHome(BuildContext context) {
-    Navigator.of(context).pushNamedAndRemoveUntil(home, (_) => false);
+    context.go(home);
+  }
+
+  static Future<void> openChatbot(BuildContext context) {
+    return context.push<void>(chatbot);
+  }
+
+  static void goToLogin(BuildContext context) {
+    context.go(login);
   }
 
   static Future<bool?> openRegister(BuildContext context) {
-    return Navigator.of(context).pushNamed<bool>(register);
+    return context.push<bool>(register);
   }
 
   static Future<void> openForgotPassword(BuildContext context) {
-    return Navigator.of(context).pushNamed<void>(forgotPassword);
+    return context.push<void>(forgotPassword);
   }
 
   static Future<void> openOtpVerification(
     BuildContext context, {
     required String email,
   }) {
-    return Navigator.of(
-      context,
-    ).pushNamed<void>(otpVerification, arguments: email);
+    return context.push<void>(otpVerification, extra: email);
   }
 
   static Future<void> openChangePassword(
     BuildContext context, {
     required String accessToken,
   }) {
-    return Navigator.of(
-      context,
-    ).pushNamed<void>(changePassword, arguments: accessToken);
+    return context.push<void>(changePassword, extra: accessToken);
   }
 
-  static MaterialPageRoute<T> _materialRoute<T>(
-    RouteSettings settings,
-    Widget page,
-  ) {
-    return MaterialPageRoute<T>(settings: settings, builder: (_) => page);
+  static void pop<T extends Object?>(BuildContext context, [T? result]) {
+    context.pop<T>(result);
   }
 
-  static PageRouteBuilder<T> _fadeRoute<T>(
-    RouteSettings settings,
-    Widget page,
-  ) {
-    return PageRouteBuilder<T>(
-      settings: settings,
-      pageBuilder: (_, animation, secondaryAnimation) => page,
-      transitionsBuilder: (_, animation, secondaryAnimation, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
-      transitionDuration: const Duration(milliseconds: 600),
-    );
-  }
-
-  static String _requiredStringArgument(
-    RouteSettings settings,
-    String argumentName,
-  ) {
-    final argument = settings.arguments;
-    if (argument is String && argument.isNotEmpty) return argument;
+  static String _requiredStringExtra(GoRouterState state, String argumentName) {
+    final value = state.extra;
+    if (value is String && value.isNotEmpty) {
+      return value;
+    }
 
     throw ArgumentError.value(
-      argument,
+      value,
       argumentName,
-      'Route ${settings.name} requires a non-empty String argument.',
+      'Route ${state.uri.path} requires a non-empty String extra.',
     );
   }
 }

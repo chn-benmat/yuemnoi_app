@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/responsive_app_bar_title.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
 import '../../../../core/widgets/app_primary_button.dart';
@@ -91,7 +92,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             ),
           );
           // นำทางกลับไปยังหน้า Login (โดยการล้าง Stack ทั้งหมดออกไปจนถึงหน้าแรกสุด หรือหน้าระดับบนสุด)
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          AppRoutes.goToLogin(context);
         } else if (state is ChangePasswordFailure) {
           setState(() {
             _isLoading = false;
@@ -108,7 +109,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
-            Navigator.pop(context);
+            AppRoutes.pop(context);
           },
         ),
         title: const ResponsiveAppBarTitle('เปลี่ยนรหัสผ่านใหม่'),

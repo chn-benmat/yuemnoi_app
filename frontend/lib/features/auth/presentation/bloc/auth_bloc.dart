@@ -197,21 +197,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final isGoogle = _signedInWithGoogle(event.session.user.appMetadata);
 
     if (isGoogle) {
-      emit(const GoogleLoginLoading());
-      try {
-        await SyncGoogleProfileImageUseCase(authRepository).execute(
-          accessToken: event.session.accessToken,
-        );
-        emit(GoogleLoginSuccess(session: event.session));
-      } on AuthApiException catch (error) {
-        _signInHandled = false;
-        emit(LoginFailure(message: error.message));
-      } catch (error) {
-        _signInHandled = false;
-        emit(LoginFailure(message: error.toString()));
-      }
+      emit(GoogleLoginSuccess(session: event.session));
+      unawaited(_syncGoogleProfileImage(event.session.accessToken));
     } else {
       emit(LoginSuccess(session: event.session));
+    }
+  }
+
+  Future<void> _syncGoogleProfileImage(String accessToken) async {
+    try {
+      await SyncGoogleProfileImageUseCase(authRepository).execute(
+        accessToken: accessToken,
+      );
+    } catch (_) {
+      // การ sync รูปเป็นงานเสริมและต้องไม่ทำให้ session ที่ล็อกอินสำเร็จล้มเหลว
     }
   }
 

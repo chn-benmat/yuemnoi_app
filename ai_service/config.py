@@ -17,7 +17,16 @@ class Settings(BaseSettings):
 
     # จำกัดข้อมูลที่ส่งเข้าโมเดลและผลลัพธ์จากฐานข้อมูล
     MAX_SEARCH_RESULTS: int = 5
+    MAX_CATALOG_ITEMS: int = 50
     MAX_HISTORY_MESSAGES: int = 6
+
+    # Output budgets for each structured Qwen task. These must leave enough room
+    # for complete JSON; truncated JSON is treated as an unavailable assistant.
+    ROUTING_MAX_TOKENS: int = 600
+    LANGUAGE_REPAIR_MAX_TOKENS: int = 300
+    FINAL_RESPONSE_MAX_TOKENS: int = 400
+    INVENTORY_MATCH_MAX_TOKENS: int = 240
+    INVENTORY_VERIFICATION_MAX_TOKENS: int = 600
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

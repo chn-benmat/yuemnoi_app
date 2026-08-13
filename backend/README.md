@@ -155,7 +155,7 @@ Content-Type: application/json
   "item_name": "กล้องถ่ายวิดีโอ 4K",
   "item_image_url": ["https://example.com/camera.jpg"],
   "description": "กล้องพร้อมแบตเตอรี่และกระเป๋า",
-  "category": "camera",
+  "category": "กล้อง",
   "price": 2500,
   "status": "available",
   "type": "daily"

@@ -1,8 +1,4 @@
-import 'dart:async';
-import 'dart:convert';
-
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
+import '../../../../core/network/api_client.dart';
 
 const invalidOtpMessage = 'รหัส OTP ผิด กรุณาลองใส่ใหม่';
 const expiredOtpMessage = 'รหัส OTP หมดอายุ';
@@ -35,30 +31,17 @@ class LoginTokens {
 }
 
 class AuthRemoteDataSource {
-  AuthRemoteDataSource({http.Client? client})
-    : _client = client ?? http.Client();
+  AuthRemoteDataSource({ApiClient? client})
+    : _client = client ?? DioApiClient();
 
-  static Uri _apiUri(String path) {
-    final apiUrl = (dotenv.env['API_URL']?.trim() ?? '').replaceFirst(
-      RegExp(r'/+$'),
-      '',
-    );
-    if (apiUrl.isEmpty) {
-      throw StateError('API_URL is not configured in .env.local.');
-    }
+  static const _loginPath = '/api/v1/auth/login';
+  static const _registerPath = '/api/v1/auth/register';
+  static const _sendOtpPath = '/api/v1/auth/send-otp';
+  static const _verifyOtpPath = '/api/v1/auth/verify-otp';
+  static const _changePasswordPath = '/api/v1/auth/change-password';
+  static const _googleProfilePath = '/api/v1/auth/google-profile';
 
-    return Uri.parse('$apiUrl$path');
-  }
-
-  static Uri get _loginUri => _apiUri('/api/v1/auth/login');
-  static Uri get _registerUri => _apiUri('/api/v1/auth/register');
-  static Uri get _sendOtpUri => _apiUri('/api/v1/auth/send-otp');
-  static Uri get _verifyOtpUri => _apiUri('/api/v1/auth/verify-otp');
-  static Uri get _changePasswordUri => _apiUri('/api/v1/auth/change-password');
-  static Uri get _googleProfileUri => _apiUri('/api/v1/auth/google-profile');
-  static const Duration _requestTimeout = Duration(seconds: 20);
-
-  final http.Client _client;
+  final ApiClient _client;
 
   Future<String> register({
     required String displayName,
@@ -70,33 +53,27 @@ class AuthRemoteDataSource {
     String? imageFileName,
   }) async {
     try {
-      final request = http.MultipartRequest('POST', _registerUri)
-        ..headers['Accept'] = 'application/json'
-        ..fields.addAll({
+      final files = imageBytes == null || imageBytes.isEmpty
+          ? const <ApiUpload>[]
+          : <ApiUpload>[
+              ApiUpload(
+                fieldName: 'image',
+                bytes: imageBytes,
+                fileName: imageFileName ?? 'profile.jpg',
+              ),
+            ];
+      final response = await _client.postMultipart(
+        _registerPath,
+        fields: {
           'display_name': displayName.trim(),
           'email': email.trim(),
           'phone': phone.trim(),
           'password': password,
           'confirm_password': confirmPassword,
-        });
-
-      if (imageBytes != null && imageBytes.isNotEmpty) {
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'image',
-            imageBytes,
-            filename: imageFileName ?? 'profile.jpg',
-          ),
-        );
-      }
-
-      final streamedResponse = await _client
-          .send(request)
-          .timeout(_requestTimeout);
-      final response = await http.Response.fromStream(
-        streamedResponse,
-      ).timeout(_requestTimeout);
-      final body = _decodeResponse(response.body);
+        },
+        files: files,
+      );
+      final body = response.data;
 
       if (response.statusCode == 201) {
         final userId = body['user_id'];
@@ -112,16 +89,8 @@ class AuthRemoteDataSource {
       throw AuthApiException(
         _errorMessage(body) ?? _registerErrorMessage(response.statusCode),
       );
-    } on TimeoutException {
-      throw const AuthApiException(
-        'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง',
-      );
-    } on http.ClientException {
-      throw const AuthApiException(
-        'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ต',
-      );
-    } on FormatException {
-      throw const AuthApiException('ข้อมูลตอบกลับจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    } on ApiClientException catch (error) {
+      throw _requestException(error);
     }
   }
 
@@ -130,18 +99,11 @@ class AuthRemoteDataSource {
     required String password,
   }) async {
     try {
-      final response = await _client
-          .post(
-            _loginUri,
-            headers: const {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({'email': email.trim(), 'password': password}),
-          )
-          .timeout(_requestTimeout);
-
-      final body = _decodeResponse(response.body);
+      final response = await _client.post(
+        _loginPath,
+        data: {'email': email.trim(), 'password': password},
+      );
+      final body = response.data;
 
       if (response.statusCode == 200) {
         final accessToken = body['access_token'];
@@ -164,33 +126,18 @@ class AuthRemoteDataSource {
       throw AuthApiException(
         _errorMessage(body) ?? _defaultErrorMessage(response.statusCode),
       );
-    } on TimeoutException {
-      throw const AuthApiException(
-        'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง',
-      );
-    } on http.ClientException {
-      throw const AuthApiException(
-        'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ต',
-      );
-    } on FormatException {
-      throw const AuthApiException('ข้อมูลตอบกลับจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    } on ApiClientException catch (error) {
+      throw _requestException(error);
     }
   }
 
   Future<void> sendOtp({required String email}) async {
     try {
-      final response = await _client
-          .post(
-            _sendOtpUri,
-            headers: const {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({'email': email.trim()}),
-          )
-          .timeout(_requestTimeout);
-
-      final body = _decodeResponse(response.body);
+      final response = await _client.post(
+        _sendOtpPath,
+        data: {'email': email.trim()},
+      );
+      final body = response.data;
 
       if (response.statusCode == 200) {
         return;
@@ -203,16 +150,8 @@ class AuthRemoteDataSource {
       throw AuthApiException(
         _errorMessage(body) ?? _sendOtpErrorMessage(response.statusCode),
       );
-    } on TimeoutException {
-      throw const AuthApiException(
-        'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง',
-      );
-    } on http.ClientException {
-      throw const AuthApiException(
-        'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ต',
-      );
-    } on FormatException {
-      throw const AuthApiException('ข้อมูลตอบกลับจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    } on ApiClientException catch (error) {
+      throw _requestException(error);
     }
   }
 
@@ -221,18 +160,11 @@ class AuthRemoteDataSource {
     required String otpCode,
   }) async {
     try {
-      final response = await _client
-          .post(
-            _verifyOtpUri,
-            headers: const {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({'email': email.trim(), 'otp_code': otpCode}),
-          )
-          .timeout(_requestTimeout);
-
-      final body = _decodeResponse(response.body);
+      final response = await _client.post(
+        _verifyOtpPath,
+        data: {'email': email.trim(), 'otp_code': otpCode},
+      );
+      final body = response.data;
 
       if (response.statusCode == 200) {
         final accessToken = body['access_token'];
@@ -248,16 +180,8 @@ class AuthRemoteDataSource {
       }
 
       throw AuthApiException(_verifyOtpErrorMessage(response.statusCode, body));
-    } on TimeoutException {
-      throw const AuthApiException(
-        'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง',
-      );
-    } on http.ClientException {
-      throw const AuthApiException(
-        'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ต',
-      );
-    } on FormatException {
-      throw const AuthApiException('ข้อมูลตอบกลับจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    } on ApiClientException catch (error) {
+      throw _requestException(error);
     }
   }
 
@@ -266,19 +190,12 @@ class AuthRemoteDataSource {
     required String newPassword,
   }) async {
     try {
-      final response = await _client
-          .post(
-            _changePasswordUri,
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $accessToken',
-            },
-            body: jsonEncode({'new_password': newPassword}),
-          )
-          .timeout(_requestTimeout);
-
-      final body = _decodeResponse(response.body);
+      final response = await _client.post(
+        _changePasswordPath,
+        data: {'new_password': newPassword},
+        headers: {'Authorization': 'Bearer $accessToken'},
+      );
+      final body = response.data;
       if (response.statusCode == 200) {
         return;
       }
@@ -286,32 +203,18 @@ class AuthRemoteDataSource {
       throw AuthApiException(
         _changePasswordErrorMessage(response.statusCode, body),
       );
-    } on TimeoutException {
-      throw const AuthApiException(
-        'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง',
-      );
-    } on http.ClientException {
-      throw const AuthApiException(
-        'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ต',
-      );
-    } on FormatException {
-      throw const AuthApiException('ข้อมูลตอบกลับจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    } on ApiClientException catch (error) {
+      throw _requestException(error);
     }
   }
 
   Future<String> syncGoogleProfileImage({required String accessToken}) async {
     try {
-      final response = await _client
-          .post(
-            _googleProfileUri,
-            headers: {
-              'Accept': 'application/json',
-              'Authorization': 'Bearer $accessToken',
-            },
-          )
-          .timeout(_requestTimeout);
-
-      final body = _decodeResponse(response.body);
+      final response = await _client.post(
+        _googleProfilePath,
+        headers: {'Authorization': 'Bearer $accessToken'},
+      );
+      final body = response.data;
       if (response.statusCode == 200) {
         final imageURL = body['user_image_url'];
         if (imageURL is String && imageURL.isNotEmpty) {
@@ -326,30 +229,31 @@ class AuthRemoteDataSource {
       throw AuthApiException(
         _errorMessage(body) ?? 'ไม่สามารถบันทึกรูปโปรไฟล์ Google ได้',
       );
-    } on TimeoutException {
-      throw const AuthApiException(
-        'การบันทึกรูปโปรไฟล์ Google ใช้เวลานานเกินไป กรุณาลองใหม่',
+    } on ApiClientException catch (error) {
+      throw _requestException(
+        error,
+        timeoutMessage:
+            'การบันทึกรูปโปรไฟล์ Google ใช้เวลานานเกินไป กรุณาลองใหม่',
+        connectionMessage:
+            'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกรูปโปรไฟล์ Google ได้',
       );
-    } on http.ClientException {
-      throw const AuthApiException(
-        'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกรูปโปรไฟล์ Google ได้',
-      );
-    } on FormatException {
-      throw const AuthApiException('ข้อมูลตอบกลับจากเซิร์ฟเวอร์ไม่ถูกต้อง');
     }
   }
 
-  Map<String, dynamic> _decodeResponse(String responseBody) {
-    if (responseBody.isEmpty) {
-      return const {};
+  AuthApiException _requestException(
+    ApiClientException error, {
+    String timeoutMessage = 'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง',
+    String connectionMessage =
+        'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ต',
+  }) {
+    switch (error.type) {
+      case ApiClientErrorType.timeout:
+        return AuthApiException(timeoutMessage);
+      case ApiClientErrorType.connection:
+        return AuthApiException(connectionMessage);
+      case ApiClientErrorType.invalidResponse:
+        return const AuthApiException('ข้อมูลตอบกลับจากเซิร์ฟเวอร์ไม่ถูกต้อง');
     }
-
-    final decodedBody = jsonDecode(responseBody);
-    if (decodedBody is Map<String, dynamic>) {
-      return decodedBody;
-    }
-
-    throw const FormatException('Response body must be a JSON object');
   }
 
   String? _errorMessage(Map<String, dynamic> body) {
