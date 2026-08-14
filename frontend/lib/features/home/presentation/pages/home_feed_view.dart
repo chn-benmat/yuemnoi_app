@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../domain/entities/feed_item.dart';
 import '../bloc/home_bloc.dart';
 import '../bloc/home_event.dart';
@@ -30,27 +31,15 @@ class _HomeFeedViewState extends State<HomeFeedView> {
   }
 
   void _onItemTap(FeedItem item) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'เลือกดู: ${item.title.replaceAll('\n', ' ')}',
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: AppColors.primaryColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    final itemId = int.tryParse(item.id);
+    if (itemId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ไม่สามารถเปิดรายละเอียดอุปกรณ์ได้')),
+      );
+      return;
+    }
+
+    AppRoutes.openItemDetail(context, itemId: itemId);
   }
 
   void _onFavoriteToggle(BuildContext context, FeedItem item) {
@@ -366,4 +355,3 @@ class _HomeErrorView extends StatelessWidget {
     );
   }
 }
-
