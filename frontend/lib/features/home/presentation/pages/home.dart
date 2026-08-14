@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -6,16 +7,38 @@ import '../../../../core/widgets/custom_bottom_navbar.dart';
 import '../../../chat/presentation/pages/chat.dart';
 import '../../../profile/presentation/pages/profile.dart';
 import '../../../wallet/presentation/pages/wallet.dart';
+import '../../data/repositories/home_repository_impl.dart';
+import '../../domain/usecases/get_home_feed_usecase.dart';
+import '../bloc/home_bloc.dart';
+import '../bloc/home_event.dart';
 import 'home_feed_view.dart';
 
-class HomeScreen extends StatefulWidget {
+
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  Widget build(BuildContext context) {
+    final homeRepository = HomeRepositoryImpl();
+
+    return BlocProvider<HomeBloc>(
+      create: (context) => HomeBloc(
+        homeRepository: homeRepository,
+        getHomeFeed: GetHomeFeedUseCase(homeRepository),
+      )..add(const LoadHomeFeedStarted()),
+      child: const _HomeScreenContent(),
+    );
+  }
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenContent extends StatefulWidget {
+  const _HomeScreenContent();
+
+  @override
+  State<_HomeScreenContent> createState() => _HomeScreenContentState();
+}
+
+class _HomeScreenContentState extends State<_HomeScreenContent> {
   int _selectedIndex = 0;
 
   final List<Widget> _pages = const [

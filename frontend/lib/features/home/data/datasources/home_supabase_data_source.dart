@@ -159,7 +159,7 @@ class HomeSupabaseDataSource {
     return list[index % list.length];
   }
 
-  /// ดึงข้อมูลทั้งหมดจาก Supabase และแปลงเป็น List<FeedItemModel>
+  /// ดึงข้อมูลทั้งหมดจาก Supabase และแปลงเป็น `List<FeedItemModel>`
   Future<List<FeedItemModel>> _fetchAllSupabaseItems() async {
     final sb = client;
     if (sb == null) {
