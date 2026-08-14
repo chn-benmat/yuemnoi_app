@@ -14,12 +14,14 @@ class ChatAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = asset.startsWith('http://') || asset.startsWith('https://')
+    final image = asset.isEmpty
+        ? Image.asset('assets/images/user.png', fit: BoxFit.cover)
+        : asset.startsWith('http://') || asset.startsWith('https://')
         ? Image.network(
             asset,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) =>
-                Image.asset('assets/images/yuemnoi.png', fit: BoxFit.cover),
+                Image.asset('assets/images/user.png', fit: BoxFit.cover),
           )
         : Image.asset(asset, fit: BoxFit.cover);
 

@@ -40,7 +40,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         name: owner.displayName,
         role: ChatParticipantRole.renter,
         avatarAsset: owner.imageUrl.isEmpty
-            ? 'assets/images/yuemnoi.png'
+            ? 'assets/images/user.png'
             : owner.imageUrl,
         preview: 'สนใจเช่า ${item.name}',
         timeLabel: 'ตอนนี้',
@@ -215,7 +215,7 @@ class _ImageGalleryState extends State<_ImageGallery> {
   Widget build(BuildContext context) {
     final urls = widget.imageUrls;
     return SizedBox(
-      height: 500,
+      height: 360,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -559,12 +559,12 @@ class _Avatar extends StatelessWidget {
       ),
       child: ClipOval(
         child: imageUrl.isEmpty
-            ? Image.asset('assets/images/yuemnoi.png', fit: BoxFit.cover)
+            ? Image.asset('assets/images/user.png', fit: BoxFit.cover)
             : CachedNetworkImage(
                 imageUrl: imageUrl,
                 fit: BoxFit.cover,
                 errorWidget: (context, url, error) =>
-                    Image.asset('assets/images/yuemnoi.png', fit: BoxFit.cover),
+                    Image.asset('assets/images/user.png', fit: BoxFit.cover),
               ),
       ),
     );
