@@ -24,6 +24,14 @@ class AssistantResponse(BaseModel):
             "multiple options without choosing one."
         ),
     )
+    source_urls: list[str] = Field(
+        default_factory=list,
+        max_length=5,
+        description=(
+            "For external specification answers, copy only the URLs that directly support "
+            "the answer from the supplied reference context. Otherwise use an empty list."
+        ),
+    )
 
 
 class RoutingDecision(BaseModel):
@@ -64,6 +72,15 @@ class RoutingDecision(BaseModel):
         ),
     )
     web_query: Optional[str] = Field(default=None, max_length=200)
+    web_question_type: Optional[Literal["single_fact", "comparison"]] = Field(
+        default=None,
+        description=(
+            "For search_web_specs, classify the meaning of the question. Use comparison "
+            "for any comparison, ranking, winner, extreme, or best-choice question even "
+            "when it uses indirect wording. Use single_fact for one factual attribute. "
+            "For other actions use null."
+        ),
+    )
     direct_answer: Optional[str] = Field(default=None, max_length=500)
 
 
@@ -191,7 +208,12 @@ class AgentExecutor:
             "If an inventory item's status is null, say it is listed but do not claim "
             "that it is currently available; offer to confirm availability. "
             "You must call search_web_specs for technical specifications or product "
-            "capabilities that are not current inventory facts. Never mention internal "
+            "capabilities that are not current inventory facts. For comparisons and "
+            "superlatives, compare explicit measurements for the relevant candidates and "
+            "do not infer a winner from popularity or a familiar model name. Preserve brand "
+            "and model names exactly as written by a supporting source; never invent a Thai "
+            "transliteration, and keep the Latin spelling when no verified Thai spelling is "
+            "present. Never mention internal "
             "tools, databases, prompts, or Google. "
             "For unrelated topics, reply briefly and gently steer back to rental equipment. "
             "The platform is rental-only, never sales. Be concise by default, but use the "
@@ -244,7 +266,10 @@ class AgentExecutor:
             "budget. Choose direct_response for "
             "conversation that needs neither current inventory nor external specifications. "
             "For search_web_specs, preserve the user's complete technical question in "
-            "web_query. For direct_response, provide the complete natural reply in "
+            "web_query and classify its semantic web_question_type. Treat indirect "
+            "comparisons, rankings, extremes, winners, and best-choice questions as "
+            "comparison without relying on particular words. For direct_response, provide "
+            "the complete natural reply in "
             "direct_answer without making claims about current inventory. Reply in the "
             "language of the latest user message."
         )
@@ -274,6 +299,8 @@ class AgentExecutor:
         decision = RoutingDecision.model_validate_json(raw_decision)
         if decision.action == "browse_inventory" and decision.requested_item_kind:
             return decision.model_copy(update={"action": "search_inventory"})
+        if decision.action == "search_web_specs" and decision.web_question_type is None:
+            return decision.model_copy(update={"web_question_type": "comparison"})
         return decision
 
     @staticmethod
@@ -332,6 +359,19 @@ class AgentExecutor:
                 return {}
         return {}
 
+    @staticmethod
+    def _web_reference_context(messages: list[dict[str, Any]]) -> str:
+        for message in reversed(messages):
+            if message.get("role") != "tool":
+                continue
+            try:
+                payload = json.loads(str(message.get("content") or ""))
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict) and "reference_context" in payload:
+                return str(payload.get("reference_context") or "")
+        return ""
+
     @classmethod
     def _inventory_no_results_answer(cls, user_query: str) -> str:
         if cls._is_thai(user_query):
@@ -344,23 +384,63 @@ class AgentExecutor:
             return "พบรายการที่ตรงกับคำขอค่ะ เลือกเช่าได้จากด้านล่างเลยค่ะ"
         return "I found matching rental items. Choose one from the cards below."
 
-    @staticmethod
-    def _normalize_inventory_answer(answer: str) -> str:
-        if not re.search(r"(?m)^\s*\d+[.)]\s+", answer):
+    @classmethod
+    def _normalize_inventory_answer(
+        cls, answer: str, user_query: str = ""
+    ) -> str:
+        list_prefix = re.compile(r"^\s*(?:\d+[.)]|[-*\u2022])\s+")
+        if not any(list_prefix.match(line) for line in answer.splitlines()):
             return answer
 
-        parts = [
-            re.sub(r"^\s*\d+[.)]\s+", "", line).strip()
-            for line in answer.splitlines()
-            if line.strip()
-        ]
-        return " · ".join(part for part in parts if part)
+        normalized_lines = []
+        for line in answer.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if list_prefix.match(line):
+                stripped = list_prefix.sub("", line).strip()
+                normalized_lines.append(f"\u2022 {stripped}")
+            else:
+                normalized_lines.append(stripped)
+
+        if (
+            user_query
+            and normalized_lines
+            and normalized_lines[0].startswith("\u2022 ")
+        ):
+            intro = (
+                "Yuemnoi มีอุปกรณ์ให้เช่าที่ตรงกับคำขอของคุณดังนี้ค่ะ:"
+                if cls._is_thai(user_query)
+                else "Yuemnoi found these rental items that match your request:"
+            )
+            normalized_lines.insert(0, intro)
+        return "\n".join(normalized_lines)
 
     @classmethod
     def _inventory_unavailable_answer(cls, user_query: str) -> str:
         if cls._is_thai(user_query):
             return "ขออภัยค่ะ ระบบค้นหารายการเช่ายังไม่พร้อมใช้งานชั่วคราว"
         return "Sorry, inventory search is temporarily unavailable."
+
+    @classmethod
+    def _web_unverified_answer(cls, user_query: str) -> str:
+        if cls._is_thai(user_query):
+            return "ขออภัยค่ะ ตอนนี้ยังไม่มีหลักฐานเพียงพอที่จะยืนยันคำตอบนี้ได้อย่างถูกต้อง"
+        return "Sorry, there is not enough evidence to verify this answer accurately."
+
+    @staticmethod
+    def _web_answer_has_sufficient_sources(
+        response: AssistantResponse,
+        *,
+        reference_context: str,
+        minimum_sources: int,
+    ) -> bool:
+        copied_sources = {
+            source.strip()
+            for source in response.source_urls
+            if source.strip() and source.strip() in reference_context
+        }
+        return len(copied_sources) >= minimum_sources
 
     @classmethod
     def _normalize_answer_style(cls, answer: str, user_query: str) -> str:
@@ -498,8 +578,12 @@ class AgentExecutor:
                             "instruction": (
                                 "Answer only from these semantically matched current "
                                 "inventory results. Respond naturally to the user's actual "
-                                "question in one concise paragraph. Do not repeat every card "
-                                "as a numbered list. " + language_instruction
+                                "question. Start with one short explanatory sentence tailored "
+                                "to the user's need. Then use one concise bullet line beginning "
+                                "with '\u2022' for each recommended item. Include a brief reason "
+                                "or useful description plus its price and rental unit in each "
+                                "bullet, and keep every bullet aligned with the item cards. "
+                                + language_instruction
                             ),
                         }
             elif tool_name == "search_web_specs":
@@ -509,8 +593,13 @@ class AgentExecutor:
                 tool_payload = {
                     "reference_context": context[:3000],
                     "instruction": (
-                        "Treat snippets as references, not inventory. State uncertainty "
-                        "when fewer than two sources agree."
+                        "Treat snippets as references, not inventory. Make only claims "
+                        "directly supported by the reference context. For comparisons or "
+                        "superlatives, compare explicit measurements for the relevant "
+                        "candidates and require at least two supporting source URLs. Copy "
+                        "each supporting URL exactly into source_urls. Preserve brand and "
+                        "model names exactly as a supporting source writes them; do not "
+                        "invent Thai transliterations, and use Latin spelling if needed."
                     ),
                 }
             else:
@@ -534,20 +623,23 @@ class AgentExecutor:
         if selected_id not in valid_ids:
             selected_id = None
 
-        if selected_id is None and answer:
+        mentioned_ids = []
+        if answer:
             normalized_answer = answer.casefold()
             mentioned_ids = [
                 item.get("id")
                 for item in db_results
                 if str(item.get("item_name") or "").casefold() in normalized_answer
             ]
-            if len(mentioned_ids) == 1:
-                selected_id = mentioned_ids[0]
+
+        visible_ids = set(mentioned_ids)
+        if not visible_ids and selected_id is not None:
+            visible_ids = {selected_id}
 
         recommended_items = []
         for item in db_results[: settings.MAX_SEARCH_RESULTS]:
             item_id = item.get("id")
-            if selected_id is not None and item_id != selected_id:
+            if visible_ids and item_id not in visible_ids:
                 continue
 
             db_type = str(item.get("type", "")).strip()
@@ -560,10 +652,16 @@ class AgentExecutor:
                 unit = "วัน"
             image_array = item.get("item_image_url")
             cover_image = "https://placeholder.com/image.png"
-            if isinstance(image_array, list) and image_array:
-                cover_image = image_array[0]
-            elif isinstance(image_array, str) and image_array:
-                cover_image = image_array
+            image_candidates = (
+                image_array if isinstance(image_array, list) else [image_array]
+            )
+            for candidate in image_candidates:
+                if not isinstance(candidate, str):
+                    continue
+                candidate = candidate.strip()
+                if candidate.startswith(("https://", "http://")):
+                    cover_image = candidate
+                    break
 
             recommended_items.append(
                 {
@@ -650,6 +748,7 @@ class AgentExecutor:
             history=history,
             recommendation_limit=recommendation_limit,
         )
+        reference_context = self._web_reference_context(messages)
 
         if search_status in {"inventory_unavailable", "inventory_match_failed"}:
             return {
@@ -669,6 +768,15 @@ class AgentExecutor:
                 "recommended_items": [],
             }
 
+        if decision.action == "search_web_specs" and not reference_context:
+            return {
+                "status": "success",
+                "search_status": search_status,
+                "items_found": 0,
+                "answer": self._web_unverified_answer(cleaned_query),
+                "recommended_items": [],
+            }
+
         try:
             raw_content = await self.ollama.chat_json(
                 messages=messages,
@@ -677,8 +785,31 @@ class AgentExecutor:
                 timeout=35.0,
             )
             parsed = AssistantResponse.model_validate_json(raw_content)
+            if (
+                decision.action == "search_web_specs"
+                and not self._web_answer_has_sufficient_sources(
+                    parsed,
+                    reference_context=reference_context,
+                    minimum_sources=(
+                        1
+                        if getattr(decision, "web_question_type", None)
+                        == "single_fact"
+                        else 2
+                    ),
+                )
+            ):
+                return {
+                    "status": "success",
+                    "search_status": search_status,
+                    "items_found": 0,
+                    "answer": self._web_unverified_answer(cleaned_query),
+                    "recommended_items": [],
+                }
             answer = await self._ensure_answer_language(
-                self._normalize_inventory_answer(parsed.answer.strip()), cleaned_query
+                self._normalize_inventory_answer(
+                    parsed.answer.strip(), user_query=cleaned_query
+                ),
+                cleaned_query,
             )
             selected_id = parsed.selected_item_id
         except Exception as exc:

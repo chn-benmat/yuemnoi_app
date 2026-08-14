@@ -211,42 +211,53 @@ class RecommendedItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      key: ValueKey('recommended-item-${item.id ?? item.name}'),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('recommended-item-${item.id ?? item.name}'),
+        onTap: onPressed,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFF0E1FA)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x2E9B25E8), blurRadius: 18, spreadRadius: 1),
-        ],
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 180) {
-            final imageSize = constraints.maxWidth < 94
-                ? constraints.maxWidth
-                : 94.0;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Align(child: _itemImage(imageSize)),
-                const SizedBox(height: 12),
-                _itemDetails(),
-              ],
-            );
-          }
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _itemImage(94),
-              const SizedBox(width: 14),
-              Expanded(child: _itemDetails()),
+        child: Ink(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFF0E1FA)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x2E9B25E8),
+                blurRadius: 18,
+                spreadRadius: 1,
+              ),
             ],
-          );
-        },
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 180) {
+                final imageSize = constraints.maxWidth < 94
+                    ? constraints.maxWidth
+                    : 94.0;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Align(child: _itemImage(imageSize)),
+                    const SizedBox(height: 12),
+                    _itemDetails(),
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _itemImage(94),
+                  const SizedBox(width: 14),
+                  Expanded(child: _itemDetails()),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -308,7 +319,7 @@ class RecommendedItemCard extends StatelessWidget {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: const Text(
-              'เช่าเลย',
+              'รายละเอียด',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
             ),
           ),

@@ -235,14 +235,16 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
   }
 
   void _showRentMessage(RecommendedItem item) {
+    final itemId = item.id;
+    if (itemId != null) {
+      AppRoutes.openItemDetail(context, itemId: itemId);
+      return;
+    }
+
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          content: Text(
-            'เลือก ${item.name} แล้ว ระบบเช่าจะเปิดให้ใช้งานเร็ว ๆ นี้',
-          ),
-        ),
+        const SnackBar(content: Text('ไม่พบรหัสอุปกรณ์ กรุณาลองค้นหาใหม่')),
       );
   }
 }
