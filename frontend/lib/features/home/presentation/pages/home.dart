@@ -13,7 +13,6 @@ import '../bloc/home_bloc.dart';
 import '../bloc/home_event.dart';
 import 'home_feed_view.dart';
 
-
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -56,20 +55,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
           ? Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox.square(
-                  dimension: 56,
-                  child: FloatingActionButton(
-                    key: const Key('home-add-rental-item-button'),
-                    heroTag: 'add-rental-item-fab',
-                    tooltip: 'เพิ่มอุปกรณ์ให้เช่า',
-                    backgroundColor: AppColors.primaryColor,
-                    foregroundColor: Colors.white,
-                    shape: const CircleBorder(),
-                    onPressed: () => AppRoutes.openAddRentalItem(context),
-                    child: const Icon(Icons.add_rounded, size: 34),
-                  ),
-                ),
-                const SizedBox(height: 12),
                 SizedBox.square(
                   dimension: 64,
                   child: FloatingActionButton(
