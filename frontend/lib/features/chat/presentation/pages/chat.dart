@@ -1,21 +1,62 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../data/datasources/chat_remote_data_source.dart';
+import '../../data/repositories/chat_repository_impl.dart';
 import '../../domain/entities/chat_conversation.dart';
-import '../mock/chat_mock_data.dart';
+import '../../domain/usecases/get_conversations_usecase.dart';
+import '../bloc/chat_list_bloc.dart';
+import '../bloc/chat_list_event.dart';
+import '../bloc/chat_list_state.dart';
 import '../widgets/chat_avatar.dart';
 
 enum _ConversationFilter { all, owner, renter }
 
-class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+class ChatScreen extends StatelessWidget {
+  const ChatScreen({super.key, this.chatListBloc});
+
+  final ChatListBloc? chatListBloc;
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  Widget build(BuildContext context) {
+    if (chatListBloc != null) {
+      return BlocProvider.value(
+        value: chatListBloc!,
+        child: const _ChatScreenContent(),
+      );
+    }
+
+    try {
+      final existingBloc = BlocProvider.of<ChatListBloc>(context, listen: false);
+      return BlocProvider.value(
+        value: existingBloc,
+        child: const _ChatScreenContent(),
+      );
+    } catch (_) {}
+
+    final repository = ChatRepositoryImpl(
+      remoteDataSource: ChatRemoteDataSource(),
+    );
+
+    return BlocProvider(
+      create: (context) => ChatListBloc(
+        getConversations: GetConversationsUseCase(repository),
+      )..add(const LoadChatListStarted()),
+      child: const _ChatScreenContent(),
+    );
+  }
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenContent extends StatefulWidget {
+  const _ChatScreenContent();
+
+  @override
+  State<_ChatScreenContent> createState() => _ChatScreenContentState();
+}
+
+class _ChatScreenContentState extends State<_ChatScreenContent> {
   final _searchController = TextEditingController();
   _ConversationFilter _filter = _ConversationFilter.all;
 
@@ -25,13 +66,14 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  List<ChatConversation> get _visibleConversations {
+  List<ChatConversation> _filterConversations(List<ChatConversation> conversations) {
     final query = _searchController.text.trim().toLowerCase();
-    return ChatMockData.conversations.where((conversation) {
-      final matchesQuery =
-          query.isEmpty ||
+    return conversations.where((conversation) {
+      final matchesQuery = query.isEmpty ||
           conversation.name.toLowerCase().contains(query) ||
-          conversation.preview.toLowerCase().contains(query);
+          conversation.preview.toLowerCase().contains(query) ||
+          (conversation.itemName?.toLowerCase().contains(query) ?? false);
+
       final matchesFilter = switch (_filter) {
         _ConversationFilter.all => true,
         _ConversationFilter.owner =>
@@ -45,8 +87,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final conversations = _visibleConversations;
-
     return SafeArea(
       bottom: false,
       child: Padding(
@@ -59,7 +99,7 @@ class _ChatScreenState extends State<ChatScreen> {
               controller: _searchController,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: 'ค้นหา',
+                hintText: 'ค้นหาการสนทนา หรือชื่ออุปกรณ์',
                 hintStyle: const TextStyle(color: Color(0xFF777A7C)),
                 prefixIcon: const Icon(
                   Icons.search_rounded,
@@ -111,15 +151,89 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(height: 18),
             Expanded(
-              child: conversations.isEmpty
-                  ? const _EmptyConversations()
-                  : ListView.separated(
+              child: BlocBuilder<ChatListBloc, ChatListState>(
+                builder: (context, state) {
+                  if (state.status == ChatListStatus.loading &&
+                      state.conversations.isEmpty) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primaryColor,
+                      ),
+                    );
+                  }
+
+                  if (state.status == ChatListStatus.failure &&
+                      state.conversations.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            size: 48,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            state.errorMessage ?? 'โหลดรายการแชทไม่สำเร็จ',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Color(0xFF777A7C)),
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton(
+                            onPressed: () => context
+                                .read<ChatListBloc>()
+                                .add(const LoadChatListStarted()),
+                            child: const Text('ลองใหม่'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  final visibleConversations =
+                      _filterConversations(state.conversations);
+
+                  if (visibleConversations.isEmpty) {
+                    return RefreshIndicator(
+                      onRefresh: () async {
+                        context
+                            .read<ChatListBloc>()
+                            .add(const ChatListRefreshed());
+                      },
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 120),
+                          _EmptyConversations(),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return RefreshIndicator(
+                    color: AppColors.primaryColor,
+                    onRefresh: () async {
+                      context
+                          .read<ChatListBloc>()
+                          .add(const ChatListRefreshed());
+                    },
+                    child: ListView.separated(
                       padding: const EdgeInsets.only(bottom: 24),
-                      itemCount: conversations.length,
-                      separatorBuilder: (_, _) => const SizedBox.shrink(),
-                      itemBuilder: (context, index) =>
-                          _ConversationCard(conversation: conversations[index]),
+                      itemCount: visibleConversations.length,
+                      separatorBuilder: (_, _) => const Divider(
+                        height: 1,
+                        color: Color(0xFFEBEBEF),
+                        indent: 84,
+                      ),
+                      itemBuilder: (context, index) => _ConversationCard(
+                        key: ValueKey('card-${visibleConversations[index].id}'),
+                        conversation: visibleConversations[index],
+                      ),
                     ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -174,29 +288,47 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _ConversationCard extends StatelessWidget {
-  const _ConversationCard({required this.conversation});
+  const _ConversationCard({super.key, required this.conversation});
 
   final ChatConversation conversation;
 
   @override
   Widget build(BuildContext context) {
+    final hasUnread = conversation.hasUnreadMessage;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         key: ValueKey('conversation-${conversation.id}'),
-        borderRadius: BorderRadius.circular(12),
-        onTap: () =>
-            AppRoutes.openConversation(context, conversation: conversation),
+        onTap: () {
+          // 1. อัปเดตสถานะอ่านแล้วทันทีใน UI และส่งคำสั่งไป Supabase ในเบื้องหลัง
+          context
+              .read<ChatListBloc>()
+              .add(ChatConversationMarkedAsRead(conversation.id));
+          ChatRemoteDataSource().markMessagesAsRead(
+            conversationId: conversation.id,
+          );
+
+          // 2. เปิดหน้าห้องแชทขึ้นมาทันที 0ms แบบลื่นไหลเหมือน Messenger / LINE
+          AppRoutes.openConversation(
+            context,
+            conversation: conversation,
+          ).then((_) {
+            if (context.mounted) {
+              context.read<ChatListBloc>().add(const ChatListRefreshed());
+            }
+          });
+        },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
               ChatAvatar(
                 asset: conversation.avatarAsset,
-                size: 64,
+                size: 60,
                 isOnline: conversation.isOnline,
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,10 +340,12 @@ class _ConversationCard extends StatelessWidget {
                             conversation.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF303234),
+                            style: TextStyle(
+                              color: const Color(0xFF222427),
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: hasUnread
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                             ),
                           ),
                         ),
@@ -219,11 +353,11 @@ class _ConversationCard extends StatelessWidget {
                         Text(
                           conversation.timeLabel,
                           style: TextStyle(
-                            color: conversation.hasUnreadMessage
+                            color: hasUnread
                                 ? AppColors.primaryColor
                                 : const Color(0xFF858789),
                             fontSize: 11,
-                            fontWeight: conversation.hasUnreadMessage
+                            fontWeight: hasUnread
                                 ? FontWeight.w600
                                 : FontWeight.w400,
                           ),
@@ -231,14 +365,37 @@ class _ConversationCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      conversation.preview,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF585B5D),
-                        fontSize: 13,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            conversation.preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: hasUnread
+                                  ? const Color(0xFF1E2022)
+                                  : const Color(0xFF858789),
+                              fontSize: 13,
+                              fontWeight: hasUnread
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                        if (hasUnread) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            key: const ValueKey('unread-conversation-dot'),
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -260,11 +417,25 @@ class _EmptyConversations extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.forum_outlined, size: 48, color: Color(0xFFB5B7B9)),
-          SizedBox(height: 12),
+          Icon(Icons.forum_outlined, size: 52, color: Color(0xFFB5B7B9)),
+          SizedBox(height: 14),
           Text(
-            'ไม่พบการสนทนา',
-            style: TextStyle(color: Color(0xFF777A7C), fontSize: 15),
+            'ยังไม่มีการสนทนา',
+            style: TextStyle(
+              color: Color(0xFF5A5D60),
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'เมื่อคุณกด "แชท" กับผู้ปล่อยเช่าในหน้าอุปกรณ์\nรายการแชทจะปรากฏที่นี่',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Color(0xFF8D9094),
+              fontSize: 13,
+              height: 1.4,
+            ),
           ),
         ],
       ),

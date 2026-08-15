@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide AuthApiException, A
 
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../../core/services/user_presence_service.dart';
 import '../../data/datasources/auth_remote_data_source.dart'; // สำหรับ AuthApiException
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/usecases/change_password_usecase.dart';
@@ -195,6 +196,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     AuthSession.saveAccessToken(event.session.accessToken);
     final isGoogle = _signedInWithGoogle(event.session.user.appMetadata);
+
+    UserPresenceService.instance.initialize();
 
     if (isGoogle) {
       emit(GoogleLoginSuccess(session: event.session));

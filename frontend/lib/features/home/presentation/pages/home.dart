@@ -4,9 +4,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/custom_bottom_navbar.dart';
+import '../../../chat/data/datasources/chat_remote_data_source.dart';
+import '../../../chat/data/repositories/chat_repository_impl.dart';
+import '../../../chat/domain/usecases/get_conversations_usecase.dart';
+import '../../../chat/presentation/bloc/chat_list_bloc.dart';
+import '../../../chat/presentation/bloc/chat_list_event.dart';
+import '../../../chat/presentation/bloc/chat_list_state.dart';
 import '../../../chat/presentation/pages/chat.dart';
 import '../../../profile/presentation/pages/profile.dart';
 import '../../../wallet/presentation/pages/wallet.dart';
+import '../../../chat/presentation/widgets/global_call_listener.dart';
 import '../../data/repositories/home_repository_impl.dart';
 import '../../domain/usecases/get_home_feed_usecase.dart';
 import '../bloc/home_bloc.dart';
@@ -19,13 +26,27 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final homeRepository = HomeRepositoryImpl();
+    final chatRepository = ChatRepositoryImpl(
+      remoteDataSource: ChatRemoteDataSource(),
+    );
 
-    return BlocProvider<HomeBloc>(
-      create: (context) => HomeBloc(
-        homeRepository: homeRepository,
-        getHomeFeed: GetHomeFeedUseCase(homeRepository),
-      )..add(const LoadHomeFeedStarted()),
-      child: const _HomeScreenContent(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<HomeBloc>(
+          create: (context) => HomeBloc(
+            homeRepository: homeRepository,
+            getHomeFeed: GetHomeFeedUseCase(homeRepository),
+          )..add(const LoadHomeFeedStarted()),
+        ),
+        BlocProvider<ChatListBloc>(
+          create: (context) => ChatListBloc(
+            getConversations: GetConversationsUseCase(chatRepository),
+          )..add(const LoadChatListStarted()),
+        ),
+      ],
+      child: const GlobalCallListener(
+        child: _HomeScreenContent(),
+      ),
     );
   }
 }
@@ -70,12 +91,20 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
               ],
             )
           : null,
-      bottomNavigationBar: CustomBottomNavbar(
-        selectedIndex: _selectedIndex,
-        onTabChange: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
+      bottomNavigationBar: BlocBuilder<ChatListBloc, ChatListState>(
+        builder: (context, chatState) {
+          final hasUnread =
+              chatState.conversations.any((c) => c.hasUnreadMessage);
+
+          return CustomBottomNavbar(
+            selectedIndex: _selectedIndex,
+            hasUnreadChat: hasUnread,
+            onTabChange: (index) {
+              setState(() {
+                _selectedIndex = index;
+              });
+            },
+          );
         },
       ),
     );

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -9,11 +10,14 @@ import '../../features/auth/presentation/pages/one_time_verification.dart';
 import '../../features/auth/presentation/pages/register.dart';
 import '../../features/chatbot/data/datasources/chatbot_remote_data_source.dart';
 import '../../features/chatbot/data/repositories/chatbot_repository_impl.dart';
-import '../../features/chatbot/domain/usecases/send_chat_message_usecase.dart';
+import '../../features/chatbot/domain/usecases/send_chat_message_usecase.dart'
+    as chatbot_uc;
 import '../../features/chatbot/presentation/bloc/chatbot_bloc.dart';
 import '../../features/chatbot/presentation/pages/chat_bot.dart';
 import '../../features/chat/domain/entities/chat_conversation.dart';
 import '../../features/chat/presentation/pages/chat_detail.dart';
+import '../../features/chat/presentation/pages/incoming_call_screen.dart';
+import '../../features/chat/presentation/pages/voice_call.dart';
 import '../../features/item_detail/data/datasources/item_detail_remote_data_source.dart';
 import '../../features/item_detail/data/repositories/item_detail_repository_impl.dart';
 import '../../features/item_detail/domain/entities/item_detail.dart';
@@ -35,6 +39,8 @@ abstract final class AppRoutes {
   static const home = '/home';
   static const chatbot = '/chatbot';
   static const chatDetail = '/chat/detail';
+  static const voiceCall = '/chat/call';
+  static const incomingCall = '/chat/incoming-call';
   static const register = '/register';
   static const forgotPassword = '/forgot-password';
   static const otpVerification = '/otp-verification';
@@ -61,9 +67,14 @@ abstract final class AppRoutes {
         ),
         GoRoute(
           path: home,
-          pageBuilder: (context, state) => NoTransitionPage<void>(
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
             child: const HomeScreen(),
+            transitionDuration: const Duration(milliseconds: 600),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
           ),
         ),
         GoRoute(
@@ -72,8 +83,10 @@ abstract final class AppRoutes {
             key: state.pageKey,
             child: BlocProvider(
               create: (context) => ChatbotBloc(
-                sendMessage: SendChatMessageUseCase(
-                  ChatbotRepositoryImpl(ChatbotRemoteDataSource()),
+                sendMessage: chatbot_uc.SendChatMessageUseCase(
+                  ChatbotRepositoryImpl(
+                    ChatbotRemoteDataSource(),
+                  ),
                 ),
               ),
               child: const ChatBotScreen(),
@@ -82,12 +95,50 @@ abstract final class AppRoutes {
         ),
         GoRoute(
           path: chatDetail,
-          pageBuilder: (context, state) => MaterialPage<void>(
+          pageBuilder: (context, state) => CupertinoPage<void>(
             key: state.pageKey,
             child: ChatDetailScreen(
               conversation: _requiredConversationExtra(state),
             ),
           ),
+        ),
+        GoRoute(
+          path: voiceCall,
+          pageBuilder: (context, state) {
+            final extraMap = state.extra is Map<String, dynamic>
+                ? state.extra as Map<String, dynamic>
+                : null;
+            final conversation = extraMap != null
+                ? extraMap['conversation'] as ChatConversation
+                : _requiredConversationExtra(state);
+            final isCaller = extraMap?['isCaller'] as bool? ?? true;
+            final sessionId = extraMap?['sessionId'] as String?;
+
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: VoiceCallScreen(
+                conversation: conversation,
+                isCaller: isCaller,
+                sessionId: sessionId,
+              ),
+            );
+          },
+        ),
+        GoRoute(
+          path: incomingCall,
+          pageBuilder: (context, state) {
+            final extraMap = state.extra as Map<String, dynamic>;
+            final conversation = extraMap['conversation'] as ChatConversation;
+            final sessionId = extraMap['sessionId'] as String;
+
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: IncomingCallScreen(
+                conversation: conversation,
+                sessionId: sessionId,
+              ),
+            );
+          },
         ),
         GoRoute(
           path: addRentalItem,
@@ -129,13 +180,12 @@ abstract final class AppRoutes {
             final repository = ItemDetailRepositoryImpl(
               ItemDetailRemoteDataSource(),
             );
-            return MaterialPage<bool>(
+            return MaterialPage<void>(
               key: state.pageKey,
               child: BlocProvider(
                 create: (context) => ItemDetailBloc(
                   getItem: GetItemDetailUseCase(repository),
                   updateItem: UpdateItemUseCase(repository),
-                  initialItem: item,
                 ),
                 child: EditItemScreen(item: item),
               ),
@@ -144,38 +194,70 @@ abstract final class AppRoutes {
         ),
         GoRoute(
           path: register,
-          pageBuilder: (context, state) => MaterialPage<bool>(
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
             child: const RegisterScreen(),
+            transitionDuration: const Duration(milliseconds: 600),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
           ),
         ),
         GoRoute(
           path: forgotPassword,
-          pageBuilder: (context, state) => MaterialPage<void>(
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
             child: const ForgetPasswordScreen(),
+            transitionDuration: const Duration(milliseconds: 600),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
           ),
         ),
         GoRoute(
           path: otpVerification,
-          pageBuilder: (context, state) => MaterialPage<void>(
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
             child: OneTimeVerificationScreen(
               email: _requiredStringExtra(state, 'email'),
             ),
+            transitionDuration: const Duration(milliseconds: 600),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
           ),
         ),
         GoRoute(
           path: changePassword,
-          pageBuilder: (context, state) => MaterialPage<void>(
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
             child: ChangePasswordScreen(
               accessToken: _requiredStringExtra(state, 'accessToken'),
             ),
+            transitionDuration: const Duration(milliseconds: 600),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
           ),
         ),
       ],
     );
+  }
+
+  static void openLogin(BuildContext context) {
+    context.go(login);
+  }
+
+  static void goToLogin(BuildContext context) {
+    context.go(login);
+  }
+
+  static void openHome(BuildContext context) {
+    context.go(home);
   }
 
   static void goToHome(BuildContext context) {
@@ -184,6 +266,50 @@ abstract final class AppRoutes {
 
   static Future<void> openChatbot(BuildContext context) {
     return context.push<void>(chatbot);
+  }
+
+  static Future<void> openChatDetail(
+    BuildContext context, {
+    required ChatConversation conversation,
+  }) {
+    return context.push<void>(chatDetail, extra: conversation);
+  }
+
+  static Future<void> openConversation(
+    BuildContext context, {
+    required ChatConversation conversation,
+  }) {
+    return openChatDetail(context, conversation: conversation);
+  }
+
+  static Future<void> openVoiceCall(
+    BuildContext context, {
+    required ChatConversation conversation,
+    bool isCaller = true,
+    String? sessionId,
+  }) {
+    return context.push<void>(
+      voiceCall,
+      extra: {
+        'conversation': conversation,
+        'isCaller': isCaller,
+        'sessionId': sessionId,
+      },
+    );
+  }
+
+  static Future<void> openIncomingCall(
+    BuildContext context, {
+    required ChatConversation conversation,
+    required String sessionId,
+  }) {
+    return context.push<void>(
+      incomingCall,
+      extra: {
+        'conversation': conversation,
+        'sessionId': sessionId,
+      },
+    );
   }
 
   static Future<void> openAddRentalItem(BuildContext context) {
@@ -204,19 +330,8 @@ abstract final class AppRoutes {
     return context.push<bool>('/items/${item.id}/edit', extra: item);
   }
 
-  static Future<void> openConversation(
-    BuildContext context, {
-    required ChatConversation conversation,
-  }) {
-    return context.push<void>(chatDetail, extra: conversation);
-  }
-
-  static void goToLogin(BuildContext context) {
-    context.go(login);
-  }
-
-  static Future<bool?> openRegister(BuildContext context) {
-    return context.push<bool>(register);
+  static Future<void> openRegister(BuildContext context) {
+    return context.push<void>(register);
   }
 
   static Future<void> openForgotPassword(BuildContext context) {
@@ -238,7 +353,14 @@ abstract final class AppRoutes {
   }
 
   static void pop<T extends Object?>(BuildContext context, [T? result]) {
-    context.pop<T>(result);
+    final navigator = Navigator.maybeOf(context);
+    if (navigator != null && navigator.canPop()) {
+      navigator.pop(result);
+      return;
+    }
+    try {
+      context.pop<T>(result);
+    } catch (_) {}
   }
 
   static String _requiredStringExtra(GoRouterState state, String argumentName) {
@@ -257,6 +379,10 @@ abstract final class AppRoutes {
   static ChatConversation _requiredConversationExtra(GoRouterState state) {
     final value = state.extra;
     if (value is ChatConversation) return value;
+
+    if (value is Map<String, dynamic> && value['conversation'] is ChatConversation) {
+      return value['conversation'] as ChatConversation;
+    }
 
     throw ArgumentError.value(
       value,
