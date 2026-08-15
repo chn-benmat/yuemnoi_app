@@ -1,0 +1,73 @@
+import 'package:equatable/equatable.dart';
+
+/// อีเวนต์ทั้งหมดของ HomeBloc
+abstract class HomeEvent extends Equatable {
+  const HomeEvent();
+
+  @override
+  List<Object?> get props => [];
+}
+
+/// อีเวนต์เริ่มโหลดข้อมูลหน้า Home Feed
+class LoadHomeFeedStarted extends HomeEvent {
+  const LoadHomeFeedStarted();
+}
+
+/// อีเวนต์เปลี่ยนหมวดหมู่ตัวกรอง
+class CategoryFilterChanged extends HomeEvent {
+  const CategoryFilterChanged(this.categoryId);
+
+  final String categoryId;
+
+  @override
+  List<Object?> get props => [categoryId];
+}
+
+/// อีเวนต์ปรับเปลี่ยนเงื่อนไขตัวกรอง (หมวดหมู่, ราคา, คะแนนรีวิว)
+class ApplyFilterRequested extends HomeEvent {
+  const ApplyFilterRequested({
+    this.categoryId = 'all',
+    this.minPrice,
+    this.maxPrice,
+    this.minRating,
+  });
+
+  final String categoryId;
+  final int? minPrice;
+  final int? maxPrice;
+  final double? minRating;
+
+  @override
+  List<Object?> get props => [categoryId, minPrice, maxPrice, minRating];
+}
+
+/// อีเวนต์ล้างตัวกรองทั้งหมดกลับสู่ค่าเริ่มต้น
+class ClearFilterRequested extends HomeEvent {
+  const ClearFilterRequested();
+}
+
+/// อีเวนต์เปลี่ยนคำค้นหา
+class SearchQueryChanged extends HomeEvent {
+  const SearchQueryChanged(this.query);
+
+  final String query;
+
+  @override
+  List<Object?> get props => [query];
+}
+
+/// อีเวนต์สลับสถานะรายการโปรด
+class ToggleFavoriteRequested extends HomeEvent {
+  const ToggleFavoriteRequested(this.itemId);
+
+  final String itemId;
+
+  @override
+  List<Object?> get props => [itemId];
+}
+
+/// อีเวนต์ดึงข้อมูลใหม่ (Pull-to-Refresh)
+class RefreshHomeFeedRequested extends HomeEvent {
+  const RefreshHomeFeedRequested();
+}
+

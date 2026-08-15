@@ -1,0 +1,331 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+
+import '../../../../core/constants/colors.dart';
+import '../../domain/entities/feed_item.dart';
+
+/// การ์ดแสดงสินค้าสไตล์ Shopee สำหรับ Grid 2 คอลัมน์ (ซ้าย-ขวา)
+class ShopeeProductCard extends StatelessWidget {
+  const ShopeeProductCard({
+    super.key,
+    required this.item,
+    required this.onTap,
+    required this.onFavoriteToggle,
+  });
+
+  final FeedItem item;
+  final VoidCallback onTap;
+  final VoidCallback onFavoriteToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFECEEF1),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('shopee-card-${item.id}'),
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ส่วนภาพสินค้าอัตราส่วน 1:1 พร้อมป้าย Badge และปุ่มบันทึก
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(13),
+                    ),
+                    child: AspectRatio(
+                      aspectRatio: 1.0,
+                      child: Container(
+                        color: const Color(0xFFF3F4F6),
+                        child: item.imageUrl.trim().isEmpty
+                            ? _buildNoPictureThumbnail()
+                            : item.imageUrl.startsWith('http')
+                                ? CachedNetworkImage(
+                                    imageUrl: item.imageUrl,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => Container(
+                                      color: const Color(0xFFF0F2F5),
+                                      child: const Center(
+                                        child: SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppColors.primaryColor,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    errorWidget: (context, url, error) =>
+                                        _buildNoPictureThumbnail(),
+                                  )
+                                : Image.asset(
+                                    item.imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            _buildNoPictureThumbnail(),
+                                  ),
+                      ),
+                    ),
+                  ),
+
+                  // ป้ายยืนยันตัวตน / ร้านแนะนำ ด้านซ้ายบน (สไตล์ Shopee Mall / Shopee แนะนำ)
+                  if (item.isVerified)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryColor.withValues(alpha: 0.92),
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.verified_rounded,
+                              size: 11,
+                              color: Colors.white,
+                            ),
+                            SizedBox(width: 3),
+                            Text(
+                              'ยืนยันแล้ว',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                height: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // ปุ่ม Favorite ด้านขวาบน
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Material(
+                      color: Colors.white.withValues(alpha: 0.88),
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: onFavoriteToggle,
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(
+                            item.isFavorite
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            color: item.isFavorite
+                                ? const Color(0xFFFF2D55)
+                                : const Color(0xFF6E7378),
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // ส่วนข้อมูลด้านล่าง (ชื่อ, สถานที่, ราคา, ดาว/รีวิว)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // ชื่ออุปกรณ์ (สูงสุด 2 บรรทัด สไตล์การ์ด Shopee)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title.replaceAll('\n', ' '),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF1E2226),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              height: 1.25,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+
+                          // ข้อมูลสถานที่และระยะทาง
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on_outlined,
+                                size: 12,
+                                color: Color(0xFF888E94),
+                              ),
+                              const SizedBox(width: 2),
+                              Expanded(
+                                child: Text(
+                                  '${item.locationName} • ${item.distanceKm.toStringAsFixed(1)} กม.',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFF7E848A),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+
+                      // ส่วนราคา และ คะแนนรีวิวด้านล่าง
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ราคาเช่า สไตล์ Shopee โดดเด่น
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              const Text(
+                                '฿',
+                                style: TextStyle(
+                                  color: AppColors.primaryColor,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                _formatPrice(item.price),
+                                style: const TextStyle(
+                                  color: AppColors.primaryColor,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                ' ${item.priceUnit}',
+                                style: const TextStyle(
+                                  color: Color(0xFF7E8388),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 4),
+
+                          // แถวล่างสุด: ดาวรีวิว + จำนวนรีวิว + ชื่อเจ้าของ
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // ดาวและคะแนน
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.star_rounded,
+                                    size: 14,
+                                    color: Color(0xFFFFB800),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    item.rating.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      color: Color(0xFF2C3035),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '(${item.reviewCount})',
+                                    style: const TextStyle(
+                                      color: Color(0xFF9EA3A8),
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              // ชื่อเจ้าของแบบย่อ
+                              Flexible(
+                                child: Text(
+                                  item.ownerName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFF7E848A),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoPictureThumbnail() {
+    return Container(
+      color: const Color(0xFFF3F4F6),
+      child: const Center(
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: Color(0xFFADB5BD),
+          size: 34,
+        ),
+      ),
+    );
+  }
+
+  String _formatPrice(int price) {
+    return price.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
+  }
+}

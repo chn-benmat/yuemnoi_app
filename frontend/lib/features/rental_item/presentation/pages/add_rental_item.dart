@@ -12,6 +12,7 @@ import '../../domain/entities/rental_item.dart';
 import '../bloc/rental_item_bloc.dart';
 import '../bloc/rental_item_event.dart';
 import '../bloc/rental_item_state.dart';
+import '../widgets/rental_category_dropdown_field.dart';
 import '../widgets/rental_item_image_picker.dart';
 import '../widgets/rental_type_dropdown_field.dart';
 
@@ -25,17 +26,16 @@ class AddRentalItemScreen extends StatefulWidget {
 class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _categoryController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
   final _picker = ImagePicker();
+  String? _category;
   String? _rentalType;
   bool _showImageValidationError = false;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _categoryController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
     super.dispose();
@@ -89,7 +89,7 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
       RentalItemSubmitted(
         RentalItemDraft(
           name: _nameController.text,
-          category: _categoryController.text,
+          category: _category!,
           description: _descriptionController.text,
           rentalType: _rentalType!,
           price: int.parse(_priceController.text),
@@ -172,12 +172,9 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
                 validator: (value) => _validateRequired(value, 'ชื่ออุปกรณ์'),
               ),
               const SizedBox(height: 12),
-              AppTextFormField(
-                fieldKey: const Key('rental-item-category'),
-                label: 'หมวดหมู่',
-                hintText: "กรุณาระบุหมวดหมู่",
-                controller: _categoryController,
-                validator: (value) => _validateRequired(value, 'หมวดหมู่'),
+              RentalCategoryDropdownField(
+                value: _category,
+                onChanged: (value) => setState(() => _category = value),
               ),
               const SizedBox(height: 12),
               AppTextFormField(
@@ -198,7 +195,7 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
               AppTextFormField(
                 fieldKey: const Key('rental-item-price'),
                 label: 'ราคา',
-                hintText: '0.00',
+                hintText: '0',
                 controller: _priceController,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],

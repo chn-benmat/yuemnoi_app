@@ -14,6 +14,15 @@ import '../../features/chatbot/presentation/bloc/chatbot_bloc.dart';
 import '../../features/chatbot/presentation/pages/chat_bot.dart';
 import '../../features/chat/domain/entities/chat_conversation.dart';
 import '../../features/chat/presentation/pages/chat_detail.dart';
+import '../../features/item_detail/data/datasources/item_detail_remote_data_source.dart';
+import '../../features/item_detail/data/repositories/item_detail_repository_impl.dart';
+import '../../features/item_detail/domain/entities/item_detail.dart';
+import '../../features/item_detail/domain/usecases/get_item_detail_usecase.dart';
+import '../../features/item_detail/domain/usecases/update_item_usecase.dart';
+import '../../features/item_detail/presentation/bloc/item_detail_bloc.dart';
+import '../../features/item_detail/presentation/bloc/item_detail_event.dart';
+import '../../features/item_detail/presentation/pages/edit_item.dart';
+import '../../features/item_detail/presentation/pages/item_detail.dart';
 import '../../features/home/presentation/pages/home.dart';
 import '../../features/rental_item/data/datasources/rental_item_remote_data_source.dart';
 import '../../features/rental_item/data/repositories/rental_item_repository_impl.dart';
@@ -60,6 +69,8 @@ abstract final class AppRoutes {
   static const editContact = '/setting/edit-contact';
   static const changeAccount = '/setting/change-account';
   static const profileChangePassword = '/setting/change-password';
+  static const itemDetail = '/items/:itemId';
+  static const editRentalItem = '/items/:itemId/edit';
 
   static GoRouter createRouter({String initialLocation = login}) {
     return GoRouter(
@@ -183,6 +194,43 @@ abstract final class AppRoutes {
             key: state.pageKey,
             child: const PrivacyPolicyScreen(),
           ),
+          path: itemDetail,
+          pageBuilder: (context, state) {
+            final itemId = _requiredItemId(state);
+            final repository = ItemDetailRepositoryImpl(
+              ItemDetailRemoteDataSource(),
+            );
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: BlocProvider(
+                create: (context) => ItemDetailBloc(
+                  getItem: GetItemDetailUseCase(repository),
+                  updateItem: UpdateItemUseCase(repository),
+                )..add(ItemDetailRequested(itemId)),
+                child: ItemDetailScreen(itemId: itemId),
+              ),
+            );
+          },
+        ),
+        GoRoute(
+          path: editRentalItem,
+          pageBuilder: (context, state) {
+            final item = _requiredItemExtra(state);
+            final repository = ItemDetailRepositoryImpl(
+              ItemDetailRemoteDataSource(),
+            );
+            return MaterialPage<bool>(
+              key: state.pageKey,
+              child: BlocProvider(
+                create: (context) => ItemDetailBloc(
+                  getItem: GetItemDetailUseCase(repository),
+                  updateItem: UpdateItemUseCase(repository),
+                  initialItem: item,
+                ),
+                child: EditItemScreen(item: item),
+              ),
+            );
+          },
         ),
         GoRoute(
           path: register,
@@ -337,6 +385,18 @@ abstract final class AppRoutes {
 
   static Future<void> openProfileChangePassword(BuildContext context) {
     return context.push<void>(profileChangePassword);
+  static Future<void> openItemDetail(
+    BuildContext context, {
+    required int itemId,
+  }) {
+    return context.push<void>('/items/$itemId');
+  }
+
+  static Future<bool?> openEditRentalItem(
+    BuildContext context, {
+    required ItemDetail item,
+  }) {
+    return context.push<bool>('/items/${item.id}/edit', extra: item);
   }
 
   static Future<void> openConversation(
@@ -405,5 +465,25 @@ abstract final class AppRoutes {
     if (value is UserProfileViewArgs) return value;
     // Fallback — ป้องกัน crash กรณีไม่มี extra
     return const UserProfileViewArgs(userId: 'unknown', displayName: 'ผู้ใช้');
+  static int _requiredItemId(GoRouterState state) {
+    final value = int.tryParse(state.pathParameters['itemId'] ?? '');
+    if (value != null && value > 0) return value;
+
+    throw ArgumentError.value(
+      state.pathParameters['itemId'],
+      'itemId',
+      'Route ${state.uri.path} requires a positive item id.',
+    );
+  }
+
+  static ItemDetail _requiredItemExtra(GoRouterState state) {
+    final value = state.extra;
+    if (value is ItemDetail) return value;
+
+    throw ArgumentError.value(
+      value,
+      'item',
+      'Route ${state.uri.path} requires an ItemDetail extra.',
+    );
   }
 }
