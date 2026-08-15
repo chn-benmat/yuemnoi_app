@@ -5,11 +5,13 @@ import '../constants/colors.dart';
 class CustomBottomNavbar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTabChange;
+  final bool hasUnreadChat;
 
   const CustomBottomNavbar({
     super.key,
     required this.selectedIndex,
     required this.onTabChange,
+    this.hasUnreadChat = false,
   });
 
   @override
@@ -64,6 +66,46 @@ class CustomBottomNavbar extends StatelessWidget {
                 icon: selectedIndex == 1
                     ? Icons.chat_bubble_rounded
                     : Icons.chat_bubble_outline_rounded,
+                leading: hasUnreadChat
+                    ? SizedBox(
+                        width: 26,
+                        height: 24,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.center,
+                          children: [
+                            Icon(
+                              selectedIndex == 1
+                                  ? Icons.chat_bubble_rounded
+                                  : Icons.chat_bubble_outline_rounded,
+                              size: 24,
+                              color: selectedIndex == 1
+                                  ? AppColors.primaryColor
+                                  : const Color(0xFF8E8E93),
+                            ),
+                            Positioned(
+                              top: -2,
+                              right: -2,
+                              child: Container(
+                                key: const ValueKey('chat-unread-badge'),
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: selectedIndex == 1
+                                        ? const Color(0xFFF3E8FF)
+                                        : Colors.white,
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : null,
                 text: 'แชท',
               ),
               GButton(

@@ -1,16 +1,19 @@
+import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_primary_button.dart';
-import '../../../chat/domain/entities/chat_conversation.dart';
+import '../../../chat/data/repositories/chat_repository_impl.dart';
 import '../../domain/entities/item_detail.dart';
 import '../bloc/item_detail_bloc.dart';
 import '../bloc/item_detail_event.dart';
 import '../bloc/item_detail_state.dart';
+import '../widgets/full_screen_image_viewer.dart';
 
 class ItemDetailScreen extends StatefulWidget {
   const ItemDetailScreen({super.key, required this.itemId});
@@ -23,6 +26,7 @@ class ItemDetailScreen extends StatefulWidget {
 
 class _ItemDetailScreenState extends State<ItemDetailScreen> {
   bool _isFavorite = false;
+  bool _isChatLoading = false;
 
   Future<void> _openEdit(ItemDetail item) async {
     final updated = await AppRoutes.openEditRentalItem(context, item: item);
@@ -31,21 +35,156 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     }
   }
 
-  Future<void> _openChat(ItemDetail item) {
-    final owner = item.owner;
-    return AppRoutes.openConversation(
-      context,
-      conversation: ChatConversation(
-        id: 'item-${item.id}-${owner.userId}',
-        name: owner.displayName,
-        role: ChatParticipantRole.renter,
-        avatarAsset: owner.imageUrl.isEmpty
-            ? 'assets/images/user.png'
-            : owner.imageUrl,
-        preview: 'สนใจเช่า ${item.name}',
-        timeLabel: 'ตอนนี้',
-        isOnline: true,
+  Future<void> _openChat(ItemDetail item) async {
+    if (!AuthSession.isAuthenticated) {
+      final shouldLogin = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'เข้าสู่ระบบเพื่อใช้งานแชท',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          content: const Text(
+            'กรุณาเข้าสู่ระบบก่อนเริ่มการสนทนากับผู้ปล่อยเช่าอุปกรณ์',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryColor,
+              ),
+              child: const Text('เข้าสู่ระบบ'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldLogin == true && mounted) {
+        AppRoutes.goToLogin(context);
+      }
+      return;
+    }
+
+    if (item.isOwner) return;
+
+    setState(() => _isChatLoading = true);
+    try {
+      final repository = ChatRepositoryImpl();
+      final conversation = await repository.getOrCreateConversation(
+        itemId: item.id,
+        ownerId: item.owner.userId,
+      );
+
+      if (mounted) {
+        setState(() => _isChatLoading = false);
+        await AppRoutes.openConversation(context, conversation: conversation);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isChatLoading = false);
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text(e.toString())),
+          );
+      }
+    }
+  }
+
+  void _handleShare() {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text('คัดลอกลิงก์อุปกรณ์แล้ว')),
+      );
+  }
+
+  void _openMoreOptions(ItemDetail item) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 38,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.share_outlined,
+                    color: Color(0xFF2D2D30),
+                  ),
+                  title: const Text(
+                    'แชร์อุปกรณ์',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _handleShare();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.link_rounded,
+                    color: Color(0xFF2D2D30),
+                  ),
+                  title: const Text(
+                    'คัดลอกลิงก์',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _handleShare();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.flag_outlined,
+                    color: Colors.redAccent,
+                  ),
+                  title: const Text(
+                    'รายงานปัญหาอุปกรณ์นี้',
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    ScaffoldMessenger.of(context)
+                      ..hideCurrentSnackBar()
+                      ..showSnackBar(
+                        const SnackBar(
+                          content: Text('ส่งรายงานปัญหาเรียบร้อยแล้ว'),
+                        ),
+                      );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -63,28 +202,31 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(28, 12, 28, 18),
                     child: AppPrimaryButton(
-                      text: item.isOwner
-                          ? 'แก้ไขอุปกรณ์ของคุณ'
-                          : 'คุยกับผู้ปล่อยเช่า',
+                      text: item.isOwner ? 'แก้ไขอุปกรณ์ของคุณ' : 'แชท',
+                      isLoading: _isChatLoading,
                       onPressed: () =>
                           item.isOwner ? _openEdit(item) : _openChat(item),
                     ),
                   ),
                 ),
-          body: Column(
+          body: Stack(
             children: [
-              _DetailTopBar(
-                isFavorite: _isFavorite,
-                onFavorite: () => setState(() => _isFavorite = !_isFavorite),
-                onShare: () {
-                  ScaffoldMessenger.of(context)
-                    ..hideCurrentSnackBar()
-                    ..showSnackBar(
-                      const SnackBar(content: Text('คัดลอกลิงก์อุปกรณ์แล้ว')),
-                    );
-                },
+              _body(state),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _DetailFloatingTopBar(
+                  isFavorite: _isFavorite,
+                  onFavorite: () => setState(() => _isFavorite = !_isFavorite),
+                  onShare: _handleShare,
+                  onMore: () {
+                    if (item != null) {
+                      _openMoreOptions(item);
+                    }
+                  },
+                ),
               ),
-              Expanded(child: _body(state)),
             ],
           ),
         );
@@ -125,7 +267,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
               children: [
                 _ImageGallery(imageUrls: item.imageUrls),
                 Transform.translate(
-                  offset: const Offset(0, -38),
+                  offset: const Offset(0, -32),
                   child: _DetailContent(item: item),
                 ),
               ],
@@ -137,63 +279,93 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 }
 
-class _DetailTopBar extends StatelessWidget {
-  const _DetailTopBar({
+class _DetailFloatingTopBar extends StatelessWidget {
+  const _DetailFloatingTopBar({
     required this.isFavorite,
     required this.onFavorite,
     required this.onShare,
+    required this.onMore,
   });
 
   final bool isFavorite;
   final VoidCallback onFavorite;
   final VoidCallback onShare;
+  final VoidCallback onMore;
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: AppColors.primaryColor,
-      child: SafeArea(
-        bottom: false,
-        child: SizedBox(
-          height: 64,
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'ย้อนกลับ',
-                onPressed: () => AppRoutes.pop(context),
-                icon: const Icon(
-                  Icons.arrow_back_rounded,
-                  color: Colors.white,
-                  size: 31,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                tooltip: isFavorite
-                    ? 'นำออกจากรายการโปรด'
-                    : 'เพิ่มในรายการโปรด',
-                onPressed: onFavorite,
-                icon: Icon(
-                  isFavorite
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  color: Colors.white,
-                  size: 29,
-                ),
-              ),
-              IconButton(
-                tooltip: 'แชร์',
-                onPressed: onShare,
-                icon: const Icon(
-                  Icons.share_outlined,
-                  color: Colors.white,
-                  size: 27,
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            _CircleActionButton(
+              tooltip: 'ย้อนกลับ',
+              icon: Icons.arrow_back_rounded,
+              onPressed: () => AppRoutes.pop(context),
+            ),
+            const Spacer(),
+            _CircleActionButton(
+              tooltip: 'แชร์',
+              icon: Icons.share_outlined,
+              iconSize: 20,
+              onPressed: onShare,
+            ),
+            const SizedBox(width: 8),
+            _CircleActionButton(
+              tooltip: isFavorite
+                  ? 'นำออกจากรายการโปรด'
+                  : 'เพิ่มในรายการโปรด',
+              icon: isFavorite
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+              iconColor: isFavorite ? const Color(0xFFFF3B5F) : Colors.white,
+              onPressed: onFavorite,
+            ),
+            const SizedBox(width: 8),
+            _CircleActionButton(
+              tooltip: 'ตัวเลือกเพิ่มเติม',
+              icon: Icons.more_vert_rounded,
+              onPressed: onMore,
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _CircleActionButton extends StatelessWidget {
+  const _CircleActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.iconColor = Colors.white,
+    this.iconSize = 22,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final Color iconColor;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.38),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        iconSize: iconSize,
+        tooltip: tooltip,
+        icon: Icon(icon, color: iconColor),
+        onPressed: onPressed,
       ),
     );
   }
@@ -214,18 +386,24 @@ class _ImageGalleryState extends State<_ImageGallery> {
   @override
   Widget build(BuildContext context) {
     final urls = widget.imageUrls;
-    return SizedBox(
-      height: 360,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final galleryHeight = screenWidth.clamp(360.0, 420.0);
+
+    return Container(
+      height: galleryHeight,
+      color: const Color(0xFFF3F4F6),
       child: Stack(
         fit: StackFit.expand,
         children: [
           if (urls.isEmpty)
             const ColoredBox(
               color: Color(0xFFE9E9EC),
-              child: Icon(
-                Icons.image_not_supported_outlined,
-                color: Color(0xFF9A9A9F),
-                size: 58,
+              child: Center(
+                child: Icon(
+                  Icons.image_not_supported_outlined,
+                  color: Color(0xFF9A9A9F),
+                  size: 58,
+                ),
               ),
             )
           else
@@ -233,47 +411,79 @@ class _ImageGalleryState extends State<_ImageGallery> {
               key: const ValueKey('item-image-gallery'),
               itemCount: urls.length,
               onPageChanged: (page) => setState(() => _page = page),
-              itemBuilder: (context, index) => CachedNetworkImage(
-                imageUrl: urls[index],
-                fit: BoxFit.cover,
-                placeholder: (context, url) => const ColoredBox(
-                  color: Color(0xFFE9E9EC),
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.primaryColor,
+              itemBuilder: (context, index) => ClipRect(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Blurred background of the same image to eliminate empty side bars
+                    Transform.scale(
+                      scale: 1.15,
+                      child: ImageFiltered(
+                        imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                        child: CachedNetworkImage(
+                          imageUrl: urls[index],
+                          fit: BoxFit.cover,
+                          errorWidget: (context, url, error) =>
+                              const ColoredBox(
+                            color: Color(0xFF232428),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                errorWidget: (context, url, error) => const ColoredBox(
-                  color: Color(0xFFE9E9EC),
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: Color(0xFF9A9A9F),
-                    size: 58,
-                  ),
+                    // Subtle overlay for pleasant contrast
+                    Container(
+                      color: Colors.black.withValues(alpha: 0.16),
+                    ),
+                    // Crisp foreground uncropped image
+                    GestureDetector(
+                      onTap: () => FullScreenImageViewer.open(
+                        context,
+                        imageUrls: urls,
+                        initialIndex: index,
+                      ),
+                      child: CachedNetworkImage(
+                        imageUrl: urls[index],
+                        fit: BoxFit.contain,
+                        placeholder: (context, url) => const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primaryColor,
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => const Center(
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: Colors.white70,
+                            size: 58,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          if (urls.length > 1)
+
+          // Bottom right image counter badge (e.g. 3/13)
+          if (urls.isNotEmpty)
             Positioned(
-              left: 0,
-              right: 0,
+              right: 18,
               bottom: 48,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  urls.length,
-                  (index) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: index == _page ? 28 : 8,
-                    height: 5,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: index == _page
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.42),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  '${_page + 1}/${urls.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ),
@@ -295,9 +505,16 @@ class _DetailContent extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 600),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(42)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 16,
+            offset: Offset(0, -4),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.fromLTRB(28, 38, 28, 18),
+      padding: const EdgeInsets.fromLTRB(28, 32, 28, 18),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),

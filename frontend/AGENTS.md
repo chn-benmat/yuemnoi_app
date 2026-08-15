@@ -43,6 +43,7 @@
 
 - Write code comments in clear, easy-to-understand Thai.
 - Preserve the existing BLoC and Clean Architecture approach. Do not introduce a competing state-management pattern.
+- Do not modify, redesign, or alter existing UI/UX layouts, styling, screens, or components unless explicitly requested by the user. When implementing new logic, connecting APIs, or integrating features, keep the existing UI design intact.
 - Before writing a widget, field decoration, button style, or repeated layout, search the feature's `presentation/widgets/`, `core/widgets/`, and `core/theme/` for an existing implementation.
 - Reuse or extend an existing shared widget with backward-compatible options when the same feature-independent UI behavior is needed. Keep the shared visual logic in one source of truth instead of recreating it in pages.
 - Place UI that is reusable only inside one feature in that feature's `presentation/widgets/`. Promote it to `core/widgets/` only when it is feature-independent and reused across pages or features.
