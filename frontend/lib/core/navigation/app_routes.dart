@@ -245,6 +245,8 @@ abstract final class AppRoutes {
             key: state.pageKey,
             child: const PrivacyPolicyScreen(),
           ),
+        ),
+        GoRoute(
           path: itemDetail,
           pageBuilder: (context, state) {
             final itemId = _requiredItemId(state);
@@ -511,6 +513,8 @@ abstract final class AppRoutes {
 
   static Future<void> openProfileChangePassword(BuildContext context) {
     return context.push<void>(profileChangePassword);
+  }
+
   static Future<void> openItemDetail(
     BuildContext context, {
     required int itemId,
@@ -591,6 +595,8 @@ abstract final class AppRoutes {
     if (value is UserProfileViewArgs) return value;
     // Fallback — ป้องกัน crash กรณีไม่มี extra
     return const UserProfileViewArgs(userId: 'unknown', displayName: 'ผู้ใช้');
+  }
+
   static int _requiredItemId(GoRouterState state) {
     final value = int.tryParse(state.pathParameters['itemId'] ?? '');
     if (value != null && value > 0) return value;
