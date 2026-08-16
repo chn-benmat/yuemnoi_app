@@ -1,46 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../domain/entities/feed_category.dart';
 
-/// ตัวเลือกช่วงราคาสำหรับตัวกรอง
-class PriceFilterOption {
-  const PriceFilterOption({
-    required this.label,
-    this.minPrice,
-    this.maxPrice,
-  });
-
-  final String label;
-  final int? minPrice;
-  final int? maxPrice;
-}
-
-/// รายการตัวเลือกราคามาตรฐาน
-const List<PriceFilterOption> kPriceFilterOptions = [
-  PriceFilterOption(label: 'ทั้งหมด'),
-  PriceFilterOption(label: 'ไม่เกิน 500 ฿', maxPrice: 500),
-  PriceFilterOption(label: '500 - 1,000 ฿', minPrice: 500, maxPrice: 1000),
-  PriceFilterOption(label: '1,000 - 2,000 ฿', minPrice: 1000, maxPrice: 2000),
-  PriceFilterOption(label: '2,000 ฿ ขึ้นไป', minPrice: 2000),
-];
-
-/// รายการตัวเลือกคะแนนรีวิว
+/// รายการตัวเลือกคะแนนรีวิว (1 ดาว ถึง 5 ดาว ไม่มีจุดทศนิยม)
 class RatingFilterOption {
   const RatingFilterOption({
     required this.label,
     this.minRating,
+    this.stars,
   });
 
   final String label;
   final double? minRating;
+  final int? stars;
 }
 
 const List<RatingFilterOption> kRatingFilterOptions = [
-  RatingFilterOption(label: 'ทั้งหมด'),
-  RatingFilterOption(label: '⭐ 4.8 ขึ้นไป', minRating: 4.8),
-  RatingFilterOption(label: '⭐ 4.5 ขึ้นไป', minRating: 4.5),
-  RatingFilterOption(label: '⭐ 4.0 ขึ้นไป', minRating: 4.0),
+  RatingFilterOption(label: 'ทั้งหมด', minRating: null, stars: null),
+  RatingFilterOption(label: '5 ดาว', minRating: 5.0, stars: 5),
+  RatingFilterOption(label: '4 ดาวขึ้นไป', minRating: 4.0, stars: 4),
+  RatingFilterOption(label: '3 ดาวขึ้นไป', minRating: 3.0, stars: 3),
+  RatingFilterOption(label: '2 ดาวขึ้นไป', minRating: 2.0, stars: 2),
+  RatingFilterOption(label: '1 ดาวขึ้นไป', minRating: 1.0, stars: 1),
 ];
 
 /// ปุ่มตัวกรองข้างช่องค้นหา (ไอคอน Filter แบบ Funnel / Filter List)
@@ -239,6 +222,16 @@ class ActiveCategoryTag extends StatelessWidget {
       priceLabel = '≤ ฿$maxPrice';
     }
 
+    String ratingLabel = '';
+    if (minRating != null) {
+      final int ratingInt = minRating!.round();
+      if (ratingInt >= 5) {
+        ratingLabel = '⭐ 5 ดาว';
+      } else {
+        ratingLabel = '⭐ $ratingInt ดาวขึ้นไป';
+      }
+    }
+
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Wrap(
@@ -262,7 +255,7 @@ class ActiveCategoryTag extends StatelessWidget {
           if (hasRating)
             _FilterPill(
               keyName: 'clear-rating-filter',
-              label: '⭐ $minRating+',
+              label: ratingLabel,
               icon: Icons.star_rounded,
               onClear: onClearRating,
             ),
@@ -371,6 +364,9 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
   int? _maxPrice;
   double? _minRating;
 
+  late final TextEditingController _minPriceController;
+  late final TextEditingController _maxPriceController;
+
   @override
   void initState() {
     super.initState();
@@ -378,6 +374,20 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
     _minPrice = widget.initialMinPrice;
     _maxPrice = widget.initialMaxPrice;
     _minRating = widget.initialMinRating;
+
+    _minPriceController = TextEditingController(
+      text: widget.initialMinPrice != null ? widget.initialMinPrice.toString() : '',
+    );
+    _maxPriceController = TextEditingController(
+      text: widget.initialMaxPrice != null ? widget.initialMaxPrice.toString() : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _minPriceController.dispose();
+    _maxPriceController.dispose();
+    super.dispose();
   }
 
   IconData _getCategoryIcon(String id) {
@@ -407,10 +417,6 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
       default:
         return Icons.apps_rounded;
     }
-  }
-
-  bool _isPriceSelected(PriceFilterOption opt) {
-    return _minPrice == opt.minPrice && _maxPrice == opt.maxPrice;
   }
 
   bool _isRatingSelected(RatingFilterOption opt) {
@@ -788,97 +794,303 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
     );
   }
 
-  // แท็บ 2: กรองราคา
+  // แท็บ 2: กรองราคา (ช่องกรอกราคาต่ำสุดและสูงสุด)
   Widget _buildPriceContent() {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'ช่วงราคาเช่าต่อวัน',
+            'ช่วงราคาเช่าต่อวัน (฿)',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
               color: Color(0xFF212529),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           const Text(
-            'เลือกช่วงราคาที่ต้องการค้นหา',
+            'ระบุราคาต่ำสุดและราคาสูงสุดที่ต้องการ',
             style: TextStyle(
               fontSize: 11.5,
               color: Color(0xFF6C757D),
             ),
           ),
-          const SizedBox(height: 14),
-          Expanded(
-            child: ListView.separated(
-              itemCount: kPriceFilterOptions.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final opt = kPriceFilterOptions[index];
-                final isSelected = _isPriceSelected(opt);
+          const SizedBox(height: 16),
 
-                return Material(
-                  color: isSelected
-                      ? const Color(0xFFF4EBFF)
-                      : const Color(0xFFF8F9FA),
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    key: ValueKey('filter-price-option-$index'),
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      setState(() {
-                        _minPrice = opt.minPrice;
-                        _maxPrice = opt.maxPrice;
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isSelected
-                                ? Icons.radio_button_checked_rounded
-                                : Icons.radio_button_off_rounded,
-                            size: 18,
-                            color: isSelected
-                                ? AppColors.primaryColor
-                                : const Color(0xFFADB5BD),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              opt.label,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.w500,
-                                color: isSelected
-                                    ? AppColors.primaryColor
-                                    : const Color(0xFF343A40),
-                              ),
-                            ),
-                          ),
-                        ],
+          // ช่องกรอกราคาต่ำสุดและราคาสูงสุด
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // ช่องราคาต่ำสุด
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ราคาต่ำสุด',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF495057),
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      key: const ValueKey('filter-min-price-input'),
+                      controller: _minPriceController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF212529),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '0',
+                        hintStyle: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFFADB5BD),
+                        ),
+                        prefixText: '฿ ',
+                        prefixStyle: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryColor,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8F9FA),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE9ECEF)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE9ECEF)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: AppColors.primaryColor,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          final trimmed = value.trim();
+                          _minPrice = trimmed.isEmpty ? null : int.tryParse(trimmed);
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              // เส้นคั่นระหว่างช่อง
+              const Padding(
+                padding: EdgeInsets.only(top: 22, left: 8, right: 8),
+                child: Text(
+                  '-',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFADB5BD),
                   ),
-                );
-              },
+                ),
+              ),
+
+              // ช่องราคาสูงสุด
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ราคาสูงสุด',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF495057),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      key: const ValueKey('filter-max-price-input'),
+                      controller: _maxPriceController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF212529),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'ไม่จำกัด',
+                        hintStyle: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFFADB5BD),
+                        ),
+                        prefixText: '฿ ',
+                        prefixStyle: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryColor,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8F9FA),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE9ECEF)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE9ECEF)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: AppColors.primaryColor,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          final trimmed = value.trim();
+                          _maxPrice = trimmed.isEmpty ? null : int.tryParse(trimmed);
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // ปุ่มลัดเลือกช่วงราคา (Quick price presets)
+          const Text(
+            'ช่วงราคายอดนิยม',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF6C757D),
             ),
           ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildPricePresetChip(
+                label: 'ไม่เกิน 500 ฿',
+                min: null,
+                max: 500,
+              ),
+              _buildPricePresetChip(
+                label: '500 - 1,000 ฿',
+                min: 500,
+                max: 1000,
+              ),
+              _buildPricePresetChip(
+                label: '1,000 - 2,000 ฿',
+                min: 1000,
+                max: 2000,
+              ),
+              _buildPricePresetChip(
+                label: '2,000 ฿ ขึ้นไป',
+                min: 2000,
+                max: null,
+              ),
+            ],
+          ),
+
+          if (_minPrice != null || _maxPrice != null) ...[
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const ValueKey('clear-price-tab-button'),
+                onPressed: () {
+                  setState(() {
+                    _minPrice = null;
+                    _maxPrice = null;
+                    _minPriceController.clear();
+                    _maxPriceController.clear();
+                  });
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text(
+                  'ล้างช่วงราคา',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFDC2626),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  // แท็บ 3: คะแนนรีวิว
+  Widget _buildPricePresetChip({
+    required String label,
+    required int? min,
+    required int? max,
+  }) {
+    final isSelected = _minPrice == min && _maxPrice == max;
+
+    return Material(
+      color: isSelected ? const Color(0xFFF4EBFF) : const Color(0xFFF8F9FA),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () {
+          setState(() {
+            _minPrice = min;
+            _maxPrice = max;
+            _minPriceController.text = min?.toString() ?? '';
+            _maxPriceController.text = max?.toString() ?? '';
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? AppColors.primaryColor : const Color(0xFFE9ECEF),
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected ? AppColors.primaryColor : const Color(0xFF495057),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // แท็บ 3: คะแนนรีวิว (1 ดาว ถึง 5 ดาว ไม่มีจุดทศนิยม)
   Widget _buildRatingContent() {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -886,16 +1098,16 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'คะแนนรีวิวขั้นต่ำ',
+            'คะแนนรีวิว',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
               color: Color(0xFF212529),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           const Text(
-            'เลือกระดับคะแนนความน่าเชื่อถือ',
+            'เลือกระดับคะแนนความพึงพอใจ (1 - 5 ดาว)',
             style: TextStyle(
               fontSize: 11.5,
               color: Color(0xFF6C757D),
@@ -926,7 +1138,7 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
-                        vertical: 12,
+                        vertical: 11,
                       ),
                       child: Row(
                         children: [
@@ -940,6 +1152,22 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
                                 : const Color(0xFFADB5BD),
                           ),
                           const SizedBox(width: 10),
+                          if (opt.stars != null) ...[
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: List.generate(5, (starIdx) {
+                                final isFilled = starIdx < opt.stars!;
+                                return Icon(
+                                  Icons.star_rounded,
+                                  size: 16,
+                                  color: isFilled
+                                      ? const Color(0xFFFFB800)
+                                      : const Color(0xFFE2E8F0),
+                                );
+                              }),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           Expanded(
                             child: Text(
                               opt.label,
@@ -954,6 +1182,12 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
                               ),
                             ),
                           ),
+                          if (isSelected)
+                            const Icon(
+                              Icons.check_rounded,
+                              color: AppColors.primaryColor,
+                              size: 18,
+                            ),
                         ],
                       ),
                     ),
