@@ -13,7 +13,7 @@ import '../widgets/home_header.dart';
 import '../widgets/home_search_bar.dart';
 import '../widgets/shopee_product_card.dart';
 
-/// หน้า Home Feed หลักของแอป Yuemnoi (ปรับปรุงเป็น Shopee 2-Column Grid)
+/// หน้า Home Feed หลักของแอป Yuemnoi (Shopee 2-Column Grid)
 class HomeFeedView extends StatefulWidget {
   const HomeFeedView({super.key});
 
@@ -38,26 +38,36 @@ class _HomeFeedViewState extends State<HomeFeedView> {
       );
       return;
     }
-
     AppRoutes.openItemDetail(context, itemId: itemId);
   }
 
-  void _onFavoriteToggle(BuildContext context, FeedItem item) {
-    context.read<HomeBloc>().add(ToggleFavoriteRequested(item.id));
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          item.isFavorite
-              ? 'นำออกจากรายการโปรดแล้ว'
-              : 'เพิ่ม "${item.title.replaceAll('\n', ' ')}" ในรายการโปรดแล้ว',
-        ),
-        backgroundColor: const Color(0xFF2B2E31),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(milliseconds: 1400),
-      ),
-    );
+  /// รวมและตัดรายการสินค้าซ้ำ
+  List<FeedItem> _getDisplayedItems(HomeLoaded state) {
+    if (state.hasActiveFilters || state.searchQuery.isNotEmpty) {
+      return state.nearbyItems;
+    }
+    final seenIds = <String>{};
+    return [
+      ...state.curatedItems.where((item) => seenIds.add(item.id)),
+      ...state.nearbyItems.where((item) => seenIds.add(item.id)),
+    ];
+  }
+
+  /// ตัวช่วยส่ง Event ตัวกรอง
+  void _applyFilter({
+    required String categoryId,
+    int? minPrice,
+    int? maxPrice,
+    double? minRating,
+  }) {
+    context.read<HomeBloc>().add(
+          ApplyFilterRequested(
+            categoryId: categoryId,
+            minPrice: minPrice,
+            maxPrice: maxPrice,
+            minRating: minRating,
+          ),
+        );
   }
 
   @override
@@ -69,7 +79,6 @@ class _HomeFeedViewState extends State<HomeFeedView> {
           if (state is HomeInitial || state is HomeLoading) {
             return const _HomeLoadingView();
           }
-
           if (state is HomeError) {
             return _HomeErrorView(
               message: state.message,
@@ -77,200 +86,163 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                   context.read<HomeBloc>().add(const LoadHomeFeedStarted()),
             );
           }
-
           if (state is HomeLoaded) {
-            // รวมรายการสินค้าสำหรับแสดงผลในกริด 2 คอลัมน์
-            final List<FeedItem> displayedItems = [];
-            final seenIds = <String>{};
-
-            if (!state.hasActiveFilters && state.searchQuery.isEmpty) {
-              for (final item in state.curatedItems) {
-                if (seenIds.add(item.id)) displayedItems.add(item);
-              }
-              for (final item in state.nearbyItems) {
-                if (seenIds.add(item.id)) displayedItems.add(item);
-              }
-            } else {
-              for (final item in state.nearbyItems) {
-                if (seenIds.add(item.id)) displayedItems.add(item);
-              }
-            }
-
-            return Column(
-              children: [
-                // 1. ส่วนหัว Header ตรึงไว้ด้านบน (ไม่เลื่อนทะลุตามการดึงรีเฟรช)
-                HomeHeader(
-                  unreadCount: 3,
-                  onNotificationTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('ไม่มีการแจ้งเตือนใหม่'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                  },
-                ),
-
-                // 2. เนื้อหา Feed ด้านล่างที่เลื่อนได้ และดึงเพื่อรีเฟรชอยู่ใต้ Header พอดี
-                Expanded(
-                  child: RefreshIndicator(
-                    color: AppColors.primaryColor,
-                    backgroundColor: Colors.white,
-                    edgeOffset: 0,
-                    onRefresh: () async {
-                      context.read<HomeBloc>().add(const RefreshHomeFeedRequested());
-                      await Future<void>.delayed(const Duration(milliseconds: 500));
-                    },
-                    child: CustomScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics(),
-                      ),
-                      slivers: [
-                        // ช่องค้นหาพร้อมปุ่มตัวกรองหมวดหมู่ด้านข้าง (หน้าต่างเลื่อนลงจากด้านบน)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: HomeSearchBar(
-                                        controller: _searchController,
-                                        onChanged: (query) {
-                                          context.read<HomeBloc>().add(
-                                                SearchQueryChanged(query),
-                                              );
-                                        },
-                                        onClear: () {
-                                          context.read<HomeBloc>().add(
-                                                const SearchQueryChanged(''),
-                                              );
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    CategoryFilterButton(
-                                      categories: state.categories,
-                                      selectedCategoryId:
-                                          state.selectedCategoryId,
-                                      minPrice: state.minPrice,
-                                      maxPrice: state.maxPrice,
-                                      minRating: state.minRating,
-                                      onApplyFilter: ({
-                                        required categoryId,
-                                        minPrice,
-                                        maxPrice,
-                                        minRating,
-                                      }) {
-                                        context.read<HomeBloc>().add(
-                                              ApplyFilterRequested(
-                                                categoryId: categoryId,
-                                                minPrice: minPrice,
-                                                maxPrice: maxPrice,
-                                                minRating: minRating,
-                                              ),
-                                            );
-                                      },
-                                      onResetFilter: () {
-                                        context.read<HomeBloc>().add(
-                                              const ClearFilterRequested(),
-                                            );
-                                      },
-                                    ),
-                                  ],
-                                ),
-                                ActiveCategoryTag(
-                                  categories: state.categories,
-                                  selectedCategoryId: state.selectedCategoryId,
-                                  minPrice: state.minPrice,
-                                  maxPrice: state.maxPrice,
-                                  minRating: state.minRating,
-                                  onClearCategory: () {
-                                    context.read<HomeBloc>().add(
-                                          ApplyFilterRequested(
-                                            categoryId: 'all',
-                                            minPrice: state.minPrice,
-                                            maxPrice: state.maxPrice,
-                                            minRating: state.minRating,
-                                          ),
-                                        );
-                                  },
-                                  onClearPrice: () {
-                                    context.read<HomeBloc>().add(
-                                          ApplyFilterRequested(
-                                            categoryId: state.selectedCategoryId,
-                                            minPrice: null,
-                                            maxPrice: null,
-                                            minRating: state.minRating,
-                                          ),
-                                        );
-                                  },
-                                  onClearRating: () {
-                                    context.read<HomeBloc>().add(
-                                          ApplyFilterRequested(
-                                            categoryId: state.selectedCategoryId,
-                                            minPrice: state.minPrice,
-                                            maxPrice: state.maxPrice,
-                                            minRating: null,
-                                          ),
-                                        );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        const SliverToBoxAdapter(child: SizedBox(height: 14)),
-
-                        // แสดงรายการสินค้าแบบ Grid 2 คอลัมน์ ซ้าย-ขวา สไตล์ Shopee Card
-                        if (displayedItems.isEmpty)
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 40),
-                              child: HomeEmptyState(searchQuery: state.searchQuery),
-                            ),
-                          )
-                        else
-                          SliverPadding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            sliver: SliverGrid(
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                crossAxisSpacing: 10,
-                                mainAxisSpacing: 10,
-                                childAspectRatio: 0.61,
-                              ),
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) {
-                                  final item = displayedItems[index];
-                                  return ShopeeProductCard(
-                                    item: item,
-                                    onTap: () => _onItemTap(item),
-                                    onFavoriteToggle: () =>
-                                        _onFavoriteToggle(context, item),
-                                  );
-                                },
-                                childCount: displayedItems.length,
-                              ),
-                            ),
-                          ),
-
-                        // เว้นระยะห่างด้านล่างสำหรับ Bottom Navigation Bar และ FAB
-                        const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            );
+            return _buildLoadedContent(state);
           }
-
           return const SizedBox.shrink();
         },
+      ),
+    );
+  }
+
+  Widget _buildLoadedContent(HomeLoaded state) {
+    final displayedItems = _getDisplayedItems(state);
+
+    return Column(
+      children: [
+        // ส่วน Header ตรึงด้านบน
+        HomeHeader(
+          unreadCount: 3,
+          onNotificationTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('ไม่มีการแจ้งเตือนใหม่'),
+                duration: Duration(seconds: 1),
+              ),
+            );
+          },
+        ),
+
+        // ส่วน Feed เลื่อนได้ พร้อม Pull to Refresh
+        Expanded(
+          child: RefreshIndicator(
+            color: AppColors.primaryColor,
+            backgroundColor: Colors.white,
+            edgeOffset: 0,
+            onRefresh: () async {
+              context.read<HomeBloc>().add(const RefreshHomeFeedRequested());
+              await Future<void>.delayed(const Duration(milliseconds: 500));
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _buildSearchAndFilterSection(state),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 14)),
+                _buildProductGridSliver(displayedItems, state.searchQuery),
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// แถบค้นหา + ปุ่มตัวกรอง + ป้าย Filter Tag
+  Widget _buildSearchAndFilterSection(HomeLoaded state) {
+    final bloc = context.read<HomeBloc>();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: HomeSearchBar(
+                  controller: _searchController,
+                  onChanged: (query) => bloc.add(SearchQueryChanged(query)),
+                  onClear: () => bloc.add(const SearchQueryChanged('')),
+                ),
+              ),
+              const SizedBox(width: 10),
+              CategoryFilterButton(
+                categories: state.categories,
+                selectedCategoryId: state.selectedCategoryId,
+                minPrice: state.minPrice,
+                maxPrice: state.maxPrice,
+                minRating: state.minRating,
+                onApplyFilter: ({
+                  required categoryId,
+                  minPrice,
+                  maxPrice,
+                  minRating,
+                }) =>
+                    _applyFilter(
+                  categoryId: categoryId,
+                  minPrice: minPrice,
+                  maxPrice: maxPrice,
+                  minRating: minRating,
+                ),
+                onResetFilter: () => bloc.add(const ClearFilterRequested()),
+              ),
+            ],
+          ),
+          ActiveCategoryTag(
+            categories: state.categories,
+            selectedCategoryId: state.selectedCategoryId,
+            minPrice: state.minPrice,
+            maxPrice: state.maxPrice,
+            minRating: state.minRating,
+            onClearCategory: () => _applyFilter(
+              categoryId: 'all',
+              minPrice: state.minPrice,
+              maxPrice: state.maxPrice,
+              minRating: state.minRating,
+            ),
+            onClearPrice: () => _applyFilter(
+              categoryId: state.selectedCategoryId,
+              minPrice: null,
+              maxPrice: null,
+              minRating: state.minRating,
+            ),
+            onClearRating: () => _applyFilter(
+              categoryId: state.selectedCategoryId,
+              minPrice: state.minPrice,
+              maxPrice: state.maxPrice,
+              minRating: null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// กริดแสดงสินค้า 2 คอลัมน์ หรือ Empty State
+  Widget _buildProductGridSliver(List<FeedItem> items, String searchQuery) {
+    if (items.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: HomeEmptyState(searchQuery: searchQuery),
+        ),
+      );
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 0.61,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final item = items[index];
+            return ShopeeProductCard(
+              item: item,
+              onTap: () => _onItemTap(item),
+            );
+          },
+          childCount: items.length,
+        ),
       ),
     );
   }

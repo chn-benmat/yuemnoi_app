@@ -10,12 +10,12 @@ class CuratedItemCard extends StatelessWidget {
     super.key,
     required this.item,
     required this.onTap,
-    required this.onFavoriteToggle,
+    this.onFavoriteToggle,
   });
 
   final FeedItem item;
   final VoidCallback onTap;
-  final VoidCallback onFavoriteToggle;
+  final VoidCallback? onFavoriteToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -124,32 +124,6 @@ class CuratedItemCard extends StatelessWidget {
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                    ),
-
-                    // ปุ่มบันทึกรายการโปรดซ้ายบน
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Material(
-                        color: Colors.white.withValues(alpha: 0.88),
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: onFavoriteToggle,
-                          child: Padding(
-                            padding: const EdgeInsets.all(7),
-                            child: Icon(
-                              item.isFavorite
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
-                              color: item.isFavorite
-                                  ? const Color(0xFFFF2D55)
-                                  : const Color(0xFF6A6E73),
-                              size: 18,
-                            ),
-                          ),
                         ),
                       ),
                     ),
