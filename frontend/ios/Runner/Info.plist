@@ -40,7 +40,10 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>ใช้สำหรับเลือกรูปโปรไฟล์ของผู้ใช้</string>
+	<string>ใช้สำหรับเลือกรูปภาพเพื่อส่งในห้องแชท โปรไฟล์ หรือลงประกาศสินค้า</string>
+	<key>NSCameraUsageDescription</key>
+	<string>ใช้สำหรับถ่ายรูปภาพเพื่อส่งในห้องแชท หรือลงประกาศสินค้า</string>
+
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -71,8 +74,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

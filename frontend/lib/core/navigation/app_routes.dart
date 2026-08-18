@@ -16,8 +16,7 @@ import '../../features/chatbot/presentation/bloc/chatbot_bloc.dart';
 import '../../features/chatbot/presentation/pages/chat_bot.dart';
 import '../../features/chat/domain/entities/chat_conversation.dart';
 import '../../features/chat/presentation/pages/chat_detail.dart';
-import '../../features/chat/presentation/pages/incoming_call_screen.dart';
-import '../../features/chat/presentation/pages/voice_call.dart';
+
 import '../../features/item_detail/data/datasources/item_detail_remote_data_source.dart';
 import '../../features/item_detail/data/repositories/item_detail_repository_impl.dart';
 import '../../features/item_detail/domain/entities/item_detail.dart';
@@ -49,13 +48,15 @@ import '../../features/profile/presentation/pages/edit_contact_screen.dart';
 import '../../features/profile/presentation/pages/change_account_screen.dart';
 import '../../features/profile/presentation/pages/change_password_screen.dart';
 abstract final class AppRoutes {
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   static const login = '/login';
   static const home = '/home';
   static const chatbot = '/chatbot';
   static const chatDetail = '/chat/detail';
-  static const voiceCall = '/chat/call';
-  static const incomingCall = '/chat/incoming-call';
   static const register = '/register';
+
   static const forgotPassword = '/forgot-password';
   static const otpVerification = '/otp-verification';
   static const changePassword = '/change-password';
@@ -78,9 +79,17 @@ abstract final class AppRoutes {
   static const itemDetail = '/items/:itemId';
   static const editRentalItem = '/items/:itemId/edit';
 
-  static GoRouter createRouter({String initialLocation = login}) {
-    return GoRouter(
+  static GoRouter? _currentRouter;
+  static GoRouter? get router => _currentRouter;
+
+  static GoRouter createRouter({
+    String initialLocation = login,
+    Object? initialExtra,
+  }) {
+    return _currentRouter = GoRouter(
+      navigatorKey: navigatorKey,
       initialLocation: initialLocation,
+      initialExtra: initialExtra,
       routes: [
         GoRoute(
           path: login,
@@ -131,44 +140,8 @@ abstract final class AppRoutes {
             ),
           ),
         ),
-        GoRoute(
-          path: voiceCall,
-          pageBuilder: (context, state) {
-            final extraMap = state.extra is Map<String, dynamic>
-                ? state.extra as Map<String, dynamic>
-                : null;
-            final conversation = extraMap != null
-                ? extraMap['conversation'] as ChatConversation
-                : _requiredConversationExtra(state);
-            final isCaller = extraMap?['isCaller'] as bool? ?? true;
-            final sessionId = extraMap?['sessionId'] as String?;
 
-            return MaterialPage<void>(
-              key: state.pageKey,
-              child: VoiceCallScreen(
-                conversation: conversation,
-                isCaller: isCaller,
-                sessionId: sessionId,
-              ),
-            );
-          },
-        ),
-        GoRoute(
-          path: incomingCall,
-          pageBuilder: (context, state) {
-            final extraMap = state.extra as Map<String, dynamic>;
-            final conversation = extraMap['conversation'] as ChatConversation;
-            final sessionId = extraMap['sessionId'] as String;
 
-            return MaterialPage<void>(
-              key: state.pageKey,
-              child: IncomingCallScreen(
-                conversation: conversation,
-                sessionId: sessionId,
-              ),
-            );
-          },
-        ),
         GoRoute(
           path: addRentalItem,
           pageBuilder: (context, state) => MaterialPage<void>(
@@ -405,50 +378,30 @@ abstract final class AppRoutes {
   }
 
   static Future<void> openChatDetail(
-    BuildContext context, {
+    BuildContext? context, {
     required ChatConversation conversation,
   }) {
-    return context.push<void>(chatDetail, extra: conversation);
+    if (_currentRouter != null) {
+      return _currentRouter!.push<void>(chatDetail, extra: conversation);
+    }
+    final targetContext = navigatorKey.currentContext ?? context;
+    if (targetContext != null) {
+      return targetContext.push<void>(chatDetail, extra: conversation);
+    }
+    return Future.value();
   }
 
   static Future<void> openConversation(
-    BuildContext context, {
+    BuildContext? context, {
     required ChatConversation conversation,
   }) {
     return openChatDetail(context, conversation: conversation);
   }
 
-  static Future<void> openVoiceCall(
-    BuildContext context, {
-    required ChatConversation conversation,
-    bool isCaller = true,
-    String? sessionId,
-  }) {
-    return context.push<void>(
-      voiceCall,
-      extra: {
-        'conversation': conversation,
-        'isCaller': isCaller,
-        'sessionId': sessionId,
-      },
-    );
-  }
 
-  static Future<void> openIncomingCall(
-    BuildContext context, {
-    required ChatConversation conversation,
-    required String sessionId,
-  }) {
-    return context.push<void>(
-      incomingCall,
-      extra: {
-        'conversation': conversation,
-        'sessionId': sessionId,
-      },
-    );
-  }
 
   static Future<void> openAddRentalItem(BuildContext context) {
+
     return context.push<void>(addRentalItem);
   }
 
@@ -552,15 +505,23 @@ abstract final class AppRoutes {
   }
 
   static void pop<T extends Object?>(BuildContext context, [T? result]) {
+    try {
+      if (context.canPop()) {
+        context.pop<T>(result);
+        return;
+      }
+    } catch (_) {}
     final navigator = Navigator.maybeOf(context);
     if (navigator != null && navigator.canPop()) {
       navigator.pop(result);
       return;
     }
+    // Fallback if no history to pop (e.g. launched directly from notification / pushReplacement)
     try {
-      context.pop<T>(result);
+      context.go(home);
     } catch (_) {}
   }
+
 
   static String _requiredStringExtra(GoRouterState state, String argumentName) {
     final value = state.extra;

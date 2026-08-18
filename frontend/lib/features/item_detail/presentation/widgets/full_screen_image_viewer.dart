@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/services/media_download_service.dart';
 
 class FullScreenImageViewer extends StatefulWidget {
   const FullScreenImageViewer({
@@ -151,46 +152,54 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     // Close button
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        shape: BoxShape.circle,
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Color(0xFFF43F5E),
+                        size: 28,
                       ),
-                      child: IconButton(
-                        iconSize: 22,
-                        padding: EdgeInsets.zero,
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: Colors.white,
-                        ),
-                        tooltip: 'ปิด',
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
+                      tooltip: 'ปิด',
+                      onPressed: () => Navigator.of(context).pop(),
                     ),
 
-                    // Counter badge
-                    if (urls.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          '${_currentIndex + 1}/${urls.length}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
+                    // Counter badge if multiple
+                    if (urls.length > 1)
+                      Text(
+                        '${_currentIndex + 1}/${urls.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
+
+                    // Download button
+                    IconButton(
+                      icon: const Icon(
+                        Icons.download_rounded,
+                        color: Color(0xFFF43F5E),
+                        size: 28,
+                      ),
+                      tooltip: 'บันทึกรูปภาพ',
+                      onPressed: () async {
+                        if (urls.isEmpty) return;
+                        final currentUrl = urls[_currentIndex];
+                        final success = await MediaDownloadService.instance
+                            .saveImageFromUrl(currentUrl);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                success
+                                    ? 'บันทึกรูปภาพลงในแกลเลอรีเรียบร้อยแล้ว'
+                                    : 'ไม่สามารถบันทึกรูปภาพได้ กรุณาลองใหม่',
+                              ),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                    ),
                   ],
                 ),
               ),

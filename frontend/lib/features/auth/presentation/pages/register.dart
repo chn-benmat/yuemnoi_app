@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/utils/app_image_compressor.dart';
 import '../../../../core/widgets/responsive_app_bar_title.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
@@ -46,6 +47,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _pickProfileImage() async {
     if (_isLoading) return;
+
+    final hasPermission =
+        await AppPermissionService.requestGalleryPermission(context);
+    if (!hasPermission || !mounted) return;
 
     try {
       final image = await _imagePicker.pickImage(

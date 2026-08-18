@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -29,10 +30,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final meta = user?.userMetadata ?? {};
 
     _displayNameCtrl = TextEditingController(
-      text: (meta['display_name'] ?? meta['full_name'] ?? '').toString(),
+      text: (meta['display_name'] ?? meta['full_name'] ?? user?.email?.split('@').first ?? '').toString(),
     );
     _usernameCtrl = TextEditingController(
-      text: (meta['username'] ?? '').toString(),
+      text: (meta['username'] ?? user?.email?.split('@').first ?? '').toString(),
     );
     _bioCtrl = TextEditingController(
       text: (meta['bio'] ?? '').toString(),
@@ -50,6 +51,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _pickImage() async {
+    final hasPermission =
+        await AppPermissionService.requestGalleryPermission(context);
+    if (!hasPermission || !mounted) return;
+
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
