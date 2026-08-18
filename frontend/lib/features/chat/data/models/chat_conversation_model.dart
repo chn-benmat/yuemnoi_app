@@ -26,6 +26,27 @@ abstract final class ChatConversationModel {
     final avatarUrl = otherProfile?['user_image_url']?.toString().trim() ?? '';
 
     final rawLastMessage = conversation['last_message']?.toString().trim() ?? '';
+    final String cleanPreview;
+    if (rawLastMessage.isEmpty) {
+      cleanPreview = 'เริ่มการสนทนา';
+    } else if (rawLastMessage.startsWith('↩ ตอบกลับ:') ||
+        rawLastMessage.startsWith('💬 ตอบกลับ') ||
+        rawLastMessage.startsWith('↪ ตอบกลับ')) {
+      final newlineIdx = rawLastMessage.indexOf('\n');
+      if (newlineIdx != -1) {
+        cleanPreview = rawLastMessage.substring(newlineIdx + 1).trim();
+      } else {
+        final pipeParts = rawLastMessage.split('|');
+        if (pipeParts.length >= 2) {
+          cleanPreview = pipeParts[1].trim();
+        } else {
+          cleanPreview = rawLastMessage;
+        }
+      }
+    } else {
+      cleanPreview = rawLastMessage;
+    }
+
     final lastMessageAtStr = conversation['last_message_at']?.toString() ??
         conversation['created_at']?.toString();
     final lastMessageAt = lastMessageAtStr != null
@@ -86,7 +107,7 @@ abstract final class ChatConversationModel {
       name: displayName,
       role: role,
       avatarAsset: avatarUrl.isEmpty ? 'assets/images/user.png' : avatarUrl,
-      preview: rawLastMessage.isEmpty ? 'เริ่มการสนทนา' : rawLastMessage,
+      preview: cleanPreview,
       timeLabel: timeLabel,
       itemId: itemId,
       itemName: itemName,
@@ -98,6 +119,11 @@ abstract final class ChatConversationModel {
     );
   }
 
+  static const List<String> _thaiShortMonths = [
+    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+  ];
+
   static String formatTimeLabel(DateTime? time) {
     if (time == null) return 'ตอนนี้';
     final now = DateTime.now();
@@ -106,15 +132,24 @@ abstract final class ChatConversationModel {
     if (now.year == time.year &&
         now.month == time.month &&
         now.day == time.day) {
-      return DateFormat('HH:mm').format(time);
+      final minuteStr = time.minute.toString().padLeft(2, '0');
+      final hourStr = time.hour.toString().padLeft(2, '0');
+      return '$hourStr:$minuteStr';
     } else if (now.year == time.year &&
         now.month == time.month &&
         now.day - time.day == 1) {
       return 'เมื่อวาน';
     } else if (now.year == time.year) {
-      return DateFormat('d MMM', 'th').format(time);
+      try {
+        return DateFormat('d MMM', 'th').format(time);
+      } catch (_) {
+        final month = (time.month >= 1 && time.month <= 12)
+            ? _thaiShortMonths[time.month - 1]
+            : '${time.month}';
+        return '${time.day} $month';
+      }
     } else {
-      return DateFormat('d/M/yy').format(time);
+      return '${time.day}/${time.month}/${time.year % 100}';
     }
   }
 }

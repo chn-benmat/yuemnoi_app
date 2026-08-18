@@ -11,6 +11,7 @@ func SetupRouter(
 	itemRepo domain.ItemRepository,
 	authGateway domain.AuthGateway,
 	aiService domain.AIService,
+	supabaseClient ...interface{},
 ) *gin.Engine {
 
 	// ใช้ Logger และ Recovery Middleware (ป้องกันเซิร์ฟเวอร์พังเวลาเกิด Panic โค้ดเอ๋อ)
@@ -45,6 +46,7 @@ func SetupRouter(
 	rentalController := NewRentalHandler()
 	userController := NewUserHandler(authGateway)
 	aiHandler := NewAIHandler(aiService)
+	pushController := NewPushHandler(nil)
 
 	// จัดการกลุ่มเส้นทาง API
 	v1 := router.Group("/api/v1")
@@ -94,7 +96,15 @@ func SetupRouter(
 		{
 			ai.POST("", aiHandler.HandleChat)
 		}
+
+		// Push Notification
+		push := v1.Group("/push")
+		{
+			push.POST("/chat", pushController.SendChatPush)
+		}
 	}
+
 
 	return router
 }
+

@@ -68,3 +68,100 @@ class ChatImageUploadedAndSent extends ChatDetailEvent {
   @override
   List<Object?> get props => [conversationId, imageBytes, fileName, caption];
 }
+
+class ChatImageData extends Equatable {
+  const ChatImageData({
+    required this.imageBytes,
+    required this.fileName,
+  });
+
+  final Uint8List imageBytes;
+  final String fileName;
+
+  @override
+  List<Object?> get props => [imageBytes, fileName];
+}
+
+class ChatMultipleImagesUploadedAndSent extends ChatDetailEvent {
+  const ChatMultipleImagesUploadedAndSent({
+    required this.conversationId,
+    required this.images,
+    this.caption,
+  });
+
+  final String conversationId;
+  final List<ChatImageData> images;
+  final String? caption;
+
+  @override
+  List<Object?> get props => [conversationId, images, caption];
+}
+
+class ChatMessageDeleted extends ChatDetailEvent {
+  const ChatMessageDeleted({
+    required this.conversationId,
+    required this.messageId,
+  });
+
+  final String conversationId;
+  final String messageId;
+
+  @override
+  List<Object?> get props => [conversationId, messageId];
+}
+
+class ChatMessageEdited extends ChatDetailEvent {
+  const ChatMessageEdited({
+    required this.conversationId,
+    required this.messageId,
+    required this.newMessage,
+  });
+
+  final String conversationId;
+  final String messageId;
+  final String newMessage;
+
+  @override
+  List<Object?> get props => [conversationId, messageId, newMessage];
+}
+
+class ChatTypingStatusUpdated extends ChatDetailEvent {
+  const ChatTypingStatusUpdated(this.isTyping);
+
+  final bool isTyping;
+
+  @override
+  List<Object?> get props => [isTyping];
+}
+
+class ChatDirectMessageReceived extends ChatDetailEvent {
+  const ChatDirectMessageReceived(this.message);
+
+  final ChatMessage message;
+
+  @override
+  List<Object?> get props => [message];
+}
+
+class ChatReadReceiptsUpdated extends ChatDetailEvent {
+  const ChatReadReceiptsUpdated(this.conversationId);
+
+  final String conversationId;
+
+  @override
+  List<Object?> get props => [conversationId];
+}
+
+class ChatRetryMessageSent extends ChatDetailEvent {
+  const ChatRetryMessageSent({
+    required this.conversationId,
+    required this.tempMessageId,
+  });
+
+  final String conversationId;
+  final String tempMessageId;
+
+  @override
+  List<Object?> get props => [conversationId, tempMessageId];
+}
+

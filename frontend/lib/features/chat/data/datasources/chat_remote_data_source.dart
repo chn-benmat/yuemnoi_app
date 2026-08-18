@@ -1,5 +1,9 @@
-import 'dart:typed_data';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/network/supabase_client.dart';
@@ -24,7 +28,7 @@ class ChatRemoteDataSource {
   static const _chatBucket = 'chat_bk';
 
   SupabaseClient get _supabaseClient {
-    if (_client != null) return _client!;
+    if (_client != null) return _client;
     if (SupabaseConfig.isInitialized) {
       return SupabaseConfig.client;
     }
@@ -51,29 +55,38 @@ class ChatRemoteDataSource {
     }
 
     try {
-      // 1. ตรวจสอบว่าเคยมีห้องแชทสำหรับคู่นี้และอุปกรณ์นี้หรือไม่
-      var conversation = await client
+      // 1. ตรวจสอบว่าเคยมีห้องแชทระหว่าง 2 คนนี้หรือไม่ (ไม่ว่าจะทักมาจากอุปกรณ์/สินค้าใด หรือทิศทางใด)
+      final existingConvs = await client
           .from('conversation_tb')
           .select('*')
-          .eq('item_id', itemId)
-          .eq('renter_id', currentUserId)
-          .eq('owner_id', ownerId)
-          .maybeSingle();
+          .or('and(renter_id.eq.$currentUserId,owner_id.eq.$ownerId),and(renter_id.eq.$ownerId,owner_id.eq.$currentUserId)')
+          .order('last_message_at', ascending: false)
+          .limit(1);
 
-      // 2. ถ้ายังไม่มี ให้สร้างห้องใหม่
-      if (conversation == null) {
-        conversation = await client
-            .from('conversation_tb')
-            .insert({
-              'item_id': itemId,
-              'renter_id': currentUserId,
-              'owner_id': ownerId,
-              'last_message': '',
-              'last_message_at': DateTime.now().toUtc().toIso8601String(),
-            })
-            .select('*')
-            .single();
+      Map<String, dynamic>? conversation;
+      if (existingConvs.isNotEmpty) {
+        conversation = (existingConvs.first as Map).cast<String, dynamic>();
+        // อัปเดต item_id เป็นอุปกรณ์ล่าสุดที่กดทักมา
+        try {
+          await client.from('conversation_tb').update({
+            'item_id': itemId,
+          }).eq('id', conversation['id']);
+          conversation['item_id'] = itemId;
+        } catch (_) {}
       }
+
+      // 2. ถ้ายังไม่เคยมีห้องแชทระหว่าง 2 คนนี้เลย ให้สร้างห้องใหม่
+      conversation ??= await client
+          .from('conversation_tb')
+          .insert({
+            'item_id': itemId,
+            'renter_id': currentUserId,
+            'owner_id': ownerId,
+            'last_message': '',
+            'last_message_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .select('*')
+          .single();
 
       // 3. ดึงข้อมูลโปรไฟล์ของคู่สนทนา (เจ้าของอุปกรณ์)
       final otherProfile = await client
@@ -104,6 +117,61 @@ class ChatRemoteDataSource {
     }
   }
 
+  Future<ChatConversation?> getConversationById(String conversationId) async {
+    if (!SupabaseConfig.isInitialized && _client == null) return null;
+    if (conversationId.isEmpty) return null;
+
+    try {
+      final client = _supabaseClient;
+      final currentUserId = _currentUserId;
+
+      final conv = await client
+          .from('conversation_tb')
+          .select('*')
+          .eq('id', conversationId)
+          .maybeSingle();
+
+      if (conv == null) return null;
+
+      final renterId = conv['renter_id']?.toString() ?? '';
+      final ownerId = conv['owner_id']?.toString() ?? '';
+      final otherId = currentUserId == renterId ? ownerId : renterId;
+
+      Map<String, dynamic>? otherProfile;
+      if (otherId.isNotEmpty) {
+        otherProfile = await client
+            .from('profile_tb')
+            .select('user_id,user_image_url,email,is_online,last_seen_at')
+            .eq('user_id', otherId)
+            .maybeSingle();
+      }
+
+      Map<String, dynamic>? item;
+      if (conv['item_id'] != null) {
+        final itemId = conv['item_id'] is num
+            ? (conv['item_id'] as num).toInt()
+            : int.tryParse(conv['item_id'].toString());
+        if (itemId != null) {
+          item = await client
+              .from('item_tb')
+              .select('id,item_name,item_image_url,price,type')
+              .eq('id', itemId)
+              .maybeSingle();
+        }
+      }
+
+      return ChatConversationModel.fromRecords(
+        conversation: conv,
+        otherProfile: otherProfile,
+        item: item,
+        currentUserId: currentUserId,
+      );
+    } catch (e) {
+      debugPrint('getConversationById error: $e');
+      return null;
+    }
+  }
+
   Future<List<ChatConversation>> getConversations() async {
     if (!SupabaseConfig.isInitialized && _client == null) {
       return const [];
@@ -119,9 +187,23 @@ class ChatRemoteDataSource {
           .or('renter_id.eq.$currentUserId,owner_id.eq.$currentUserId')
           .order('last_message_at', ascending: false);
 
-      final conversations =
+      final allRawConversations =
           (rawConversations as List).cast<Map<String, dynamic>>();
-      if (conversations.isEmpty) return const [];
+      if (allRawConversations.isEmpty) return const [];
+
+      // Deduplicate: รวมห้องแชทของคู่สนทนาคนเดียวกัน ให้แสดงเฉพาะห้องแชทล่าสุดเพียงห้องเดียว
+      final conversations = <Map<String, dynamic>>[];
+      final seenOtherUserIds = <String>{};
+      for (final conv in allRawConversations) {
+        final renterId = conv['renter_id']?.toString() ?? '';
+        final ownerId = conv['owner_id']?.toString() ?? '';
+        final otherId = currentUserId == renterId ? ownerId : renterId;
+        if (otherId.isEmpty) continue;
+        if (!seenOtherUserIds.contains(otherId)) {
+          seenOtherUserIds.add(otherId);
+          conversations.add(conv);
+        }
+      }
 
       // รวบรวม ID ของคู่สนทนาและ item_id ทั้งหมดเพื่อ query ครั้งเดียว
       final otherUserIds = <String>{};
@@ -141,31 +223,39 @@ class ChatRemoteDataSource {
         }
       }
 
-      // ดึงโปรไฟล์ทั้งหมด
+      // ดึงโปรไฟล์ทั้งหมด (พร้อม try-catch ป้องกัน sub-query error)
       final profilesMap = <String, Map<String, dynamic>>{};
       if (otherUserIds.isNotEmpty) {
-        final profiles = await client
-            .from('profile_tb')
-            .select('user_id,user_image_url,email,is_online,last_seen_at')
-            .inFilter('user_id', otherUserIds.toList(growable: false));
-        for (final p in (profiles as List).cast<Map<String, dynamic>>()) {
-          final uid = p['user_id']?.toString();
-          if (uid != null) profilesMap[uid] = p;
+        try {
+          final profiles = await client
+              .from('profile_tb')
+              .select('user_id,user_image_url,email,is_online,last_seen_at')
+              .inFilter('user_id', otherUserIds.toList(growable: false));
+          for (final p in (profiles as List).cast<Map<String, dynamic>>()) {
+            final uid = p['user_id']?.toString();
+            if (uid != null) profilesMap[uid] = p;
+          }
+        } catch (e) {
+          debugPrint('getConversations profiles sub-query error: $e');
         }
       }
 
-      // ดึงข้อมูล item ทั้งหมด
+      // ดึงข้อมูล item ทั้งหมด (พร้อม try-catch ป้องกัน sub-query error)
       final itemsMap = <int, Map<String, dynamic>>{};
       if (itemIds.isNotEmpty) {
-        final items = await client
-            .from('item_tb')
-            .select('id,item_name,item_image_url,price,type')
-            .inFilter('id', itemIds.toList(growable: false));
-        for (final item in (items as List).cast<Map<String, dynamic>>()) {
-          final id = item['id'] is num
-              ? (item['id'] as num).toInt()
-              : int.tryParse(item['id'].toString());
-          if (id != null) itemsMap[id] = item;
+        try {
+          final items = await client
+              .from('item_tb')
+              .select('id,item_name,item_image_url,price,type')
+              .inFilter('id', itemIds.toList(growable: false));
+          for (final item in (items as List).cast<Map<String, dynamic>>()) {
+            final id = item['id'] is num
+                ? (item['id'] as num).toInt()
+                : int.tryParse(item['id'].toString());
+            if (id != null) itemsMap[id] = item;
+          }
+        } catch (e) {
+          debugPrint('getConversations items sub-query error: $e');
         }
       }
 
@@ -207,10 +297,36 @@ class ChatRemoteDataSource {
     } on ChatRemoteException {
       rethrow;
     } on PostgrestException catch (e) {
+      debugPrint('getConversations PostgrestException: ${e.message}');
       throw ChatRemoteException('โหลดรายการแชทไม่สำเร็จ: ${e.message}');
-    } catch (_) {
+    } on SocketException catch (e) {
+      debugPrint('getConversations SocketException: $e');
+      throw const ChatRemoteException('ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาลองใหม่');
+    } catch (e, stack) {
+      debugPrint('getConversations error: $e\n$stack');
       throw const ChatRemoteException('ไม่สามารถดึงข้อมูลแชทได้ กรุณาลองใหม่');
     }
+  }
+
+  Stream<List<ChatConversation>> streamConversations() {
+    if (!SupabaseConfig.isInitialized && _client == null) {
+      return const Stream.empty();
+    }
+
+    final client = _supabaseClient;
+    return client
+        .from('conversation_tb')
+        .stream(primaryKey: ['id'])
+        .asyncMap((_) async {
+          try {
+            return await getConversations();
+          } catch (_) {
+            return <ChatConversation>[];
+          }
+        })
+        .handleError((error) {
+          debugPrint('streamConversations connection error: $error');
+        });
   }
 
   Future<void> markMessagesAsRead({required String conversationId}) async {
@@ -285,7 +401,78 @@ class ChatRemoteDataSource {
         .map((records) => records
             .map((json) =>
                 ChatMessageModel.fromJson(json, currentUserId: currentUserId))
-            .toList());
+            .toList())
+        .handleError((error) {
+          debugPrint('streamMessages connection error: $error');
+        });
+  }
+
+
+  RealtimeChannel? _roomChannel;
+  String? _activeRoomChannelConversationId;
+
+  RealtimeChannel? getOrCreateRoomChannel(String conversationId) {
+    if (!SupabaseConfig.isInitialized && _client == null) return null;
+    if (_roomChannel != null && _activeRoomChannelConversationId == conversationId) {
+      return _roomChannel;
+    }
+    try {
+      _roomChannel?.unsubscribe();
+    } catch (_) {}
+    _activeRoomChannelConversationId = conversationId;
+    _roomChannel = _supabaseClient.channel('chat_room:$conversationId');
+    return _roomChannel;
+  }
+
+  Future<void> broadcastDirectMessage({
+    required String conversationId,
+    required ChatMessage message,
+  }) async {
+    try {
+      final channel = getOrCreateRoomChannel(conversationId);
+      final currentUserId = _supabaseClient.auth.currentUser?.id ?? '';
+      final payload = ChatMessageModel.toJson(message);
+      if (currentUserId.isNotEmpty) {
+        payload['sender_id'] = currentUserId;
+      }
+      payload.remove('is_mine');
+      await channel?.sendBroadcastMessage(
+        event: 'new_message',
+        payload: payload,
+      );
+    } catch (_) {}
+  }
+
+
+  Future<void> broadcastTypingStatus({
+    required String conversationId,
+    required bool isTyping,
+  }) async {
+    try {
+      final channel = getOrCreateRoomChannel(conversationId);
+      await channel?.sendBroadcastMessage(
+        event: 'typing',
+        payload: {
+          'user_id': _currentUserId,
+          'is_typing': isTyping,
+        },
+      );
+    } catch (_) {}
+  }
+
+  Future<void> broadcastReadReceipt({
+    required String conversationId,
+  }) async {
+    try {
+      final channel = getOrCreateRoomChannel(conversationId);
+      await channel?.sendBroadcastMessage(
+        event: 'messages_read',
+        payload: {
+          'reader_id': _currentUserId,
+          'conversation_id': conversationId,
+        },
+      );
+    } catch (_) {}
   }
 
   Future<String> uploadChatImage({
@@ -323,29 +510,256 @@ class ChatRemoteDataSource {
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
     try {
-      await client.from('chat_message_tb').insert({
+      final displayLastMsg = imageUrl != null && message.trim().isEmpty
+          ? '[รูปภาพ]'
+          : message.trim();
+
+      final inserted = await client.from('chat_message_tb').insert({
         'conversation_id': conversationId,
         'sender_id': currentUserId,
         'message': message.trim(),
         'image_url': imageUrl,
         'created_at': nowIso,
-      });
+      }).select('id').maybeSingle();
 
-      final displayLastMsg = imageUrl != null && message.trim().isEmpty
-          ? '[รูปภาพ]'
-          : message.trim();
+      final newMsgId = inserted?['id']?.toString() ?? '';
 
       await client.from('conversation_tb').update({
         'last_message': displayLastMsg,
         'last_message_at': nowIso,
         'updated_at': nowIso,
       }).eq('id', conversationId);
+
+      // ส่ง Push Notification ไปยังผู้รับในระบบ OS (ทำงานแบบ Background Non-blocking)
+      unawaited(sendChatPushNotification(
+        conversationId: conversationId,
+        message: displayLastMsg,
+        messageId: newMsgId,
+      ));
     } on PostgrestException catch (e) {
       throw ChatRemoteException('ส่งข้อความไม่สำเร็จ: ${e.message}');
     } catch (_) {
       throw const ChatRemoteException('เกิดข้อผิดพลาดในการส่งข้อความ');
     }
   }
+
+  Future<void> deleteMessage({
+    required String messageId,
+    required String conversationId,
+  }) async {
+    final client = _supabaseClient;
+    try {
+      final dynamic parsedId = int.tryParse(messageId) ?? messageId;
+      await client.from('chat_message_tb').delete().eq('id', parsedId);
+    } on PostgrestException catch (e) {
+      throw ChatRemoteException('ลบข้อความไม่สำเร็จ: ${e.message}');
+    } catch (_) {
+      throw const ChatRemoteException('เกิดข้อผิดพลาดในการลบข้อความ');
+    }
+  }
+
+  Future<void> editMessage({
+    required String messageId,
+    required String newMessage,
+  }) async {
+    final client = _supabaseClient;
+    try {
+      final dynamic parsedId = int.tryParse(messageId) ?? messageId;
+      await client
+          .from('chat_message_tb')
+          .update({'message': newMessage})
+          .eq('id', parsedId);
+    } on PostgrestException catch (e) {
+      throw ChatRemoteException('แก้ไขข้อความไม่สำเร็จ: ${e.message}');
+    } catch (_) {
+      throw const ChatRemoteException('เกิดข้อผิดพลาดในการแก้ไขข้อความ');
+    }
+  }
+
+  Future<void> deleteConversation({
+    required String conversationId,
+  }) async {
+    final client = _supabaseClient;
+    try {
+      await client
+          .from('chat_message_tb')
+          .delete()
+          .eq('conversation_id', conversationId);
+      await client
+          .from('conversation_tb')
+          .delete()
+          .eq('id', conversationId);
+    } on PostgrestException catch (e) {
+      throw ChatRemoteException('ลบการสนทนาไม่สำเร็จ: ${e.message}');
+    } catch (_) {
+      throw const ChatRemoteException('เกิดข้อผิดพลาดในการลบการสนทนา');
+    }
+  }
+
+  Future<void> sendChatPushNotification({
+    required String conversationId,
+    required String message,
+    String? messageId,
+  }) async {
+    try {
+      final client = _supabaseClient;
+      final currentUserId = _currentUserId;
+
+      final convRes = await client
+          .from('conversation_tb')
+          .select('renter_id, owner_id')
+          .eq('id', conversationId)
+          .maybeSingle();
+
+      if (convRes == null) return;
+      final renterId = convRes['renter_id']?.toString() ?? '';
+      final ownerId = convRes['owner_id']?.toString() ?? '';
+      final receiverId = currentUserId == renterId ? ownerId : renterId;
+
+      if (receiverId.isEmpty) return;
+
+      // ดึงข้อมูลผู้ส่ง
+      final senderProfile = await client
+          .from('profile_tb')
+          .select('email, user_image_url')
+          .eq('user_id', currentUserId)
+          .maybeSingle();
+
+      final senderEmail = senderProfile?['email']?.toString() ?? '';
+      final senderAvatar = senderProfile?['user_image_url']?.toString() ?? '';
+      final senderName = senderEmail.contains('@')
+          ? senderEmail.split('@').first
+          : 'ผู้ใช้งาน Yuemnoi';
+
+      final apiUrl = dotenv.env['API_URL'] ?? 'http://10.0.2.2:8080';
+      final clientHttp = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+      final request = await clientHttp.postUrl(Uri.parse('$apiUrl/api/v1/push/chat'));
+      request.headers.contentType = ContentType.json;
+
+      // สกัดเอาเฉพาะข้อความตอบกลับตัวจริง โดยตัดคำนำหน้า '↩ ตอบกลับ:...' ออก ไม่ให้ขึ้นคำว่าตอบกลับใน Push Notification
+      final cleanMessageForPush = _extractCleanPushMessage(message);
+
+      request.write(jsonEncode({
+        'receiver_id': receiverId,
+        'message': cleanMessageForPush,
+        'message_id': messageId ?? '',
+        'sender_name': senderName,
+        'sender_avatar': senderAvatar,
+        'conversation_id': conversationId,
+      }));
+      final response = await request.close();
+      await response.drain();
+      clientHttp.close();
+    } catch (e) {
+      debugPrint('sendChatPushNotification error: $e');
+    }
+  }
+
+  Stream<List<IncomingChatMessageData>> streamIncomingMessages() {
+    if (!SupabaseConfig.isInitialized && _client == null) {
+      return const Stream.empty();
+    }
+
+    final client = _supabaseClient;
+    final currentUserId = _currentUserId;
+
+    return client
+        .from('conversation_tb')
+        .stream(primaryKey: ['id'])
+        .asyncMap((records) async {
+          final now = DateTime.now().toUtc();
+          final results = <IncomingChatMessageData>[];
+
+          for (final conv in records) {
+            final renterId = conv['renter_id']?.toString() ?? '';
+            final ownerId = conv['owner_id']?.toString() ?? '';
+
+            if (renterId != currentUserId && ownerId != currentUserId) {
+              continue;
+            }
+
+            final lastMsgAtStr = conv['last_message_at']?.toString();
+            if (lastMsgAtStr == null || lastMsgAtStr.isEmpty) continue;
+
+            try {
+              final lastMsgAt = DateTime.parse(lastMsgAtStr).toUtc();
+              // ตรวจสอบว่าเป็นข้อความใหม่ภายใน 20 วินาทีล่าสุด
+              if (now.difference(lastMsgAt).inSeconds.abs() > 20) {
+                continue;
+              }
+            } catch (_) {
+              continue;
+            }
+
+            final convId = conv['id']?.toString() ?? '';
+            if (convId.isEmpty) continue;
+
+            // ดึงข้อความล่าสุดในห้องนี้
+            try {
+              final latestMsgRow = await client
+                  .from('chat_message_tb')
+                  .select('*')
+                  .eq('conversation_id', convId)
+                  .order('created_at', ascending: false)
+                  .limit(1)
+                  .maybeSingle();
+
+              if (latestMsgRow == null) continue;
+
+              final senderId = latestMsgRow['sender_id']?.toString() ?? '';
+              if (senderId == currentUserId) continue; // ข้อความที่ส่งโดยตัวเอง ไม่ต้องแจ้งเตือน
+
+              final otherId = currentUserId == renterId ? ownerId : renterId;
+
+              final profile = await client
+                  .from('profile_tb')
+                  .select('user_id,user_image_url,email,is_online,last_seen_at')
+                  .eq('user_id', otherId)
+                  .maybeSingle();
+
+              Map<String, dynamic>? item;
+              if (conv['item_id'] != null) {
+                item = await client
+                    .from('item_tb')
+                    .select('id,item_name,item_image_url,price,type')
+                    .eq('id', conv['item_id'])
+                    .maybeSingle();
+              }
+
+              final chatConv = ChatConversationModel.fromRecords(
+                conversation: conv,
+                otherProfile: profile,
+                item: item,
+                currentUserId: currentUserId,
+                hasUnreadMessage: true,
+              );
+
+              final createdAt = DateTime.tryParse(
+                    latestMsgRow['created_at']?.toString() ?? '',
+                  ) ??
+                  DateTime.now();
+
+              results.add(
+                IncomingChatMessageData(
+                  id: latestMsgRow['id']?.toString() ?? '',
+                  conversationId: convId,
+                  senderId: senderId,
+                  message: latestMsgRow['message']?.toString() ?? '',
+                  imageUrl: latestMsgRow['image_url']?.toString(),
+                  createdAt: createdAt,
+                  conversation: chatConv,
+                ),
+              );
+            } catch (_) {}
+          }
+
+          return results;
+        })
+        .handleError((error) {
+          debugPrint('streamLatestIncomingMessage connection error: $error');
+        });
+  }
+
 
   static String _extension(String fileName) {
     final index = fileName.lastIndexOf('.');
@@ -359,4 +773,45 @@ class ChatRemoteDataSource {
         'webp' => 'image/webp',
         _ => 'image/jpeg',
       };
+
+  static String _extractCleanPushMessage(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '📷 ส่งรูปภาพ';
+    if (trimmed.startsWith('↩ ตอบกลับ:') ||
+        trimmed.startsWith('💬 ตอบกลับ') ||
+        trimmed.startsWith('↪ ตอบกลับ')) {
+      final newlineIdx = trimmed.indexOf('\n');
+      if (newlineIdx != -1) {
+        final actual = trimmed.substring(newlineIdx + 1).trim();
+        return actual.isNotEmpty ? actual : 'ส่งข้อความถึงคุณ';
+      }
+      final pipeParts = trimmed.split('|');
+      if (pipeParts.length >= 2) {
+        final actual = pipeParts[1].trim();
+        return actual.isNotEmpty ? actual : 'ส่งข้อความถึงคุณ';
+      }
+    }
+    return trimmed;
+  }
 }
+
+class IncomingChatMessageData {
+  const IncomingChatMessageData({
+    required this.id,
+    required this.conversationId,
+    required this.senderId,
+    required this.message,
+    required this.imageUrl,
+    required this.createdAt,
+    required this.conversation,
+  });
+
+  final String id;
+  final String conversationId;
+  final String senderId;
+  final String message;
+  final String? imageUrl;
+  final DateTime createdAt;
+  final ChatConversation conversation;
+}
+

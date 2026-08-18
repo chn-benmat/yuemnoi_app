@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_form_field.dart';
@@ -42,6 +43,13 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+
+    // แสดง Dialog ขออนุญาตรับการแจ้งเตือนเมื่อเข้าสู่หน้า Login
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppPermissionService.checkAndPromptNotificationPermission(context);
+      }
+    });
   }
 
   void _loginWithGoogle() {
@@ -120,155 +128,155 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       },
       child: Scaffold(
-      backgroundColor: Colors.white,
-      body: ResponsivePageBody(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 48),
-              Text(
-                'ยินดีต้อนรับ',
-                style:
-                    theme.textTheme.headlineLarge?.copyWith(
-                      color: Colors.black,
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                    ) ??
-                    const TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'มาสนุกกับการยืมกัน !',
-                style:
-                    theme.textTheme.bodyLarge?.copyWith(
-                      color: Colors.black54,
-                      fontSize: 16,
-                    ) ??
-                    const TextStyle(fontSize: 16, color: Colors.black54),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 48),
-              AppTextFormField(
-                label: 'อีเมล',
-                hintText: 'name@exemple.com',
-                prefixIcon: Icons.email_outlined,
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'กรุณากรอกอีเมล';
-                  }
-                  if (!RegExp(
-                    r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                  ).hasMatch(value)) {
-                    return 'รูปแบบอีเมลไม่ถูกต้อง';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-              AppTextFormField(
-                label: 'รหัสผ่าน',
-                hintText: 'กรุณากรอกรหัสผ่าน',
-                prefixIcon: Icons.lock_outline_rounded,
-                obscureText: _obscurePassword,
-                controller: _passwordController,
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    color: AppColors.fieldIconColor,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _obscurePassword = !_obscurePassword;
-                    });
+        backgroundColor: Colors.white,
+        body: ResponsivePageBody(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 48),
+                Text(
+                  'ยินดีต้อนรับ',
+                  style:
+                      theme.textTheme.headlineLarge?.copyWith(
+                        color: Colors.black,
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                      ) ??
+                      const TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'มาสนุกกับการยืมกัน !',
+                  style:
+                      theme.textTheme.bodyLarge?.copyWith(
+                        color: Colors.black54,
+                        fontSize: 16,
+                      ) ??
+                      const TextStyle(fontSize: 16, color: Colors.black54),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 48),
+                AppTextFormField(
+                  label: 'อีเมล',
+                  hintText: 'name@exemple.com',
+                  prefixIcon: Icons.email_outlined,
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'กรุณากรอกอีเมล';
+                    }
+                    if (!RegExp(
+                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                    ).hasMatch(value)) {
+                      return 'รูปแบบอีเมลไม่ถูกต้อง';
+                    }
+                    return null;
                   },
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'กรุณากรอกรหัสผ่าน';
-                  }
-                  if (value.length < 6) {
-                    return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    AppRoutes.openForgotPassword(context);
-                  },
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text(
-                    'ลืมรหัสผ่าน ?',
-                    style: TextStyle(
-                      color: AppColors.primaryColor,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                const SizedBox(height: 24),
+                AppTextFormField(
+                  label: 'รหัสผ่าน',
+                  hintText: 'กรุณากรอกรหัสผ่าน',
+                  prefixIcon: Icons.lock_outline_rounded,
+                  obscureText: _obscurePassword,
+                  controller: _passwordController,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: AppColors.fieldIconColor,
                     ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 36),
-              AppPrimaryButton(
-                text: 'เข้าสู่ระบบ',
-                isLoading: _isLoading,
-                onPressed: _login,
-              ),
-              const SizedBox(height: 32),
-              const AuthDivider(),
-              const SizedBox(height: 32),
-              SocialButton(
-                text: _isGoogleLoading ? 'กำลังเปิด Google...' : 'Google',
-                iconPath: 'assets/icons/google.png',
-                onPressed: _loginWithGoogle,
-              ),
-              const SizedBox(height: 48),
-              Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  const Text(
-                    'สร้างบัญชีใหม่ ',
-                    style: TextStyle(color: Colors.black54, fontSize: 14),
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      AppRoutes.openRegister(context);
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
                     },
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'กรุณากรอกรหัสผ่าน';
+                    }
+                    if (value.length < 6) {
+                      return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      AppRoutes.openForgotPassword(context);
+                    },
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     child: const Text(
-                      'สมัครสมาชิก',
+                      'ลืมรหัสผ่าน ?',
                       style: TextStyle(
                         color: AppColors.primaryColor,
                         fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
-            ],
+                ),
+                const SizedBox(height: 36),
+                AppPrimaryButton(
+                  text: 'เข้าสู่ระบบ',
+                  isLoading: _isLoading,
+                  onPressed: _login,
+                ),
+                const SizedBox(height: 32),
+                const AuthDivider(),
+                const SizedBox(height: 32),
+                SocialButton(
+                  text: _isGoogleLoading ? 'กำลังเปิด Google...' : 'Google',
+                  iconPath: 'assets/icons/google.png',
+                  onPressed: _loginWithGoogle,
+                ),
+                const SizedBox(height: 48),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text(
+                      'สร้างบัญชีใหม่ ',
+                      style: TextStyle(color: Colors.black54, fontSize: 14),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        AppRoutes.openRegister(context);
+                      },
+                      child: const Text(
+                        'สมัครสมาชิก',
+                        style: TextStyle(
+                          color: AppColors.primaryColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

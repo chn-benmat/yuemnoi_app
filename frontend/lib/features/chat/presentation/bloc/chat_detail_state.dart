@@ -11,6 +11,8 @@ class ChatDetailState extends Equatable {
     this.isFetchingOlder = false,
     this.hasReachedMax = false,
     this.isUploadingImage = false,
+    this.isOtherUserTyping = false,
+    this.failedMessageIds = const {},
     this.errorMessage,
   });
 
@@ -20,6 +22,8 @@ class ChatDetailState extends Equatable {
   final bool isFetchingOlder;
   final bool hasReachedMax;
   final bool isUploadingImage;
+  final bool isOtherUserTyping;
+  final Set<String> failedMessageIds;
   final String? errorMessage;
 
   ChatDetailState copyWith({
@@ -29,6 +33,8 @@ class ChatDetailState extends Equatable {
     bool? isFetchingOlder,
     bool? hasReachedMax,
     bool? isUploadingImage,
+    bool? isOtherUserTyping,
+    Set<String>? failedMessageIds,
     String? errorMessage,
   }) {
     return ChatDetailState(
@@ -38,6 +44,8 @@ class ChatDetailState extends Equatable {
       isFetchingOlder: isFetchingOlder ?? this.isFetchingOlder,
       hasReachedMax: hasReachedMax ?? this.hasReachedMax,
       isUploadingImage: isUploadingImage ?? this.isUploadingImage,
+      isOtherUserTyping: isOtherUserTyping ?? this.isOtherUserTyping,
+      failedMessageIds: failedMessageIds ?? this.failedMessageIds,
       errorMessage: errorMessage,
     );
   }
@@ -50,6 +58,8 @@ class ChatDetailState extends Equatable {
         isFetchingOlder,
         hasReachedMax,
         isUploadingImage,
+        isOtherUserTyping,
+        failedMessageIds,
         errorMessage,
       ];
 }

@@ -3,7 +3,7 @@ test/
 design-qa.md
 .serena/
 design-qa
-
+google-services.json
 # Miscellaneous
 *.class
 *.log

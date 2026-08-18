@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/utils/app_image_compressor.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_form_field.dart';
@@ -62,6 +63,11 @@ class _EditItemScreenState extends State<EditItemScreen> {
   Future<void> _pickImages() async {
     final remaining = 5 - _images.length;
     if (remaining <= 0) return;
+
+    final hasPermission =
+        await AppPermissionService.requestGalleryPermission(context);
+    if (!hasPermission || !mounted) return;
+
     try {
       final selected = await _picker.pickMultiImage(
         maxWidth: 1920,
