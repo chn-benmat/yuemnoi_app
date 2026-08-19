@@ -215,7 +215,11 @@ class ActiveCategoryTag extends StatelessWidget {
 
     String priceLabel = '';
     if (minPrice != null && maxPrice != null) {
-      priceLabel = '฿$minPrice - ฿$maxPrice';
+      if (minPrice == 1) {
+        priceLabel = '≤ ฿$maxPrice';
+      } else {
+        priceLabel = '฿$minPrice - ฿$maxPrice';
+      }
     } else if (minPrice != null) {
       priceLabel = '≥ ฿$minPrice';
     } else if (maxPrice != null) {
@@ -996,7 +1000,7 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
             children: [
               _buildPricePresetChip(
                 label: 'ไม่เกิน 500 ฿',
-                min: null,
+                min: 1,
                 max: 500,
               ),
               _buildPricePresetChip(
@@ -1007,6 +1011,11 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
               _buildPricePresetChip(
                 label: '1,000 - 2,000 ฿',
                 min: 1000,
+                max: 2000,
+              ),
+              _buildPricePresetChip(
+                label: 'ไม่เกิน 2,000 ฿',
+                min: 1,
                 max: 2000,
               ),
               _buildPricePresetChip(

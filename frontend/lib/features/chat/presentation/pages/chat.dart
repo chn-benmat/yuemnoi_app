@@ -29,7 +29,10 @@ class ChatScreen extends StatelessWidget {
     }
 
     try {
-      final existingBloc = BlocProvider.of<ChatListBloc>(context, listen: false);
+      final existingBloc = BlocProvider.of<ChatListBloc>(
+        context,
+        listen: false,
+      );
       return BlocProvider.value(
         value: existingBloc,
         child: const _ChatScreenContent(),
@@ -41,9 +44,9 @@ class ChatScreen extends StatelessWidget {
     );
 
     return BlocProvider(
-      create: (context) => ChatListBloc(
-        getConversations: GetConversationsUseCase(repository),
-      )..add(const LoadChatListStarted()),
+      create: (context) =>
+          ChatListBloc(getConversations: GetConversationsUseCase(repository))
+            ..add(const LoadChatListStarted()),
       child: const _ChatScreenContent(),
     );
   }
@@ -66,10 +69,13 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
     super.dispose();
   }
 
-  List<ChatConversation> _filterConversations(List<ChatConversation> conversations) {
+  List<ChatConversation> _filterConversations(
+    List<ChatConversation> conversations,
+  ) {
     final query = _searchController.text.trim().toLowerCase();
     return conversations.where((conversation) {
-      final matchesQuery = query.isEmpty ||
+      final matchesQuery =
+          query.isEmpty ||
           conversation.name.toLowerCase().contains(query) ||
           conversation.preview.toLowerCase().contains(query) ||
           (conversation.itemName?.toLowerCase().contains(query) ?? false);
@@ -181,9 +187,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                           ),
                           const SizedBox(height: 16),
                           FilledButton(
-                            onPressed: () => context
-                                .read<ChatListBloc>()
-                                .add(const LoadChatListStarted()),
+                            onPressed: () => context.read<ChatListBloc>().add(
+                              const LoadChatListStarted(),
+                            ),
                             child: const Text('ลองใหม่'),
                           ),
                         ],
@@ -191,15 +197,16 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                     );
                   }
 
-                  final visibleConversations =
-                      _filterConversations(state.conversations);
+                  final visibleConversations = _filterConversations(
+                    state.conversations,
+                  );
 
                   if (visibleConversations.isEmpty) {
                     return RefreshIndicator(
                       onRefresh: () async {
-                        context
-                            .read<ChatListBloc>()
-                            .add(const ChatListRefreshed());
+                        context.read<ChatListBloc>().add(
+                          const ChatListRefreshed(),
+                        );
                       },
                       child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
@@ -214,9 +221,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                   return RefreshIndicator(
                     color: AppColors.primaryColor,
                     onRefresh: () async {
-                      context
-                          .read<ChatListBloc>()
-                          .add(const ChatListRefreshed());
+                      context.read<ChatListBloc>().add(
+                        const ChatListRefreshed(),
+                      );
                     },
                     child: ListView.separated(
                       padding: const EdgeInsets.only(bottom: 24),
@@ -302,18 +309,17 @@ class _ConversationCard extends StatelessWidget {
         key: ValueKey('conversation-${conversation.id}'),
         onTap: () {
           // 1. อัปเดตสถานะอ่านแล้วทันทีใน UI และส่งคำสั่งไป Supabase ในเบื้องหลัง
-          context
-              .read<ChatListBloc>()
-              .add(ChatConversationMarkedAsRead(conversation.id));
+          context.read<ChatListBloc>().add(
+            ChatConversationMarkedAsRead(conversation.id),
+          );
           ChatRemoteDataSource().markMessagesAsRead(
             conversationId: conversation.id,
           );
 
           // 2. เปิดหน้าห้องแชทขึ้นมาทันที 0ms แบบลื่นไหลเหมือน Messenger / LINE
-          AppRoutes.openConversation(
-            context,
-            conversation: conversation,
-          ).then((_) {
+          AppRoutes.openConversation(context, conversation: conversation).then((
+            _,
+          ) {
             if (context.mounted) {
               context.read<ChatListBloc>().add(const ChatListRefreshed());
             }

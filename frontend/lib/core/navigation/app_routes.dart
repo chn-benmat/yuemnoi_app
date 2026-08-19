@@ -8,6 +8,7 @@ import '../../features/auth/presentation/pages/forget_password.dart';
 import '../../features/auth/presentation/pages/login.dart';
 import '../../features/auth/presentation/pages/one_time_verification.dart';
 import '../../features/auth/presentation/pages/register.dart';
+import '../../features/booking/presentation/pages/booking.dart';
 import '../../features/chatbot/data/datasources/chatbot_remote_data_source.dart';
 import '../../features/chatbot/data/repositories/chatbot_repository_impl.dart';
 import '../../features/chatbot/domain/usecases/send_chat_message_usecase.dart'
@@ -59,6 +60,8 @@ abstract final class AppRoutes {
   static const forgotPassword = '/forgot-password';
   static const otpVerification = '/otp-verification';
   static const changePassword = '/change-password';
+  static const booking = '/booking';
+  static const bookingConfirmation = '/booking/confirm';
   static const addRentalItem = '/rental-items/add';
   static const myItems = '/profile/my-items';
   static const contact = '/profile/contact';
@@ -374,6 +377,30 @@ abstract final class AppRoutes {
           ),
         ),
         GoRoute(
+          path: booking,
+          pageBuilder: (context, state) {
+            final data = state.extra is BookingRequestData
+                ? state.extra as BookingRequestData
+                : null;
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: BookingRequestPage(initialData: data),
+            );
+          },
+        ),
+        GoRoute(
+          path: bookingConfirmation,
+          pageBuilder: (context, state) {
+            final data = state.extra is BookingRequestData
+                ? state.extra as BookingRequestData
+                : null;
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: BookingConfirmationPage(bookingData: data),
+            );
+          },
+        ),
+        GoRoute(
           path: profileChangePassword,
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
@@ -446,6 +473,21 @@ abstract final class AppRoutes {
         'sessionId': sessionId,
       },
     );
+  }
+
+  static Future<void> openBooking(
+    BuildContext context, {
+    BookingRequestData? initialData,
+    int? itemId,
+  }) {
+    return context.push<void>(booking, extra: initialData);
+  }
+
+  static Future<void> openBookingConfirmation(
+    BuildContext context, {
+    BookingRequestData? bookingData,
+  }) {
+    return context.push<void>(bookingConfirmation, extra: bookingData);
   }
 
   static Future<void> openAddRentalItem(BuildContext context) {
