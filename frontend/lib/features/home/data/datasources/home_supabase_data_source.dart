@@ -174,7 +174,7 @@ class HomeSupabaseDataSource {
           .order('id', ascending: false);
 
       if (rawItems.isEmpty) {
-        return _fallbackDataSource.fetchNearbyItems();
+        return await _fallbackDataSource.fetchNearbyItems();
       }
 
       // 2. ดึงข้อมูลโปรไฟล์ผู้ใช้จาก profile_tb เพื่อดึงชื่อและรูปเจ้าของสินค้า
