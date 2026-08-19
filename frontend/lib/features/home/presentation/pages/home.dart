@@ -13,7 +13,6 @@ import '../../../chat/presentation/bloc/chat_list_state.dart';
 import '../../../chat/presentation/pages/chat.dart';
 import '../../../profile/presentation/pages/profile.dart';
 import '../../../wallet/presentation/pages/wallet.dart';
-import '../../../chat/presentation/widgets/global_call_listener.dart';
 import '../../data/repositories/home_repository_impl.dart';
 import '../../domain/usecases/get_home_feed_usecase.dart';
 import '../bloc/home_bloc.dart';
@@ -44,9 +43,7 @@ class HomeScreen extends StatelessWidget {
           )..add(const LoadChatListStarted()),
         ),
       ],
-      child: const GlobalCallListener(
-        child: _HomeScreenContent(),
-      ),
+      child: const _HomeScreenContent(),
     );
   }
 }

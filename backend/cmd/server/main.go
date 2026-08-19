@@ -13,9 +13,14 @@ import (
 	"github.com/Chanachai04/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/Chanachai04/yuemnoi_app/backend/internal/ports"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// โหลดค่าจากไฟล์ .env (ถ้ามี)
+	if err := godotenv.Load(); err != nil {
+		_ = godotenv.Load("../../.env")
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {

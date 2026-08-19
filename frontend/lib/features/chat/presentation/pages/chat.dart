@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/services/chat_pin_service.dart';
 import '../../data/datasources/chat_remote_data_source.dart';
 import '../../data/repositories/chat_repository_impl.dart';
 import '../../domain/entities/chat_conversation.dart';
@@ -11,6 +12,7 @@ import '../bloc/chat_list_bloc.dart';
 import '../bloc/chat_list_event.dart';
 import '../bloc/chat_list_state.dart';
 import '../widgets/chat_avatar.dart';
+import '../widgets/conversation_action_sheet.dart';
 
 enum _ConversationFilter { all, owner, renter }
 
@@ -64,18 +66,26 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
   _ConversationFilter _filter = _ConversationFilter.all;
 
   @override
+  void initState() {
+    super.initState();
+    ChatPinService.instance.pinNotifier.addListener(_onPinChanged);
+  }
+
+  @override
   void dispose() {
+    ChatPinService.instance.pinNotifier.removeListener(_onPinChanged);
     _searchController.dispose();
     super.dispose();
   }
 
-  List<ChatConversation> _filterConversations(
-    List<ChatConversation> conversations,
-  ) {
+  void _onPinChanged() {
+    if (mounted) setState(() {});
+  }
+
+  List<ChatConversation> _filterConversations(List<ChatConversation> conversations) {
     final query = _searchController.text.trim().toLowerCase();
-    return conversations.where((conversation) {
-      final matchesQuery =
-          query.isEmpty ||
+    final filtered = conversations.where((conversation) {
+      final matchesQuery = query.isEmpty ||
           conversation.name.toLowerCase().contains(query) ||
           conversation.preview.toLowerCase().contains(query) ||
           (conversation.itemName?.toLowerCase().contains(query) ?? false);
@@ -89,6 +99,18 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
       };
       return matchesQuery && matchesFilter;
     }).toList();
+
+    // จัดเรียงให้แชทที่ถูกปักหมุดอยู่บนสุดเสมอ (จำกัดปักหมุดได้ 1 แชท)
+    final pinnedId = ChatPinService.instance.pinnedConversationId;
+    if (pinnedId != null) {
+      filtered.sort((a, b) {
+        if (a.id == pinnedId) return -1;
+        if (b.id == pinnedId) return 1;
+        return 0;
+      });
+    }
+
+    return filtered;
   }
 
   @override
@@ -302,11 +324,26 @@ class _ConversationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasUnread = conversation.hasUnreadMessage;
+    final isPinned = ChatPinService.instance.isPinned(conversation.id);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         key: ValueKey('conversation-${conversation.id}'),
+        onLongPress: () {
+          ConversationActionSheet.show(
+            context,
+            conversation: conversation,
+            onTogglePin: () async {
+              await ChatPinService.instance.togglePin(conversation.id);
+            },
+            onDelete: () {
+              context.read<ChatListBloc>().add(
+                    ChatConversationDeleted(conversation.id),
+                  );
+            },
+          );
+        },
         onTap: () {
           // 1. อัปเดตสถานะอ่านแล้วทันทีใน UI และส่งคำสั่งไป Supabase ในเบื้องหลัง
           context.read<ChatListBloc>().add(
@@ -342,17 +379,31 @@ class _ConversationCard extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            conversation.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: const Color(0xFF222427),
-                              fontSize: 16,
-                              fontWeight: hasUnread
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                            ),
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  conversation.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: const Color(0xFF222427),
+                                    fontSize: 16,
+                                    fontWeight: hasUnread
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              if (isPinned) ...[
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.push_pin_rounded,
+                                  size: 15,
+                                  color: AppColors.primaryColor,
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                         const SizedBox(width: 8),

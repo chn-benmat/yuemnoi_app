@@ -106,7 +106,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       );
   }
 
-  void _openMoreOptions(ItemDetail item) {
+  void _openReportOptions(ItemDetail item) {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
@@ -116,68 +116,94 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       builder: (ctx) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   width: 38,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
+                  margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     color: Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                ListTile(
-                  leading: const Icon(
-                    Icons.share_outlined,
-                    color: Color(0xFF2D2D30),
-                  ),
-                  title: const Text(
-                    'แชร์อุปกรณ์',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _handleShare();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(
-                    Icons.link_rounded,
-                    color: Color(0xFF2D2D30),
-                  ),
-                  title: const Text(
-                    'คัดลอกลิงก์',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _handleShare();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(
-                    Icons.flag_outlined,
-                    color: Colors.redAccent,
-                  ),
-                  title: const Text(
-                    'รายงานปัญหาอุปกรณ์นี้',
-                    style: TextStyle(
-                      color: Colors.redAccent,
-                      fontWeight: FontWeight.w600,
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFEE2E2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.flag_rounded,
+                        color: Color(0xFFEF4444),
+                        size: 24,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'รายงานปัญหาอุปกรณ์นี้',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'โปรดเลือกเหตุผลที่คุณต้องการรายงาน',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444)),
+                  title: const Text('เนื้อหาไม่เหมาะสม / หลอกลวง', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   onTap: () {
                     Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context)
-                      ..hideCurrentSnackBar()
-                      ..showSnackBar(
-                        const SnackBar(
-                          content: Text('ส่งรายงานปัญหาเรียบร้อยแล้ว'),
-                        ),
-                      );
+                    _showReportSuccess();
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.price_change_outlined, color: Color(0xFFF59E0B)),
+                  title: const Text('ราคาหรือข้อมูลอุปกรณ์ไม่ถูกต้อง', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showReportSuccess();
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.block_rounded, color: Color(0xFF64748B)),
+                  title: const Text('สินค้าต้องห้ามหรือผิดกฎหมาย', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showReportSuccess();
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.more_horiz_rounded, color: Color(0xFF94A3B8)),
+                  title: const Text('เหตุผลอื่นๆ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showReportSuccess();
                   },
                 ),
               ],
@@ -186,6 +212,16 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         );
       },
     );
+  }
+
+  void _showReportSuccess() {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('ส่งรายงานปัญหาให้ทีมงานตรวจสอบเรียบร้อยแล้ว'),
+        ),
+      );
   }
 
   @override
@@ -220,9 +256,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   isFavorite: _isFavorite,
                   onFavorite: () => setState(() => _isFavorite = !_isFavorite),
                   onShare: _handleShare,
-                  onMore: () {
+                  onReport: () {
                     if (item != null) {
-                      _openMoreOptions(item);
+                      _openReportOptions(item);
                     }
                   },
                 ),
@@ -284,13 +320,13 @@ class _DetailFloatingTopBar extends StatelessWidget {
     required this.isFavorite,
     required this.onFavorite,
     required this.onShare,
-    required this.onMore,
+    required this.onReport,
   });
 
   final bool isFavorite;
   final VoidCallback onFavorite;
   final VoidCallback onShare;
-  final VoidCallback onMore;
+  final VoidCallback onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -325,9 +361,10 @@ class _DetailFloatingTopBar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             _CircleActionButton(
-              tooltip: 'ตัวเลือกเพิ่มเติม',
-              icon: Icons.more_vert_rounded,
-              onPressed: onMore,
+              tooltip: 'รายงานปัญหา',
+              icon: Icons.flag_outlined,
+              iconSize: 20,
+              onPressed: onReport,
             ),
           ],
         ),

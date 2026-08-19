@@ -16,3 +16,4 @@ Thumbs.db
 tests/
 test/
 .serena/
+service-account.json

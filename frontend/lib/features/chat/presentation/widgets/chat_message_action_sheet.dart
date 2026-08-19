@@ -1,0 +1,247 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../../core/services/media_download_service.dart';
+import '../../domain/entities/chat_message.dart';
+
+/// เมนูกดค้างที่ข้อความ (Message Action Sheet) ตามสไตล์ Messenger
+class ChatMessageActionSheet extends StatelessWidget {
+  const ChatMessageActionSheet({
+    super.key,
+    required this.message,
+    this.imageUrls = const [],
+    required this.onReply,
+    required this.onCopy,
+    this.onEdit,
+    required this.onDelete,
+    this.onSaveImage,
+  });
+
+  final ChatMessage message;
+  final List<String> imageUrls;
+  final VoidCallback onReply;
+  final VoidCallback onCopy;
+  final VoidCallback? onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback? onSaveImage;
+
+  static Future<void> show(
+    BuildContext context, {
+    required ChatMessage message,
+    List<String> imageUrls = const [],
+    required VoidCallback onReply,
+    VoidCallback? onEdit,
+    required VoidCallback onDelete,
+    VoidCallback? onSaveImage,
+  }) {
+    final effectiveImages = imageUrls.isNotEmpty
+        ? imageUrls
+        : (message.imageUrl != null && message.imageUrl!.isNotEmpty
+            ? [message.imageUrl!]
+            : <String>[]);
+
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => ChatMessageActionSheet(
+        message: message,
+        imageUrls: effectiveImages,
+        onReply: () {
+          Navigator.of(modalContext).pop();
+          onReply();
+        },
+        onCopy: () {
+          Navigator.of(modalContext).pop();
+          if (message.message.isNotEmpty && message.message != '📷 ส่งรูปภาพ') {
+            Clipboard.setData(ClipboardData(text: message.message));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('คัดลอกข้อความแล้ว'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        },
+        onEdit: onEdit != null
+            ? () {
+                Navigator.of(modalContext).pop();
+                onEdit();
+              }
+            : null,
+        onDelete: () {
+          Navigator.of(modalContext).pop();
+          _confirmDelete(context, onDelete);
+        },
+        onSaveImage: () async {
+          Navigator.of(modalContext).pop();
+          if (onSaveImage != null) {
+            onSaveImage();
+            return;
+          }
+          if (effectiveImages.isNotEmpty) {
+            final count = await MediaDownloadService.instance
+                .saveMultipleImagesFromUrls(effectiveImages);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    count > 1
+                        ? 'บันทึก $count รูปภาพลงในแกลเลอรีเรียบร้อยแล้ว'
+                        : 'บันทึกรูปภาพลงในแกลเลอรีเรียบร้อยแล้ว',
+                  ),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  static void _confirmDelete(BuildContext context, VoidCallback onConfirm) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'ยกเลิกการส่งข้อความนี้หรือไม่?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        content: const Text(
+          'ข้อความนี้จะถูกลบออกจากห้องแชทสำหรับทุกคน',
+          style: TextStyle(fontSize: 14, color: Color(0xFF4A4D52)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('ยกเลิก', style: TextStyle(color: Color(0xFF6B7280))),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              onConfirm();
+            },
+            child: const Text('ลบสำหรับทุกคน'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveImages = imageUrls.isNotEmpty
+        ? imageUrls
+        : (message.imageUrl != null && message.imageUrl!.isNotEmpty
+            ? [message.imageUrl!]
+            : <String>[]);
+    final hasImages = effectiveImages.isNotEmpty;
+
+    final isTextMessage = message.message.isNotEmpty &&
+        message.message != '📷 ส่งรูปภาพ' &&
+        message.message != '[รูปภาพ]' &&
+        !message.message.startsWith('📞');
+
+    final canEdit = message.isMine && isTextMessage && onEdit != null;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF26262A),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _ActionButton(
+              icon: Icons.reply_rounded,
+              label: 'ตอบกลับ',
+              color: Colors.white,
+              onTap: onReply,
+            ),
+            if (hasImages)
+              _ActionButton(
+                icon: Icons.download_rounded,
+                label: 'บันทึกภาพ',
+                color: Colors.white,
+                onTap: onSaveImage ?? () {},
+              ),
+            if (isTextMessage)
+              _ActionButton(
+                icon: Icons.content_copy_rounded,
+                label: 'คัดลอก',
+                color: Colors.white,
+                onTap: onCopy,
+              ),
+            if (canEdit)
+              _ActionButton(
+                icon: Icons.edit_rounded,
+                label: 'แก้ไข',
+                color: Colors.white,
+                onTap: onEdit!,
+              ),
+            _ActionButton(
+              icon: Icons.delete_outline_rounded,
+              label: 'ลบ',
+              color: const Color(0xFFF43F5E),
+              onTap: onDelete,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

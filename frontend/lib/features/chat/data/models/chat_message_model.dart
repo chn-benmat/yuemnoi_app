@@ -16,6 +16,15 @@ abstract final class ChatMessageModel {
         : DateTime.now();
     final isRead = json['is_read'] as bool? ?? false;
 
+    final bool isMine;
+    if (currentUserId.isNotEmpty && senderId.isNotEmpty && senderId != 'me') {
+      isMine = (currentUserId == senderId);
+    } else if (senderId == 'me') {
+      isMine = true;
+    } else {
+      isMine = json['is_mine'] as bool? ?? false;
+    }
+
     return ChatMessage(
       id: id,
       conversationId: conversationId,
@@ -23,8 +32,22 @@ abstract final class ChatMessageModel {
       message: message,
       imageUrl: imageUrl?.isEmpty ?? true ? null : imageUrl,
       createdAt: createdAt,
-      isMine: currentUserId == senderId,
+      isMine: isMine,
       isRead: isRead,
     );
   }
+
+  static Map<String, dynamic> toJson(ChatMessage message) {
+    return {
+      'id': message.id,
+      'conversation_id': message.conversationId,
+      'sender_id': message.senderId,
+      'message': message.message,
+      'image_url': message.imageUrl,
+      'created_at': message.createdAt.toIso8601String(),
+      'is_read': message.isRead,
+      'is_mine': message.isMine,
+    };
+  }
 }
+
