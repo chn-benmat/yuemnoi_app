@@ -47,6 +47,9 @@ import '../../features/profile/presentation/pages/edit_profile_screen.dart';
 import '../../features/profile/presentation/pages/edit_contact_screen.dart';
 import '../../features/profile/presentation/pages/change_account_screen.dart';
 import '../../features/profile/presentation/pages/change_password_screen.dart';
+import '../../features/wallet/presentation/pages/wallet.dart';
+import '../../features/wallet/presentation/pages/wallet_payment_screen.dart';
+import '../../features/wallet/presentation/pages/wallet_success_screen.dart';
 abstract final class AppRoutes {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
@@ -78,6 +81,9 @@ abstract final class AppRoutes {
   static const profileChangePassword = '/setting/change-password';
   static const itemDetail = '/items/:itemId';
   static const editRentalItem = '/items/:itemId/edit';
+  static const wallet = '/wallet';
+  static const walletPayment = '/wallet/payment';
+  static const walletSuccess = '/wallet/success';
 
   static GoRouter? _currentRouter;
   static GoRouter? get router => _currentRouter;
@@ -105,15 +111,18 @@ abstract final class AppRoutes {
         ),
         GoRoute(
           path: home,
-          pageBuilder: (context, state) => CustomTransitionPage<void>(
-            key: state.pageKey,
-            child: const HomeScreen(),
-            transitionDuration: const Duration(milliseconds: 600),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(opacity: animation, child: child);
-                },
-          ),
+          pageBuilder: (context, state) {
+            final initialIndex = (state.extra as int?) ?? 0;
+            return CustomTransitionPage<void>(
+              key: state.pageKey,
+              child: HomeScreen(initialIndex: initialIndex),
+              transitionDuration: const Duration(milliseconds: 600),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return FadeTransition(opacity: animation, child: child);
+                  },
+            );
+          },
         ),
         GoRoute(
           path: chatbot,
@@ -353,6 +362,33 @@ abstract final class AppRoutes {
             child: const ProfileChangePasswordScreen(),
           ),
         ),
+        GoRoute(
+          path: wallet,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: const WalletScreen(),
+          ),
+        ),
+        GoRoute(
+          path: walletPayment,
+          pageBuilder: (context, state) {
+            final amount = (state.extra as num?)?.toDouble() ?? 0.0;
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: WalletPaymentScreen(amount: amount),
+            );
+          },
+        ),
+        GoRoute(
+          path: walletSuccess,
+          pageBuilder: (context, state) {
+            final amount = (state.extra as num?)?.toDouble() ?? 0.0;
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: WalletSuccessScreen(amount: amount),
+            );
+          },
+        ),
       ],
     );
   }
@@ -365,12 +401,12 @@ abstract final class AppRoutes {
     context.go(login);
   }
 
-  static void openHome(BuildContext context) {
-    context.go(home);
+  static void openHome(BuildContext context, {int initialIndex = 0}) {
+    context.go(home, extra: initialIndex);
   }
 
-  static void goToHome(BuildContext context) {
-    context.go(home);
+  static void goToHome(BuildContext context, {int initialIndex = 0}) {
+    context.go(home, extra: initialIndex);
   }
 
   static Future<void> openChatbot(BuildContext context) {
@@ -502,6 +538,24 @@ abstract final class AppRoutes {
     required String accessToken,
   }) {
     return context.push<void>(changePassword, extra: accessToken);
+  }
+
+  static Future<void> openWallet(BuildContext context) {
+    return context.push<void>(wallet);
+  }
+
+  static Future<void> openWalletPayment(
+    BuildContext context, {
+    required double amount,
+  }) {
+    return context.push<void>(walletPayment, extra: amount);
+  }
+
+  static Future<void> openWalletSuccess(
+    BuildContext context, {
+    double amount = 0,
+  }) {
+    return context.push<void>(walletSuccess, extra: amount);
   }
 
   static void pop<T extends Object?>(BuildContext context, [T? result]) {

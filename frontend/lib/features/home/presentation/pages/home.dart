@@ -20,7 +20,8 @@ import '../bloc/home_event.dart';
 import 'home_feed_view.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  final int initialIndex;
+  const HomeScreen({super.key, this.initialIndex = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -43,27 +44,40 @@ class HomeScreen extends StatelessWidget {
           )..add(const LoadChatListStarted()),
         ),
       ],
-      child: const _HomeScreenContent(),
+      child: _HomeScreenContent(initialIndex: initialIndex),
     );
   }
 }
 
 class _HomeScreenContent extends StatefulWidget {
-  const _HomeScreenContent();
+  final int initialIndex;
+  const _HomeScreenContent({this.initialIndex = 0});
 
   @override
   State<_HomeScreenContent> createState() => _HomeScreenContentState();
 }
 
 class _HomeScreenContentState extends State<_HomeScreenContent> {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
 
-  final List<Widget> _pages = const [
-    HomeFeedView(),
-    ChatScreen(),
-    WalletScreen(),
-    ProfileScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex;
+  }
+
+  List<Widget> get _pages => [
+        const HomeFeedView(),
+        const ChatScreen(),
+        WalletScreen(
+          onBack: () {
+            setState(() {
+              _selectedIndex = 0;
+            });
+          },
+        ),
+        const ProfileScreen(),
+      ];
 
   @override
   Widget build(BuildContext context) {

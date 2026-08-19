@@ -12,6 +12,7 @@ import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/chat/data/datasources/chat_remote_data_source.dart';
 import 'features/chat/domain/entities/chat_conversation.dart';
 import 'features/chat/presentation/widgets/global_chat_notification_listener.dart';
+import 'features/wallet/presentation/bloc/wallet_cubit.dart';
 
 class YuemnoiApp extends StatefulWidget {
   const YuemnoiApp({super.key, this.initialRoute = AppRoutes.login});
@@ -85,9 +86,16 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider<AuthBloc>(
-      create: (context) =>
-          AuthBloc(authRepository: AuthRepositoryImpl(AuthRemoteDataSource())),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<AuthBloc>(
+          create: (context) =>
+              AuthBloc(authRepository: AuthRepositoryImpl(AuthRemoteDataSource())),
+        ),
+        BlocProvider<WalletCubit>(
+          create: (context) => WalletCubit(),
+        ),
+      ],
       child: MaterialApp.router(
         title: 'Yuemnoi App',
         theme: AppTheme.lightTheme,

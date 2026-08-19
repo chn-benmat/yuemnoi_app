@@ -36,3 +36,9 @@ These instructions apply to everything under `backend/`.
 
 - Write code comments in clear, easy-to-understand Thai.
 - Create all new test files inside the `tests/` directory.
+
+## Serena MCP Usage
+
+- When using Serena MCP tools (e.g., `activate_project`, symbol search, code navigation, editing), activate the project strictly inside the `backend/` directory (e.g., `activate_project` with path `backend`).
+- Do NOT activate Serena at the root workspace level (`yuemnoi_app`) or create `.serena` outside the `backend/` folder. All Serena project configurations, cache, and memories must remain contained in `backend/.serena/`.
+- Ensure the language server is set to Go (`go`).

@@ -42,4 +42,10 @@ These instructions apply to everything under `ai_service/`.
 - Write code comments in clear, easy-to-understand Thai.
 - Create all new test files inside the `tests/` directory.
 
+## Serena MCP Usage
+
+- When using Serena MCP tools (e.g., `activate_project`, symbol search, code navigation, editing), activate the project strictly inside the `ai_service/` directory (e.g., `activate_project` with path `ai_service`).
+- Do NOT activate Serena at the root workspace level (`yuemnoi_app`) or create `.serena` outside the `ai_service/` folder. All Serena project configurations, cache, and memories must remain contained in `ai_service/.serena/`.
+- Ensure the language server is set to Python (`python`).
+
 No formatter, linter, or test runner is currently declared in the repository. Do not invent commands or add tooling just for verification. Report checks that could not run.

@@ -48,7 +48,13 @@
 - Reuse or extend an existing shared widget with backward-compatible options when the same feature-independent UI behavior is needed. Keep the shared visual logic in one source of truth instead of recreating it in pages.
 - Place UI that is reusable only inside one feature in that feature's `presentation/widgets/`. Promote it to `core/widgets/` only when it is feature-independent and reused across pages or features.
 
-## 5. Current Status and Next Steps
+## 5. Serena MCP Usage
+
+- When using Serena MCP tools (e.g., `activate_project`, symbol search, code navigation, editing), activate the project strictly inside the `frontend/` directory (e.g., `activate_project` with path `frontend`).
+- Do NOT activate Serena at the root workspace level (`yuemnoi_app`) or create `.serena` outside the `frontend/` folder. All Serena project configurations, cache, and memories must remain contained in `frontend/.serena/`.
+- Ensure the language server is set to Dart (`dart`).
+
+## 6. Current Status and Next Steps
 
 - The current focus is the Flutter frontend written in Dart.
 - The authentication frontend has been implemented.
