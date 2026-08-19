@@ -14,6 +14,7 @@ import '../bloc/item_detail_bloc.dart';
 import '../bloc/item_detail_event.dart';
 import '../bloc/item_detail_state.dart';
 import '../widgets/full_screen_image_viewer.dart';
+import '../widgets/item_share_bottom_sheet.dart';
 
 class ItemDetailScreen extends StatefulWidget {
   const ItemDetailScreen({super.key, required this.itemId});
@@ -98,12 +99,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     }
   }
 
-  void _handleShare() {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(content: Text('คัดลอกลิงก์อุปกรณ์แล้ว')),
-      );
+  void _handleShare(ItemDetail? item) {
+    if (item == null) return;
+    ItemShareBottomSheet.show(context, item: item);
   }
 
   void _openReportOptions(ItemDetail item) {
@@ -255,7 +253,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 child: _DetailFloatingTopBar(
                   isFavorite: _isFavorite,
                   onFavorite: () => setState(() => _isFavorite = !_isFavorite),
-                  onShare: _handleShare,
+                  onShare: () => _handleShare(item),
                   onReport: () {
                     if (item != null) {
                       _openReportOptions(item);

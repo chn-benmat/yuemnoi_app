@@ -30,9 +30,7 @@ dependencies:
   firebase_messaging: ^15.2.5
   shared_preferences: ^2.5.5
   gal: ^2.3.3
-
-
-
+  share_plus: ^13.3.0
 
 dev_dependencies:
   flutter_test:

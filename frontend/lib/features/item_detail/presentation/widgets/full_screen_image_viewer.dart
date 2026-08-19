@@ -155,7 +155,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
                     IconButton(
                       icon: const Icon(
                         Icons.close_rounded,
-                        color: Color(0xFFF43F5E),
+                        color: AppColors.primaryColor,
                         size: 28,
                       ),
                       tooltip: 'ปิด',
@@ -177,7 +177,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
                     IconButton(
                       icon: const Icon(
                         Icons.download_rounded,
-                        color: Color(0xFFF43F5E),
+                        color: AppColors.primaryColor,
                         size: 28,
                       ),
                       tooltip: 'บันทึกรูปภาพ',
