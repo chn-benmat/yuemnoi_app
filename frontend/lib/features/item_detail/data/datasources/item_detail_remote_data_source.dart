@@ -123,7 +123,7 @@ class ItemDetailRemoteDataSource {
           .eq('user_id', user.id)
           .select('id')
           .single();
-      return fetchById(draft.itemId);
+      return await fetchById(draft.itemId);
     } on ItemDetailRemoteException {
       await _removeNewUploads(uploadedPaths);
       rethrow;

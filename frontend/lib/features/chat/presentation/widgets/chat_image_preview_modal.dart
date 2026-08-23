@@ -140,7 +140,7 @@ class _ChatImagePreviewModalState extends State<ChatImagePreviewModal> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _selectedImages.length + 1,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 if (index == _selectedImages.length) {
                   // Add more button

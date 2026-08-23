@@ -8,9 +8,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/active_conversation_tracker.dart';
 import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/services/chat_notification_service.dart';
+import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../data/datasources/chat_remote_data_source.dart';
 import '../../data/repositories/chat_repository_impl.dart';
 import '../../domain/entities/chat_conversation.dart';
@@ -304,9 +306,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
         .then((_) {
           if (!mounted) return;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            final postBox =
-                _messageKeys[targetItem.message.id]?.currentContext?.findRenderObject();
-            if (postBox is RenderBox && _scrollController.hasClients && mounted) {
+            final postBox = _messageKeys[targetItem.message.id]?.currentContext
+                ?.findRenderObject();
+            if (postBox is RenderBox &&
+                _scrollController.hasClients &&
+                mounted) {
               final viewport = RenderAbstractViewport.of(postBox);
               final revealed = viewport.getOffsetToReveal(postBox, 0.5);
               _scrollController.animateTo(
@@ -508,6 +512,111 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     }
   }
 
+  void _openBookingRequest() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final rentalType =
+        (_conversation.itemRentalType == 'hourly' ||
+            _conversation.itemRentalType == 'รายชั่วโมง')
+        ? BookingRentalType.hourly
+        : BookingRentalType.daily;
+    final price = (_conversation.itemPrice ?? 100).toDouble();
+
+    final itemInfo = BookingItemInfo(
+      id: _conversation.itemId ?? 1,
+      title: _conversation.itemName?.isNotEmpty == true
+          ? _conversation.itemName!
+          : (_conversation.name.isNotEmpty
+                ? 'อุปกรณ์จาก ${_conversation.name}'
+                : 'อุปกรณ์เช่า'),
+      imageUrl: _conversation.itemImageUrl?.isNotEmpty == true
+          ? _conversation.itemImageUrl!
+          : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop',
+      rating: 4.9,
+      reviewCount: 10,
+      hourlyRate: rentalType == BookingRentalType.hourly
+          ? price
+          : (price / 8).roundToDouble(),
+      dailyRate: rentalType == BookingRentalType.daily
+          ? price
+          : (price * 8).roundToDouble(),
+      defaultLocation: 'นัดรับตามตกลง',
+      ownerName: _conversation.name,
+    );
+
+    final bookingData = BookingRequestData(
+      item: itemInfo,
+      rentalType: rentalType,
+      startDate: today,
+      endDate: rentalType == BookingRentalType.daily
+          ? today.add(const Duration(days: 1))
+          : today,
+      startTime: const TimeOfDay(hour: 9, minute: 0),
+      endTime: const TimeOfDay(hour: 17, minute: 0),
+      location: 'นัดรับตามตกลง',
+      locationNote: 'เลือกโดยผู้ปล่อยเช่า',
+      conversationId: _conversation.id,
+      ownerId: _conversation.otherUserId,
+    );
+
+    AppRoutes.openBooking(context, initialData: bookingData);
+  }
+
+  Widget _buildFloatingRentalRequestButton() {
+    return Positioned(
+      top: 10,
+      right: 12,
+      child: Material(
+        color: Colors.transparent,
+        elevation: 3,
+        shadowColor: AppColors.primaryColor.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          key: const ValueKey('chat-floating-rental-request-button'),
+          onTap: _openBookingRequest,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 0.8,
+              ),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.receipt_long_rounded, color: Colors.white, size: 15),
+                SizedBox(width: 5),
+                Text(
+                  'ส่งคำขอการเช่า',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                SizedBox(width: 2),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.white70,
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -608,66 +717,69 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                            if (showTimeDivider)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    _formatTimeDivider(
-                                      item.message.createdAt,
-                                      previousDate,
-                                    ),
-                                    style: const TextStyle(
-                                      color: Color(0xFF8A8E92),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w400,
+                              if (showTimeDivider)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _formatTimeDivider(
+                                        item.message.createdAt,
+                                        previousDate,
+                                      ),
+                                      style: const TextStyle(
+                                        color: Color(0xFF8A8E92),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w400,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ChatMessageBubble(
-                              message: item.message,
-                              imageUrls: item.imageUrls,
-                              otherAvatarAsset: _conversation.avatarAsset,
-                              showAvatar: showAvatar,
-                              deliveryStatus: deliveryStatusLabel,
-                              isRead: item.message.isRead,
-                              showDeliveryStatus: showDeliveryStatus,
-                              isHighlighted: isHighlighted,
-                              isFailed: state.failedMessageIds.contains(
-                                item.message.id,
-                              ),
-                              onRetry: () {
-                                context.read<ChatDetailBloc>().add(
-                                  ChatRetryMessageSent(
-                                    conversationId: widget.conversation.id,
-                                    tempMessageId: item.message.id,
-                                  ),
-                                );
-                              },
-                              onReply: _handleReply,
-                              onEdit: item.message.isMine ? _handleEdit : null,
-                              onQuotedTap: _scrollToMessage,
-                              onDelete: (msg) {
-                                final idsToDelete = item.messageIds.isNotEmpty
-                                    ? item.messageIds
-                                    : [msg.id];
-                                for (final id in idsToDelete) {
+                              ChatMessageBubble(
+                                message: item.message,
+                                imageUrls: item.imageUrls,
+                                otherAvatarAsset: _conversation.avatarAsset,
+                                otherUserName: _conversation.name,
+                                showAvatar: showAvatar,
+                                deliveryStatus: deliveryStatusLabel,
+                                isRead: item.message.isRead,
+                                showDeliveryStatus: showDeliveryStatus,
+                                isHighlighted: isHighlighted,
+                                isFailed: state.failedMessageIds.contains(
+                                  item.message.id,
+                                ),
+                                onRetry: () {
                                   context.read<ChatDetailBloc>().add(
-                                    ChatMessageDeleted(
+                                    ChatRetryMessageSent(
                                       conversationId: widget.conversation.id,
-                                      messageId: id,
+                                      tempMessageId: item.message.id,
                                     ),
                                   );
-                                }
-                              },
-                            ),
-                            const SizedBox(height: 4),
-                          ],
-                        ),
-                      );
+                                },
+                                onReply: _handleReply,
+                                onEdit: item.message.isMine
+                                    ? _handleEdit
+                                    : null,
+                                onQuotedTap: _scrollToMessage,
+                                onDelete: (msg) {
+                                  final idsToDelete = item.messageIds.isNotEmpty
+                                      ? item.messageIds
+                                      : [msg.id];
+                                  for (final id in idsToDelete) {
+                                    context.read<ChatDetailBloc>().add(
+                                      ChatMessageDeleted(
+                                        conversationId: widget.conversation.id,
+                                        messageId: id,
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                              const SizedBox(height: 4),
+                            ],
+                          ),
+                        );
                       },
                     );
                   },
@@ -716,6 +828,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                     ),
                   ),
                 ),
+                _buildFloatingRentalRequestButton(),
               ],
             ),
           ),
@@ -865,8 +978,18 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   }
 
   static const List<String> _thaiShortMonths = [
-    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+    'ม.ค.',
+    'ก.พ.',
+    'มี.ค.',
+    'เม.ย.',
+    'พ.ค.',
+    'มิ.ย.',
+    'ก.ค.',
+    'ส.ค.',
+    'ก.ย.',
+    'ต.ค.',
+    'พ.ย.',
+    'ธ.ค.',
   ];
 
   static String _formatThaiDayMonth(DateTime date) {

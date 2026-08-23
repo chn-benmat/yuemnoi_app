@@ -361,12 +361,28 @@ abstract final class AppRoutes {
         GoRoute(
           path: booking,
           pageBuilder: (context, state) {
-            final data = state.extra is BookingRequestData
-                ? state.extra as BookingRequestData
-                : null;
+            if (state.extra is BookingRequestData) {
+              return MaterialPage<void>(
+                key: state.pageKey,
+                child: BookingRequestPage(
+                  initialData: state.extra as BookingRequestData,
+                ),
+              );
+            }
+            if (state.extra is Map<String, dynamic>) {
+              final map = state.extra as Map<String, dynamic>;
+              return MaterialPage<void>(
+                key: state.pageKey,
+                child: BookingRequestPage(
+                  initialData: map['initialData'] as BookingRequestData?,
+                  itemId: map['itemId'] as int?,
+                  isEditMode: map['isEditMode'] as bool? ?? false,
+                ),
+              );
+            }
             return MaterialPage<void>(
               key: state.pageKey,
-              child: BookingRequestPage(initialData: data),
+              child: const BookingRequestPage(),
             );
           },
         ),
@@ -467,7 +483,18 @@ abstract final class AppRoutes {
     BuildContext context, {
     BookingRequestData? initialData,
     int? itemId,
+    bool isEditMode = false,
   }) {
+    if (isEditMode || itemId != null) {
+      return context.push<void>(
+        booking,
+        extra: {
+          'initialData': initialData,
+          'itemId': itemId,
+          'isEditMode': isEditMode,
+        },
+      );
+    }
     return context.push<void>(booking, extra: initialData);
   }
 
