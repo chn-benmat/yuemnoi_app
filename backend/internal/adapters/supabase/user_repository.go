@@ -406,3 +406,160 @@ func (r *supabaseUserRepository) Logout(ctx context.Context, accessToken string)
 
 	return nil
 }
+
+func (r *supabaseUserRepository) GetProfile(ctx context.Context, userID string) (*domain.UserProfile, error) {
+	var profiles []struct {
+		UserID       string `json:"user_id"`
+		Email        string `json:"email"`
+		UserImageURL string `json:"user_image_url"`
+		DisplayName  string `json:"display_name"`
+		Bio          string `json:"bio"`
+		Username     string `json:"username"`
+		Phone        string `json:"phone"`
+	}
+
+	err := r.client.DB.From("profile_tb").
+		Select("user_id,email,user_image_url,display_name,bio,username,phone").
+		Eq("user_id", userID).
+		ExecuteWithContext(ctx, &profiles)
+	if err != nil {
+		return nil, fmt.Errorf("load profile failed: %w", err)
+	}
+
+	profile := &domain.UserProfile{UserID: userID}
+	if len(profiles) > 0 {
+		p := profiles[0]
+		profile.Email = p.Email
+		profile.UserImageURL = p.UserImageURL
+		profile.DisplayName = p.DisplayName
+		profile.Bio = p.Bio
+		profile.Username = p.Username
+		profile.Phone = p.Phone
+	}
+
+	user, err := r.client.Admin.GetUser(ctx, userID)
+	if err == nil && user != nil {
+		if profile.Email == "" {
+			profile.Email = user.Email
+		}
+		if profile.Phone == "" {
+			if phone, ok := user.UserMetaData["phone"].(string); ok && phone != "" {
+				profile.Phone = phone
+			} else {
+				profile.Phone = user.Phone
+			}
+		}
+		if profile.DisplayName == "" {
+			if dn, ok := user.UserMetaData["display_name"].(string); ok && dn != "" {
+				profile.DisplayName = dn
+			} else if fn, ok := user.UserMetaData["full_name"].(string); ok && fn != "" {
+				profile.DisplayName = fn
+			}
+		}
+		if profile.UserImageURL == "" {
+			profile.UserImageURL = googleProfileImageURL(user.UserMetaData)
+		}
+	}
+
+	return profile, nil
+}
+
+func (r *supabaseUserRepository) UpdateProfile(
+	ctx context.Context,
+	userID string,
+	req domain.UpdateProfileRequest,
+	img *domain.ProfileImage,
+) (*domain.UserProfile, error) {
+	fields := make(map[string]interface{})
+	metadata := make(map[string]interface{})
+
+	if req.DisplayName != nil {
+		trimmed := strings.TrimSpace(*req.DisplayName)
+		fields["display_name"] = trimmed
+		metadata["display_name"] = trimmed
+	}
+	if req.Username != nil {
+		trimmed := strings.TrimSpace(*req.Username)
+		fields["username"] = trimmed
+		metadata["username"] = trimmed
+	}
+	if req.Bio != nil {
+		trimmed := strings.TrimSpace(*req.Bio)
+		fields["bio"] = trimmed
+		metadata["bio"] = trimmed
+	}
+
+	if img != nil {
+		objectPath := fmt.Sprintf("profile-%s-%d%s", userID, time.Now().UTC().UnixNano(), img.Extension)
+		_, err := r.uploadProfileImage(objectPath, img)
+		if err != nil {
+			return nil, err
+		}
+		publicURL := r.client.Storage.From(profileBucket).GetPublicUrl(objectPath).SignedUrl
+		if publicURL != "" {
+			fields["user_image_url"] = publicURL
+			metadata["avatar_url"] = publicURL
+		}
+	}
+
+	if len(fields) > 0 {
+		var updated []map[string]interface{}
+		err := r.client.DB.From("profile_tb").
+			Update(fields).
+			Eq("user_id", userID).
+			ExecuteWithContext(ctx, &updated)
+		if err != nil {
+			return nil, fmt.Errorf("update profile_tb failed: %w", err)
+		}
+	}
+
+	if len(metadata) > 0 {
+		_, _ = r.client.Admin.UpdateUser(ctx, userID, supabase.AdminUserParams{
+			UserMetadata: metadata,
+		})
+	}
+
+	return r.GetProfile(ctx, userID)
+}
+
+func (r *supabaseUserRepository) UpdateContact(ctx context.Context, userID string, phone string) error {
+	normalizedPhone := strings.TrimSpace(phone)
+	fields := map[string]interface{}{
+		"phone": normalizedPhone,
+	}
+
+	var updated []map[string]interface{}
+	err := r.client.DB.From("profile_tb").
+		Update(fields).
+		Eq("user_id", userID).
+		ExecuteWithContext(ctx, &updated)
+	if err != nil {
+		return fmt.Errorf("update contact in profile_tb failed: %w", err)
+	}
+
+	_, _ = r.client.Admin.UpdateUser(ctx, userID, supabase.AdminUserParams{
+		Phone: normalizedPhone,
+		UserMetadata: map[string]interface{}{
+			"phone": normalizedPhone,
+		},
+	})
+
+	return nil
+}
+
+func (r *supabaseUserRepository) UpdateFCMToken(ctx context.Context, userID string, fcmToken string) error {
+	fields := map[string]interface{}{
+		"fcm_token": strings.TrimSpace(fcmToken),
+	}
+
+	var updated []map[string]interface{}
+	err := r.client.DB.From("profile_tb").
+		Update(fields).
+		Eq("user_id", userID).
+		ExecuteWithContext(ctx, &updated)
+	if err != nil {
+		return fmt.Errorf("update fcm token in profile_tb failed: %w", err)
+	}
+
+	return nil
+}

@@ -4,7 +4,6 @@ class AppColors {
   AppColors._();
   // สีหลักของแอปพลิเคชัน
   static const Color primaryColor = Color(0xFF7400C9);
-  // static const Color bgcolor = Color(0xFFF5F6F7);
   // สีพื้นหลังField
   static const Color bgFieldColor = Color(0xFFEFF1F2);
   // สี icon ของ Field

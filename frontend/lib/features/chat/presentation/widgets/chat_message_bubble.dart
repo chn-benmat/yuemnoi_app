@@ -59,43 +59,6 @@ class ChatMessageBubble extends StatelessWidget {
   final ValueChanged<ChatMessage>? onDelete;
   final ValueChanged<String>? onQuotedTap;
 
-  static (String title, String subtitle, IconData icon) _parseCallLog(String raw) {
-    final text = raw.replaceFirst('📞 ', '').trim();
-    String title = 'โทรด้วยเสียง';
-    IconData icon = Icons.phone_rounded;
-
-    if (text.contains('วิดีโอ')) {
-      title = 'วิดีโอคอล';
-      icon = Icons.videocam_rounded;
-    }
-
-    String subtitle = 'โทรด้วยเสียง';
-    if (text.contains('ไม่ได้รับสาย')) {
-      subtitle = 'ไม่ได้รับสาย';
-      icon = Icons.phone_missed_rounded;
-    } else if (text.contains('ยกเลิก') || text.contains('วางสาย')) {
-      subtitle = 'วางสายแล้ว';
-      icon = Icons.phone_disabled_rounded;
-    } else if (text.contains('ปฏิเสธ')) {
-      subtitle = 'สายถูกปฏิเสธ';
-      icon = Icons.phone_disabled_rounded;
-    } else if (text.contains('สนทนา') || text.contains('•')) {
-      final durationInParen = RegExp(r'\(สนทนา\s+([^)]+)\)').firstMatch(text);
-      if (durationInParen != null) {
-        subtitle = durationInParen.group(1)!.trim();
-      } else {
-        final parts = text.split('•');
-        var dur = parts.length > 1 ? parts.last.trim() : text;
-        dur = dur.replaceFirst('สนทนา', '').trim();
-        subtitle = dur.isNotEmpty ? dur : 'วางสายแล้ว';
-      }
-    } else {
-      subtitle = text;
-    }
-
-    return (title, subtitle, icon);
-  }
-
   static ({
     String? replyHeader,
     String? quotedText,
@@ -218,193 +181,6 @@ class ChatMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMine = message.isMine;
-    final isCallLog = message.message.startsWith('📞');
-
-    if (isCallLog) {
-      final (title, subtitle, icon) = _parseCallLog(message.message);
-
-      final callCard = GestureDetector(
-        onLongPress: () => _showActions(context),
-        child: Container(
-          width: 220,
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF2C2C2E),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      icon,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            color: Color(0xFFA1A1AA),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
-
-      final statusFailedWidget = isFailed
-          ? GestureDetector(
-              onTap: onRetry,
-              child: const Padding(
-                padding: EdgeInsets.only(right: 6, bottom: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 15),
-                    SizedBox(width: 3),
-                    Text(
-                      'ส่งไม่สำเร็จ',
-                      key: ValueKey('chat-message-failed-status'),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFFEF4444),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : null;
-
-      final statusTextWidget = (isMine && showDeliveryStatus && !isRead)
-          ? Padding(
-              padding: const EdgeInsets.only(right: 6, bottom: 4),
-              child: Text(
-                deliveryStatus ?? 'ส่งแล้ว',
-                key: const ValueKey('chat-message-delivery-status'),
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF8A8E92),
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            )
-          : null;
-
-      final avatarStatusWidget = (isMine && showDeliveryStatus && isRead)
-          ? Container(
-              key: const ValueKey('chat-message-delivery-status'),
-              width: 16,
-              height: 16,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-              ),
-              child: ChatAvatar(
-                asset: otherAvatarAsset ?? 'assets/images/user.png',
-                size: 16,
-                showStatus: false,
-              ),
-            )
-          : null;
-
-      final body = isMine
-          ? Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                ?statusFailedWidget,
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    callCard,
-                    if (statusTextWidget != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 3, right: 6, bottom: 2),
-                        child: statusTextWidget,
-                      ),
-                    if (avatarStatusWidget != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2, right: 2),
-                        child: avatarStatusWidget,
-                      ),
-                  ],
-                ),
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (showAvatar)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8, bottom: 2),
-                    child: ChatAvatar(
-                      asset: otherAvatarAsset ?? 'assets/images/user1.png',
-                      size: 28,
-                      showStatus: false,
-                    ),
-                  )
-                else
-                  const SizedBox(width: 36),
-                Flexible(child: callCard),
-              ],
-            );
-
-      final bubbleContainer = AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        decoration: BoxDecoration(
-          color: isHighlighted
-              ? AppColors.primaryColor.withValues(alpha: 0.15)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: body,
-      );
-
-      return SwipeToReply(
-        isMine: isMine,
-        onReply: () => onReply?.call(message),
-        child: bubbleContainer,
-      );
-    }
 
     final isBooking = BookingRequestData.isBookingRequest(message.message);
     if (isBooking) {
@@ -726,35 +502,32 @@ class ChatMessageBubble extends StatelessWidget {
                   );
                 }
               },
-              child: Hero(
-                tag: effectiveImages.first,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.sizeOf(context).width * 0.72,
-                    maxHeight: 300,
-                  ),
-                  child: CachedNetworkImage(
-                    imageUrl: effectiveImages.first,
-                    fit: BoxFit.contain,
-                    placeholder: (context, url) => Container(
-                      width: 220,
-                      height: 180,
-                      color: Colors.black12,
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.primaryColor,
-                        ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.sizeOf(context).width * 0.72,
+                  maxHeight: 300,
+                ),
+                child: CachedNetworkImage(
+                  imageUrl: effectiveImages.first,
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => Container(
+                    width: 220,
+                    height: 180,
+                    color: Colors.black12,
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primaryColor,
                       ),
                     ),
-                    errorWidget: (context, url, error) => Container(
-                      width: 220,
-                      height: 140,
-                      color: Colors.black12,
-                      child: const Icon(
-                        Icons.broken_image_rounded,
-                        size: 40,
-                      ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: 220,
+                    height: 140,
+                    color: Colors.black12,
+                    child: const Icon(
+                      Icons.broken_image_rounded,
+                      size: 40,
                     ),
                   ),
                 ),

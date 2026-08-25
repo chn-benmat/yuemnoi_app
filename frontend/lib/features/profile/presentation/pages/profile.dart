@@ -106,10 +106,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ProfileHeader(
-                displayName: _displayName,
-                avatarUrl: _avatarUrl,
-              ),
+              _ProfileHeader(displayName: _displayName, avatarUrl: _avatarUrl),
               const SizedBox(height: 20),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -350,7 +347,6 @@ class _AvatarWidget extends StatelessWidget {
                 fit: BoxFit.cover,
                 errorBuilder: (ctx, err, stack) =>
                     _InitialAvatar(name: displayName),
-
               )
             : _InitialAvatar(name: displayName),
       ),
@@ -406,7 +402,9 @@ class _QuickActionsRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: items.map((item) => Expanded(child: _QuickActionItem(data: item))).toList(),
+        children: items
+            .map((item) => Expanded(child: _QuickActionItem(data: item)))
+            .toList(),
       ),
     );
   }
@@ -417,11 +415,7 @@ class _QuickActionData {
   final String label;
   final VoidCallback? onTap;
 
-  const _QuickActionData({
-    required this.icon,
-    required this.label,
-    this.onTap,
-  });
+  const _QuickActionData({required this.icon, required this.label, this.onTap});
 }
 
 class _QuickActionItem extends StatelessWidget {

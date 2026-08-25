@@ -2,28 +2,7 @@ package domain
 
 import (
 	"context"
-	"time"
 )
-
-// Profile ตรงกับตาราง profile_tb ในฐานข้อมูล Supabase
-type Profile struct {
-	ID           string    `json:"id"`
-	UserID       string    `json:"user_id"`
-	UserImageUrl string    `json:"user_image_url"`
-	Latitude     float64   `json:"latitude"`  // เก็บพิกัดละติจูด
-	Longitude    float64   `json:"longitude"` // เก็บพิกัดลองจิจูด
-	CreatedAt    time.Time `json:"created_at"`
-}
-
-// Verification ตรงกับตาราง verification_tb ในฐานข้อมูล Supabase
-type Verification struct {
-	ID          string    `json:"id"`
-	UserID      string    `json:"user_id"`
-	Provider    string    `json:"provider"`     // เช่น "ndid", "thaid"
-	ProviderRef string    `json:"provider_ref"` // รหัสอ้างอิงจากผู้ให้บริการยืนยันตัวตน
-	Status      string    `json:"status"`       // เช่น "pending", "verified", "rejected"
-	CreatedAt   time.Time `json:"created_at"`
-}
 
 // RegisterUser contains all data required to create an Auth user and an
 // optional profile image. DisplayName is stored as Auth user metadata, Phone
@@ -78,6 +57,30 @@ type UserVerifyOTPResetRequest struct {
 	OTPCode string `json:"otp_code" binding:"required,len=6,numeric"`
 }
 
+type UserProfile struct {
+	UserID       string `json:"user_id"`
+	Email        string `json:"email"`
+	DisplayName  string `json:"display_name"`
+	Username     string `json:"username"`
+	Bio          string `json:"bio"`
+	Phone        string `json:"phone"`
+	UserImageURL string `json:"user_image_url"`
+}
+
+type UpdateProfileRequest struct {
+	DisplayName *string `json:"display_name" form:"display_name" binding:"omitempty,max=150"`
+	Username    *string `json:"username" form:"username" binding:"omitempty,max=100"`
+	Bio         *string `json:"bio" form:"bio" binding:"omitempty,max=500"`
+}
+
+type UpdateContactRequest struct {
+	Phone string `json:"phone" binding:"required"`
+}
+
+type UpdateFCMTokenRequest struct {
+	FCMToken string `json:"fcm_token" binding:"required"`
+}
+
 type AuthRepository interface {
 	Login(ctx context.Context, email, password string) (*AuthTokens, error)
 	Register(ctx context.Context, user RegisterUser) (*RegisterResult, error)
@@ -87,6 +90,10 @@ type AuthRepository interface {
 	VerifyOTP(ctx context.Context, email, otpCode string) (*AuthTokens, error)
 	IsEmailExists(ctx context.Context, email string) (bool, error)
 	Logout(ctx context.Context, userToken string) error
+	GetProfile(ctx context.Context, userID string) (*UserProfile, error)
+	UpdateProfile(ctx context.Context, userID string, req UpdateProfileRequest, img *ProfileImage) (*UserProfile, error)
+	UpdateContact(ctx context.Context, userID string, phone string) error
+	UpdateFCMToken(ctx context.Context, userID string, fcmToken string) error
 }
 
 type TokenVerifier interface {
@@ -98,10 +105,4 @@ type TokenVerifier interface {
 type AuthGateway interface {
 	AuthRepository
 	TokenVerifier
-}
-
-type UserRepository interface {
-	UpdateProfile(ctx context.Context, profile *Profile) error
-	GetProfileByUserID(ctx context.Context, userID string) (*Profile, error)
-	CreateKYCVerification(ctx context.Context, v *Verification) error
 }

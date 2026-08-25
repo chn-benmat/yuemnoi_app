@@ -45,8 +45,9 @@ func main() {
 	aiService := service.NewAIService(aiServiceURL)
 	itemRepo := supabase.NewSupabaseItemRepository(supabaseClient)
 	authGateway := supabase.NewSupabaseUserRepository(supabaseClient, sbKey)
+	contactRepository := supabase.NewSupabaseConversationContactRepository(supabaseClient)
 
-	router := ports.SetupRouter(itemRepo, authGateway, aiService)
+	router := ports.SetupRouter(itemRepo, authGateway, contactRepository, aiService)
 
 	// กำหนดค่า HTTP Server
 	srv := &http.Server{

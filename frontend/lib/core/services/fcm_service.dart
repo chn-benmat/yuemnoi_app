@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../network/api_client.dart';
 import '../network/supabase_client.dart';
 import 'chat_notification_service.dart';
 
@@ -22,17 +23,21 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     }
   } catch (_) {}
 
-  debugPrint('FCM Background Message Received: ${message.messageId} / Data: ${message.data}');
+  debugPrint(
+    'FCM Background Message Received: ${message.messageId} / Data: ${message.data}',
+  );
 
   final data = message.data;
   final type = data['type']?.toString() ?? '';
 
   if (type == 'chat_message' || type == 'chat') {
-    final title = data['sender_name']?.toString() ??
+    final title =
+        data['sender_name']?.toString() ??
         message.notification?.title ??
         data['title']?.toString() ??
         'ข้อความใหม่';
-    final rawBody = data['message']?.toString() ??
+    final rawBody =
+        data['message']?.toString() ??
         message.notification?.body ??
         data['body']?.toString() ??
         'ส่งข้อความถึงคุณ';
@@ -41,7 +46,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     final messageId = data['message_id']?.toString() ?? message.messageId ?? '';
 
     await ChatNotificationService.instance.showSystemNotification(
-      id: conversationId.isNotEmpty ? conversationId.hashCode : message.hashCode,
+      id: conversationId.isNotEmpty
+          ? conversationId.hashCode
+          : message.hashCode,
       title: title,
       body: body,
       payload: conversationId,
@@ -70,8 +77,6 @@ String _extractCleanNotificationText(String raw) {
   }
   return trimmed;
 }
-
-
 
 class FcmService {
   FcmService._();
@@ -142,7 +147,7 @@ class FcmService {
       }
 
       _isInitialized = true;
-      debugPrint('FCM Initialized successfully. Token: $_cachedToken');
+      debugPrint('FCM Initialized successfully.');
     } catch (e) {
       debugPrint('FCM Initialization error: $e');
     }
@@ -171,22 +176,37 @@ class FcmService {
     } catch (_) {}
   }
 
-  Future<void> _saveTokenToSupabaseWithUserId(String token, String userId) async {
+  Future<void> _saveTokenToSupabaseWithUserId(
+    String token,
+    String userId,
+  ) async {
     try {
       if (!SupabaseConfig.isInitialized) return;
+
+      final session = SupabaseConfig.client.auth.currentSession;
+      final accessToken = session?.accessToken;
+      if (accessToken != null) {
+        final apiClient = DioApiClient();
+        await apiClient.post(
+          '/api/v1/user/fcm-token',
+          headers: {'Authorization': 'Bearer $accessToken'},
+          data: {'fcm_token': token},
+        );
+        return;
+      }
+
       await SupabaseConfig.client
           .from('profile_tb')
           .update({'fcm_token': token})
           .eq('user_id', userId);
     } catch (e) {
-      debugPrint('Save FCM token to Supabase error: $e');
+      debugPrint('Save FCM token error: $e');
     }
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
     debugPrint('FCM Foreground Message: ${message.data}');
   }
-
 
   void _handleMessageOpenedApp(RemoteMessage message) {
     final data = message.data;
@@ -195,9 +215,10 @@ class FcmService {
     if (type == 'chat' || type == 'chat_message') {
       final conversationId = data['conversation_id']?.toString() ?? '';
       if (conversationId.isNotEmpty) {
-        ChatNotificationService.instance.onNotificationTapped?.call(conversationId);
+        ChatNotificationService.instance.onNotificationTapped?.call(
+          conversationId,
+        );
       }
     }
   }
 }
-

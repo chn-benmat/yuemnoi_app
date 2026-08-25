@@ -59,33 +59,3 @@ class OllamaClient:
         response.raise_for_status()
         result = response.json()
         return result.get("message", {}).get("content", "").strip()
-
-    async def chat_with_tools(
-        self,
-        *,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]],
-        max_tokens: int,
-        timeout: float,
-    ) -> dict[str, Any]:
-        response = await self.client.post(
-            self.api_url,
-            json={
-                "model": settings.MODEL_NAME,
-                "messages": messages,
-                "tools": tools,
-                "stream": False,
-                "think": False,
-                "keep_alive": settings.OLLAMA_KEEP_ALIVE,
-                "options": {
-                    "temperature": 0.0,
-                    "num_ctx": settings.OLLAMA_CONTEXT_LENGTH,
-                    "num_predict": max_tokens,
-                    "seed": 0,
-                },
-            },
-            timeout=timeout,
-        )
-        response.raise_for_status()
-        result = response.json()
-        return result.get("message", {})

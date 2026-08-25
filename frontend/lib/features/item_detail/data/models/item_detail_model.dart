@@ -39,6 +39,35 @@ abstract final class ItemDetailModel {
     );
   }
 
+  static ItemDetail fromApiResponse({
+    required Map<String, dynamic> item,
+    required String? currentUserId,
+  }) {
+    final id = _requiredInt(item['id'], 'item id');
+    final ownerId = _string(item['user_id']);
+    if (ownerId.isEmpty) throw const FormatException('Invalid item owner');
+
+    final owner = ItemOwner(
+      userId: ownerId,
+      displayName: _fallbackString(item['owner_name'], 'ผู้ใช้งาน Yuemnoi'),
+      imageUrl: _string(item['owner_avatar_url']),
+    );
+
+    return ItemDetail(
+      id: id,
+      owner: owner,
+      name: _fallbackString(item['item_name'], 'อุปกรณ์ให้เช่า'),
+      imageUrls: _imageUrls(item['item_image_url']),
+      description: _string(item['description']),
+      category: _fallbackString(item['category'], 'อุปกรณ์'),
+      price: _optionalInt(item['price']) ?? 0,
+      status: _string(item['status']),
+      rentalType: _fallbackString(item['type'], 'รายวัน'),
+      reviews: const [],
+      isOwner: currentUserId != null && currentUserId == ownerId,
+    );
+  }
+
   static ItemOwner _owner(String userId, Map<String, dynamic>? profile) {
     final email = _string(profile?['email']);
     final emailName = email.contains('@') ? email.split('@').first : email;

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/network/api_client.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../domain/entities/item_detail.dart';
 import '../models/item_detail_model.dart';
@@ -13,13 +14,34 @@ class ItemDetailRemoteException implements Exception {
 }
 
 class ItemDetailRemoteDataSource {
-  ItemDetailRemoteDataSource({SupabaseClient? client})
-    : _client = client ?? SupabaseConfig.client;
+  ItemDetailRemoteDataSource({
+    SupabaseClient? client,
+    ApiClient? apiClient,
+  })  : _client = client ?? SupabaseConfig.client,
+        _apiClient = apiClient ?? DioApiClient();
 
   static const _bucket = 'item_bk';
   final SupabaseClient _client;
+  final ApiClient _apiClient;
 
   Future<ItemDetail> fetchById(int itemId) async {
+    try {
+      final response = await _apiClient.get('/api/v1/items/$itemId');
+      if (response.statusCode == 200 && response.data is Map) {
+        return ItemDetailModel.fromApiResponse(
+          item: Map<String, dynamic>.from(response.data as Map),
+          currentUserId: _client.auth.currentUser?.id,
+        );
+      }
+      if (response.statusCode == 404) {
+        throw const ItemDetailRemoteException('ไม่พบอุปกรณ์นี้');
+      }
+    } on ItemDetailRemoteException {
+      rethrow;
+    } catch (_) {
+      // Fallback to direct supabase query if API is not reachable
+    }
+
     try {
       final item = await _client
           .from('item_tb')
@@ -78,7 +100,8 @@ class ItemDetailRemoteDataSource {
 
   Future<ItemDetail> update(ItemEditDraft draft) async {
     final user = _client.auth.currentUser;
-    if (user == null) {
+    final session = _client.auth.currentSession;
+    if (user == null || session == null) {
       throw const ItemDetailRemoteException('กรุณาเข้าสู่ระบบก่อนแก้ไขอุปกรณ์');
     }
 
@@ -108,22 +131,29 @@ class ItemDetailRemoteDataSource {
         );
       }
 
-      await _client
-          .from('item_tb')
-          .update({
-            'item_name': draft.name.trim(),
-            'category': draft.category.trim(),
-            'description': draft.description.trim(),
-            'type': draft.rentalType,
-            'price': draft.price,
-            'item_image_url': imageUrls,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', draft.itemId)
-          .eq('user_id', user.id)
-          .select('id')
-          .single();
-      return await fetchById(draft.itemId);
+      final response = await _apiClient.put(
+        '/api/v1/items/${draft.itemId}',
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
+        data: {
+          'item_name': draft.name.trim(),
+          'category': draft.category.trim(),
+          'description': draft.description.trim(),
+          'type': draft.rentalType,
+          'price': draft.price,
+          'item_image_url': imageUrls,
+        },
+      );
+
+      if (response.statusCode != 200) {
+        final errorMsg = response.data is Map
+            ? (response.data as Map)['error']?.toString()
+            : null;
+        throw ItemDetailRemoteException(
+          errorMsg ?? 'แก้ไขอุปกรณ์ไม่สำเร็จ กรุณาลองใหม่',
+        );
+      }
+
+      return fetchById(draft.itemId);
     } on ItemDetailRemoteException {
       await _removeNewUploads(uploadedPaths);
       rethrow;
@@ -132,9 +162,6 @@ class ItemDetailRemoteDataSource {
       throw ItemDetailRemoteException(
         error.message.isEmpty ? 'อัปโหลดรูปภาพไม่สำเร็จ' : error.message,
       );
-    } on PostgrestException catch (error) {
-      await _removeNewUploads(uploadedPaths);
-      throw ItemDetailRemoteException(_databaseMessage(error));
     } catch (_) {
       await _removeNewUploads(uploadedPaths);
       throw const ItemDetailRemoteException(

@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -19,6 +22,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _usernameCtrl;
   late final TextEditingController _bioCtrl;
   String? _avatarUrl;
+  Uint8List? _pickedImageBytes;
+  String? _pickedImageName;
   bool _isSaving = false;
 
   @override
@@ -40,6 +45,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
     _avatarUrl = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
     if (_avatarUrl!.isEmpty) _avatarUrl = null;
+
+    _loadProfileFromBackend();
+  }
+
+  Future<void> _loadProfileFromBackend() async {
+    try {
+      final session = SupabaseConfig.isInitialized
+          ? SupabaseConfig.client.auth.currentSession
+          : null;
+      if (session == null) return;
+
+      final apiClient = DioApiClient();
+      final response = await apiClient.get(
+        '/api/v1/user/profile',
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
+      );
+
+      if (response.statusCode == 200 && response.data is Map && mounted) {
+        final data = response.data as Map;
+        setState(() {
+          if (data['display_name'] != null && data['display_name'].toString().isNotEmpty) {
+            _displayNameCtrl.text = data['display_name'].toString();
+          }
+          if (data['username'] != null && data['username'].toString().isNotEmpty) {
+            _usernameCtrl.text = data['username'].toString();
+          }
+          if (data['bio'] != null && data['bio'].toString().isNotEmpty) {
+            _bioCtrl.text = data['bio'].toString();
+          }
+          if (data['user_image_url'] != null && data['user_image_url'].toString().isNotEmpty) {
+            _avatarUrl = data['user_image_url'].toString();
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -56,29 +96,97 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!hasPermission || !mounted) return;
 
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked != null) {
-      // TODO: upload image and update _avatarUrl
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _pickedImageBytes = bytes;
+        _pickedImageName = picked.name;
+      });
     }
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    setState(() => _isSaving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text(
-          'บันทึกข้อมูลเรียบร้อย',
-          style: TextStyle(fontFamily: AppTextStyles.fontFamily),
+
+    try {
+      final session = SupabaseConfig.isInitialized
+          ? SupabaseConfig.client.auth.currentSession
+          : null;
+      final accessToken = session?.accessToken;
+      if (accessToken == null) {
+        throw Exception('กรุณาเข้าสู่ระบบก่อน');
+      }
+
+      final apiClient = DioApiClient();
+      final headers = {'Authorization': 'Bearer $accessToken'};
+
+      ApiResponse response;
+      if (_pickedImageBytes != null && _pickedImageName != null) {
+        response = await apiClient.putMultipart(
+          '/api/v1/user/profile',
+          headers: headers,
+          fields: {
+            'display_name': _displayNameCtrl.text.trim(),
+            'username': _usernameCtrl.text.trim(),
+            'bio': _bioCtrl.text.trim(),
+          },
+          files: [
+            ApiUpload(
+              fieldName: 'image',
+              bytes: _pickedImageBytes!,
+              fileName: _pickedImageName!,
+            ),
+          ],
+        );
+      } else {
+        response = await apiClient.put(
+          '/api/v1/user/profile',
+          headers: headers,
+          data: {
+            'display_name': _displayNameCtrl.text.trim(),
+            'username': _usernameCtrl.text.trim(),
+            'bio': _bioCtrl.text.trim(),
+          },
+        );
+      }
+
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'บันทึกข้อมูลเรียบร้อย',
+              style: TextStyle(fontFamily: AppTextStyles.fontFamily),
+            ),
+            backgroundColor: AppColors.primaryColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        Navigator.of(context).pop(true);
+        return;
+      } else {
+        final errorMsg = response.data is Map ? response.data['error']?.toString() : null;
+        throw Exception(errorMsg ?? 'บันทึกข้อมูลไม่สำเร็จ');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+            style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        backgroundColor: AppColors.primaryColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+      );
+    }
   }
 
   @override
@@ -125,16 +233,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                       padding: const EdgeInsets.all(3),
                       child: ClipOval(
-                        child: _avatarUrl != null
-                            ? Image.network(_avatarUrl!, fit: BoxFit.cover)
-                            : Container(
-                                color: const Color(0xFFF3E8FF),
-                                child: const Icon(
-                                  Icons.person_rounded,
-                                  size: 48,
-                                  color: AppColors.primaryColor,
-                                ),
-                              ),
+                        child: _pickedImageBytes != null
+                            ? Image.memory(_pickedImageBytes!, fit: BoxFit.cover)
+                            : _avatarUrl != null
+                                ? Image.network(_avatarUrl!, fit: BoxFit.cover)
+                                : Container(
+                                    color: const Color(0xFFF3E8FF),
+                                    child: const Icon(
+                                      Icons.person_rounded,
+                                      size: 48,
+                                      color: AppColors.primaryColor,
+                                    ),
+                                  ),
                       ),
                     ),
                     GestureDetector(

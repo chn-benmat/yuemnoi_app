@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/services/phone_call_service.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/active_conversation_tracker.dart';
 import '../../../../core/services/app_permission_service.dart';
@@ -18,6 +19,7 @@ import '../../data/repositories/chat_repository_impl.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/usecases/fetch_messages_usecase.dart';
+import '../../domain/usecases/get_conversation_contact_phone_usecase.dart';
 import '../../domain/usecases/mark_messages_as_read_usecase.dart';
 import '../../domain/usecases/send_chat_message_usecase.dart';
 import '../../domain/usecases/stream_messages_usecase.dart';
@@ -47,23 +49,31 @@ class ChatDetailScreen extends StatelessWidget {
     super.key,
     required this.conversation,
     this.chatDetailBloc,
+    this.getContactPhone,
+    this.phoneCallService = const UrlPhoneCallService(),
   });
 
   final ChatConversation conversation;
   final ChatDetailBloc? chatDetailBloc;
+  final GetConversationContactPhoneUseCase? getContactPhone;
+  final PhoneCallService phoneCallService;
 
   @override
   Widget build(BuildContext context) {
-    if (chatDetailBloc != null) {
-      return BlocProvider.value(
-        value: chatDetailBloc!,
-        child: _ChatDetailView(conversation: conversation),
-      );
-    }
-
     final repository = ChatRepositoryImpl(
       remoteDataSource: ChatRemoteDataSource(),
     );
+    final contactPhoneUseCase =
+        getContactPhone ?? GetConversationContactPhoneUseCase(repository);
+    final chatDetailView = _ChatDetailView(
+      conversation: conversation,
+      getContactPhone: contactPhoneUseCase,
+      phoneCallService: phoneCallService,
+    );
+
+    if (chatDetailBloc != null) {
+      return BlocProvider.value(value: chatDetailBloc!, child: chatDetailView);
+    }
 
     return BlocProvider(
       create: (context) => ChatDetailBloc(
@@ -74,15 +84,21 @@ class ChatDetailScreen extends StatelessWidget {
         uploadChatImage: UploadChatImageUseCase(repository),
         markMessagesAsRead: MarkMessagesAsReadUseCase(repository),
       ),
-      child: _ChatDetailView(conversation: conversation),
+      child: chatDetailView,
     );
   }
 }
 
 class _ChatDetailView extends StatefulWidget {
-  const _ChatDetailView({required this.conversation});
+  const _ChatDetailView({
+    required this.conversation,
+    required this.getContactPhone,
+    required this.phoneCallService,
+  });
 
   final ChatConversation conversation;
+  final GetConversationContactPhoneUseCase getContactPhone;
+  final PhoneCallService phoneCallService;
 
   @override
   State<_ChatDetailView> createState() => _ChatDetailViewState();
@@ -100,6 +116,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   Timer? _highlightTimer;
   String? _highlightedMessageId;
   bool _showScrollToBottom = false;
+  bool _isStartingPhoneCall = false;
   final _messageKeys = <String, GlobalKey>{};
 
   GlobalKey _getKeyForMessage(String id) =>
@@ -170,6 +187,33 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
         isTyping: false,
       );
     }
+  }
+
+  Future<void> _startPhoneCall() async {
+    if (_isStartingPhoneCall) return;
+    setState(() => _isStartingPhoneCall = true);
+
+    try {
+      final phone = await widget.getContactPhone(_conversation.id);
+      final launched = await widget.phoneCallService.call(phone);
+      if (!launched) {
+        throw const ChatRemoteException('ไม่สามารถเปิดแอปโทรศัพท์ได้');
+      }
+    } on ChatRemoteException catch (error) {
+      if (!mounted) return;
+      _showPhoneCallError(error.message);
+    } catch (_) {
+      if (!mounted) return;
+      _showPhoneCallError('ไม่สามารถโทรหาผู้ใช้นี้ได้ กรุณาลองใหม่');
+    } finally {
+      if (mounted) setState(() => _isStartingPhoneCall = false);
+    }
+  }
+
+  void _showPhoneCallError(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _handleReply(ChatMessage message) {
@@ -623,7 +667,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       backgroundColor: const Color(0xFFF5F6F7),
       body: Column(
         children: [
-          ChatDetailHeader(conversation: _conversation),
+          ChatDetailHeader(
+            conversation: _conversation,
+            onPhoneCallPressed: _startPhoneCall,
+            isPhoneCallLoading: _isStartingPhoneCall,
+          ),
           Expanded(
             child: Stack(
               children: [
@@ -740,7 +788,6 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                 message: item.message,
                                 imageUrls: item.imageUrls,
                                 otherAvatarAsset: _conversation.avatarAsset,
-                                otherUserName: _conversation.name,
                                 showAvatar: showAvatar,
                                 deliveryStatus: deliveryStatusLabel,
                                 isRead: item.message.isRead,
@@ -769,9 +816,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                   for (final id in idsToDelete) {
                                     context.read<ChatDetailBloc>().add(
                                       ChatMessageDeleted(
-                                        conversationId: widget.conversation.id,
-                                        messageId: id,
-                                      ),
+                                         conversationId: widget.conversation.id,
+                                         messageId: id,
+                                         imageUrl: msg.imageUrl,
+                                       ),
                                     );
                                   }
                                 },
@@ -891,6 +939,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     int i = 0;
     while (i < messages.length) {
       final msg = messages[i];
+      if (msg.message.trimLeft().startsWith('📞')) {
+        i++;
+        continue;
+      }
+
       final isImageOnly =
           (msg.imageUrl != null && msg.imageUrl!.isNotEmpty) &&
           (msg.message.isEmpty ||
@@ -972,7 +1025,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     if (curr.isMine) return false;
     if (index == items.length - 1) return true;
     final next = items[index + 1].message;
-    if (next.isMine || next.message.startsWith('📞')) return true;
+    if (next.isMine) return true;
     if (_shouldShowTimeDivider(items, index + 1)) return true;
     return false;
   }

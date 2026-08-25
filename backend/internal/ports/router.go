@@ -10,8 +10,8 @@ import (
 func SetupRouter(
 	itemRepo domain.ItemRepository,
 	authGateway domain.AuthGateway,
+	contactRepository domain.ConversationContactRepository,
 	aiService domain.AIService,
-	supabaseClient ...interface{},
 ) *gin.Engine {
 
 	// ใช้ Logger และ Recovery Middleware (ป้องกันเซิร์ฟเวอร์พังเวลาเกิด Panic โค้ดเอ๋อ)
@@ -46,7 +46,8 @@ func SetupRouter(
 	rentalController := NewRentalHandler()
 	userController := NewUserHandler(authGateway)
 	aiHandler := NewAIHandler(aiService)
-	pushController := NewPushHandler(nil)
+	pushController := NewPushHandler()
+	chatContactController := NewChatContactHandler(contactRepository, authGateway)
 
 	// จัดการกลุ่มเส้นทาง API
 	v1 := router.Group("/api/v1")
@@ -68,6 +69,19 @@ func SetupRouter(
 			user.POST("/verify-otp", userController.VerifyResetOTP)
 			// POST /api/v1/auth/logout
 			user.POST("/logout", userController.Logout)
+		}
+
+		// จัดการโปรไฟล์และข้อมูลผู้ใช้ (User Profile & Settings)
+		profile := v1.Group("/user")
+		{
+			// GET /api/v1/user/profile
+			profile.GET("/profile", userController.GetProfile)
+			// PUT /api/v1/user/profile
+			profile.PUT("/profile", userController.UpdateProfile)
+			// PUT /api/v1/user/contact
+			profile.PUT("/contact", userController.UpdateContact)
+			// POST /api/v1/user/fcm-token
+			profile.POST("/fcm-token", userController.UpdateFCMToken)
 		}
 		// ทุกอย่างเกี่ยวกับ Items ปล่อยเช่า
 		items := v1.Group("/items")
@@ -102,9 +116,13 @@ func SetupRouter(
 		{
 			push.POST("/chat", pushController.SendChatPush)
 		}
-	}
 
+		chat := v1.Group("/chat")
+		{
+			// POST /api/v1/chat/contact
+			chat.POST("/contact", chatContactController.GetConversationContact)
+		}
+	}
 
 	return router
 }
-
