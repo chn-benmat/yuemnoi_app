@@ -656,6 +656,7 @@ class ChatRemoteDataSource {
   Future<void> editMessage({
     required String messageId,
     required String newMessage,
+    String? conversationId,
   }) async {
     final client = _supabaseClient;
     try {
@@ -664,6 +665,17 @@ class ChatRemoteDataSource {
           .from('chat_message_tb')
           .update({'message': newMessage})
           .eq('id', parsedId);
+
+      if (conversationId != null && conversationId.isNotEmpty) {
+        final nowIso = DateTime.now().toUtc().toIso8601String();
+        try {
+          await client.from('conversation_tb').update({
+            'last_message': newMessage.trim(),
+            'last_message_at': nowIso,
+            'updated_at': nowIso,
+          }).eq('id', conversationId);
+        } catch (_) {}
+      }
     } on PostgrestException catch (e) {
       throw ChatRemoteException('แก้ไขข้อความไม่สำเร็จ: ${e.message}');
     } catch (_) {

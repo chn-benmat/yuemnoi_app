@@ -13,16 +13,19 @@ class BookingScreen extends StatelessWidget {
     super.key,
     this.initialData,
     this.itemId,
+    this.isEditMode = false,
   });
 
   final BookingRequestData? initialData;
   final int? itemId;
+  final bool isEditMode;
 
   @override
   Widget build(BuildContext context) {
     return BookingRequestPage(
       initialData: initialData,
       itemId: itemId,
+      isEditMode: isEditMode,
     );
   }
 }
