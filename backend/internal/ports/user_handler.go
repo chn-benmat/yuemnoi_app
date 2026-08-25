@@ -14,17 +14,34 @@ import (
 )
 
 type UserHandler struct {
-	repo domain.AuthRepository
+	repo     domain.AuthRepository
+	verifier domain.TokenVerifier
 }
 
 const maxProfileImageSize = 5 << 20
 
 var phonePattern = regexp.MustCompile(`^0[0-9]{9}$`)
 
-func NewUserHandler(r domain.AuthRepository) *UserHandler {
+func NewUserHandler(gateway domain.AuthGateway) *UserHandler {
 	return &UserHandler{
-		repo: r,
+		repo:     gateway,
+		verifier: gateway,
 	}
+}
+
+func (h *UserHandler) authenticatedUserID(c *gin.Context) (string, bool) {
+	token, ok := extractToken(c)
+	if !ok {
+		return "", false
+	}
+
+	userID, err := h.verifier.UserIDFromToken(c.Request.Context(), token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Access Token ไม่ถูกต้องหรือหมดอายุ"})
+		return "", false
+	}
+
+	return userID, true
 }
 
 // สำหรับสกัดเอาเฉพาะ JWT Token ล้วนๆ
@@ -320,5 +337,115 @@ func (h *UserHandler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  http.StatusOK,
 		"message": "ออกจากระบบสำเร็จ",
+	})
+}
+
+// [GET] /api/v1/user/profile - ดึงข้อมูลโปรไฟล์ของผู้ใช้ที่ล็อกอินอยู่
+func (h *UserHandler) GetProfile(c *gin.Context) {
+	userID, ok := h.authenticatedUserID(c)
+	if !ok {
+		return
+	}
+
+	profile, err := h.repo.GetProfile(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถโหลดข้อมูลโปรไฟล์ได้: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, profile)
+}
+
+// [PUT] /api/v1/user/profile - อัปเดตข้อมูลโปรไฟล์ (ชื่อ, ไบโอ, รูปภาพ)
+func (h *UserHandler) UpdateProfile(c *gin.Context) {
+	userID, ok := h.authenticatedUserID(c)
+	if !ok {
+		return
+	}
+
+	var req domain.UpdateProfileRequest
+	if strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
+		if err := c.ShouldBind(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลโปรไฟล์ไม่ถูกต้อง: " + err.Error()})
+			return
+		}
+	} else {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลโปรไฟล์ไม่ถูกต้อง: " + err.Error()})
+			return
+		}
+	}
+
+	profileImage, err := profileImageFromRequest(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	profile, err := h.repo.UpdateProfile(c.Request.Context(), userID, req, profileImage)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถแก้ไขโปรไฟล์ได้: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  http.StatusOK,
+		"message": "บันทึกข้อมูลโปรไฟล์เรียบร้อย",
+		"profile": profile,
+	})
+}
+
+// [PUT] /api/v1/user/contact - อัปเดตเบอร์โทรศัพท์ติดต่อ
+func (h *UserHandler) UpdateContact(c *gin.Context) {
+	userID, ok := h.authenticatedUserID(c)
+	if !ok {
+		return
+	}
+
+	var req domain.UpdateContactRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเบอร์โทรศัพท์"})
+		return
+	}
+
+	phone, valid := normalizePhone(req.Phone)
+	if !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0"})
+		return
+	}
+
+	if err := h.repo.UpdateContact(c.Request.Context(), userID, phone); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกเบอร์โทรศัพท์ได้: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  http.StatusOK,
+		"message": "บันทึกข้อมูลติดต่อเรียบร้อย",
+		"phone":   phone,
+	})
+}
+
+// [POST] /api/v1/user/fcm-token - อัปเดต FCM Push Token
+func (h *UserHandler) UpdateFCMToken(c *gin.Context) {
+	userID, ok := h.authenticatedUserID(c)
+	if !ok {
+		return
+	}
+
+	var req domain.UpdateFCMTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุ fcm_token"})
+		return
+	}
+
+	if err := h.repo.UpdateFCMToken(c.Request.Context(), userID, req.FCMToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึก FCM Token ได้: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  http.StatusOK,
+		"message": "บันทึก FCM Token เรียบร้อย",
 	})
 }

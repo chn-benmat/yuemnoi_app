@@ -1,8 +1,12 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/navigation/app_routes.dart';
+import 'core/navigation/item_deep_link.dart';
 import 'core/services/app_orientation_service.dart';
 import 'core/services/chat_notification_service.dart';
 import 'core/theme/app_theme.dart';
@@ -25,12 +29,20 @@ class YuemnoiApp extends StatefulWidget {
 
 class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   late final GoRouter _router;
+  StreamSubscription<Uri>? _deepLinkSubscription;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _router = AppRoutes.createRouter(initialLocation: widget.initialRoute);
+    _deepLinkSubscription = AppLinks().uriLinkStream.listen(
+      _handleDeepLink,
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('Deep link warning: $error');
+      },
+    );
+    unawaited(_handleInitialDeepLink());
 
     ChatNotificationService.instance.onNotificationTapped =
         (conversationId) async {
@@ -63,6 +75,26 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _handleInitialDeepLink() async {
+    try {
+      final uri = await AppLinks().getInitialLink();
+      if (uri == null || !mounted) return;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _handleDeepLink(uri);
+      });
+    } catch (error) {
+      debugPrint('Initial deep link warning: $error');
+    }
+  }
+
+  void _handleDeepLink(Uri uri) {
+    final itemId = ItemDeepLink.parseItemId(uri);
+    if (itemId == null) return;
+
+    _router.push('/items/$itemId');
+  }
+
   @override
   void didChangeMetrics() {
     super.didChangeMetrics();
@@ -80,6 +112,7 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_deepLinkSubscription?.cancel());
     _router.dispose();
     super.dispose();
   }
@@ -89,12 +122,11 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>(
-          create: (context) =>
-              AuthBloc(authRepository: AuthRepositoryImpl(AuthRemoteDataSource())),
+          create: (context) => AuthBloc(
+            authRepository: AuthRepositoryImpl(AuthRemoteDataSource()),
+          ),
         ),
-        BlocProvider<WalletCubit>(
-          create: (context) => WalletCubit(),
-        ),
+        BlocProvider<WalletCubit>(create: (context) => WalletCubit()),
       ],
       child: MaterialApp.router(
         title: 'Yuemnoi App',

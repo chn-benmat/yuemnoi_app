@@ -9,9 +9,16 @@ import '../bloc/chat_detail_state.dart';
 import 'chat_avatar.dart';
 
 class ChatDetailHeader extends StatelessWidget {
-  const ChatDetailHeader({super.key, required this.conversation});
+  const ChatDetailHeader({
+    super.key,
+    required this.conversation,
+    required this.onPhoneCallPressed,
+    this.isPhoneCallLoading = false,
+  });
 
   final ChatConversation conversation;
+  final VoidCallback onPhoneCallPressed;
+  final bool isPhoneCallLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -34,9 +41,11 @@ class ChatDetailHeader extends StatelessWidget {
               ),
               const SizedBox(width: 2),
               ValueListenableBuilder<Set<String>>(
-                valueListenable: UserPresenceService.instance.onlineUsersNotifier,
+                valueListenable:
+                    UserPresenceService.instance.onlineUsersNotifier,
                 builder: (context, onlineUsers, _) {
-                  final isCurrentlyOnline = conversation.isOnline ||
+                  final isCurrentlyOnline =
+                      conversation.isOnline ||
                       onlineUsers.contains(conversation.otherUserId);
                   return ChatAvatar(
                     asset: conversation.avatarAsset,
@@ -62,7 +71,8 @@ class ChatDetailHeader extends StatelessWidget {
                       ),
                     ),
                     BlocBuilder<ChatDetailBloc, ChatDetailState>(
-                      buildWhen: (p, c) => p.isOtherUserTyping != c.isOtherUserTyping,
+                      buildWhen: (p, c) =>
+                          p.isOtherUserTyping != c.isOtherUserTyping,
                       builder: (context, state) {
                         if (state.isOtherUserTyping) {
                           return const Text(
@@ -76,9 +86,11 @@ class ChatDetailHeader extends StatelessWidget {
                           );
                         }
                         return ValueListenableBuilder<Set<String>>(
-                          valueListenable: UserPresenceService.instance.onlineUsersNotifier,
+                          valueListenable:
+                              UserPresenceService.instance.onlineUsersNotifier,
                           builder: (context, onlineUsers, _) {
-                            final isCurrentlyOnline = conversation.isOnline ||
+                            final isCurrentlyOnline =
+                                conversation.isOnline ||
                                 onlineUsers.contains(conversation.otherUserId);
                             return Text(
                               isCurrentlyOnline ? 'ออนไลน์' : 'ออฟไลน์',
@@ -100,7 +112,21 @@ class ChatDetailHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 16),
+              IconButton(
+                key: const ValueKey('chat-phone-call-button'),
+                tooltip: 'โทรศัพท์',
+                onPressed: isPhoneCallLoading ? null : onPhoneCallPressed,
+                icon: isPhoneCallLoading
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.call_rounded, color: Colors.white),
+              ),
+              const SizedBox(width: 8),
             ],
           ),
         ),

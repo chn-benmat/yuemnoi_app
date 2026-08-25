@@ -110,24 +110,21 @@ class ChatStackedImageCard extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Hero(
-                        tag: primaryUrl,
-                        child: CachedNetworkImage(
-                          imageUrl: primaryUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            color: const Color(0xFFE2E8F0),
-                            child: const Center(
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.primaryColor,
-                              ),
+                      CachedNetworkImage(
+                        imageUrl: primaryUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: const Color(0xFFE2E8F0),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primaryColor,
                             ),
                           ),
-                          errorWidget: (context, url, error) => Container(
-                            color: const Color(0xFFE2E8F0),
-                            child: const Icon(Icons.broken_image_rounded, size: 40),
-                          ),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: const Color(0xFFE2E8F0),
+                          child: const Icon(Icons.broken_image_rounded, size: 40),
                         ),
                       ),
 

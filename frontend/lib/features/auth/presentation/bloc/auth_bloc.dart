@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthApiException, AuthState;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    hide AuthApiException, AuthState;
 
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
@@ -36,14 +37,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     // ติดตามการเปลี่ยนแปลงสถานะ Auth ของ Supabase
     if (SupabaseConfig.isInitialized) {
-      _authStateSubscription = SupabaseConfig.client.auth.onAuthStateChange.listen((authState) {
-        if (authState.event == AuthChangeEvent.signedIn &&
-            authState.session != null) {
-          add(AuthAuthStateChanged(authState.session!));
-        }
-      }, onError: (error) {
-        // สามารถดักจับ error เพิ่มเติมได้ตรงนี้
-      });
+      _authStateSubscription = SupabaseConfig.client.auth.onAuthStateChange
+          .listen(
+            (authState) {
+              if (authState.event == AuthChangeEvent.signedIn &&
+                  authState.session != null) {
+                add(AuthAuthStateChanged(authState.session!));
+              }
+            },
+            onError: (error) {
+              // สามารถดักจับ error เพิ่มเติมได้ตรงนี้
+            },
+          );
     }
   }
 
@@ -54,10 +59,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     _signInHandled = false;
     emit(const LoginLoading());
     try {
-      final tokens = await LoginUseCase(authRepository).execute(
-        email: event.email,
-        password: event.password,
-      );
+      final tokens = await LoginUseCase(
+        authRepository,
+      ).execute(email: event.email, password: event.password);
 
       final authResponse = await SupabaseConfig.client.auth.setSession(
         tokens.refreshToken,
@@ -83,9 +87,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized) {
-      emit(const LoginFailure(
-        message: 'ยังไม่ได้ตั้งค่า Supabase Publishable key สำหรับแอป',
-      ));
+      emit(
+        const LoginFailure(
+          message: 'ยังไม่ได้ตั้งค่า Supabase Publishable key สำหรับแอป',
+        ),
+      );
       return;
     }
 
@@ -103,14 +109,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
 
       if (!launched) {
-        emit(const LoginFailure(message: 'ไม่สามารถเปิดหน้าล็อกอิน Google ได้'));
+        emit(
+          const LoginFailure(message: 'ไม่สามารถเปิดหน้าล็อกอิน Google ได้'),
+        );
       }
     } on AuthException catch (error) {
       emit(LoginFailure(message: error.message));
     } catch (_) {
-      emit(const LoginFailure(
-        message: 'เกิดข้อผิดพลาดระหว่างเปิด Google Login กรุณาลองใหม่',
-      ));
+      emit(
+        const LoginFailure(
+          message: 'เกิดข้อผิดพลาดระหว่างเปิด Google Login กรุณาลองใหม่',
+        ),
+      );
     }
   }
 
@@ -158,10 +168,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(const VerifyOtpLoading());
     try {
-      final tokens = await VerifyOtpUseCase(authRepository).execute(
-        email: event.email,
-        otpCode: event.otpCode,
-      );
+      final tokens = await VerifyOtpUseCase(
+        authRepository,
+      ).execute(email: event.email, otpCode: event.otpCode);
       emit(VerifyOtpSuccess(tokens: tokens));
     } on AuthApiException catch (error) {
       emit(VerifyOtpFailure(message: error.message));
@@ -176,10 +185,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(const ChangePasswordLoading());
     try {
-      await ChangePasswordUseCase(authRepository).execute(
-        accessToken: event.accessToken,
-        newPassword: event.newPassword,
-      );
+      await ChangePasswordUseCase(
+        authRepository,
+      ).execute(accessToken: event.accessToken, newPassword: event.newPassword);
       emit(const ChangePasswordSuccess());
     } on AuthApiException catch (error) {
       emit(ChangePasswordFailure(message: error.message));
@@ -214,9 +222,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _syncGoogleProfileImage(String accessToken) async {
     try {
-      await SyncGoogleProfileImageUseCase(authRepository).execute(
-        accessToken: accessToken,
-      );
+      await SyncGoogleProfileImageUseCase(
+        authRepository,
+      ).execute(accessToken: accessToken);
     } catch (_) {
       // การ sync รูปเป็นงานเสริมและต้องไม่ทำให้ session ที่ล็อกอินสำเร็จล้มเหลว
     }
@@ -228,10 +236,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     return providers is List && providers.contains('google');
   }
 
-  void _onResetState(
-    AuthResetState event,
-    Emitter<AuthState> emit,
-  ) {
+  void _onResetState(AuthResetState event, Emitter<AuthState> emit) {
     _signInHandled = false;
     emit(const AuthInitial());
   }

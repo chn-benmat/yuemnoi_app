@@ -140,12 +140,16 @@ Adapter สำหรับติดต่อกับ **AI Service** (Python Fas
 | `DELETE` | `/api/v1/items/:id` | `ItemHandler.DeleteItem`          | ลบอุปกรณ์ของเจ้าของรายการ           |
 | `POST`   | `/api/v1/rentals`   | `RentalHandler.CreateRentalOrder` | สร้างใบจองเช่าอุปกรณ์               |
 | `POST`   | `/api/v1/chat-ai`   | `AIHandler.HandleChat`            | ส่งข้อความแชทไปยัง AI และรับคำตอบ   |
+| `POST`   | `/api/v1/chat/contact` | `ChatContactHandler.GetConversationContact` | ดึงเบอร์คู่สนทนาสำหรับสมาชิกในห้อง |
 
 คำสั่ง `POST`, `PUT` และ `DELETE` ของ Items ต้องส่ง Supabase access token:
 
 ```http
 Authorization: Bearer <SUPABASE_ACCESS_TOKEN>
 ```
+
+`POST /api/v1/chat/contact` ต้องส่ง access token เช่นกัน และจะคืนข้อมูลติดต่อ
+เฉพาะเมื่อผู้ใช้เป็นผู้เช่าหรือเจ้าของในห้องสนทนาที่ระบุเท่านั้น
 
 การเพิ่มอุปกรณ์ใช้ `multipart/form-data` และแนบรูปด้วยชื่อฟิลด์ `images` ได้สูงสุด 5 รูป
 (JPEG, PNG หรือ WebP รูปละไม่เกิน 5 MB):

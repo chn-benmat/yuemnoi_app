@@ -15,7 +15,7 @@ class ApiResponse {
   const ApiResponse({required this.statusCode, required this.data});
 
   final int statusCode;
-  final Map<String, dynamic> data;
+  final dynamic data;
 }
 
 class ApiUpload {
@@ -31,6 +31,12 @@ class ApiUpload {
 }
 
 abstract interface class ApiClient {
+  Future<ApiResponse> get(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    Map<String, String>? headers,
+  });
+
   Future<ApiResponse> post(
     String path, {
     Map<String, dynamic>? data,
@@ -43,6 +49,21 @@ abstract interface class ApiClient {
     List<ApiUpload> files,
     Map<String, String>? headers,
   });
+
+  Future<ApiResponse> put(
+    String path, {
+    Map<String, dynamic>? data,
+    Map<String, String>? headers,
+  });
+
+  Future<ApiResponse> putMultipart(
+    String path, {
+    required Map<String, String> fields,
+    List<ApiUpload> files,
+    Map<String, String>? headers,
+  });
+
+  Future<ApiResponse> delete(String path, {Map<String, String>? headers});
 
   void close();
 }
@@ -70,12 +91,26 @@ class DioApiClient implements ApiClient {
   final Dio _dio;
 
   @override
+  Future<ApiResponse> get(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    Map<String, String>? headers,
+  }) {
+    return _send(
+      path,
+      method: 'GET',
+      queryParameters: queryParameters,
+      headers: headers,
+    );
+  }
+
+  @override
   Future<ApiResponse> post(
     String path, {
     Map<String, dynamic>? data,
     Map<String, String>? headers,
   }) {
-    return _send(path, data: data, headers: headers);
+    return _send(path, method: 'POST', data: data, headers: headers);
   }
 
   @override
@@ -85,6 +120,36 @@ class DioApiClient implements ApiClient {
     List<ApiUpload> files = const [],
     Map<String, String>? headers,
   }) {
+    final formData = _buildFormData(fields, files);
+    return _send(path, method: 'POST', data: formData, headers: headers);
+  }
+
+  @override
+  Future<ApiResponse> put(
+    String path, {
+    Map<String, dynamic>? data,
+    Map<String, String>? headers,
+  }) {
+    return _send(path, method: 'PUT', data: data, headers: headers);
+  }
+
+  @override
+  Future<ApiResponse> putMultipart(
+    String path, {
+    required Map<String, String> fields,
+    List<ApiUpload> files = const [],
+    Map<String, String>? headers,
+  }) {
+    final formData = _buildFormData(fields, files);
+    return _send(path, method: 'PUT', data: formData, headers: headers);
+  }
+
+  @override
+  Future<ApiResponse> delete(String path, {Map<String, String>? headers}) {
+    return _send(path, method: 'DELETE', headers: headers);
+  }
+
+  FormData _buildFormData(Map<String, String> fields, List<ApiUpload> files) {
     final formData = FormData.fromMap(fields);
     for (final file in files) {
       formData.files.add(
@@ -94,20 +159,22 @@ class DioApiClient implements ApiClient {
         ),
       );
     }
-
-    return _send(path, data: formData, headers: headers);
+    return formData;
   }
 
   Future<ApiResponse> _send(
     String path, {
+    String method = 'POST',
     Object? data,
+    Map<String, dynamic>? queryParameters,
     Map<String, String>? headers,
   }) async {
     try {
-      final response = await _dio.post<Object?>(
+      final response = await _dio.request<Object?>(
         path,
         data: data,
-        options: headers == null ? null : Options(headers: headers),
+        queryParameters: queryParameters,
+        options: Options(method: method, headers: headers),
       );
 
       return ApiResponse(
@@ -121,7 +188,7 @@ class DioApiClient implements ApiClient {
     }
   }
 
-  Map<String, dynamic> _decodeResponse(Object? responseData) {
+  dynamic _decodeResponse(Object? responseData) {
     if (responseData == null || responseData == '') {
       return const {};
     }
@@ -129,11 +196,7 @@ class DioApiClient implements ApiClient {
     final decoded = responseData is String
         ? jsonDecode(responseData)
         : responseData;
-    if (decoded is Map) {
-      return decoded.map((key, value) => MapEntry(key.toString(), value));
-    }
-
-    throw const FormatException('Response body must be a JSON object');
+    return decoded;
   }
 
   ApiClientErrorType _errorType(DioException error) {

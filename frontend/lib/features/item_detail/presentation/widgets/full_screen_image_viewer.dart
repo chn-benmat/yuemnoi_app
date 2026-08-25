@@ -1,7 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/colors.dart';
 import '../../../../core/services/media_download_service.dart';
 
 class FullScreenImageViewer extends StatefulWidget {
@@ -82,130 +81,200 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
   @override
   Widget build(BuildContext context) {
     final urls = widget.imageUrls;
+    final mediaQuery = MediaQuery.of(context);
+    final topPadding = mediaQuery.padding.top + 56.0;
+    final bottomPadding = mediaQuery.padding.bottom + 24.0;
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (urls.isEmpty)
-            const Center(
-              child: Icon(
-                Icons.image_not_supported_outlined,
-                color: Colors.white54,
-                size: 64,
-              ),
-            )
-          else
-            PageView.builder(
-              controller: _pageController,
-              itemCount: urls.length,
-              onPageChanged: (index) {
-                setState(() => _currentIndex = index);
-                // Reset zoom on other pages
-                for (final entry in _transformControllers.entries) {
-                  if (entry.key != index) {
-                    entry.value.value = Matrix4.identity();
+      backgroundColor: const Color(0xFF7A09A3),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF8B12BA),
+              Color(0xFF6E0099),
+              Color(0xFF4C006E),
+            ],
+          ),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (urls.isEmpty)
+              const Center(
+                child: Icon(
+                  Icons.image_not_supported_outlined,
+                  color: Colors.white54,
+                  size: 64,
+                ),
+              )
+            else
+              PageView.builder(
+                controller: _pageController,
+                itemCount: urls.length,
+                onPageChanged: (index) {
+                  setState(() => _currentIndex = index);
+                  // Reset zoom on other pages
+                  for (final entry in _transformControllers.entries) {
+                    if (entry.key != index) {
+                      entry.value.value = Matrix4.identity();
+                    }
                   }
-                }
-              },
-              itemBuilder: (context, index) {
-                final controller = _getController(index);
-                return GestureDetector(
-                  onDoubleTap: () => _handleDoubleTap(index),
-                  child: Center(
-                    child: InteractiveViewer(
-                      transformationController: controller,
-                      minScale: 0.8,
-                      maxScale: 4.0,
-                      child: CachedNetworkImage(
-                        imageUrl: urls[index],
-                        fit: BoxFit.contain,
-                        placeholder: (context, url) => const Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.primaryColor,
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => const Center(
-                          child: Icon(
-                            Icons.broken_image_outlined,
-                            color: Colors.white54,
-                            size: 64,
-                          ),
-                        ),
+                },
+                itemBuilder: (context, index) {
+                  final controller = _getController(index);
+                  return GestureDetector(
+                    onDoubleTap: () => _handleDoubleTap(index),
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        top: topPadding,
+                        bottom: bottomPadding,
+                        left: 16,
+                        right: 16,
                       ),
-                    ),
-                  ),
-                );
-              },
-            ),
-
-          // Top action bar
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Close button
-                    IconButton(
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: AppColors.primaryColor,
-                        size: 28,
-                      ),
-                      tooltip: 'ปิด',
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-
-                    // Counter badge if multiple
-                    if (urls.length > 1)
-                      Text(
-                        '${_currentIndex + 1}/${urls.length}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-
-                    // Download button
-                    IconButton(
-                      icon: const Icon(
-                        Icons.download_rounded,
-                        color: AppColors.primaryColor,
-                        size: 28,
-                      ),
-                      tooltip: 'บันทึกรูปภาพ',
-                      onPressed: () async {
-                        if (urls.isEmpty) return;
-                        final currentUrl = urls[_currentIndex];
-                        final success = await MediaDownloadService.instance
-                            .saveImageFromUrl(currentUrl);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                success
-                                    ? 'บันทึกรูปภาพลงในแกลเลอรีเรียบร้อยแล้ว'
-                                    : 'ไม่สามารถบันทึกรูปภาพได้ กรุณาลองใหม่',
-                              ),
-                              duration: const Duration(seconds: 2),
+                      child: Center(
+                        child: InteractiveViewer(
+                          transformationController: controller,
+                          minScale: 0.8,
+                          maxScale: 4.0,
+                          clipBehavior: Clip.none,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.35),
+                                  blurRadius: 20,
+                                  spreadRadius: 2,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
                             ),
-                          );
-                        }
-                      },
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(18),
+                              child: CachedNetworkImage(
+                                imageUrl: urls[index],
+                                fit: BoxFit.contain,
+                                placeholder: (context, url) => const Center(
+                                  child: SizedBox(
+                                    width: 36,
+                                    height: 36,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 3,
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) =>
+                                    const Center(
+                                  child: Icon(
+                                    Icons.broken_image_outlined,
+                                    color: Colors.white54,
+                                    size: 64,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ],
+                  );
+                },
+              ),
+
+            // Top action bar
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Close button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                          tooltip: 'ปิด',
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ),
+
+                      // Counter badge if multiple
+                      if (urls.length > 1)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${_currentIndex + 1}/${urls.length}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+
+                      // Download button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.download_rounded,
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                          tooltip: 'บันทึกรูปภาพ',
+                          onPressed: () async {
+                            if (urls.isEmpty) return;
+                            final currentUrl = urls[_currentIndex];
+                            final success = await MediaDownloadService.instance
+                                .saveImageFromUrl(currentUrl);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    success
+                                        ? 'บันทึกรูปภาพลงในแกลเลอรีเรียบร้อยแล้ว'
+                                        : 'ไม่สามารถบันทึกรูปภาพได้ กรุณาลองใหม่',
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

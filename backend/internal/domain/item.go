@@ -13,17 +13,19 @@ var (
 
 // Item ตรงกับตาราง item_tb ในฐานข้อมูล Supabase
 type Item struct {
-	ID           int64     `json:"id"`
-	UserID       string    `json:"user_id"`
-	ItemName     string    `json:"item_name"`
-	ItemImageURL []string  `json:"item_image_url"`
-	Description  string    `json:"description"`
-	Category     string    `json:"category"`
-	Price        int       `json:"price"`
-	Status       string    `json:"status"` // เช่น "pending", "verified", "rejected"
-	Type         string    `json:"type"`   // เช่น "ปล่อยเช่า", "ไม่ปล่อยเช่า"
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID             int64     `json:"id"`
+	UserID         string    `json:"user_id"`
+	ItemName       string    `json:"item_name"`
+	ItemImageURL   []string  `json:"item_image_url"`
+	Description    string    `json:"description"`
+	Category       string    `json:"category"`
+	Price          int       `json:"price"`
+	Status         string    `json:"status"` // เช่น "pending", "verified", "rejected"
+	Type           string    `json:"type"`   // เช่น "รายวัน", "รายชั่วโมง"
+	OwnerName      string    `json:"owner_name,omitempty"`
+	OwnerAvatarURL string    `json:"owner_avatar_url,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // ItemImage คือไฟล์รูปอุปกรณ์ที่ผ่านการตรวจสอบจาก HTTP handler แล้ว
@@ -31,17 +33,6 @@ type ItemImage struct {
 	Data        []byte
 	ContentType string
 	Extension   string
-}
-
-// Review ตรงกับตาราง review_tb ในฐานข้อมูล Supabase
-type Review struct {
-	ID          string    `json:"id"`
-	UserID      string    `json:"user_id"`
-	ItemName    string    `json:"item_name"`
-	Rating      string    `json:"rating"` // การให้คะแนน
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type CreateItemRequest struct {
@@ -69,5 +60,4 @@ type ItemRepository interface {
 	FindByID(ctx context.Context, id int64) (*Item, error)
 	Update(ctx context.Context, id int64, userID string, fields map[string]interface{}) (*Item, error)
 	Delete(ctx context.Context, id int64, userID string) error
-	// InsertReview(ctx context.Context, review *Review) error
 }

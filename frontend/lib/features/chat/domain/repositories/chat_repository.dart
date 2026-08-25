@@ -11,6 +11,8 @@ abstract class ChatRepository {
 
   Future<List<ChatConversation>> getConversations();
 
+  Future<String> getConversationContactPhone(String conversationId);
+
   Future<List<ChatMessage>> fetchMessages({
     required String conversationId,
     DateTime? before,

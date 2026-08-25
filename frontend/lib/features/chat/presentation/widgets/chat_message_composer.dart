@@ -78,7 +78,7 @@ class ChatMessageComposer extends StatelessWidget {
                             child: CachedNetworkImage(
                               imageUrl: replyingMessage!.imageUrl!,
                               fit: BoxFit.cover,
-                              errorWidget: (_, __, ___) =>
+                              errorWidget: (_, _, _) =>
                                   const Icon(Icons.image, size: 20),
                             ),
                           ),

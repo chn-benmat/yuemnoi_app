@@ -1,19 +1,23 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/network/api_client.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../models/feed_category_model.dart';
 import '../models/feed_item_model.dart';
 import 'home_mock_data_source.dart';
 
-/// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงจาก Supabase Database (`item_tb` & `profile_tb`)
+/// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงผ่าน Go Backend REST API (`/api/v1/items`)
 class HomeSupabaseDataSource {
   HomeSupabaseDataSource({
     SupabaseClient? client,
+    ApiClient? apiClient,
     HomeMockDataSource? fallbackDataSource,
   })  : _client = client,
+        _apiClient = apiClient ?? DioApiClient(),
         _fallbackDataSource = fallbackDataSource ?? HomeMockDataSource();
 
   final SupabaseClient? _client;
+  final ApiClient _apiClient;
   final HomeMockDataSource _fallbackDataSource;
   final Set<String> _favoriteItemIds = {};
 
@@ -159,126 +163,92 @@ class HomeSupabaseDataSource {
     return list[index % list.length];
   }
 
-  /// ดึงข้อมูลทั้งหมดจาก Supabase และแปลงเป็น `List<FeedItemModel>`
+  /// ดึงข้อมูลทั้งหมดผ่าน Go Backend API (`/api/v1/items`) และแปลงเป็น `List<FeedItemModel>`
   Future<List<FeedItemModel>> _fetchAllSupabaseItems() async {
-    final sb = client;
-    if (sb == null) {
-      return _fallbackDataSource.fetchNearbyItems();
-    }
-
     try {
-      // 1. ดึงข้อมูลสินค้าทั้งหมดจากตาราง item_tb
-      final rawItems = await sb
-          .from('item_tb')
-          .select('*')
-          .order('id', ascending: false);
+      final response = await _apiClient.get('/api/v1/items');
+      if (response.statusCode == 200 && response.data is List) {
+        final rawItems = response.data as List;
+        if (rawItems.isNotEmpty) {
+          final List<FeedItemModel> items = [];
+          for (int i = 0; i < rawItems.length; i++) {
+            final item = rawItems[i] is Map<String, dynamic>
+                ? rawItems[i] as Map<String, dynamic>
+                : Map<String, dynamic>.from(rawItems[i] as Map);
+            final id = item['id'].toString();
+            final title = item['item_name']?.toString() ?? 'อุปกรณ์ให้เช่า';
+            final description = item['description']?.toString() ?? '';
+            final rawCategory = item['category']?.toString();
+            final categoryId = mapDbCategoryToId(rawCategory);
+            final price = (item['price'] is num)
+                ? (item['price'] as num).toInt()
+                : int.tryParse(item['price']?.toString() ?? '0') ?? 0;
+            final type = item['type']?.toString();
+            final priceUnit = (type == 'รายชั่วโมง') ? '/ ชม.' : '/ วัน';
 
-      if (rawItems.isEmpty) {
-        return await _fallbackDataSource.fetchNearbyItems();
+            // จัดการรูปภาพ (ดึงจาก item_image_url ถ้าไม่มีให้ปล่อยว่างเพื่อแสดง no picture icon)
+            String imageUrl = '';
+            if (item['item_image_url'] is List &&
+                (item['item_image_url'] as List).isNotEmpty) {
+              final firstImg =
+                  (item['item_image_url'] as List).first?.toString();
+              if (firstImg != null && firstImg.trim().isNotEmpty) {
+                imageUrl = firstImg.trim();
+              }
+            }
+
+            final ownerName = item['owner_name']?.toString().trim().isNotEmpty == true
+                ? item['owner_name'].toString().trim()
+                : 'Yuemnoi Verified';
+            final ownerAvatar = item['owner_avatar_url']?.toString();
+            const locationName = 'กรุงเทพฯ';
+
+            // ดึงแท็กจากคำอธิบาย
+            List<String> tags = [];
+            if (rawCategory != null && rawCategory.isNotEmpty) {
+              tags.add(rawCategory);
+            }
+            if (description.isNotEmpty) {
+              final words = description
+                  .split(RegExp(r'[,\s]+'))
+                  .where((w) => w.length >= 3 && w.length <= 15)
+                  .take(2)
+                  .toList();
+              tags.addAll(words);
+            }
+
+            final rating = 4.7 + ((i % 4) * 0.1);
+            final reviewCount = 8 + (i * 3);
+            final distanceKm = 0.8 + ((i % 6) * 0.6);
+
+            items.add(
+              FeedItemModel(
+                id: id,
+                title: title,
+                categoryId: categoryId,
+                price: price,
+                priceUnit: priceUnit,
+                rating: double.parse(rating.toStringAsFixed(1)),
+                reviewCount: reviewCount,
+                distanceKm: double.parse(distanceKm.toStringAsFixed(1)),
+                isVerified: true,
+                ownerName: ownerName,
+                ownerAvatarUrl: ownerAvatar,
+                imageUrl: imageUrl,
+                isCurated: i < 4,
+                isFavorite: _favoriteItemIds.contains(id),
+                tags: tags,
+                locationName: locationName,
+              ),
+            );
+          }
+
+          return items;
+        }
       }
+    } catch (_) {}
 
-      // 2. ดึงข้อมูลโปรไฟล์ผู้ใช้จาก profile_tb เพื่อดึงชื่อและรูปเจ้าของสินค้า
-      Map<String, Map<String, dynamic>> profilesMap = {};
-      try {
-        final rawProfiles = await sb.from('profile_tb').select('*');
-        for (final p in rawProfiles) {
-          final userId = p['user_id']?.toString();
-          if (userId != null) {
-            profilesMap[userId] = p;
-          }
-        }
-      } catch (_) {
-        // หากดึงโปรไฟล์ล้มเหลว ให้ใช้ค่าเริ่มต้น
-      }
-
-      final List<FeedItemModel> items = [];
-      for (int i = 0; i < rawItems.length; i++) {
-        final item = rawItems[i];
-        final id = item['id'].toString();
-        final userId = item['user_id']?.toString() ?? '';
-        final title = item['item_name']?.toString() ?? 'อุปกรณ์ให้เช่า';
-        final description = item['description']?.toString() ?? '';
-        final rawCategory = item['category']?.toString();
-        final categoryId = mapDbCategoryToId(rawCategory);
-        final price = (item['price'] is num)
-            ? (item['price'] as num).toInt()
-            : int.tryParse(item['price']?.toString() ?? '0') ?? 0;
-        final type = item['type']?.toString();
-        final priceUnit = (type == 'รายชั่วโมง') ? '/ ชม.' : '/ วัน';
-
-        // จัดการรูปภาพ (ดึงจาก item_image_url ถ้าไม่มีให้ปล่อยว่างเพื่อแสดง no picture icon)
-        String imageUrl = '';
-        if (item['item_image_url'] is List &&
-            (item['item_image_url'] as List).isNotEmpty) {
-          final firstImg = (item['item_image_url'] as List).first?.toString();
-          if (firstImg != null && firstImg.trim().isNotEmpty) {
-            imageUrl = firstImg.trim();
-          }
-        }
-
-
-        // ดึงข้อมูลเจ้าของจาก profile_tb
-        final profile = profilesMap[userId];
-        String ownerName = 'Yuemnoi Verified';
-        String? ownerAvatar;
-        String locationName = 'กรุงเทพฯ';
-
-        if (profile != null) {
-          final email = profile['email']?.toString();
-          if (email != null && email.contains('@')) {
-            ownerName = email.split('@').first;
-          }
-          final userImg = profile['user_image_url']?.toString();
-          if (userImg != null && userImg.isNotEmpty) {
-            ownerAvatar = userImg;
-          }
-        }
-
-        // ดึงแท็กจากคำอธิบาย
-        List<String> tags = [];
-        if (rawCategory != null && rawCategory.isNotEmpty) {
-          tags.add(rawCategory);
-        }
-        if (description.isNotEmpty) {
-          final words = description
-              .split(RegExp(r'[,\s]+'))
-              .where((w) => w.length >= 3 && w.length <= 15)
-              .take(2)
-              .toList();
-          tags.addAll(words);
-        }
-
-        // จำลองคะแนนรีวิวสำหรับข้อมูลจริง
-        final rating = 4.7 + ((i % 4) * 0.1);
-        final reviewCount = 8 + (i * 3);
-        final distanceKm = 0.8 + ((i % 6) * 0.6);
-
-        items.add(
-          FeedItemModel(
-            id: id,
-            title: title,
-            categoryId: categoryId,
-            price: price,
-            priceUnit: priceUnit,
-            rating: double.parse(rating.toStringAsFixed(1)),
-            reviewCount: reviewCount,
-            distanceKm: double.parse(distanceKm.toStringAsFixed(1)),
-            isVerified: true,
-            ownerName: ownerName,
-            ownerAvatarUrl: ownerAvatar,
-            imageUrl: imageUrl,
-            isCurated: i < 4,
-            isFavorite: _favoriteItemIds.contains(id),
-            tags: tags,
-            locationName: locationName,
-          ),
-        );
-      }
-
-      return items;
-    } catch (_) {
-      return _fallbackDataSource.fetchNearbyItems();
-    }
+    return _fallbackDataSource.fetchNearbyItems();
   }
 
   /// ดึงรายการแนะนำพิเศษ (Curated Daily) จาก Supabase
