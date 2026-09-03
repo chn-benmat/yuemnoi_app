@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 enum ApiClientErrorType { timeout, connection, invalidResponse }
@@ -220,16 +221,19 @@ class DioApiClient implements ApiClient {
   }
 
   static String _resolveBaseUrl(String? baseUrl) {
-    final configuredUrl = (baseUrl ?? dotenv.env['API_URL'] ?? '').trim();
-    var normalizedUrl = configuredUrl;
-    while (normalizedUrl.endsWith('/')) {
-      normalizedUrl = normalizedUrl.substring(0, normalizedUrl.length - 1);
+    var configuredUrl = (baseUrl ?? dotenv.env['API_URL'] ?? '').trim();
+    while (configuredUrl.endsWith('/')) {
+      configuredUrl = configuredUrl.substring(0, configuredUrl.length - 1);
     }
-    if (normalizedUrl.isEmpty) {
+    if (configuredUrl.isEmpty) {
       throw StateError('API_URL is not configured in .env.local.');
     }
 
-    return normalizedUrl;
+    if (kIsWeb && configuredUrl.contains('10.0.2.2')) {
+      configuredUrl = configuredUrl.replaceAll('10.0.2.2', 'localhost');
+    }
+
+    return configuredUrl;
   }
 
   @override

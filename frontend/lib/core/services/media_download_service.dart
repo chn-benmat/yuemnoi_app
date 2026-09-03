@@ -16,6 +16,7 @@ class MediaDownloadService {
 
   /// บันทึกรูปภาพ 1 รูปจาก URL ลงในแกลเลอรีของเครื่อง
   Future<bool> saveImageFromUrl(String imageUrl) async {
+    if (kIsWeb) return false;
     try {
       final hasAccess = await Gal.hasAccess(toAlbum: false);
       if (!hasAccess) {
@@ -40,7 +41,7 @@ class MediaDownloadService {
 
   /// บันทึกรูปภาพหลายรูปลงในแกลเลอรีของเครื่อง
   Future<int> saveMultipleImagesFromUrls(List<String> imageUrls) async {
-    if (imageUrls.isEmpty) return 0;
+    if (kIsWeb || imageUrls.isEmpty) return 0;
 
     final hasAccess = await Gal.hasAccess(toAlbum: false);
     if (!hasAccess) {
