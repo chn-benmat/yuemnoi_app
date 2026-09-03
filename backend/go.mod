@@ -1,4 +1,4 @@
-module github.com/Chanachai04/yuemnoi_app/backend
+module github.com/chn-benmat/yuemnoi_app/backend
 
 go 1.26.2
 
@@ -6,6 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/joho/godotenv v1.5.1
 	github.com/nedpals/supabase-go v0.5.0
+	github.com/stripe/stripe-go/v84 v84.4.1
 )
 
 require (

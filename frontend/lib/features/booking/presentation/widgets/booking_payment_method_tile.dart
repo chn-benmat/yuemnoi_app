@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -9,13 +10,20 @@ class BookingPaymentMethodSelector extends StatelessWidget {
     super.key,
     required this.selectedMethod,
     required this.onChanged,
+    this.walletBalance,
   });
 
   final BookingPaymentMethod selectedMethod;
   final ValueChanged<BookingPaymentMethod> onChanged;
+  final double? walletBalance;
 
   @override
   Widget build(BuildContext context) {
+    final currencyFormatter = NumberFormat('#,##0.00', 'en_US');
+    final formattedWallet = walletBalance != null
+        ? ' (คงเหลือ ${currencyFormatter.format(walletBalance)} ฿)'
+        : '';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -29,18 +37,20 @@ class BookingPaymentMethodSelector extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        // 1. ธนาคาร
+
+        // Method 1: บัตรเครดิต/เดบิต (Stripe)
         _PaymentOptionTile(
-          title: 'ธนาคาร',
+          title: 'บัตรเครดิต / เดบิต',
+          subtitle: 'ชำระปลอดภัยผ่าน Stripe Checkout',
           iconWidget: Container(
             width: 44,
             height: 44,
             decoration: const BoxDecoration(
-              color: Color(0xFFB154FF), // สีม่วงสดใสตาม UI
+              color: Color(0xFFB154FF),
               shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons.account_balance_rounded,
+              Icons.credit_card_rounded,
               color: Colors.white,
               size: 22,
             ),
@@ -49,29 +59,11 @@ class BookingPaymentMethodSelector extends StatelessWidget {
           onTap: () => onChanged(BookingPaymentMethod.bankTransfer),
         ),
         const SizedBox(height: 12),
-        // 2. เงินในบัญชี
+
+        // Method 2: PromptPay QR (Stripe)
         _PaymentOptionTile(
-          title: 'เงินในบัญชี',
-          iconWidget: Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE8EAED),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.account_balance_wallet_rounded,
-              color: Color(0xFF1E2022),
-              size: 22,
-            ),
-          ),
-          isSelected: selectedMethod == BookingPaymentMethod.wallet,
-          onTap: () => onChanged(BookingPaymentMethod.wallet),
-        ),
-        const SizedBox(height: 12),
-        // 3. PromptPay
-        _PaymentOptionTile(
-          title: 'PromptPay',
+          title: 'PromptPay QR',
+          subtitle: 'สแกน QR Code ผ่านแอปธนาคาร',
           iconWidget: Container(
             width: 44,
             height: 44,
@@ -88,6 +80,37 @@ class BookingPaymentMethodSelector extends StatelessWidget {
           isSelected: selectedMethod == BookingPaymentMethod.promptPay,
           onTap: () => onChanged(BookingPaymentMethod.promptPay),
         ),
+        const SizedBox(height: 12),
+
+        // Method 3: กระเป๋าเงิน Yuemnoi (Wallet)
+        _PaymentOptionTile(
+          title: 'กระเป๋าเงิน Yuemnoi',
+          subtitle: 'หักจากเงินในบัญชี$formattedWallet',
+          iconWidget: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.primaryColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.account_balance_wallet_rounded,
+              color: AppColors.primaryColor,
+              size: 22,
+            ),
+          ),
+          isSelected: selectedMethod == BookingPaymentMethod.wallet,
+          onTap: () => onChanged(BookingPaymentMethod.wallet),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'คุณสามารถตรวจสอบยอดและวิธีชำระเงินก่อนยืนยันรายการได้',
+          style: TextStyle(
+            fontFamily: AppTextStyles.fontFamily,
+            fontSize: 12,
+            color: Color(0xFF777A7C),
+          ),
+        ),
       ],
     );
   }
@@ -96,12 +119,14 @@ class BookingPaymentMethodSelector extends StatelessWidget {
 class _PaymentOptionTile extends StatelessWidget {
   const _PaymentOptionTile({
     required this.title,
+    this.subtitle,
     required this.iconWidget,
     required this.isSelected,
     required this.onTap,
   });
 
   final String title;
+  final String? subtitle;
   final Widget iconWidget;
   final bool isSelected;
   final VoidCallback onTap;
@@ -118,6 +143,10 @@ class _PaymentOptionTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isSelected ? AppColors.primaryColor : const Color(0xFFF1F3F5),
+              width: isSelected ? 1.5 : 1.0,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.03),
@@ -131,14 +160,30 @@ class _PaymentOptionTile extends StatelessWidget {
               iconWidget,
               const SizedBox(width: 14),
               Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1E2022),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E2022),
+                      ),
+                    ),
+                    if (subtitle != null && subtitle!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 12,
+                          color: Color(0xFF777A7C),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               // Custom Radio Button

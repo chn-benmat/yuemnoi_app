@@ -44,7 +44,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         ),
       );
     } catch (e) {
-      emit(HomeError('ไม่สามารถโหลดข้อมูลหน้าหลักได้: ${e.toString()}'));
+      emit(const HomeError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่'));
     }
   }
 
@@ -227,7 +227,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       if (currentState is HomeLoaded) {
         emit(currentState.copyWith(isRefreshing: false));
       } else {
-        emit(HomeError('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล: ${e.toString()}'));
+        emit(const HomeError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่'));
       }
     }
   }

@@ -245,10 +245,12 @@ class HomeSupabaseDataSource {
 
           return items;
         }
+        return const [];
       }
-    } catch (_) {}
-
-    return _fallbackDataSource.fetchNearbyItems();
+      throw const FormatException('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่');
+    } catch (_) {
+      throw const FormatException('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่');
+    }
   }
 
   /// ดึงรายการแนะนำพิเศษ (Curated Daily) จาก Supabase

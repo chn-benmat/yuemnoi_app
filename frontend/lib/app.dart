@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import 'core/navigation/app_routes.dart';
 import 'core/navigation/item_deep_link.dart';
+import 'core/navigation/payment_deep_link.dart';
 import 'core/services/app_orientation_service.dart';
 import 'core/services/chat_notification_service.dart';
 import 'core/theme/app_theme.dart';
@@ -16,6 +17,11 @@ import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/chat/data/datasources/chat_remote_data_source.dart';
 import 'features/chat/domain/entities/chat_conversation.dart';
 import 'features/chat/presentation/widgets/global_chat_notification_listener.dart';
+import 'features/wallet/data/datasources/wallet_remote_data_source.dart';
+import 'features/wallet/data/repositories/wallet_repository_impl.dart';
+import 'features/wallet/domain/usecases/get_wallet_info_usecase.dart';
+import 'features/wallet/domain/usecases/pay_rental_with_wallet_usecase.dart';
+import 'features/wallet/domain/usecases/start_wallet_topup_usecase.dart';
 import 'features/wallet/presentation/bloc/wallet_cubit.dart';
 
 class YuemnoiApp extends StatefulWidget {
@@ -89,6 +95,20 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   }
 
   void _handleDeepLink(Uri uri) {
+    if (PaymentDeepLink.isWalletReturn(uri)) {
+      final result = PaymentDeepLink.parseResult(uri);
+      if (result == 'success') {
+        _router.push(AppRoutes.walletSuccess);
+      } else {
+        _router.push(AppRoutes.wallet);
+      }
+      return;
+    }
+    final rentalId = PaymentDeepLink.parseRentalId(uri);
+    if (rentalId != null) {
+      _router.push('/payments/$rentalId');
+      return;
+    }
     final itemId = ItemDeepLink.parseItemId(uri);
     if (itemId == null) return;
 
@@ -119,6 +139,8 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final walletRepo = WalletRepositoryImpl(WalletRemoteDataSource());
+
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>(
@@ -126,7 +148,14 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
             authRepository: AuthRepositoryImpl(AuthRemoteDataSource()),
           ),
         ),
-        BlocProvider<WalletCubit>(create: (context) => WalletCubit()),
+        BlocProvider<WalletCubit>(
+          create: (context) => WalletCubit(
+            getWalletInfo: GetWalletInfoUseCase(walletRepo),
+            startWalletTopUp: StartWalletTopUpUseCase(walletRepo),
+            payRentalWithWallet: PayRentalWithWalletUseCase(walletRepo),
+            repository: walletRepo,
+          )..fetchWallet(),
+        ),
       ],
       child: MaterialApp.router(
         title: 'Yuemnoi App',

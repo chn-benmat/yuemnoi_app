@@ -9,9 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Chanachai04/yuemnoi_app/backend/internal/adapters/service"
-	"github.com/Chanachai04/yuemnoi_app/backend/internal/adapters/supabase"
-	"github.com/Chanachai04/yuemnoi_app/backend/internal/ports"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/service"
+	stripeadapter "github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/stripe"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -46,8 +47,22 @@ func main() {
 	itemRepo := supabase.NewSupabaseItemRepository(supabaseClient)
 	authGateway := supabase.NewSupabaseUserRepository(supabaseClient, sbKey)
 	contactRepository := supabase.NewSupabaseConversationContactRepository(supabaseClient)
+	paymentRepository := supabase.NewSupabasePaymentRepository(supabaseClient)
+	paymentGateway := stripeadapter.NewPaymentGateway(
+		os.Getenv("STRIPE_SECRET_KEY"),
+		os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		os.Getenv("STRIPE_PAYMENT_SUCCESS_URL"),
+		os.Getenv("STRIPE_PAYMENT_CANCEL_URL"),
+	)
 
-	router := ports.SetupRouter(itemRepo, authGateway, contactRepository, aiService)
+	router := ports.SetupRouter(
+		itemRepo,
+		authGateway,
+		contactRepository,
+		aiService,
+		paymentRepository,
+		paymentGateway,
+	)
 
 	// กำหนดค่า HTTP Server
 	srv := &http.Server{

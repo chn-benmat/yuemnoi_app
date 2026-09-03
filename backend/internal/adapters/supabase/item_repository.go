@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/nedpals/supabase-go"
 	postgrest "github.com/nedpals/supabase-go/postgrest/pkg"
 )

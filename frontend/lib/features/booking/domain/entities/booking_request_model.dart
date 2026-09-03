@@ -14,7 +14,7 @@ enum BookingRentalType {
 
 /// วิธีการชำระเงิน
 enum BookingPaymentMethod {
-  bankTransfer('ธนาคาร', 'โอนผ่านบัญชีธนาคาร'),
+  bankTransfer('บัตรเครดิต/เดบิต', 'ชำระด้วยบัตรธนาคารผ่าน Stripe'),
   wallet('เงินในบัญชี', 'กระเป๋าเงิน Yuemnoi Pay'),
   promptPay('PromptPay', 'พร้อมเพย์ QR Code');
 

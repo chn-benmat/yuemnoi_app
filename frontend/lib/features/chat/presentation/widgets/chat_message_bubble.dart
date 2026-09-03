@@ -12,13 +12,24 @@ import 'stacked_images_grid_screen.dart';
 import 'swipe_to_reply.dart';
 
 String _extractActualTextMessage(String raw) {
-  if (raw.startsWith('↩ ตอบกลับ:') || raw.startsWith('💬 ตอบกลับ')) {
-    final newlineIdx = raw.indexOf('\n');
+  final trimmed = raw.trim();
+  if (trimmed.startsWith('↩ ตอบกลับ:') ||
+      trimmed.startsWith('💬 ตอบกลับ') ||
+      trimmed.startsWith('↪ ตอบกลับ')) {
+    final newlineIdx = trimmed.indexOf('\n');
     if (newlineIdx != -1) {
-      return raw.substring(newlineIdx + 1);
+      return trimmed.substring(newlineIdx + 1).trim();
+    }
+    final parts = trimmed.split('|');
+    if (parts.length >= 2) {
+      return parts.last.trim();
+    }
+    final colonIdx = trimmed.indexOf(':');
+    if (colonIdx != -1) {
+      return trimmed.substring(colonIdx + 1).trim();
     }
   }
-  return raw;
+  return trimmed;
 }
 
 class ChatMessageBubble extends StatelessWidget {
@@ -191,14 +202,11 @@ class ChatMessageBubble extends StatelessWidget {
       );
 
       if (bookingData != null) {
-        final bookingCard = GestureDetector(
-          onLongPress: () => _showActions(context),
-          child: BookingRequestBubbleCard(
-            message: message,
-            bookingData: bookingData,
-            senderName: otherUserName,
-            isOwner: isOwner,
-          ),
+        final bookingCard = BookingRequestBubbleCard(
+          message: message,
+          bookingData: bookingData,
+          senderName: otherUserName,
+          isOwner: isOwner,
         );
 
         final statusFailedWidget = isFailed
