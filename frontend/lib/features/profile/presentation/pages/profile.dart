@@ -8,6 +8,7 @@ import '../../../../core/network/supabase_client.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
+import 'user_profile_view_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -38,6 +39,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user == null) return null;
     return user.userMetadata?['avatar_url'] as String? ??
         user.userMetadata?['picture'] as String?;
+  }
+
+  void _openUserProfile() {
+    final user = _currentUser;
+    final meta = user?.userMetadata ?? {};
+    final bio = (meta['bio'] as String?)?.trim();
+    AppRoutes.openUserProfile(
+      context,
+      args: UserProfileViewArgs(
+        userId: user?.id ?? '',
+        displayName: _displayName,
+        avatarUrl: _avatarUrl,
+        rating: 4.9,
+        isVerified: true,
+        bio: (bio != null && bio.isNotEmpty)
+            ? bio
+            : 'สนใจกล้องตัวไหนโปรดติดต่อฉัน',
+      ),
+    );
   }
 
   void _logout() {
@@ -108,6 +128,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _ProfileHeader(
               displayName: _displayName,
               avatarUrl: _avatarUrl,
+              onProfileTap: _openUserProfile,
             ),
             Expanded(
               child: SingleChildScrollView(
@@ -255,8 +276,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _ProfileHeader extends StatelessWidget {
   final String displayName;
   final String? avatarUrl;
+  final VoidCallback? onProfileTap;
 
-  const _ProfileHeader({required this.displayName, required this.avatarUrl});
+  const _ProfileHeader({
+    required this.displayName,
+    required this.avatarUrl,
+    this.onProfileTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -277,40 +303,49 @@ class _ProfileHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _AvatarWidget(avatarUrl: avatarUrl, displayName: displayName),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName,
-                      style: const TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onProfileTap,
+            child: Row(
+              children: [
+                _AvatarWidget(avatarUrl: avatarUrl, displayName: displayName),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'ดูโปรไฟล์',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 13,
-                        color: Colors.white70,
-                        decoration: TextDecoration.underline,
-                        decorationColor: Colors.white70,
+                      const SizedBox(height: 4),
+                      const Text(
+                        'ดูโปรไฟล์',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 13,
+                          color: Colors.white70,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Colors.white70,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Colors.white70,
+                  size: 16,
+                ),
+              ],
+            ),
           ),
         ],
       ),

@@ -2,13 +2,25 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/network/supabase_client.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/utils/phone_formatter.dart';
 
 class SettingAccountScreen extends StatelessWidget {
   const SettingAccountScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final user = SupabaseConfig.isInitialized
+        ? SupabaseConfig.client.auth.currentUser
+        : null;
+    final rawPhone =
+        user?.userMetadata?['phone'] as String? ?? user?.phone ?? '';
+    final formattedPhone = PhoneFormatter.formatForDisplay(rawPhone);
+    final phoneSubtitle = formattedPhone.isNotEmpty
+        ? 'เบอร์โทร: $formattedPhone'
+        : 'อีเมล, เบอร์โทรศัพท์';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F9),
       appBar: AppBar(
@@ -57,7 +69,7 @@ class SettingAccountScreen extends StatelessWidget {
                 iconBgColor: const Color(0xFFE3F2FF),
                 iconColor: const Color(0xFF1976D2),
                 title: 'ข้อมูลติดต่อ',
-                subtitle: 'อีเมล, เบอร์โทรศัพท์',
+                subtitle: phoneSubtitle,
                 onTap: () => AppRoutes.openEditContact(context),
               ),
               Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey.shade100),
@@ -65,8 +77,8 @@ class SettingAccountScreen extends StatelessWidget {
                 icon: Icons.security_outlined,
                 iconBgColor: const Color(0xFFE8F5E9),
                 iconColor: const Color(0xFF388E3C),
-                title: 'ความปลอดภัย',
-                subtitle: 'เปลี่ยนรหัสผ่าน',
+                title: 'ความปลอดภัยและความเป็นส่วนตัว',
+                subtitle: 'รหัสผ่าน, บล็อกผู้ใช้, การแจ้งเตือน',
                 showDivider: false,
                 onTap: () => AppRoutes.openChangeAccount(context),
               ),

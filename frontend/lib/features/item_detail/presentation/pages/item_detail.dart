@@ -15,6 +15,11 @@ import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../../chat/data/datasources/chat_remote_data_source.dart';
 import '../../../chat/data/repositories/chat_repository_impl.dart';
 import '../../../chat/domain/entities/item_inquiry_data.dart';
+import '../../../../core/utils/phone_formatter.dart';
+import '../../../../core/services/favorite_service.dart';
+import '../../../../core/theme/app_text_styles.dart';
+import '../../../chat/data/repositories/chat_repository_impl.dart';
+import '../../../profile/presentation/pages/user_profile_view_screen.dart';
 import '../../domain/entities/item_detail.dart';
 import '../bloc/item_detail_bloc.dart';
 import '../bloc/item_detail_event.dart';
@@ -34,6 +39,33 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   bool _isFavorite = false;
   bool _isChatLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _isFavorite = FavoriteService.instance.isItemFavorite(widget.itemId);
+  }
+
+  Future<void> _handleFavoriteToggle() async {
+    final isFav =
+        await FavoriteService.instance.toggleFavorite(widget.itemId);
+    if (!mounted) return;
+    setState(() => _isFavorite = isFav);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            isFav ? 'เพิ่มในรายการถูกใจแล้ว' : 'นำออกจากรายการถูกใจแล้ว',
+            style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+  }
+
   Future<void> _openEdit(ItemDetail item) async {
     final updated = await AppRoutes.openEditRentalItem(context, item: item);
     if (updated == true && mounted) {
@@ -47,8 +79,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     final user = SupabaseConfig.client.auth.currentUser;
     final rawPhone =
         user?.userMetadata?['phone']?.toString() ?? user?.phone ?? '';
-    final normalizedPhone = rawPhone.replaceAll(RegExp(r'\D'), '');
-    return RegExp(r'^0\d{9}$').hasMatch(normalizedPhone);
+    return PhoneFormatter.isValidPhone(rawPhone);
   }
 
   Future<void> _showMissingPhoneDialog() async {
@@ -368,7 +399,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 right: 0,
                 child: _DetailFloatingTopBar(
                   isFavorite: _isFavorite,
-                  onFavorite: () => setState(() => _isFavorite = !_isFavorite),
+                  onFavorite: _handleFavoriteToggle,
                   onShare: () => _handleShare(item),
                   onReport: () {
                     if (item != null) {
@@ -861,13 +892,28 @@ class _OwnerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final owner = item.owner;
-    return Container(
-      height: 96,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F1F2),
-        borderRadius: BorderRadius.circular(30),
-      ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        AppRoutes.openUserProfile(
+          context,
+          args: UserProfileViewArgs(
+            userId: owner.userId,
+            displayName: owner.displayName,
+            avatarUrl: owner.imageUrl,
+            rating: item.averageRating > 0 ? item.averageRating : 4.9,
+            isVerified: true,
+            bio: 'สนใจกล้องตัวไหนโปรดติดต่อฉัน',
+          ),
+        );
+      },
+      child: Container(
+        height: 96,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F1F2),
+          borderRadius: BorderRadius.circular(30),
+        ),
       child: Row(
         children: [
           _Avatar(imageUrl: owner.imageUrl, size: 64),
@@ -922,8 +968,9 @@ class _OwnerCard extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _ReviewCard extends StatelessWidget {
