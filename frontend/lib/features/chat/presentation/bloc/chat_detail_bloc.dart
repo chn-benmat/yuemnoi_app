@@ -183,6 +183,20 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
             } catch (_) {}
           });
 
+          _roomBroadcastChannel?.onBroadcast(event: 'message_deleted', callback: (payload) {
+            try {
+              final raw = payload['payload'];
+              final Map<String, dynamic> data = raw is Map<String, dynamic> ? raw : payload;
+              final deletedId = data['message_id']?.toString() ?? '';
+              if (deletedId.isNotEmpty) {
+                add(ChatMessageDeleted(
+                  conversationId: event.conversationId,
+                  messageId: deletedId,
+                ));
+              }
+            } catch (_) {}
+          });
+
           _roomBroadcastChannel?.subscribe();
         } catch (_) {}
       }
@@ -503,11 +517,17 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     final targetMsg = state.messages
         .where((m) => m.id == event.messageId)
         .firstOrNull;
-    final imageUrl = event.imageUrl ?? targetMsg?.imageUrl;
+    final imageUrl = targetMsg?.imageUrl ?? event.imageUrl;
 
     final updated = state.messages.where((m) => m.id != event.messageId).toList();
     emit(state.copyWith(messages: updated));
     ChatMessagesCache.set(event.conversationId, updated);
+
+    // ส่งสัญญาณ Realtime Broadcast แจ้งเตือนห้องแชทให้ลบข้อความนี้ทันที
+    unawaited(ChatRemoteDataSource().broadcastMessageDeleted(
+      conversationId: event.conversationId,
+      messageId: event.messageId,
+    ));
 
     try {
       await ChatRemoteDataSource().deleteMessage(

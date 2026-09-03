@@ -3,7 +3,7 @@ package ports
 import (
 	"net/http"
 
-	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/gin-gonic/gin"
 )
 
@@ -12,12 +12,13 @@ func SetupRouter(
 	authGateway domain.AuthGateway,
 	contactRepository domain.ConversationContactRepository,
 	aiService domain.AIService,
+	paymentRepository domain.PaymentRepository,
+	paymentGateway domain.PaymentGateway,
 ) *gin.Engine {
 
 	// ใช้ Logger และ Recovery Middleware (ป้องกันเซิร์ฟเวอร์พังเวลาเกิด Panic โค้ดเอ๋อ)
 	router := gin.New()
 	router.Use(gin.Logger())
-	router.Use(responseLoggingMiddleware())
 	router.Use(gin.Recovery())
 
 	// ตั้งค่า CORS  เพื่อให้ Flutter ยิงเข้ามาหาได้ไม่ติดบล็อก
@@ -43,15 +44,19 @@ func SetupRouter(
 
 	// นำเข้าคอนโทรลเลอร์ต่างๆ
 	itemController := NewItemHandler(itemRepo, authGateway)
-	rentalController := NewRentalHandler()
+	rentalController := NewRentalHandler(paymentRepository, paymentGateway, itemRepo, authGateway)
 	userController := NewUserHandler(authGateway)
 	aiHandler := NewAIHandler(aiService)
 	pushController := NewPushHandler()
 	chatContactController := NewChatContactHandler(contactRepository, authGateway)
+	router.GET("/payments/return", rentalController.PaymentReturnPage)
 
 	// จัดการกลุ่มเส้นทาง API
 	v1 := router.Group("/api/v1")
 	{
+		// Stripe เรียกเส้นทางนี้จากภายนอก จึงตรวจ Stripe-Signature แทน Bearer JWT
+		v1.POST("/webhooks/stripe", rentalController.HandleStripeWebhook)
+
 		// ทุกอย่างเกี่ยวกับการยืนยันตัวตน (Authentication)
 		user := v1.Group("/auth")
 		{
@@ -102,7 +107,8 @@ func SetupRouter(
 		rentals := v1.Group("/rentals")
 		{
 			rentals.POST("", rentalController.CreateRentalOrder)
-
+			rentals.POST("/:id/checkout-session", rentalController.CreateCheckoutSession)
+			rentals.GET("/:id/payment-status", rentalController.GetPaymentStatus)
 		}
 
 		// ทุกอย่างเกี่ยวกับ AI

@@ -190,12 +190,15 @@ class DioApiClient implements ApiClient {
 
   dynamic _decodeResponse(Object? responseData) {
     if (responseData == null || responseData == '') {
-      return const {};
+      return const <String, dynamic>{};
     }
 
     final decoded = responseData is String
         ? jsonDecode(responseData)
         : responseData;
+    if (decoded is Map) {
+      return Map<String, dynamic>.from(decoded);
+    }
     return decoded;
   }
 

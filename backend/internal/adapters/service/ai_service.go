@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 )
 
 // aiService is the HTTP adapter for the domain AIService contract.

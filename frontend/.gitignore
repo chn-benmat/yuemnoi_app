@@ -1,4 +1,16 @@
 test/
+!test/
+test/*
+!test/core/
+test/core/*
+!test/core/navigation/
+test/core/navigation/*
+!test/core/navigation/payment_deep_link_test.dart
+!test/features/
+test/features/*
+!test/features/payment/
+test/features/payment/*
+!test/features/payment/payment_cubit_test.dart
 .qa/
 design-qa.md
 .serena/

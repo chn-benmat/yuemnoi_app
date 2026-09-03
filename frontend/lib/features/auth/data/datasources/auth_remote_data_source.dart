@@ -73,7 +73,7 @@ class AuthRemoteDataSource {
         },
         files: files,
       );
-      final body = response.data;
+      final body = _map(response.data);
 
       if (response.statusCode == 201) {
         final userId = body['user_id'];
@@ -103,7 +103,7 @@ class AuthRemoteDataSource {
         _loginPath,
         data: {'email': email.trim(), 'password': password},
       );
-      final body = response.data;
+      final body = _map(response.data);
 
       if (response.statusCode == 200) {
         final accessToken = body['access_token'];
@@ -137,7 +137,7 @@ class AuthRemoteDataSource {
         _sendOtpPath,
         data: {'email': email.trim()},
       );
-      final body = response.data;
+      final body = _map(response.data);
 
       if (response.statusCode == 200) {
         return;
@@ -164,7 +164,7 @@ class AuthRemoteDataSource {
         _verifyOtpPath,
         data: {'email': email.trim(), 'otp_code': otpCode},
       );
-      final body = response.data;
+      final body = _map(response.data);
 
       if (response.statusCode == 200) {
         final accessToken = body['access_token'];
@@ -195,7 +195,7 @@ class AuthRemoteDataSource {
         data: {'new_password': newPassword},
         headers: {'Authorization': 'Bearer $accessToken'},
       );
-      final body = response.data;
+      final body = _map(response.data);
       if (response.statusCode == 200) {
         return;
       }
@@ -214,7 +214,7 @@ class AuthRemoteDataSource {
         _googleProfilePath,
         headers: {'Authorization': 'Bearer $accessToken'},
       );
-      final body = response.data;
+      final body = _map(response.data);
       if (response.statusCode == 200) {
         final imageURL = body['user_image_url'];
         if (imageURL is String && imageURL.isNotEmpty) {
@@ -254,6 +254,12 @@ class AuthRemoteDataSource {
       case ApiClientErrorType.invalidResponse:
         return const AuthApiException('ข้อมูลตอบกลับจากเซิร์ฟเวอร์ไม่ถูกต้อง');
     }
+  }
+
+  Map<String, dynamic> _map(Object? value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return const <String, dynamic>{};
   }
 
   String? _errorMessage(Map<String, dynamic> body) {
