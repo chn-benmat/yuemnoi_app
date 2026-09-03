@@ -48,7 +48,7 @@ class ChatRemoteDataSource {
   }
 
   Future<ChatConversation> getOrCreateConversation({
-    required int itemId,
+    int? itemId,
     required String ownerId,
   }) async {
     final client = _supabaseClient;
@@ -70,41 +70,59 @@ class ChatRemoteDataSource {
       Map<String, dynamic>? conversation;
       if (existingConvs.isNotEmpty) {
         conversation = (existingConvs.first as Map).cast<String, dynamic>();
-        // อัปเดต item_id เป็นอุปกรณ์ล่าสุดที่กดทักมา
-        try {
-          await client.from('conversation_tb').update({
-            'item_id': itemId,
-          }).eq('id', conversation['id']);
-          conversation['item_id'] = itemId;
-        } catch (_) {}
+        // อัปเดต item_id เป็นอุปกรณ์ล่าสุดที่กดทักมา (ถ้ามีการระบุ itemId)
+        if (itemId != null && itemId > 0) {
+          try {
+            await client.from('conversation_tb').update({
+              'item_id': itemId,
+            }).eq('id', conversation['id']);
+            conversation['item_id'] = itemId;
+          } catch (_) {}
+        }
       }
 
       // 2. ถ้ายังไม่เคยมีห้องแชทระหว่าง 2 คนนี้เลย ให้สร้างห้องใหม่
-      conversation ??= await client
-          .from('conversation_tb')
-          .insert({
-            'item_id': itemId,
-            'renter_id': currentUserId,
-            'owner_id': ownerId,
-            'last_message': '',
-            'last_message_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .select('*')
-          .single();
+      if (conversation == null) {
+        final Map<String, dynamic> insertData = {
+          'renter_id': currentUserId,
+          'owner_id': ownerId,
+          'last_message': '',
+          'last_message_at': DateTime.now().toUtc().toIso8601String(),
+        };
+        if (itemId != null && itemId > 0) {
+          insertData['item_id'] = itemId;
+        }
 
-      // 3. ดึงข้อมูลโปรไฟล์ของคู่สนทนา (เจ้าของอุปกรณ์)
+        conversation = await client
+            .from('conversation_tb')
+            .insert(insertData)
+            .select('*')
+            .single();
+      }
+
+      // 3. ดึงข้อมูลโปรไฟล์ของคู่สนทนา (เจ้าของอุปกรณ์ / ผู้ใช้ที่สนทนาด้วย)
       final otherProfile = await client
           .from('profile_tb')
           .select('user_id,user_image_url,email,is_online,last_seen_at')
           .eq('user_id', ownerId)
           .maybeSingle();
 
-      // 4. ดึงข้อมูลอุปกรณ์
-      final item = await client
-          .from('item_tb')
-          .select('id,item_name,item_image_url,price,type')
-          .eq('id', itemId)
-          .maybeSingle();
+      // 4. ดึงข้อมูลอุปกรณ์ (หากมีการผูก item_id ไว้)
+      final dynamic effectiveItemId =
+          conversation['item_id'] ?? (itemId != null && itemId > 0 ? itemId : null);
+      Map<String, dynamic>? item;
+      if (effectiveItemId != null) {
+        final parsedId = effectiveItemId is num
+            ? effectiveItemId.toInt()
+            : int.tryParse(effectiveItemId.toString());
+        if (parsedId != null && parsedId > 0) {
+          item = await client
+              .from('item_tb')
+              .select('id,item_name,item_image_url,price,type')
+              .eq('id', parsedId)
+              .maybeSingle();
+        }
+      }
 
       return ChatConversationModel.fromRecords(
         conversation: conversation,

@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
+import '../../../../../core/network/auth_session.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/utils/phone_formatter.dart';
+import '../../../../chat/data/repositories/chat_repository_impl.dart';
 import '../../widgets/profile/user_profile_widgets.dart';
 
 // ─── Data model ───────────────────────────────────────────────────────────────
@@ -41,6 +44,7 @@ class UserProfileViewScreen extends StatefulWidget {
 
 class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
   bool _isLoading = true;
+  bool _isChatLoading = false;
   String _displayName = '';
   String? _avatarUrl;
   String? _bio;
@@ -277,6 +281,144 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
     return (Icons.inventory_2_outlined, const Color(0xFF2E1065));
   }
 
+  bool _hasCurrentUserPhone() {
+    if (!SupabaseConfig.isInitialized) return false;
+
+    final user = SupabaseConfig.client.auth.currentUser;
+    final rawPhone =
+        user?.userMetadata?['phone']?.toString() ?? user?.phone ?? '';
+    return PhoneFormatter.isValidPhone(rawPhone);
+  }
+
+  Future<void> _showMissingPhoneDialog() async {
+    final shouldAddPhone = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'เพิ่มเบอร์โทรศัพท์',
+          style: TextStyle(
+            fontFamily: AppTextStyles.fontFamily,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: const Text(
+          'กรุณาใส่เบอร์โทรศัพท์สำหรับการติดต่อก่อนใช้งานแชท',
+          style: TextStyle(fontFamily: AppTextStyles.fontFamily),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryColor,
+            ),
+            child: const Text('เพิ่มเบอร์โทร'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldAddPhone == true && mounted) {
+      await AppRoutes.openEditContact(context);
+    }
+  }
+
+  Future<void> _handleChatPressed() async {
+    if (!AuthSession.isAuthenticated) {
+      final shouldLogin = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'เข้าสู่ระบบเพื่อใช้งานแชท',
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: const Text(
+            'กรุณาเข้าสู่ระบบก่อนเริ่มการสนทนากับผู้ใช้นี้',
+            style: TextStyle(fontFamily: AppTextStyles.fontFamily),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryColor,
+              ),
+              child: const Text('เข้าสู่ระบบ'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldLogin == true && mounted) {
+        AppRoutes.goToLogin(context);
+      }
+      return;
+    }
+
+    final currentUid = SupabaseConfig.isInitialized
+        ? SupabaseConfig.client.auth.currentUser?.id
+        : null;
+    final targetUserId = widget.args.userId;
+
+    if (currentUid != null && currentUid == targetUserId) {
+      return;
+    }
+
+    if (!_hasCurrentUserPhone()) {
+      await _showMissingPhoneDialog();
+      return;
+    }
+
+    setState(() => _isChatLoading = true);
+
+    try {
+      final repository = ChatRepositoryImpl();
+      final conversation = await repository.getOrCreateConversation(
+        ownerId: targetUserId,
+        itemId: _userItems.isNotEmpty ? _userItems.first.id : null,
+      );
+
+      final effectiveConversation = conversation.copyWith(
+        name: (_displayName.isNotEmpty && _displayName != 'ผู้ใช้')
+            ? _displayName
+            : conversation.name,
+        avatarAsset: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+            ? _avatarUrl
+            : conversation.avatarAsset,
+      );
+
+      if (mounted) {
+        setState(() => _isChatLoading = false);
+        await AppRoutes.openConversation(
+          context,
+          conversation: effectiveConversation,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isChatLoading = false);
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text(e.toString())),
+          );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUid = SupabaseConfig.isInitialized
@@ -332,10 +474,12 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                       rating: _rating,
                       isVerified: _isVerified,
                       isCurrentUser: isCurrentUser,
+                      isChatLoading: _isChatLoading,
                       onEditProfile: () async {
                         await AppRoutes.openEditProfile(context);
                         _loadSupabaseData();
                       },
+                      onChat: _handleChatPressed,
                     ),
 
                     const SizedBox(height: 20),

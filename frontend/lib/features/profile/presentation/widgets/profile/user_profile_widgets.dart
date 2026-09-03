@@ -97,7 +97,9 @@ class UserProfileHeaderSection extends StatelessWidget {
   final double rating;
   final bool isVerified;
   final bool isCurrentUser;
+  final bool isChatLoading;
   final VoidCallback onEditProfile;
+  final VoidCallback? onChat;
 
   const UserProfileHeaderSection({
     super.key,
@@ -107,7 +109,9 @@ class UserProfileHeaderSection extends StatelessWidget {
     required this.rating,
     required this.isVerified,
     required this.isCurrentUser,
+    this.isChatLoading = false,
     required this.onEditProfile,
+    this.onChat,
   });
 
   @override
@@ -179,7 +183,9 @@ class UserProfileHeaderSection extends StatelessWidget {
 
           // Action button
           ElevatedButton(
-            onPressed: isCurrentUser ? onEditProfile : () {},
+            onPressed: isCurrentUser
+                ? onEditProfile
+                : (isChatLoading ? null : onChat),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryColor,
               foregroundColor: Colors.white,
@@ -189,14 +195,23 @@ class UserProfileHeaderSection extends StatelessWidget {
               ),
               minimumSize: const Size(double.infinity, 48),
             ),
-            child: Text(
-              isCurrentUser ? 'แก้ไขโปรไฟล์' : 'แชทกับ $displayName',
-              style: const TextStyle(
-                fontFamily: AppTextStyles.fontFamily,
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-              ),
-            ),
+            child: isChatLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Text(
+                    isCurrentUser ? 'แก้ไขโปรไฟล์' : 'แชทกับ $displayName',
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
           ),
         ],
       ),

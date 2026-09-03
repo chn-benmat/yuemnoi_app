@@ -13,7 +13,7 @@ class ChatRepositoryImpl implements ChatRepository {
 
   @override
   Future<ChatConversation> getOrCreateConversation({
-    required int itemId,
+    int? itemId,
     required String ownerId,
   }) {
     return _remoteDataSource.getOrCreateConversation(
