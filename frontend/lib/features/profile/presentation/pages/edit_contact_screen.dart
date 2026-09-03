@@ -1,9 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/utils/phone_formatter.dart';
 
 class EditContactScreen extends StatefulWidget {
   const EditContactScreen({super.key});
@@ -25,9 +27,12 @@ class _EditContactScreenState extends State<EditContactScreen> {
         ? SupabaseConfig.client.auth.currentUser
         : null;
 
+    final rawPhone =
+        (user?.userMetadata?['phone'] ?? user?.phone ?? '').toString();
+
     _emailCtrl = TextEditingController(text: user?.email ?? '');
     _phoneCtrl = TextEditingController(
-      text: (user?.userMetadata?['phone'] ?? user?.phone ?? '').toString(),
+      text: PhoneFormatter.formatForDisplay(rawPhone),
     );
 
     _loadContactFromBackend();
@@ -43,14 +48,15 @@ class _EditContactScreenState extends State<EditContactScreen> {
       final apiClient = DioApiClient();
       final response = await apiClient.get(
         '/api/v1/user/profile',
-        headers: {'Authorization': 'Bearer '},
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
       );
 
       if (response.statusCode == 200 && response.data is Map && mounted) {
         final data = response.data as Map;
         if (data['phone'] != null && data['phone'].toString().isNotEmpty) {
           setState(() {
-            _phoneCtrl.text = data['phone'].toString();
+            _phoneCtrl.text =
+                PhoneFormatter.formatForDisplay(data['phone'].toString());
           });
         }
       }
@@ -67,7 +73,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final phone = _phoneCtrl.text.replaceAll(RegExp(r'\D'), '');
+    final rawInput = _phoneCtrl.text;
+    final phoneForSupabase = PhoneFormatter.formatForSupabase(rawInput);
+    final phoneForDisplay = PhoneFormatter.formatForDisplay(rawInput);
     setState(() => _isSaving = true);
 
     try {
@@ -82,8 +90,8 @@ class _EditContactScreenState extends State<EditContactScreen> {
       final apiClient = DioApiClient();
       final response = await apiClient.put(
         '/api/v1/user/contact',
-        headers: {'Authorization': 'Bearer '},
-        data: {'phone': phone},
+        headers: {'Authorization': 'Bearer $accessToken'},
+        data: {'phone': phoneForSupabase},
       );
 
       if (response.statusCode != 200) {
@@ -93,7 +101,17 @@ class _EditContactScreenState extends State<EditContactScreen> {
         throw Exception(errorMsg ?? 'ไม่สามารถบันทึกเบอร์โทรศัพท์ได้');
       }
 
-      _phoneCtrl.text = phone;
+      // บันทึกลงใน Supabase User Metadata ให้เป็น +66 โดยตรงด้วย
+      try {
+        await SupabaseConfig.client.auth.updateUser(
+          UserAttributes(
+            data: {'phone': phoneForSupabase},
+          ),
+        );
+      } catch (_) {}
+
+      // อัปเดตช่องข้อความในหน้าจอให้แสดงเป็นเลข 0 แทน +66
+      _phoneCtrl.text = phoneForDisplay;
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -174,9 +192,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
                 validator: (value) {
-                  final phone = value?.replaceAll(RegExp(r'\D'), '') ?? '';
+                  final phone = value?.trim() ?? '';
                   if (phone.isEmpty) return 'กรุณากรอกเบอร์โทรศัพท์';
-                  if (!RegExp(r'^0\d{9}$').hasMatch(phone)) {
+                  if (!PhoneFormatter.isValidPhone(phone)) {
                     return 'เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0';
                   }
                   return null;

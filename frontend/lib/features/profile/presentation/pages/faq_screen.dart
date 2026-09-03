@@ -15,7 +15,7 @@ class _FaqScreenState extends State<FaqScreen> {
     _FaqItemData(
       question: 'สถานะของแอปพลิเคชัน',
       answer:
-          'Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry\'s standard dummy text ever since the 1500s.',
+          'ระบบและเซิร์ฟเวอร์ทั้งหมดของแอปพลิเคชัน Yuemnoi เปิดให้บริการตามปกติ คุณสามารถลงประกาศปล่อยเช่า ค้นหาอุปกรณ์ จองและชำระเงินออนไลน์ รวมถึงติดต่อสนทนาผ่านระบบแชทได้ตลอด 24 ชั่วโมง ทั้งนี้ หากมีช่วงเวลาปิดปรับปรุงระบบเพื่อพัฒนายกระดับการบริการ ทีมงานจะแจ้งให้ทราบล่วงหน้าผ่านการแจ้งเตือนในแอปพลิเคชัน',
       isExpanded: true,
     ),
     _FaqItemData(
@@ -75,7 +75,10 @@ class _FaqScreenState extends State<FaqScreen> {
                 item: faq,
                 onToggle: () {
                   setState(() {
-                    _faqs[index].isExpanded = !_faqs[index].isExpanded;
+                    final willExpand = !_faqs[index].isExpanded;
+                    for (int i = 0; i < _faqs.length; i++) {
+                      _faqs[i].isExpanded = (i == index) ? willExpand : false;
+                    }
                   });
                 },
               );

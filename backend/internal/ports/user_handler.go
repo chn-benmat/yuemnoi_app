@@ -20,7 +20,11 @@ type UserHandler struct {
 
 const maxProfileImageSize = 5 << 20
 
-var phonePattern = regexp.MustCompile(`^0[0-9]{9}$`)
+var (
+	phoneLocalPattern = regexp.MustCompile(`^0[0-9]{9}$`)
+	phoneIntlPattern  = regexp.MustCompile(`^\+66[0-9]{9}$`)
+	phoneAltPattern   = regexp.MustCompile(`^66[0-9]{9}$`)
+)
 
 func NewUserHandler(gateway domain.AuthGateway) *UserHandler {
 	return &UserHandler{
@@ -172,10 +176,16 @@ func (h *UserHandler) Register(c *gin.Context) {
 
 func normalizePhone(phone string) (string, bool) {
 	normalized := strings.TrimSpace(phone)
-	if !phonePattern.MatchString(normalized) {
-		return "", false
+	if phoneLocalPattern.MatchString(normalized) {
+		return "+66" + strings.TrimPrefix(normalized, "0"), true
 	}
-	return "+66" + strings.TrimPrefix(normalized, "0"), true
+	if phoneIntlPattern.MatchString(normalized) {
+		return normalized, true
+	}
+	if phoneAltPattern.MatchString(normalized) {
+		return "+" + normalized, true
+	}
+	return "", false
 }
 
 func profileImageFromRequest(c *gin.Context) (*domain.ProfileImage, error) {
@@ -410,7 +420,7 @@ func (h *UserHandler) UpdateContact(c *gin.Context) {
 
 	phone, valid := normalizePhone(req.Phone)
 	if !valid {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0 หรือ +66"})
 		return
 	}
 

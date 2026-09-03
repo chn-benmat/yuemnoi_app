@@ -15,6 +15,7 @@ import 'core/services/app_orientation_service.dart';
 
 import 'core/services/chat_notification_service.dart';
 import 'core/services/chat_pin_service.dart';
+import 'core/services/favorite_service.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/user_presence_service.dart';
 
@@ -41,6 +42,7 @@ Future<void> main() async {
 
   await SupabaseConfig.initialize();
   unawaited(ChatPinService.instance.init());
+  unawaited(FavoriteService.instance.init());
 
   if (!kIsWeb) {
     try {
