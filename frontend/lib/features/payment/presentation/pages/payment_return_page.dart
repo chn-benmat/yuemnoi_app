@@ -89,7 +89,26 @@ class _PaymentReturnPageState extends State<PaymentReturnPage> {
                       ),
                     ],
                     const SizedBox(height: 24),
-                    if (!isPaid)
+                    if (isPaid)
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primaryColor,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        onPressed: () {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          } else {
+                            AppRoutes.goToHome(context);
+                          }
+                        },
+                        child: const Text('กลับไปยังห้องแชท'),
+                      )
+                    else ...[
                       FilledButton(
                         onPressed: isLoading
                             ? null
@@ -98,11 +117,12 @@ class _PaymentReturnPageState extends State<PaymentReturnPage> {
                               ),
                         child: const Text('ตรวจสอบอีกครั้ง'),
                       ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => AppRoutes.goToHome(context),
-                      child: const Text('กลับหน้าหลัก'),
-                    ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => AppRoutes.goToHome(context),
+                        child: const Text('กลับหน้าหลัก'),
+                      ),
+                    ],
                   ],
                 ),
               ),

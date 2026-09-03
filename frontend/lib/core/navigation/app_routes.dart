@@ -9,6 +9,7 @@ import '../../features/auth/presentation/pages/login.dart';
 import '../../features/auth/presentation/pages/one_time_verification.dart';
 import '../../features/auth/presentation/pages/register.dart';
 import '../../features/booking/presentation/pages/booking.dart';
+import '../../features/booking/presentation/pages/location_picker_map_page.dart';
 import '../../features/chatbot/data/datasources/chatbot_remote_data_source.dart';
 import '../../features/chatbot/data/repositories/chatbot_repository_impl.dart';
 import '../../features/chatbot/domain/usecases/send_chat_message_usecase.dart'
@@ -511,8 +512,6 @@ abstract final class AppRoutes {
     return openChatDetail(context, conversation: conversation);
   }
 
-
-
   static Future<void> openBooking(
     BuildContext context, {
     BookingRequestData? initialData,
@@ -537,6 +536,25 @@ abstract final class AppRoutes {
     BookingRequestData? bookingData,
   }) {
     return context.push<void>(bookingConfirmation, extra: bookingData);
+  }
+
+  static Future<LocationPickerResult?> openLocationPicker(
+    BuildContext context, {
+    String? initialLocationName,
+    String? initialNote,
+    double? initialLatitude,
+    double? initialLongitude,
+  }) {
+    return Navigator.of(context).push<LocationPickerResult>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerMapPage(
+          initialLocationName: initialLocationName,
+          initialNote: initialNote,
+          initialLatitude: initialLatitude,
+          initialLongitude: initialLongitude,
+        ),
+      ),
+    );
   }
 
   static Future<void> openAddRentalItem(BuildContext context) {

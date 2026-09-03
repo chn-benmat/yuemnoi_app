@@ -164,6 +164,22 @@ func (h *RentalHandler) GetPaymentStatus(c *gin.Context) {
 		writeRentalError(c, err)
 		return
 	}
+
+	// If payment is not marked as paid in DB, but has a Stripe Checkout Session ID,
+	// query Stripe directly to see if payment was completed.
+	if payment.Status != domain.PaymentStatusPaid && payment.StripeCheckoutSessionID != "" && h.paymentGateway != nil {
+		event, err := h.paymentGateway.RetrieveCheckoutSession(c.Request.Context(), payment.StripeCheckoutSessionID)
+		if err == nil && event != nil && event.NextStatus == domain.PaymentStatusPaid {
+			if event.PaymentOrderID == "" {
+				event.PaymentOrderID = payment.ID
+			}
+			_, _ = h.paymentRepository.ProcessEvent(c.Request.Context(), *event)
+			if updatedPayment, err := h.paymentRepository.FindPaymentForRental(c.Request.Context(), rentalID, userID); err == nil {
+				payment = updatedPayment
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"rental_id":        rentalID,
 		"payment_order_id": payment.ID,

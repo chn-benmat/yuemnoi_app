@@ -169,23 +169,51 @@ class DioApiClient implements ApiClient {
     Object? data,
     Map<String, dynamic>? queryParameters,
     Map<String, String>? headers,
+    int maxRetries = 2,
   }) async {
-    try {
-      final response = await _dio.request<Object?>(
-        path,
-        data: data,
-        queryParameters: queryParameters,
-        options: Options(method: method, headers: headers),
-      );
+    var attempt = 0;
+    while (true) {
+      attempt++;
+      try {
+        final response = await _dio.request<Object?>(
+          path,
+          data: data,
+          queryParameters: queryParameters,
+          options: Options(method: method, headers: headers),
+        );
 
-      return ApiResponse(
-        statusCode: response.statusCode ?? 0,
-        data: _decodeResponse(response.data),
-      );
-    } on DioException catch (error) {
-      throw ApiClientException(_errorType(error));
-    } on FormatException {
-      throw const ApiClientException(ApiClientErrorType.invalidResponse);
+        return ApiResponse(
+          statusCode: response.statusCode ?? 0,
+          data: _decodeResponse(response.data),
+        );
+      } on DioException catch (error) {
+        final isRetryable = _isRetryable(error);
+        if (attempt <= maxRetries && isRetryable && (method == 'GET' || method == 'HEAD')) {
+          await Future<void>.delayed(Duration(milliseconds: 500 * attempt));
+          continue;
+        }
+        throw ApiClientException(_errorType(error));
+      } on FormatException {
+        throw const ApiClientException(ApiClientErrorType.invalidResponse);
+      }
+    }
+  }
+
+  bool _isRetryable(DioException error) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+      case DioExceptionType.badCertificate:
+      case DioExceptionType.unknown:
+        return true;
+      case DioExceptionType.badResponse:
+        final status = error.response?.statusCode ?? 0;
+        return status == 502 || status == 503 || status == 504 || status == 429;
+      case DioExceptionType.cancel:
+      case DioExceptionType.transformTimeout:
+        return false;
     }
   }
 
@@ -222,6 +250,10 @@ class DioApiClient implements ApiClient {
 
   static String _resolveBaseUrl(String? baseUrl) {
     var configuredUrl = (baseUrl ?? dotenv.env['API_URL'] ?? '').trim();
+    if ((configuredUrl.startsWith('"') && configuredUrl.endsWith('"')) ||
+        (configuredUrl.startsWith("'") && configuredUrl.endsWith("'"))) {
+      configuredUrl = configuredUrl.substring(1, configuredUrl.length - 1).trim();
+    }
     while (configuredUrl.endsWith('/')) {
       configuredUrl = configuredUrl.substring(0, configuredUrl.length - 1);
     }

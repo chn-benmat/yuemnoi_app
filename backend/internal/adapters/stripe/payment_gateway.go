@@ -94,6 +94,44 @@ func (g *PaymentGateway) CreateCheckoutSession(ctx context.Context, request doma
 	}, nil
 }
 
+func (g *PaymentGateway) RetrieveCheckoutSession(ctx context.Context, sessionID string) (*domain.PaymentEvent, error) {
+	if g.client == nil || strings.TrimSpace(sessionID) == "" {
+		return nil, domain.ErrPaymentConfiguration
+	}
+	session, err := g.client.V1CheckoutSessions.Retrieve(ctx, strings.TrimSpace(sessionID), nil)
+	if err != nil {
+		return nil, fmt.Errorf("retrieve Stripe Checkout Session: %w", err)
+	}
+	status := domain.PaymentStatusCheckoutPending
+	if session.PaymentStatus == stripeapi.CheckoutSessionPaymentStatusPaid {
+		status = domain.PaymentStatusPaid
+	} else if session.Status == stripeapi.CheckoutSessionStatusExpired {
+		status = domain.PaymentStatusExpired
+	}
+
+	paymentIntentID := ""
+	if session.PaymentIntent != nil {
+		paymentIntentID = session.PaymentIntent.ID
+	}
+
+	paymentOrderID := session.ClientReferenceID
+	if paymentOrderID == "" && session.Metadata != nil {
+		paymentOrderID = session.Metadata[paymentOrderMetadataKey]
+	}
+
+	return &domain.PaymentEvent{
+		ID:                      "retrieved_" + session.ID,
+		Type:                    "checkout.session.completed",
+		PaymentOrderID:          paymentOrderID,
+		StripeCheckoutSessionID: session.ID,
+		StripePaymentIntentID:   paymentIntentID,
+		AmountSatang:            session.AmountTotal,
+		Currency:                string(session.Currency),
+		Livemode:                session.Livemode,
+		NextStatus:              status,
+	}, nil
+}
+
 func (g *PaymentGateway) ParseWebhook(payload []byte, signature string) (*domain.PaymentEvent, error) {
 	if g.webhookSecret == "" {
 		return nil, domain.ErrPaymentConfiguration

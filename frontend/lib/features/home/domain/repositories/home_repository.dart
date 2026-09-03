@@ -20,5 +20,8 @@ abstract class HomeRepository {
 
   /// สลับสถานะรายการโปรดของอุปกรณ์
   Future<bool> toggleFavorite(String itemId);
+
+  /// ล้างแคชในหน่วยความจำเพื่อบังคับโหลดข้อมูลใหม่
+  void clearCache() {}
 }
 

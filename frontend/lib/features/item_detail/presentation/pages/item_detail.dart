@@ -11,7 +11,9 @@ import '../../../../core/network/supabase_client.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/navigation/item_deep_link.dart';
 import '../../../../core/widgets/app_primary_button.dart';
+import '../../../chat/data/datasources/chat_remote_data_source.dart';
 import '../../../chat/data/repositories/chat_repository_impl.dart';
+import '../../../chat/domain/entities/item_inquiry_data.dart';
 import '../../domain/entities/item_detail.dart';
 import '../bloc/item_detail_bloc.dart';
 import '../bloc/item_detail_event.dart';
@@ -130,6 +132,26 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         itemId: item.id,
         ownerId: item.owner.userId,
       );
+
+      final firstImageUrl =
+          item.imageUrls.isNotEmpty ? item.imageUrls.first : '';
+      final inquiryData = ItemInquiryData(
+        itemId: item.id,
+        itemName: item.name,
+        price: item.price.toDouble(),
+        unitLabel: item.unitLabel,
+        imageUrl: firstImageUrl,
+      );
+
+      // ส่งข้อความแสดงความสนใจเช่าอุปกรณ์เข้าแชทโดยอัตโนมัติเมื่อกดแชทจากหน้ารายละเอียดอุปกรณ์
+      final chatDataSource = ChatRemoteDataSource();
+      try {
+        await chatDataSource.sendMessage(
+          conversationId: conversation.id,
+          message: inquiryData.toChatMessagePayload(),
+          imageUrl: firstImageUrl.isNotEmpty ? firstImageUrl : null,
+        );
+      } catch (_) {}
 
       if (mounted) {
         setState(() => _isChatLoading = false);

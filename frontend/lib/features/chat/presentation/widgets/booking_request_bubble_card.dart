@@ -4,12 +4,14 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/network/supabase_client.dart';
+import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../../item_detail/presentation/widgets/full_screen_image_viewer.dart';
 import '../../domain/entities/chat_message.dart';
 
-class BookingRequestBubbleCard extends StatelessWidget {
+class BookingRequestBubbleCard extends StatefulWidget {
   const BookingRequestBubbleCard({
     super.key,
     required this.message,
@@ -25,15 +27,69 @@ class BookingRequestBubbleCard extends StatelessWidget {
   final bool? isOwner;
   final VoidCallback? onTap;
 
+  @override
+  State<BookingRequestBubbleCard> createState() =>
+      _BookingRequestBubbleCardState();
+}
+
+class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
+  bool _isPaid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPaidStatus();
+  }
+
+  @override
+  void didUpdateWidget(covariant BookingRequestBubbleCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.bookingData.item.id != widget.bookingData.item.id ||
+        oldWidget.message.id != widget.message.id) {
+      _checkPaidStatus();
+    }
+  }
+
+  Future<void> _checkPaidStatus() async {
+    try {
+      if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized) return;
+      final client = SupabaseConfig.client;
+      final itemId = widget.bookingData.item.id;
+      final startAt = widget.bookingData.startDateTime;
+      final endAt = widget.bookingData.endDateTime;
+
+      final res = await client
+          .from('booking_tb')
+          .select('id, status, payment_status')
+          .eq('item_id', itemId)
+          .or('status.eq.paid,status.eq.confirmed,payment_status.eq.paid')
+          .lte('start_at', endAt.toUtc().toIso8601String())
+          .gte('end_at', startAt.toUtc().toIso8601String())
+          .limit(1);
+
+      if (mounted && res.isNotEmpty) {
+        setState(() {
+          _isPaid = true;
+        });
+      }
+    } catch (_) {}
+  }
+
   bool _checkIsOwner() {
-    if (isOwner != null) return isOwner!;
-    return message.isMine;
+    if (widget.isOwner != null) return widget.isOwner!;
+    return widget.message.isMine;
   }
 
   void _handleAction(BuildContext context, bool isOwner) {
-    final attachedData = bookingData.copyWith(
-      originalMessageId: message.id,
-      conversationId: bookingData.conversationId ?? message.conversationId,
+    if (_isPaid) {
+      AppRoutes.openRentalStatus(context);
+      return;
+    }
+
+    final attachedData = widget.bookingData.copyWith(
+      originalMessageId: widget.message.id,
+      conversationId:
+          widget.bookingData.conversationId ?? widget.message.conversationId,
     );
 
     if (isOwner) {
@@ -43,10 +99,7 @@ class BookingRequestBubbleCard extends StatelessWidget {
         isEditMode: true,
       );
     } else {
-      AppRoutes.openBookingConfirmation(
-        context,
-        bookingData: attachedData,
-      );
+      AppRoutes.openBookingConfirmation(context, bookingData: attachedData);
     }
   }
 
@@ -57,16 +110,17 @@ class BookingRequestBubbleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMine = message.isMine;
-    final item = bookingData.item;
+    final isMine = widget.message.isMine;
+    final item = widget.bookingData.item;
     final displayImageUrl =
-        (message.imageUrl != null && message.imageUrl!.isNotEmpty)
-            ? message.imageUrl!
-            : item.imageUrl;
+        (widget.message.imageUrl != null && widget.message.imageUrl!.isNotEmpty)
+        ? widget.message.imageUrl!
+        : item.imageUrl;
     final isOwnerUser = _checkIsOwner();
 
-    final senderText = (senderName != null && senderName!.isNotEmpty)
-        ? senderName!
+    final senderText =
+        (widget.senderName != null && widget.senderName!.isNotEmpty)
+        ? widget.senderName!
         : (item.ownerName.isNotEmpty ? item.ownerName : 'ผู้เช่า');
 
     return Container(
@@ -75,10 +129,7 @@ class BookingRequestBubbleCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -198,15 +249,54 @@ class BookingRequestBubbleCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    isMine ? 'คุณส่งรายละเอียด' : '$senderTextส่งรายละเอียด',
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E2022),
-                      height: 1.3,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          isMine
+                              ? 'คุณส่งรายละเอียด'
+                              : '$senderTextส่งรายละเอียด',
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1E2022),
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                      if (_isPaid)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.check_circle_rounded,
+                                size: 12,
+                                color: Color(0xFF16A34A),
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                'ชำระเงินแล้ว',
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF16A34A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   const Text(
@@ -231,10 +321,7 @@ class BookingRequestBubbleCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFE2E8F0),
-                  width: 0.8,
-                ),
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
               ),
               child: Column(
                 children: [
@@ -243,7 +330,7 @@ class BookingRequestBubbleCard extends StatelessWidget {
                     icon: Icons.access_time_filled_rounded,
                     iconColor: const Color(0xFF8B5CF6),
                     label: 'เวลาเช่า',
-                    value: bookingData.formattedPeriodSummary,
+                    value: widget.bookingData.formattedPeriodSummary,
                   ),
                   const SizedBox(height: 6),
 
@@ -252,7 +339,18 @@ class BookingRequestBubbleCard extends StatelessWidget {
                     icon: Icons.location_on_rounded,
                     iconColor: const Color(0xFFEF4444),
                     label: 'จุดนัดพบ',
-                    value: bookingData.location,
+                    value: widget.bookingData.location,
+                    onTap: () {
+                      final coordinates = LocationService.resolveCoordinates(
+                        locationName: widget.bookingData.location,
+                        latitude: widget.bookingData.latitude,
+                        longitude: widget.bookingData.longitude,
+                      );
+                      LocationService.openInExternalMaps(
+                        coordinates.latitude,
+                        coordinates.longitude,
+                      );
+                    },
                   ),
                   const SizedBox(height: 6),
 
@@ -261,7 +359,7 @@ class BookingRequestBubbleCard extends StatelessWidget {
                     icon: Icons.payments_rounded,
                     iconColor: const Color(0xFF10B981),
                     label: 'ยอดรวม',
-                    value: _formatPrice(bookingData.totalPrice),
+                    value: _formatPrice(widget.bookingData.totalPrice),
                     isPrice: true,
                   ),
                 ],
@@ -270,30 +368,47 @@ class BookingRequestBubbleCard extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // 4. ปุ่ม Action Minimal (แก้ไขรายละเอียดการเช่า / ตรวจสอบ)
+            // 4. ปุ่ม Action (ตรวจสอบสถานะการเช่า / แก้ไขรายละเอียดการเช่า / ตรวจสอบ)
             SizedBox(
               width: double.infinity,
               height: 40,
-              child: ElevatedButton(
+              child: ElevatedButton.icon(
                 key: const ValueKey('chat-booking-action-button'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE5E7EB),
-                  foregroundColor: const Color(0xFF1E2022),
-                  elevation: 0,
-                  shadowColor: Colors.transparent,
+                  backgroundColor: _isPaid
+                      ? AppColors.primaryColor
+                      : const Color(0xFFE5E7EB),
+                  foregroundColor: _isPaid
+                      ? Colors.white
+                      : const Color(0xFF1E2022),
+                  elevation: _isPaid ? 2 : 0,
+                  shadowColor: _isPaid
+                      ? AppColors.primaryColor.withValues(alpha: 0.3)
+                      : Colors.transparent,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                 ),
                 onPressed: () => _handleAction(context, isOwnerUser),
-                child: Text(
-                  isOwnerUser ? 'แก้ไขรายละเอียดการเช่า' : 'ตรวจสอบ',
-                  style: const TextStyle(
+                icon: _isPaid
+                    ? const Icon(
+                        Icons.local_shipping_outlined,
+                        size: 18,
+                        color: Colors.white,
+                      )
+                    : const SizedBox.shrink(),
+                label: Text(
+                  _isPaid
+                      ? 'ตรวจสอบสถานะการเช่า'
+                      : isOwnerUser
+                      ? 'แก้ไขรายละเอียดการเช่า'
+                      : 'ตรวจสอบ',
+                  style: TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1E2022),
+                    color: _isPaid ? Colors.white : const Color(0xFF1E2022),
                   ),
                 ),
               ),
@@ -310,8 +425,9 @@ class BookingRequestBubbleCard extends StatelessWidget {
     required String label,
     required String value,
     bool isPrice = false,
+    VoidCallback? onTap,
   }) {
-    return Row(
+    final row = Row(
       children: [
         Icon(icon, size: 14, color: iconColor),
         const SizedBox(width: 5),
@@ -339,7 +455,28 @@ class BookingRequestBubbleCard extends StatelessWidget {
             ),
           ),
         ),
+        if (onTap != null) ...[
+          const SizedBox(width: 4),
+          const Icon(
+            Icons.open_in_new_rounded,
+            size: 11,
+            color: AppColors.primaryColor,
+          ),
+        ],
       ],
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 1),
+          child: row,
+        ),
+      );
+    }
+
+    return row;
   }
 }

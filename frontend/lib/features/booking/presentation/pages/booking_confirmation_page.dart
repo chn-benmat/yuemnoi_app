@@ -56,6 +56,8 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
           endTime: const TimeOfDay(hour: 17, minute: 0),
           location: 'ซีคอน บางแค',
           locationNote: 'เลือกโดยผู้ปล่อยเช่า',
+          latitude: 13.7115884,
+          longitude: 100.4341077,
         );
 
     _selectedPaymentMethod = _bookingData.paymentMethod;
@@ -70,7 +72,28 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      context.read<PaymentCubit>().refresh();
+      unawaited(_checkPaymentStatusWithPolling());
+    }
+  }
+
+  Future<void> _checkPaymentStatusWithPolling() async {
+    if (!mounted) return;
+    final cubit = context.read<PaymentCubit>();
+    if (cubit.state.flowStatus == PaymentFlowStatus.paid) {
+      return;
+    }
+    for (int i = 0; i < 6; i++) {
+      if (!mounted) return;
+      if (cubit.state.flowStatus == PaymentFlowStatus.paid) {
+        return;
+      }
+      await cubit.refresh();
+      if (cubit.state.flowStatus == PaymentFlowStatus.paid) {
+        return;
+      }
+      if (i < 5) {
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+      }
     }
   }
 
@@ -142,6 +165,9 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
     final checkoutUrl = await context.read<PaymentCubit>().start(draft);
     if (!mounted || checkoutUrl == null) return;
     await _launchCheckout(checkoutUrl);
+    if (mounted) {
+      await _checkPaymentStatusWithPolling();
+    }
   }
 
   Future<void> _launchCheckout(Uri checkoutUrl) async {
@@ -326,10 +352,9 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
                     ),
                     onPressed: () {
                       Navigator.pop(ctx);
-                      Navigator.of(context).popUntil((route) => route.isFirst);
                     },
                     child: const Text(
-                      'เสร็จสิ้น',
+                      'กลับไปยังห้องแชท',
                       style: TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
                         fontSize: 16,
@@ -344,6 +369,13 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
         );
       },
     );
+
+    if (!mounted) return;
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 
   @override
@@ -417,6 +449,8 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
                       BookingLocationCard(
                         location: _bookingData.location,
                         locationNote: _bookingData.locationNote,
+                        latitude: _bookingData.latitude,
+                        longitude: _bookingData.longitude,
                         isEditable: false,
                       ),
                       const SizedBox(height: 18),
@@ -448,27 +482,117 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
               // 7. ปุ่ม "ชำระเงิน"
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: BlocBuilder<PaymentCubit, PaymentState>(
-                    builder: (context, state) {
-                      final isBusy =
-                          state.flowStatus ==
-                              PaymentFlowStatus.creatingCheckout ||
-                          state.flowStatus == PaymentFlowStatus.checkingStatus;
+                child: BlocBuilder<PaymentCubit, PaymentState>(
+                  builder: (context, state) {
+                    final isBusy =
+                        state.flowStatus ==
+                            PaymentFlowStatus.creatingCheckout ||
+                        state.flowStatus == PaymentFlowStatus.checkingStatus;
 
-                      String buttonLabel;
-                      if (_selectedPaymentMethod == BookingPaymentMethod.wallet) {
-                        buttonLabel = 'ชำระด้วย Yuemnoi Wallet';
-                      } else if (state.flowStatus ==
-                          PaymentFlowStatus.awaitingPayment) {
-                        buttonLabel = 'เปิดหน้าชำระเงินอีกครั้ง';
-                      } else {
-                        buttonLabel = 'ชำระเงินผ่าน Stripe';
-                      }
+                    if (state.flowStatus == PaymentFlowStatus.awaitingPayment &&
+                        _selectedPaymentMethod != BookingPaymentMethod.wallet) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF10B981),
+                                foregroundColor: Colors.white,
+                                elevation: 3,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                              ),
+                              onPressed: isBusy
+                                  ? null
+                                  : () => _checkPaymentStatusWithPolling(),
+                              icon: isBusy
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.check_circle_outline_rounded,
+                                      size: 20,
+                                    ),
+                              label: Text(
+                                isBusy
+                                    ? 'กำลังตรวจสอบสถานะการชำระเงิน...'
+                                    : 'ตรวจสอบสถานะการชำระเงิน',
+                                style: const TextStyle(
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 46,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primaryColor,
+                                side: BorderSide(
+                                  color: AppColors.primaryColor.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                              onPressed: isBusy
+                                  ? null
+                                  : () {
+                                      final checkoutUrl = state.checkoutUrl;
+                                      if (checkoutUrl != null) {
+                                        _launchCheckout(checkoutUrl).then((_) {
+                                          if (mounted) {
+                                            _checkPaymentStatusWithPolling();
+                                          }
+                                        });
+                                      } else {
+                                        _handlePayment();
+                                      }
+                                    },
+                              icon: const Icon(
+                                Icons.open_in_browser_rounded,
+                                size: 18,
+                              ),
+                              label: const Text(
+                                'เปิดหน้าชำระเงิน Stripe อีกครั้ง',
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
 
-                      return ElevatedButton(
+                    String buttonLabel;
+                    if (_selectedPaymentMethod == BookingPaymentMethod.wallet) {
+                      buttonLabel = 'ชำระด้วย Yuemnoi Wallet';
+                    } else {
+                      buttonLabel = 'ชำระเงินผ่าน Stripe';
+                    }
+
+                    return SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primaryColor,
                           foregroundColor: Colors.white,
@@ -480,19 +604,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
                             borderRadius: BorderRadius.circular(28),
                           ),
                         ),
-                        onPressed: isBusy
-                            ? null
-                            : (state.flowStatus ==
-                                        PaymentFlowStatus.awaitingPayment &&
-                                    _selectedPaymentMethod !=
-                                        BookingPaymentMethod.wallet)
-                                ? () {
-                                    final checkoutUrl = state.checkoutUrl;
-                                    if (checkoutUrl != null) {
-                                      _launchCheckout(checkoutUrl);
-                                    }
-                                  }
-                                : _handlePayment,
+                        onPressed: isBusy ? null : _handlePayment,
                         child: isBusy
                             ? const SizedBox(
                                 width: 22,
@@ -510,9 +622,9 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
