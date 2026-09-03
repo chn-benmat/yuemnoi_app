@@ -14,9 +14,6 @@ main
 Thumbs.db
 
 tests/
-!tests/
-tests/*
-!tests/payment_handler_test.go
 test/
 .serena/
 service-account.json
