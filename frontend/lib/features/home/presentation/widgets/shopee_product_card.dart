@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../domain/entities/feed_item.dart';
 
 /// การ์ดแสดงสินค้าสไตล์ Shopee สำหรับ Grid 2 คอลัมน์ (ซ้าย-ขวา)
@@ -23,10 +24,7 @@ class ShopeeProductCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFECEEF1),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFECEEF1), width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -58,32 +56,24 @@ class ShopeeProductCard extends StatelessWidget {
                         child: item.imageUrl.trim().isEmpty
                             ? _buildNoPictureThumbnail()
                             : item.imageUrl.startsWith('http')
-                                ? CachedNetworkImage(
-                                    imageUrl: item.imageUrl,
-                                    fit: BoxFit.cover,
-                                    placeholder: (context, url) => Container(
-                                      color: const Color(0xFFF0F2F5),
-                                      child: const Center(
-                                        child: SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: AppColors.primaryColor,
-                                          ),
-                                        ),
+                            ? CachedNetworkImage(
+                                imageUrl: item.imageUrl,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) =>
+                                    const SkeletonShimmer(
+                                      child: ColoredBox(
+                                        color: Color(0xFFE3E5E8),
                                       ),
                                     ),
-                                    errorWidget: (context, url, error) =>
-                                        _buildNoPictureThumbnail(),
-                                  )
-                                : Image.asset(
-                                    item.imageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            _buildNoPictureThumbnail(),
-                                  ),
+                                errorWidget: (context, url, error) =>
+                                    _buildNoPictureThumbnail(),
+                              )
+                            : Image.asset(
+                                item.imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    _buildNoPictureThumbnail(),
+                              ),
                       ),
                     ),
                   ),

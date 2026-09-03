@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../domain/entities/feed_item.dart';
 import '../bloc/home_bloc.dart';
 import '../bloc/home_event.dart';
@@ -61,13 +62,13 @@ class _HomeFeedViewState extends State<HomeFeedView> {
     double? minRating,
   }) {
     context.read<HomeBloc>().add(
-          ApplyFilterRequested(
-            categoryId: categoryId,
-            minPrice: minPrice,
-            maxPrice: maxPrice,
-            minRating: minRating,
-          ),
-        );
+      ApplyFilterRequested(
+        categoryId: categoryId,
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+        minRating: minRating,
+      ),
+    );
   }
 
   @override
@@ -113,6 +114,10 @@ class _HomeFeedViewState extends State<HomeFeedView> {
           },
         ),
 
+        // แถบค้นหาและตัวกรองอยู่นอกพื้นที่ Pull to Refresh เพื่อไม่ให้ถูกดึงลง
+        _buildSearchAndFilterSection(state),
+        const SizedBox(height: 14),
+
         // ส่วน Feed เลื่อนได้ พร้อม Pull to Refresh
         Expanded(
           child: RefreshIndicator(
@@ -128,10 +133,6 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                 parent: BouncingScrollPhysics(),
               ),
               slivers: [
-                SliverToBoxAdapter(
-                  child: _buildSearchAndFilterSection(state),
-                ),
-                const SliverToBoxAdapter(child: SizedBox(height: 14)),
                 _buildProductGridSliver(displayedItems, state.searchQuery),
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
@@ -167,18 +168,14 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                 minPrice: state.minPrice,
                 maxPrice: state.maxPrice,
                 minRating: state.minRating,
-                onApplyFilter: ({
-                  required categoryId,
-                  minPrice,
-                  maxPrice,
-                  minRating,
-                }) =>
-                    _applyFilter(
-                  categoryId: categoryId,
-                  minPrice: minPrice,
-                  maxPrice: maxPrice,
-                  minRating: minRating,
-                ),
+                onApplyFilter:
+                    ({required categoryId, minPrice, maxPrice, minRating}) =>
+                        _applyFilter(
+                          categoryId: categoryId,
+                          minPrice: minPrice,
+                          maxPrice: maxPrice,
+                          minRating: minRating,
+                        ),
                 onResetFilter: () => bloc.add(const ClearFilterRequested()),
               ),
             ],
@@ -233,16 +230,10 @@ class _HomeFeedViewState extends State<HomeFeedView> {
           mainAxisSpacing: 10,
           childAspectRatio: 0.61,
         ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final item = items[index];
-            return ShopeeProductCard(
-              item: item,
-              onTap: () => _onItemTap(item),
-            );
-          },
-          childCount: items.length,
-        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final item = items[index];
+          return ShopeeProductCard(item: item, onTap: () => _onItemTap(item));
+        }, childCount: items.length),
       ),
     );
   }
@@ -253,21 +244,90 @@ class _HomeLoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircularProgressIndicator(
-            color: AppColors.primaryColor,
-            strokeWidth: 3,
+    return Column(
+      key: const ValueKey('home-feed-skeleton'),
+      children: [
+        const HomeHeader(unreadCount: 0),
+        Expanded(
+          child: SkeletonShimmer(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: Column(
+                children: [
+                  const Row(
+                    children: [
+                      Expanded(
+                        child: SkeletonBox(height: 52, borderRadius: 18),
+                      ),
+                      SizedBox(width: 10),
+                      SkeletonBox(width: 52, height: 52, borderRadius: 18),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Expanded(
+                    child: GridView.builder(
+                      padding: EdgeInsets.zero,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 0.61,
+                          ),
+                      itemCount: 6,
+                      itemBuilder: (context, index) =>
+                          const _ProductCardSkeleton(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          SizedBox(height: 16),
-          Text(
-            'กำลังโหลดรายการอุปกรณ์...',
-            style: TextStyle(
-              color: Color(0xFF6B7075),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductCardSkeleton extends StatelessWidget {
+  const _ProductCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 6,
+            child: SkeletonBox(height: double.infinity, borderRadius: 0),
+          ),
+          Expanded(
+            flex: 4,
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SkeletonBox(
+                    width: double.infinity,
+                    height: 14,
+                    borderRadius: 7,
+                  ),
+                  SizedBox(height: 8),
+                  SkeletonBox(width: 96, height: 14, borderRadius: 7),
+                  Spacer(),
+                  SkeletonBox(width: 76, height: 18, borderRadius: 9),
+                  SizedBox(height: 8),
+                  SkeletonBox(width: 116, height: 12, borderRadius: 6),
+                ],
+              ),
             ),
           ),
         ],
@@ -277,10 +337,7 @@ class _HomeLoadingView extends StatelessWidget {
 }
 
 class _HomeErrorView extends StatelessWidget {
-  const _HomeErrorView({
-    required this.message,
-    required this.onRetry,
-  });
+  const _HomeErrorView({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;

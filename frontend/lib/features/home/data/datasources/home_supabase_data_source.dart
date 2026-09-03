@@ -3,46 +3,29 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/network/api_client.dart';
-import '../../../../core/network/supabase_client.dart';
 import '../models/feed_category_model.dart';
 import '../models/feed_item_model.dart';
 import 'home_mock_data_source.dart';
 
 /// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงผ่าน Go Backend REST API (`/api/v1/items`)
-/// พร้อมระบบ Fallback 3 ระดับ (Go API -> Supabase DB Direct -> Local Cache)
+/// พร้อม fallback จาก Go API ไปยัง Local Cache
 class HomeSupabaseDataSource {
   HomeSupabaseDataSource({
-    SupabaseClient? client,
     ApiClient? apiClient,
     HomeMockDataSource? fallbackDataSource,
-  })  : _client = client,
-        _apiClient = apiClient ?? DioApiClient(),
-        _fallbackDataSource = fallbackDataSource ?? HomeMockDataSource();
+  }) : _apiClient = apiClient ?? DioApiClient(),
+       _fallbackDataSource = fallbackDataSource ?? HomeMockDataSource();
 
-  static const String _cacheKey = 'cached_home_feed_items_v1';
+  static const String _cacheKey = 'cached_home_feed_items_v2_ranked';
 
-  final SupabaseClient? _client;
   final ApiClient _apiClient;
   final HomeMockDataSource _fallbackDataSource;
   final Set<String> _favoriteItemIds = {};
 
   List<FeedItemModel>? _cachedFeedItems;
   DateTime? _lastFetchTime;
-
-  SupabaseClient? get client {
-    if (_client != null) return _client;
-    if (SupabaseConfig.isInitialized) {
-      try {
-        return SupabaseConfig.client;
-      } catch (_) {
-        return null;
-      }
-    }
-    return null;
-  }
 
   void clearMemoryCache() {
     _cachedFeedItems = null;
@@ -209,7 +192,10 @@ class HomeSupabaseDataSource {
     return list[index % list.length];
   }
 
-  List<FeedItemModel> _mapRawListToFeedItems(List rawItems, {Map<String, Map<String, dynamic>>? profilesMap}) {
+  List<FeedItemModel> _mapRawListToFeedItems(
+    List rawItems, {
+    Map<String, Map<String, dynamic>>? profilesMap,
+  }) {
     final List<FeedItemModel> items = [];
     for (int i = 0; i < rawItems.length; i++) {
       final item = rawItems[i] is Map<String, dynamic>
@@ -229,12 +215,12 @@ class HomeSupabaseDataSource {
       String imageUrl = '';
       if (item['item_image_url'] is List &&
           (item['item_image_url'] as List).isNotEmpty) {
-        final firstImg =
-            (item['item_image_url'] as List).first?.toString();
+        final firstImg = (item['item_image_url'] as List).first?.toString();
         if (firstImg != null && firstImg.trim().isNotEmpty) {
           imageUrl = firstImg.trim();
         }
-      } else if (item['item_image_url'] is String && (item['item_image_url'] as String).trim().isNotEmpty) {
+      } else if (item['item_image_url'] is String &&
+          (item['item_image_url'] as String).trim().isNotEmpty) {
         imageUrl = (item['item_image_url'] as String).trim();
       }
 
@@ -269,8 +255,12 @@ class HomeSupabaseDataSource {
         tags.addAll(words);
       }
 
-      final rating = 4.7 + ((i % 4) * 0.1);
-      final reviewCount = 8 + (i * 3);
+      final rating = item['rating'] is num
+          ? (item['rating'] as num).toDouble()
+          : double.tryParse(item['rating']?.toString() ?? '') ?? 0;
+      final reviewCount = item['review_count'] is num
+          ? (item['review_count'] as num).toInt()
+          : int.tryParse(item['review_count']?.toString() ?? '') ?? 0;
       final distanceKm = 0.8 + ((i % 6) * 0.6);
 
       items.add(
@@ -297,46 +287,10 @@ class HomeSupabaseDataSource {
     return items;
   }
 
-  Future<List<FeedItemModel>> _fetchDirectFromSupabase() async {
-    final sb = client;
-    if (sb == null) {
-      throw const FormatException('Supabase client not initialized');
-    }
-
-    final rawItems = await sb.from('item_tb').select('*').order('id', ascending: false);
-    if (rawItems is! List) {
-      throw const FormatException('Supabase query returned invalid format');
-    }
-    final rawList = rawItems.cast<Map<String, dynamic>>();
-    if (rawList.isEmpty) return const [];
-
-    final userIds = rawList
-        .map((e) => e['user_id']?.toString())
-        .where((id) => id != null && id.isNotEmpty)
-        .cast<String>()
-        .toSet();
-
-    final profilesMap = <String, Map<String, dynamic>>{};
-    if (userIds.isNotEmpty) {
-      try {
-        final rawProfiles = await sb
-            .from('profile_tb')
-            .select('user_id,email,user_image_url')
-            .inFilter('user_id', userIds.toList(growable: false));
-        if (rawProfiles is List) {
-          for (final p in rawProfiles.cast<Map<String, dynamic>>()) {
-            final uid = p['user_id']?.toString();
-            if (uid != null) profilesMap[uid] = p;
-          }
-        }
-      } catch (_) {}
-    }
-
-    return _mapRawListToFeedItems(rawList, profilesMap: profilesMap);
-  }
-
-  /// ดึงข้อมูลทั้งหมดผ่าน Go Backend API (`/api/v1/items`) หรือ Supabase หรือ Local Cache
-  Future<List<FeedItemModel>> _fetchAllSupabaseItems({bool forceRefresh = false}) async {
+  /// ดึงข้อมูลทั้งหมดผ่าน Go Backend API (`/api/v1/items`) หรือ Local Cache
+  Future<List<FeedItemModel>> _fetchAllSupabaseItems({
+    bool forceRefresh = false,
+  }) async {
     if (!forceRefresh &&
         _cachedFeedItems != null &&
         _lastFetchTime != null &&
@@ -350,38 +304,25 @@ class HomeSupabaseDataSource {
       if (response.statusCode == 200 && response.data is List) {
         final rawItems = response.data as List;
         final items = _mapRawListToFeedItems(rawItems);
-        if (items.isNotEmpty) {
-          _cachedFeedItems = items;
-          _lastFetchTime = DateTime.now();
-          unawaited(_saveCachedItems(items));
-          return items;
-        }
-      }
-    } catch (e) {
-      debugPrint('Home Go Backend API fetch error: $e');
-    }
-
-    // Tier 2: Try Direct Supabase DB Query
-    try {
-      final items = await _fetchDirectFromSupabase();
-      if (items.isNotEmpty) {
         _cachedFeedItems = items;
         _lastFetchTime = DateTime.now();
         unawaited(_saveCachedItems(items));
         return items;
       }
     } catch (e) {
-      debugPrint('Home Supabase direct query error: $e');
+      debugPrint('Home Go Backend API fetch error: $e');
     }
 
-    // Tier 3: Try Local Cache from SharedPreferences
+    // Tier 2: Try Local Cache from SharedPreferences
     final cached = await _loadCachedItems();
     if (cached.isNotEmpty) {
       _cachedFeedItems = cached;
       return cached;
     }
 
-    throw const FormatException('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่');
+    throw const FormatException(
+      'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่',
+    );
   }
 
   /// ดึงรายการแนะนำพิเศษ (Curated Daily) จาก Supabase / Backend
@@ -413,10 +354,10 @@ class HomeSupabaseDataSource {
       items = items.where((item) {
         final matchesTitle = item.title.toLowerCase().contains(query);
         final matchesCategory = item.categoryId.toLowerCase().contains(query);
-        final matchesTags =
-            item.tags.any((t) => t.toLowerCase().contains(query));
-        final matchesLocation =
-            item.locationName.toLowerCase().contains(query);
+        final matchesTags = item.tags.any(
+          (t) => t.toLowerCase().contains(query),
+        );
+        final matchesLocation = item.locationName.toLowerCase().contains(query);
         final matchesOwner = item.ownerName.toLowerCase().contains(query);
         return matchesTitle ||
             matchesCategory ||
