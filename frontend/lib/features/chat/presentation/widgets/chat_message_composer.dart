@@ -4,13 +4,24 @@ import '../../../../core/constants/colors.dart';
 import '../../domain/entities/chat_message.dart';
 
 String _extractActualTextMessage(String raw) {
-  if (raw.startsWith('↩ ตอบกลับ:') || raw.startsWith('💬 ตอบกลับ')) {
-    final newlineIdx = raw.indexOf('\n');
+  final trimmed = raw.trim();
+  if (trimmed.startsWith('↩ ตอบกลับ:') ||
+      trimmed.startsWith('💬 ตอบกลับ') ||
+      trimmed.startsWith('↪ ตอบกลับ')) {
+    final newlineIdx = trimmed.indexOf('\n');
     if (newlineIdx != -1) {
-      return raw.substring(newlineIdx + 1);
+      return trimmed.substring(newlineIdx + 1).trim();
+    }
+    final parts = trimmed.split('|');
+    if (parts.length >= 2) {
+      return parts.last.trim();
+    }
+    final colonIdx = trimmed.indexOf(':');
+    if (colonIdx != -1) {
+      return trimmed.substring(colonIdx + 1).trim();
     }
   }
-  return raw;
+  return trimmed;
 }
 
 class ChatMessageComposer extends StatelessWidget {

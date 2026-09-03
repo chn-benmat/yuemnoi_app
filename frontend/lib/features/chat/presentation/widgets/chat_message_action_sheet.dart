@@ -3,6 +3,28 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/services/media_download_service.dart';
 import '../../domain/entities/chat_message.dart';
+import 'chat_toast.dart';
+
+String _extractActualTextMessage(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.startsWith('↩ ตอบกลับ:') ||
+      trimmed.startsWith('💬 ตอบกลับ') ||
+      trimmed.startsWith('↪ ตอบกลับ')) {
+    final newlineIdx = trimmed.indexOf('\n');
+    if (newlineIdx != -1) {
+      return trimmed.substring(newlineIdx + 1).trim();
+    }
+    final parts = trimmed.split('|');
+    if (parts.length >= 2) {
+      return parts.last.trim();
+    }
+    final colonIdx = trimmed.indexOf(':');
+    if (colonIdx != -1) {
+      return trimmed.substring(colonIdx + 1).trim();
+    }
+  }
+  return trimmed;
+}
 
 /// เมนูกดค้างที่ข้อความ (Message Action Sheet) ตามสไตล์ Messenger
 class ChatMessageActionSheet extends StatelessWidget {
@@ -52,14 +74,12 @@ class ChatMessageActionSheet extends StatelessWidget {
         },
         onCopy: () {
           Navigator.of(modalContext).pop();
-          if (message.message.isNotEmpty && message.message != '📷 ส่งรูปภาพ') {
-            Clipboard.setData(ClipboardData(text: message.message));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('คัดลอกข้อความแล้ว'),
-                duration: Duration(seconds: 2),
-              ),
-            );
+          final textToCopy = _extractActualTextMessage(message.message);
+          if (textToCopy.isNotEmpty &&
+              textToCopy != '📷 ส่งรูปภาพ' &&
+              textToCopy != '[รูปภาพ]') {
+            Clipboard.setData(ClipboardData(text: textToCopy));
+            ChatToast.show(context, message: 'คัดลอกแล้ว');
           }
         },
         onEdit: onEdit != null
@@ -82,15 +102,11 @@ class ChatMessageActionSheet extends StatelessWidget {
             final count = await MediaDownloadService.instance
                 .saveMultipleImagesFromUrls(effectiveImages);
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    count > 1
-                        ? 'บันทึก $count รูปภาพลงในแกลเลอรีเรียบร้อยแล้ว'
-                        : 'บันทึกรูปภาพลงในแกลเลอรีเรียบร้อยแล้ว',
-                  ),
-                  duration: const Duration(seconds: 2),
-                ),
+              ChatToast.show(
+                context,
+                message: count > 1
+                    ? 'บันทึก $count รูปภาพแล้ว'
+                    : 'บันทึกรูปภาพแล้ว',
               );
             }
           }
@@ -141,9 +157,10 @@ class ChatMessageActionSheet extends StatelessWidget {
             : <String>[]);
     final hasImages = effectiveImages.isNotEmpty;
 
-    final isTextMessage = message.message.isNotEmpty &&
-        message.message != '📷 ส่งรูปภาพ' &&
-        message.message != '[รูปภาพ]';
+    final actualText = _extractActualTextMessage(message.message);
+    final isTextMessage = actualText.isNotEmpty &&
+        actualText != '📷 ส่งรูปภาพ' &&
+        actualText != '[รูปภาพ]';
 
     final canEdit = message.isMine && isTextMessage && onEdit != null;
 

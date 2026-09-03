@@ -525,6 +525,22 @@ class ChatRemoteDataSource {
     } catch (_) {}
   }
 
+  Future<void> broadcastMessageDeleted({
+    required String conversationId,
+    required String messageId,
+  }) async {
+    try {
+      final channel = getOrCreateRoomChannel(conversationId);
+      await channel?.sendBroadcastMessage(
+        event: 'message_deleted',
+        payload: {
+          'message_id': messageId,
+          'conversation_id': conversationId,
+        },
+      );
+    } catch (_) {}
+  }
+
   Future<String> uploadChatImage({
     required String conversationId,
     required Uint8List imageBytes,
@@ -605,7 +621,8 @@ class ChatRemoteDataSource {
     final pathSegments = uri.pathSegments;
     final bucketIndex = pathSegments.indexOf(_chatBucket);
     if (bucketIndex != -1 && bucketIndex + 1 < pathSegments.length) {
-      return pathSegments.sublist(bucketIndex + 1).join('/');
+      final subPath = pathSegments.sublist(bucketIndex + 1).join('/');
+      return Uri.decodeComponent(subPath);
     }
     return null;
   }
@@ -615,9 +632,13 @@ class ChatRemoteDataSource {
     required String conversationId,
     String? imageUrl,
   }) async {
+    if (messageId.startsWith('temp_') || int.tryParse(messageId) == null) {
+      return;
+    }
+
     final client = _supabaseClient;
     try {
-      final dynamic parsedId = int.tryParse(messageId) ?? messageId;
+      final parsedId = int.parse(messageId);
 
       // ถ้าไม่ได้ส่ง imageUrl มา ให้ query ค้นหา URL รูปภาพก่อนลบจากฐานข้อมูล
       String? targetImageUrl = imageUrl;
@@ -646,6 +667,42 @@ class ChatRemoteDataSource {
 
       // ลบข้อความออกจากฐานข้อมูล Supabase
       await client.from('chat_message_tb').delete().eq('id', parsedId);
+
+      // อัปเดตข้อความล่าสุด (last_message) ใน conversation_tb ให้เป็นข้อความล่าสุดที่เหลืออยู่
+      try {
+        final latestMsg = await client
+            .from('chat_message_tb')
+            .select('message, image_url, created_at')
+            .eq('conversation_id', conversationId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+
+        if (latestMsg != null) {
+          final lastText = latestMsg['message']?.toString().trim() ?? '';
+          final lastImg = latestMsg['image_url']?.toString();
+          final displayLastMsg = lastImg != null &&
+                  lastImg.isNotEmpty &&
+                  (lastText.isEmpty || lastText == '📷 ส่งรูปภาพ')
+              ? '[รูปภาพ]'
+              : lastText;
+          final lastAt = latestMsg['created_at']?.toString() ??
+              DateTime.now().toUtc().toIso8601String();
+
+          await client.from('conversation_tb').update({
+            'last_message': displayLastMsg,
+            'last_message_at': lastAt,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', conversationId);
+        } else {
+          await client.from('conversation_tb').update({
+            'last_message': '',
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', conversationId);
+        }
+      } catch (e) {
+        debugPrint('Failed to update conversation last_message after delete: $e');
+      }
     } on PostgrestException catch (e) {
       throw ChatRemoteException('ลบข้อความไม่สำเร็จ: ${e.message}');
     } catch (_) {
@@ -658,6 +715,9 @@ class ChatRemoteDataSource {
     required String newMessage,
     String? conversationId,
   }) async {
+    if (messageId.startsWith('temp_') || int.tryParse(messageId) == null) {
+      return;
+    }
     final client = _supabaseClient;
     try {
       final dynamic parsedId = int.tryParse(messageId) ?? messageId;

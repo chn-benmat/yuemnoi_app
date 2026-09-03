@@ -35,13 +35,24 @@ import '../widgets/chat_skeleton_loading_view.dart';
 import '../widgets/chat_typing_indicator_bubble.dart';
 
 String _extractActualTextMessage(String raw) {
-  if (raw.startsWith('↩ ตอบกลับ:') || raw.startsWith('💬 ตอบกลับ')) {
-    final newlineIdx = raw.indexOf('\n');
+  final trimmed = raw.trim();
+  if (trimmed.startsWith('↩ ตอบกลับ:') ||
+      trimmed.startsWith('💬 ตอบกลับ') ||
+      trimmed.startsWith('↪ ตอบกลับ')) {
+    final newlineIdx = trimmed.indexOf('\n');
     if (newlineIdx != -1) {
-      return raw.substring(newlineIdx + 1);
+      return trimmed.substring(newlineIdx + 1).trim();
+    }
+    final parts = trimmed.split('|');
+    if (parts.length >= 2) {
+      return parts.last.trim();
+    }
+    final colonIdx = trimmed.indexOf(':');
+    if (colonIdx != -1) {
+      return trimmed.substring(colonIdx + 1).trim();
     }
   }
-  return raw;
+  return trimmed;
 }
 
 class ChatDetailScreen extends StatelessWidget {
@@ -556,7 +567,18 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     }
   }
 
+  bool get _isCurrentUserOwner =>
+      _conversation.role == ChatParticipantRole.renter;
+
   void _openBookingRequest() {
+    if (!_isCurrentUserOwner) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('เฉพาะผู้ปล่อยเช่าเท่านั้นที่สามารถส่งคำขอการเช่าได้'),
+        ),
+      );
+      return;
+    }
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final rentalType =
@@ -607,9 +629,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   }
 
   Widget _buildFloatingRentalRequestButton() {
+    if (!_isCurrentUserOwner) return const SizedBox.shrink();
+
     return Positioned(
-      top: 10,
-      right: 12,
+      bottom: 12,
+      right: 14,
       child: Material(
         color: Colors.transparent,
         elevation: 3,
@@ -816,10 +840,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                   for (final id in idsToDelete) {
                                     context.read<ChatDetailBloc>().add(
                                       ChatMessageDeleted(
-                                         conversationId: widget.conversation.id,
-                                         messageId: id,
-                                         imageUrl: msg.imageUrl,
-                                       ),
+                                        conversationId: widget.conversation.id,
+                                        messageId: id,
+                                        imageUrl: idsToDelete.length == 1 ? msg.imageUrl : null,
+                                      ),
                                     );
                                   }
                                 },
@@ -834,7 +858,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                 ),
                 Positioned(
                   right: 16,
-                  bottom: 12,
+                  bottom: _isCurrentUserOwner ? 58 : 12,
                   child: AnimatedScale(
                     scale: _showScrollToBottom ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 200),

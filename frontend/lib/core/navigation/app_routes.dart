@@ -28,6 +28,12 @@ import '../../features/item_detail/presentation/bloc/item_detail_event.dart';
 import '../../features/item_detail/presentation/pages/edit_item.dart';
 import '../../features/item_detail/presentation/pages/item_detail.dart';
 import '../../features/home/presentation/pages/home.dart';
+import '../../features/payment/data/datasources/payment_remote_data_source.dart';
+import '../../features/payment/data/repositories/payment_repository_impl.dart';
+import '../../features/payment/domain/usecases/get_payment_status_usecase.dart';
+import '../../features/payment/domain/usecases/start_payment_usecase.dart';
+import '../../features/payment/presentation/bloc/payment_cubit.dart';
+import '../../features/payment/presentation/pages/payment_return_page.dart';
 import '../../features/rental_item/data/datasources/rental_item_remote_data_source.dart';
 import '../../features/rental_item/data/repositories/rental_item_repository_impl.dart';
 import '../../features/rental_item/domain/usecases/create_rental_item_usecase.dart';
@@ -87,6 +93,7 @@ abstract final class AppRoutes {
   static const wallet = '/wallet';
   static const walletPayment = '/wallet/payment';
   static const walletSuccess = '/wallet/success';
+  static const paymentReturn = '/payments/:rentalId';
 
   static GoRouter? _currentRouter;
   static GoRouter? get router => _currentRouter;
@@ -392,9 +399,36 @@ abstract final class AppRoutes {
             final data = state.extra is BookingRequestData
                 ? state.extra as BookingRequestData
                 : null;
+            final repository = PaymentRepositoryImpl(PaymentRemoteDataSource());
             return MaterialPage<void>(
               key: state.pageKey,
-              child: BookingConfirmationPage(bookingData: data),
+              child: BlocProvider(
+                create: (context) => PaymentCubit(
+                  startPayment: StartPaymentUseCase(repository),
+                  getPaymentStatus: GetPaymentStatusUseCase(repository),
+                  repository: repository,
+                ),
+                child: BookingConfirmationPage(bookingData: data),
+              ),
+            );
+          },
+        ),
+        GoRoute(
+          path: paymentReturn,
+          pageBuilder: (context, state) {
+            final rentalId = _requiredRentalId(state);
+            final repository = PaymentRepositoryImpl(PaymentRemoteDataSource());
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: BlocProvider(
+                create: (context) => PaymentCubit(
+                  startPayment: StartPaymentUseCase(repository),
+                  getPaymentStatus: GetPaymentStatusUseCase(repository),
+                  repository: repository,
+                  initialRentalId: rentalId,
+                ),
+                child: PaymentReturnPage(rentalId: rentalId),
+              ),
             );
           },
         ),
@@ -689,6 +723,17 @@ abstract final class AppRoutes {
       state.pathParameters['itemId'],
       'itemId',
       'Route ${state.uri.path} requires a positive item id.',
+    );
+  }
+
+  static int _requiredRentalId(GoRouterState state) {
+    final value = int.tryParse(state.pathParameters['rentalId'] ?? '');
+    if (value != null && value > 0) return value;
+
+    throw ArgumentError.value(
+      state.pathParameters['rentalId'],
+      'rentalId',
+      'Route ${state.uri.path} requires a positive rental id.',
     );
   }
 

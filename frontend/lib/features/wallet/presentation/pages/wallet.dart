@@ -36,6 +36,9 @@ class _WalletScreenState extends State<WalletScreen>
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<WalletCubit>().fetchWallet();
+    });
   }
 
   @override
@@ -554,102 +557,118 @@ class _WalletScreenState extends State<WalletScreen>
                     ],
                   ),
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.only(top: 8, bottom: 24),
-                  itemCount: filteredTransactions.length,
-                  itemBuilder: (context, index) {
-                    final tx = filteredTransactions[index];
-                    final amountFormatted =
-                        '+ ${_currencyFormat.format(tx.amount)}';
+              : RefreshIndicator(
+                  onRefresh: () => context.read<WalletCubit>().fetchWallet(),
+                  color: AppColors.primaryColor,
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(top: 8, bottom: 24),
+                    itemCount: filteredTransactions.length,
+                    itemBuilder: (context, index) {
+                      final tx = filteredTransactions[index];
+                      final isExpense = tx.amount < 0;
+                      final absAmount = tx.amount.abs();
+                      final amountFormatted = isExpense
+                          ? '- ${_currencyFormat.format(absAmount)}'
+                          : '+ ${_currencyFormat.format(absAmount)}';
 
-                    return Container(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 5,
-                      ),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: const Color(0xFFF1F3F5),
-                          width: 1.2,
+                      return Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 5,
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFFF1F3F5),
+                            width: 1.2,
                           ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          // Modern emerald icon badge
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFECFDF5),
-                              borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
                             ),
-                            child: const Icon(
-                              Icons.arrow_downward_rounded,
-                              color: Color(0xFF059669),
-                              size: 22,
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            // Badge Icon
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: isExpense
+                                    ? const Color(0xFFFEE2E2)
+                                    : const Color(0xFFECFDF5),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                isExpense
+                                    ? Icons.arrow_upward_rounded
+                                    : Icons.arrow_downward_rounded,
+                                color: isExpense
+                                    ? const Color(0xFFDC2626)
+                                    : const Color(0xFF059669),
+                                size: 22,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 14),
-                          // Title & Date
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  tx.title,
-                                  style: const TextStyle(
-                                    fontFamily: AppTextStyles.fontFamily,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF111827),
+                            const SizedBox(width: 14),
+                            // Title & Date
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    tx.title,
+                                    style: const TextStyle(
+                                      fontFamily: AppTextStyles.fontFamily,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF111827),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.schedule_rounded,
-                                      size: 13,
-                                      color: Color(0xFF9CA3AF),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      tx.formattedDateThai,
-                                      style: const TextStyle(
-                                        fontFamily: AppTextStyles.fontFamily,
-                                        fontSize: 12,
-                                        color: Color(0xFF6B7280),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.schedule_rounded,
+                                        size: 13,
+                                        color: Color(0xFF9CA3AF),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        tx.formattedDateThai,
+                                        style: const TextStyle(
+                                          fontFamily: AppTextStyles.fontFamily,
+                                          fontSize: 12,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          // Amount
-                          Text(
-                            amountFormatted,
-                            style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF059669),
+                            // Amount
+                            Text(
+                              amountFormatted,
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.fontFamily,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isExpense
+                                    ? const Color(0xFFDC2626)
+                                    : const Color(0xFF059669),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
         ),
       ],
