@@ -54,7 +54,26 @@
 - Do NOT activate Serena at the root workspace level (`yuemnoi_app`) or create `.serena` outside the `frontend/` folder. All Serena project configurations, cache, and memories must remain contained in `frontend/.serena/`.
 - Ensure the language server is set to Dart (`dart`).
 
-## 6. Current Status and Next Steps
+## 6. Backend vs Frontend Architecture & Supabase Security
 
-- The current focus is the Flutter frontend written in Dart.
-- The authentication frontend has been implemented.
+To maintain security, data integrity, and scalability, follow the **Hybrid Architecture** guidelines:
+
+### 6.1 Backend Responsibilities (Go Backend via REST API)
+- **Core CRUD & Business Logic**: All product/item feeds, item creation, updates, and rental transactions must route through Go backend APIs (`/api/v1/items`, `/api/v1/rentals`).
+- **Sensitive User Data & Authorization**: Profile updates, contact phone number lookup (`/api/v1/chat/contact`), KYC verifications, and FCM token synchronization (`profile_tb`) must be processed and validated through the Go backend to enforce strict authorization and prevent direct client-side table leaks.
+- **Server-Side Image & Data Validation**: Multi-table joins, pagination, input validation, and media storage coordination should be handled by the backend rather than in-memory client joins.
+
+### 6.2 Frontend Direct Supabase Usage (Realtime & Client SDK)
+- **Supabase Realtime Streams**: Live chat messaging streams (`chat_room:*`), typing indicators, and presence tracking may connect directly via Supabase WebSockets for optimal low latency.
+- **Client Auth Lifecycle**: Supabase Auth client handles Google OAuth (PKCE), session restore, and token refreshing.
+- **Direct Client Storage**: Permitted only for low-risk realtime chat attachments with appropriate RLS policies.
+
+### 6.3 Security Rules for Agents
+- Do NOT perform raw SQL queries or direct client-side table joins on sensitive tables (`profile_tb`, `review_tb`, cross-user data) in Flutter when a backend endpoint is available or appropriate.
+- All mutating business transactions must include the Bearer JWT token in the `Authorization` header when calling Go backend endpoints.
+
+## 7. Current Status and Next Steps
+
+- The current focus is the Flutter frontend written in Dart and the Go backend services.
+- The authentication frontend and backend have been implemented.
+- Chat message/conversation deletion with Supabase Storage cleanup is fully integrated.

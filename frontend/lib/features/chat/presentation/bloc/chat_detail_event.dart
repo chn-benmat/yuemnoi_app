@@ -101,13 +101,15 @@ class ChatMessageDeleted extends ChatDetailEvent {
   const ChatMessageDeleted({
     required this.conversationId,
     required this.messageId,
+    this.imageUrl,
   });
 
   final String conversationId;
   final String messageId;
+  final String? imageUrl;
 
   @override
-  List<Object?> get props => [conversationId, messageId];
+  List<Object?> get props => [conversationId, messageId, imageUrl];
 }
 
 class ChatMessageEdited extends ChatDetailEvent {

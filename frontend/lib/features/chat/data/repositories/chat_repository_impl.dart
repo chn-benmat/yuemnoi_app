@@ -28,6 +28,11 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<String> getConversationContactPhone(String conversationId) {
+    return _remoteDataSource.getConversationContactPhone(conversationId);
+  }
+
+  @override
   Future<List<ChatMessage>> fetchMessages({
     required String conversationId,
     DateTime? before,

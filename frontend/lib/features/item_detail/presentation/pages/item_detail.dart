@@ -3,10 +3,13 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/network/auth_session.dart';
+import '../../../../core/network/supabase_client.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/navigation/item_deep_link.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../chat/data/repositories/chat_repository_impl.dart';
 import '../../domain/entities/item_detail.dart';
@@ -14,7 +17,6 @@ import '../bloc/item_detail_bloc.dart';
 import '../bloc/item_detail_event.dart';
 import '../bloc/item_detail_state.dart';
 import '../widgets/full_screen_image_viewer.dart';
-import '../widgets/item_share_bottom_sheet.dart';
 
 class ItemDetailScreen extends StatefulWidget {
   const ItemDetailScreen({super.key, required this.itemId});
@@ -33,6 +35,47 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     final updated = await AppRoutes.openEditRentalItem(context, item: item);
     if (updated == true && mounted) {
       context.read<ItemDetailBloc>().add(ItemDetailRequested(widget.itemId));
+    }
+  }
+
+  bool _hasCurrentUserPhone() {
+    if (!SupabaseConfig.isInitialized) return false;
+
+    final user = SupabaseConfig.client.auth.currentUser;
+    final rawPhone =
+        user?.userMetadata?['phone']?.toString() ?? user?.phone ?? '';
+    final normalizedPhone = rawPhone.replaceAll(RegExp(r'\D'), '');
+    return RegExp(r'^0\d{9}$').hasMatch(normalizedPhone);
+  }
+
+  Future<void> _showMissingPhoneDialog() async {
+    final shouldAddPhone = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'เพิ่มเบอร์โทรศัพท์',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: const Text('กรุณาใส่เบอร์โทรศัพท์สำหรับการติดต่อ'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryColor,
+            ),
+            child: const Text('เพิ่มเบอร์โทร'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldAddPhone == true && mounted) {
+      await AppRoutes.openEditContact(context);
     }
   }
 
@@ -75,6 +118,11 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
     if (item.isOwner) return;
 
+    if (!_hasCurrentUserPhone()) {
+      await _showMissingPhoneDialog();
+      return;
+    }
+
     setState(() => _isChatLoading = true);
     try {
       final repository = ChatRepositoryImpl();
@@ -92,16 +140,36 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         setState(() => _isChatLoading = false);
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(content: Text(e.toString())),
-          );
+          ..showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
 
-  void _handleShare(ItemDetail? item) {
+  Future<void> _handleShare(ItemDetail? item) async {
     if (item == null) return;
-    ItemShareBottomSheet.show(context, item: item);
+
+    final description = item.description.trim();
+    final price = NumberFormat('#,##0.##').format(item.price);
+    final shareText = <String>[
+      'ลองดู ${item.name} บน Yuemnoi',
+      if (description.isNotEmpty) description,
+      'ราคา ฿$price/${item.unitLabel}',
+      ItemDeepLink.build(item.id).toString(),
+    ].join('\n');
+
+    final renderObject = context.findRenderObject();
+    final sharePositionOrigin = renderObject is RenderBox
+        ? renderObject.localToGlobal(Offset.zero) & renderObject.size
+        : null;
+
+    await SharePlus.instance.share(
+      ShareParams(
+        text: shareText,
+        title: 'แชร์ ${item.name}',
+        subject: item.name,
+        sharePositionOrigin: sharePositionOrigin,
+      ),
+    );
   }
 
   void _openReportOptions(ItemDetail item) {
@@ -170,8 +238,14 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 const SizedBox(height: 12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444)),
-                  title: const Text('เนื้อหาไม่เหมาะสม / หลอกลวง', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  leading: const Icon(
+                    Icons.error_outline_rounded,
+                    color: Color(0xFFEF4444),
+                  ),
+                  title: const Text(
+                    'เนื้อหาไม่เหมาะสม / หลอกลวง',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _showReportSuccess();
@@ -179,8 +253,14 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.price_change_outlined, color: Color(0xFFF59E0B)),
-                  title: const Text('ราคาหรือข้อมูลอุปกรณ์ไม่ถูกต้อง', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  leading: const Icon(
+                    Icons.price_change_outlined,
+                    color: Color(0xFFF59E0B),
+                  ),
+                  title: const Text(
+                    'ราคาหรือข้อมูลอุปกรณ์ไม่ถูกต้อง',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _showReportSuccess();
@@ -188,8 +268,14 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.block_rounded, color: Color(0xFF64748B)),
-                  title: const Text('สินค้าต้องห้ามหรือผิดกฎหมาย', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  leading: const Icon(
+                    Icons.block_rounded,
+                    color: Color(0xFF64748B),
+                  ),
+                  title: const Text(
+                    'สินค้าต้องห้ามหรือผิดกฎหมาย',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _showReportSuccess();
@@ -197,8 +283,14 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.more_horiz_rounded, color: Color(0xFF94A3B8)),
-                  title: const Text('เหตุผลอื่นๆ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  leading: const Icon(
+                    Icons.more_horiz_rounded,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  title: const Text(
+                    'เหตุผลอื่นๆ',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _showReportSuccess();
@@ -348,9 +440,7 @@ class _DetailFloatingTopBar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             _CircleActionButton(
-              tooltip: isFavorite
-                  ? 'นำออกจากรายการโปรด'
-                  : 'เพิ่มในรายการโปรด',
+              tooltip: isFavorite ? 'นำออกจากรายการโปรด' : 'เพิ่มในรายการโปรด',
               icon: isFavorite
                   ? Icons.favorite_rounded
                   : Icons.favorite_border_rounded,
@@ -459,16 +549,12 @@ class _ImageGalleryState extends State<_ImageGallery> {
                           imageUrl: urls[index],
                           fit: BoxFit.cover,
                           errorWidget: (context, url, error) =>
-                              const ColoredBox(
-                            color: Color(0xFF232428),
-                          ),
+                              const ColoredBox(color: Color(0xFF232428)),
                         ),
                       ),
                     ),
                     // Subtle overlay for pleasant contrast
-                    Container(
-                      color: Colors.black.withValues(alpha: 0.16),
-                    ),
+                    Container(color: Colors.black.withValues(alpha: 0.16)),
                     // Crisp foreground uncropped image
                     GestureDetector(
                       onTap: () => FullScreenImageViewer.open(
@@ -498,8 +584,8 @@ class _ImageGalleryState extends State<_ImageGallery> {
               ),
             ),
 
-          // Bottom right image counter badge (e.g. 3/13)
-          if (urls.isNotEmpty)
+          // Bottom right image counter badge (only when multiple images e.g. 2/3)
+          if (urls.length > 1)
             Positioned(
               right: 18,
               bottom: 48,

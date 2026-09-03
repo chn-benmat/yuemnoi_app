@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
@@ -28,6 +29,32 @@ class _EditContactScreenState extends State<EditContactScreen> {
     _phoneCtrl = TextEditingController(
       text: (user?.userMetadata?['phone'] ?? user?.phone ?? '').toString(),
     );
+
+    _loadContactFromBackend();
+  }
+
+  Future<void> _loadContactFromBackend() async {
+    try {
+      final session = SupabaseConfig.isInitialized
+          ? SupabaseConfig.client.auth.currentSession
+          : null;
+      if (session == null) return;
+
+      final apiClient = DioApiClient();
+      final response = await apiClient.get(
+        '/api/v1/user/profile',
+        headers: {'Authorization': 'Bearer '},
+      );
+
+      if (response.statusCode == 200 && response.data is Map && mounted) {
+        final data = response.data as Map;
+        if (data['phone'] != null && data['phone'].toString().isNotEmpty) {
+          setState(() {
+            _phoneCtrl.text = data['phone'].toString();
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -39,21 +66,63 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final phone = _phoneCtrl.text.replaceAll(RegExp(r'\D'), '');
     setState(() => _isSaving = true);
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    setState(() => _isSaving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text(
-          'บันทึกข้อมูลติดต่อเรียบร้อย',
-          style: TextStyle(fontFamily: AppTextStyles.fontFamily),
+
+    try {
+      final session = SupabaseConfig.isInitialized
+          ? SupabaseConfig.client.auth.currentSession
+          : null;
+      final accessToken = session?.accessToken;
+      if (accessToken == null) {
+        throw Exception('กรุณาเข้าสู่ระบบก่อน');
+      }
+
+      final apiClient = DioApiClient();
+      final response = await apiClient.put(
+        '/api/v1/user/contact',
+        headers: {'Authorization': 'Bearer '},
+        data: {'phone': phone},
+      );
+
+      if (response.statusCode != 200) {
+        final errorMsg = response.data is Map
+            ? response.data['error']?.toString()
+            : null;
+        throw Exception(errorMsg ?? 'ไม่สามารถบันทึกเบอร์โทรศัพท์ได้');
+      }
+
+      _phoneCtrl.text = phone;
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'บันทึกข้อมูลติดต่อเรียบร้อย',
+            style: TextStyle(fontFamily: AppTextStyles.fontFamily),
+          ),
+          backgroundColor: AppColors.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        backgroundColor: AppColors.primaryColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+            style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -104,6 +173,14 @@ class _EditContactScreenState extends State<EditContactScreen> {
                 hint: '0xx-xxx-xxxx',
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
+                validator: (value) {
+                  final phone = value?.replaceAll(RegExp(r'\D'), '') ?? '';
+                  if (phone.isEmpty) return 'กรุณากรอกเบอร์โทรศัพท์';
+                  if (!RegExp(r'^0\d{9}$').hasMatch(phone)) {
+                    return 'เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 28),
 

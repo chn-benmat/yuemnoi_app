@@ -500,6 +500,11 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     ChatMessageDeleted event,
     Emitter<ChatDetailState> emit,
   ) async {
+    final targetMsg = state.messages
+        .where((m) => m.id == event.messageId)
+        .firstOrNull;
+    final imageUrl = event.imageUrl ?? targetMsg?.imageUrl;
+
     final updated = state.messages.where((m) => m.id != event.messageId).toList();
     emit(state.copyWith(messages: updated));
     ChatMessagesCache.set(event.conversationId, updated);
@@ -508,6 +513,7 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
       await ChatRemoteDataSource().deleteMessage(
         messageId: event.messageId,
         conversationId: event.conversationId,
+        imageUrl: imageUrl,
       );
     } catch (_) {}
   }

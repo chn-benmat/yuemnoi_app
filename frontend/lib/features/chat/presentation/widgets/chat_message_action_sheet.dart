@@ -143,8 +143,7 @@ class ChatMessageActionSheet extends StatelessWidget {
 
     final isTextMessage = message.message.isNotEmpty &&
         message.message != '📷 ส่งรูปภาพ' &&
-        message.message != '[รูปภาพ]' &&
-        !message.message.startsWith('📞');
+        message.message != '[รูปภาพ]';
 
     final canEdit = message.isMine && isTextMessage && onEdit != null;
 

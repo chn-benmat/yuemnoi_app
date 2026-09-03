@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Chanachai04/yuemnoi_app/backend/internal/domain"
@@ -112,7 +113,7 @@ func (r *supabaseItemRepository) rollbackCreatedItem(item *domain.Item, paths []
 	_ = r.Delete(context.Background(), item.ID, item.UserID)
 }
 
-// FindAll ดึงข้อมูลอุปกรณ์เช่าทั้งหมดจากตาราง item_tb
+// FindAll ดึงข้อมูลอุปกรณ์เช่าทั้งหมดจากตาราง item_tb พร้อมข้อมูลเจ้าของ
 func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.Item, error) {
 	var items []domain.Item
 
@@ -122,10 +123,45 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.Item, er
 		return nil, fmt.Errorf("supabase find all failed: %w", err)
 	}
 
+	if len(items) > 0 {
+		var profiles []struct {
+			UserID       string `json:"user_id"`
+			Email        string `json:"email"`
+			UserImageURL string `json:"user_image_url"`
+		}
+		_ = r.client.DB.From("profile_tb").Select("user_id,email,user_image_url").ExecuteWithContext(ctx, &profiles)
+		profilesMap := make(map[string]struct {
+			Email        string
+			UserImageURL string
+		})
+		for _, p := range profiles {
+			profilesMap[p.UserID] = struct {
+				Email        string
+				UserImageURL string
+			}{Email: p.Email, UserImageURL: p.UserImageURL}
+		}
+
+		for i := range items {
+			if p, ok := profilesMap[items[i].UserID]; ok {
+				ownerName := p.Email
+				if idx := strings.Index(ownerName, "@"); idx != -1 {
+					ownerName = ownerName[:idx]
+				}
+				if ownerName == "" {
+					ownerName = "Yuemnoi Verified"
+				}
+				items[i].OwnerName = ownerName
+				items[i].OwnerAvatarURL = p.UserImageURL
+			} else {
+				items[i].OwnerName = "Yuemnoi Verified"
+			}
+		}
+	}
+
 	return items, nil
 }
 
-// FindByID ดึงข้อมูลอุปกรณ์เช่าตาม ID จากตาราง item_tb
+// FindByID ดึงข้อมูลอุปกรณ์เช่าตาม ID จากตาราง item_tb พร้อมข้อมูลเจ้าของ
 func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domain.Item, error) {
 	var items []domain.Item
 
@@ -138,7 +174,29 @@ func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domai
 		return nil, domain.ErrItemNotFound
 	}
 
-	return &items[0], nil
+	item := &items[0]
+	var profiles []struct {
+		UserID       string `json:"user_id"`
+		Email        string `json:"email"`
+		UserImageURL string `json:"user_image_url"`
+	}
+	_ = r.client.DB.From("profile_tb").Select("user_id,email,user_image_url").Eq("user_id", item.UserID).ExecuteWithContext(ctx, &profiles)
+	if len(profiles) > 0 {
+		p := profiles[0]
+		ownerName := p.Email
+		if idx := strings.Index(ownerName, "@"); idx != -1 {
+			ownerName = ownerName[:idx]
+		}
+		if ownerName == "" {
+			ownerName = "Yuemnoi Verified"
+		}
+		item.OwnerName = ownerName
+		item.OwnerAvatarURL = p.UserImageURL
+	} else {
+		item.OwnerName = "Yuemnoi Verified"
+	}
+
+	return item, nil
 }
 
 func (r *supabaseItemRepository) Update(

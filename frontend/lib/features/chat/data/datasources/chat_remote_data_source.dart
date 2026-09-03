@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/chat_message.dart';
@@ -22,10 +24,15 @@ class ChatRemoteException implements Exception {
 }
 
 class ChatRemoteDataSource {
-  ChatRemoteDataSource({SupabaseClient? client}) : _client = client;
+  ChatRemoteDataSource({SupabaseClient? client, ApiClient? apiClient})
+    : _client = client,
+      _apiClient = apiClient;
 
   final SupabaseClient? _client;
+  ApiClient? _apiClient;
   static const _chatBucket = 'chat_bk';
+
+  ApiClient get _backendClient => _apiClient ??= DioApiClient();
 
   SupabaseClient get _supabaseClient {
     if (_client != null) return _client;
@@ -308,6 +315,49 @@ class ChatRemoteDataSource {
     }
   }
 
+  Future<String> getConversationContactPhone(String conversationId) async {
+    final token = AuthSession.accessToken;
+    if (token == null || token.isEmpty) {
+      throw const ChatRemoteException('กรุณาเข้าสู่ระบบก่อนดูข้อมูลติดต่อ');
+    }
+
+    try {
+      final response = await _backendClient.post(
+        '/api/v1/chat/contact',
+        data: {'conversation_id': conversationId},
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      final data = response.data;
+      final phone = data['phone']?.toString().trim() ?? '';
+      if (phone.isNotEmpty) {
+        return phone;
+      }
+
+      final message = data['error']?.toString().trim() ?? '';
+      throw ChatRemoteException(
+        message.isEmpty ? 'ไม่สามารถโหลดเบอร์โทรศัพท์ได้' : message,
+      );
+    } on ChatRemoteException {
+      rethrow;
+    } on ApiClientException catch (error) {
+      switch (error.type) {
+        case ApiClientErrorType.timeout:
+          throw const ChatRemoteException(
+            'โหลดเบอร์โทรศัพท์นานเกินไป กรุณาลองใหม่',
+          );
+        case ApiClientErrorType.connection:
+          throw const ChatRemoteException('ไม่สามารถเชื่อมต่อระบบติดต่อได้');
+        case ApiClientErrorType.invalidResponse:
+          throw const ChatRemoteException(
+            'ระบบติดต่อส่งข้อมูลกลับมาไม่ถูกต้อง',
+          );
+      }
+    } catch (_) {
+      throw const ChatRemoteException('เกิดข้อผิดพลาดในการโหลดเบอร์โทรศัพท์');
+    }
+  }
+
   Stream<List<ChatConversation>> streamConversations() {
     if (!SupabaseConfig.isInitialized && _client == null) {
       return const Stream.empty();
@@ -543,13 +593,58 @@ class ChatRemoteDataSource {
     }
   }
 
+  String? _extractStoragePath(String imageUrl) {
+    if (imageUrl.isEmpty) return null;
+    final trimmed = imageUrl.trim();
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) return null;
+
+    final pathSegments = uri.pathSegments;
+    final bucketIndex = pathSegments.indexOf(_chatBucket);
+    if (bucketIndex != -1 && bucketIndex + 1 < pathSegments.length) {
+      return pathSegments.sublist(bucketIndex + 1).join('/');
+    }
+    return null;
+  }
+
   Future<void> deleteMessage({
     required String messageId,
     required String conversationId,
+    String? imageUrl,
   }) async {
     final client = _supabaseClient;
     try {
       final dynamic parsedId = int.tryParse(messageId) ?? messageId;
+
+      // ถ้าไม่ได้ส่ง imageUrl มา ให้ query ค้นหา URL รูปภาพก่อนลบจากฐานข้อมูล
+      String? targetImageUrl = imageUrl;
+      if (targetImageUrl == null || targetImageUrl.isEmpty) {
+        try {
+          final res = await client
+              .from('chat_message_tb')
+              .select('image_url')
+              .eq('id', parsedId)
+              .maybeSingle();
+          targetImageUrl = res?['image_url'] as String?;
+        } catch (_) {}
+      }
+
+      // ลบรูปภาพจาก Supabase Storage (ถ้ามี)
+      if (targetImageUrl != null && targetImageUrl.isNotEmpty) {
+        final storagePath = _extractStoragePath(targetImageUrl);
+        if (storagePath != null && storagePath.isNotEmpty) {
+          try {
+            await client.storage.from(_chatBucket).remove([storagePath]);
+          } catch (e) {
+            debugPrint('Failed to delete message image from storage: $e');
+          }
+        }
+      }
+
+      // ลบข้อความออกจากฐานข้อมูล Supabase
       await client.from('chat_message_tb').delete().eq('id', parsedId);
     } on PostgrestException catch (e) {
       throw ChatRemoteException('ลบข้อความไม่สำเร็จ: ${e.message}');
@@ -561,6 +656,7 @@ class ChatRemoteDataSource {
   Future<void> editMessage({
     required String messageId,
     required String newMessage,
+    String? conversationId,
   }) async {
     final client = _supabaseClient;
     try {
@@ -569,6 +665,17 @@ class ChatRemoteDataSource {
           .from('chat_message_tb')
           .update({'message': newMessage})
           .eq('id', parsedId);
+
+      if (conversationId != null && conversationId.isNotEmpty) {
+        final nowIso = DateTime.now().toUtc().toIso8601String();
+        try {
+          await client.from('conversation_tb').update({
+            'last_message': newMessage.trim(),
+            'last_message_at': nowIso,
+            'updated_at': nowIso,
+          }).eq('id', conversationId);
+        } catch (_) {}
+      }
     } on PostgrestException catch (e) {
       throw ChatRemoteException('แก้ไขข้อความไม่สำเร็จ: ${e.message}');
     } catch (_) {
@@ -581,10 +688,47 @@ class ChatRemoteDataSource {
   }) async {
     final client = _supabaseClient;
     try {
+      // 1. ค้นหาและลบรูปภาพทั้งหมดที่แนบในการสนทนานี้ออกจาก Supabase Storage
+      try {
+        final records = await client
+            .from('chat_message_tb')
+            .select('image_url')
+            .eq('conversation_id', conversationId)
+            .not('image_url', 'is', null);
+
+        final imagePaths = <String>[];
+        for (final row in records) {
+          final url = row['image_url'] as String?;
+          if (url != null && url.isNotEmpty) {
+            final path = _extractStoragePath(url);
+            if (path != null && path.isNotEmpty) {
+              imagePaths.add(path);
+            }
+          }
+        }
+
+        if (imagePaths.isNotEmpty) {
+          try {
+            await client.storage.from(_chatBucket).remove(imagePaths);
+          } catch (e) {
+            debugPrint(
+              'Failed to delete conversation images from storage: $e',
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint(
+          'Failed to fetch/delete chat images during conversation deletion: $e',
+        );
+      }
+
+      // 2. ลบข้อความทั้งหมดของการสนทนานี้ในตาราง chat_message_tb
       await client
           .from('chat_message_tb')
           .delete()
           .eq('conversation_id', conversationId);
+
+      // 3. ลบห้องสนทนาในตาราง conversation_tb
       await client
           .from('conversation_tb')
           .delete()

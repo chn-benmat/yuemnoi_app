@@ -22,17 +22,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/nedpals/supabase-go"
 )
 
 // PushHandler จัดการการส่ง Push Notification ผ่าน FCM HTTP v1
-type PushHandler struct {
-	supabaseClient *supabase.Client
-}
+type PushHandler struct{}
 
 // NewPushHandler สร้าง PushHandler ใหม่
-func NewPushHandler(client *supabase.Client) *PushHandler {
-	return &PushHandler{supabaseClient: client}
+func NewPushHandler() *PushHandler {
+	return &PushHandler{}
 }
 
 // SendChatPushRequest เป็น request body สำหรับส่ง push notification ของข้อความแชท
