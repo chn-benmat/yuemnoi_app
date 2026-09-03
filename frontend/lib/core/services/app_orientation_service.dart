@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,6 +23,7 @@ class AppOrientationService {
   /// - โทรศัพท์มือถือ (< 600dp): บังคับเฉพาะแนวตั้งเท่านั้น (Portrait Up)
   /// - แท็บเล็ต / iPad (>= 600dp): อนุญาตทั้งแนวตั้งและแนวนอน (Portrait & Landscape)
   static Future<void> setupOrientation() async {
+    if (kIsWeb) return;
     try {
       final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
       if (view != null) {

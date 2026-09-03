@@ -21,12 +21,17 @@ func SetupRouter(
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	// ตั้งค่า CORS  เพื่อให้ Flutter ยิงเข้ามาหาได้ไม่ติดบล็อก
+	// ตั้งค่า CORS เพื่อให้ Flutter Web / Mobile ยิงเข้ามาหาได้ไม่ติดบล็อก
 	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		if origin != "" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With")
 
 		// ถ้าระบบส่ง OPTIONS มาถามทาง ให้ตอบกลับ 204 แล้วจบงานตรงนี้เลย
 		if c.Request.Method == "OPTIONS" {
@@ -34,7 +39,6 @@ func SetupRouter(
 			return
 		}
 		c.Next()
-
 	})
 
 	// Health check สำหรับ Docker และระบบเฝ้าระวัง โดยไม่เปิดเผยข้อมูลภายใน

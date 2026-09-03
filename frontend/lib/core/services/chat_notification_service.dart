@@ -30,6 +30,7 @@ class ChatNotificationService {
       _injectedAudioPlayer ?? (_lazyAudioPlayer ??= AudioPlayer());
 
   Future<void> initialize() async {
+    if (kIsWeb) return;
     if (_isInitialized) return;
 
     try {
@@ -110,6 +111,7 @@ class ChatNotificationService {
 
   /// ยกเลิกการแจ้งเตือนทั้งหมด
   Future<void> cancelAllNotifications() async {
+    if (kIsWeb) return;
     try {
       await _notificationsPlugin.cancelAll();
     } catch (_) {}
@@ -121,6 +123,7 @@ class ChatNotificationService {
   /// ล้างประวัติการแจ้งเตือนของห้องแชทนั้นๆ เมื่อผู้ใช้เปิดเข้าไปอ่าน
   Future<void> clearConversationNotifications(String conversationId) async {
     _conversationMessages.remove(conversationId);
+    if (kIsWeb) return;
     try {
       await _notificationsPlugin.cancel(id: conversationId.hashCode);
     } catch (_) {}
@@ -154,6 +157,7 @@ class ChatNotificationService {
     String? payload,
     String? messageId,
   }) async {
+    if (kIsWeb) return;
     if (!_isInitialized) {
       await initialize();
     }

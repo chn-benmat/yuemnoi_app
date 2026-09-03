@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -10,6 +11,7 @@ import 'chat_notification_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (kIsWeb) return;
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await Firebase.initializeApp();
@@ -87,6 +89,7 @@ class FcmService {
 
   /// ขอสิทธิ์การแจ้งเตือนจาก Firebase Cloud Messaging
   Future<NotificationSettings?> requestNotificationPermission() async {
+    if (kIsWeb) return null;
     try {
       final messaging = FirebaseMessaging.instance;
       return await messaging.requestPermission(
@@ -105,6 +108,7 @@ class FcmService {
   }
 
   Future<void> initialize() async {
+    if (kIsWeb) return;
     if (_isInitialized) return;
 
     try {
@@ -154,7 +158,7 @@ class FcmService {
   }
 
   Future<void> syncUserToken(String userId) async {
-    if (userId.isEmpty) return;
+    if (kIsWeb || userId.isEmpty) return;
     try {
       final token = _cachedToken ?? await FirebaseMessaging.instance.getToken();
       if (token != null && token.isNotEmpty) {
@@ -167,6 +171,7 @@ class FcmService {
   }
 
   Future<void> _saveTokenToSupabase(String token) async {
+    if (kIsWeb) return;
     try {
       if (!SupabaseConfig.isInitialized) return;
       final currentUserId = SupabaseConfig.client.auth.currentUser?.id;

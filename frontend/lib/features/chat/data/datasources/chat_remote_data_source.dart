@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/network/api_client.dart';
@@ -306,9 +303,6 @@ class ChatRemoteDataSource {
     } on PostgrestException catch (e) {
       debugPrint('getConversations PostgrestException: ${e.message}');
       throw ChatRemoteException('โหลดรายการแชทไม่สำเร็จ: ${e.message}');
-    } on SocketException catch (e) {
-      debugPrint('getConversations SocketException: $e');
-      throw const ChatRemoteException('ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาลองใหม่');
     } catch (e, stack) {
       debugPrint('getConversations error: $e\n$stack');
       throw const ChatRemoteException('ไม่สามารถดึงข้อมูลแชทได้ กรุณาลองใหม่');
@@ -835,25 +829,20 @@ class ChatRemoteDataSource {
           ? senderEmail.split('@').first
           : 'ผู้ใช้งาน Yuemnoi';
 
-      final apiUrl = dotenv.env['API_URL'] ?? 'http://10.0.2.2:8080';
-      final clientHttp = HttpClient()..connectionTimeout = const Duration(seconds: 4);
-      final request = await clientHttp.postUrl(Uri.parse('$apiUrl/api/v1/push/chat'));
-      request.headers.contentType = ContentType.json;
-
       // สกัดเอาเฉพาะข้อความตอบกลับตัวจริง โดยตัดคำนำหน้า '↩ ตอบกลับ:...' ออก ไม่ให้ขึ้นคำว่าตอบกลับใน Push Notification
       final cleanMessageForPush = _extractCleanPushMessage(message);
 
-      request.write(jsonEncode({
-        'receiver_id': receiverId,
-        'message': cleanMessageForPush,
-        'message_id': messageId ?? '',
-        'sender_name': senderName,
-        'sender_avatar': senderAvatar,
-        'conversation_id': conversationId,
-      }));
-      final response = await request.close();
-      await response.drain();
-      clientHttp.close();
+      await _backendClient.post(
+        '/api/v1/push/chat',
+        data: {
+          'receiver_id': receiverId,
+          'message': cleanMessageForPush,
+          'message_id': messageId ?? '',
+          'sender_name': senderName,
+          'sender_avatar': senderAvatar,
+          'conversation_id': conversationId,
+        },
+      );
     } catch (e) {
       debugPrint('sendChatPushNotification error: $e');
     }
