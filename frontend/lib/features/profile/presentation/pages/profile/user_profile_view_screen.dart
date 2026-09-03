@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/network/supabase_client.dart';
-import '../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/navigation/app_routes.dart';
+import '../../../../../core/network/supabase_client.dart';
+import '../../../../../core/theme/app_text_styles.dart';
+import '../../widgets/profile/user_profile_widgets.dart';
 
 // ─── Data model ───────────────────────────────────────────────────────────────
 
@@ -46,8 +47,8 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
   double _rating = 0.0;
   bool _isVerified = false;
 
-  List<_RentalItemData> _featuredItems = [];
-  List<_RentalItemData> _userItems = [];
+  List<UserProfileRentalItemData> _featuredItems = [];
+  List<UserProfileRentalItemData> _userItems = [];
 
   @override
   void initState() {
@@ -94,7 +95,8 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
         // ถ้าเป็นผู้ใช้ปัจจุบัน นำ metadata จาก Auth มาเสริม
         if (currentUser != null && currentUser.id == targetUserId) {
           final meta = currentUser.userMetadata ?? {};
-          final name = meta['display_name'] as String? ??
+          final name =
+              meta['display_name'] as String? ??
               meta['full_name'] as String? ??
               currentUser.email?.split('@').first;
           if (name != null && name.isNotEmpty) _displayName = name;
@@ -107,13 +109,14 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
       }
 
       // 2. ดึงรายการอุปกรณ์จริงที่เป็นของผู้ใช้นี้ (user_id = targetUserId)
-      List<_RentalItemData> loadedUserItems = [];
+      List<UserProfileRentalItemData> loadedUserItems = [];
       if (targetUserId.isNotEmpty) {
         try {
           final userItemsResp = await client
               .from('item_tb')
               .select(
-                  'id, user_id, item_name, item_image_url, description, category, price, status')
+                'id, user_id, item_name, item_image_url, description, category, price, status',
+              )
               .eq('user_id', targetUserId)
               .order('id', ascending: false);
 
@@ -122,12 +125,13 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
       }
 
       // 3. ดึงรายการแนะนำที่น่าสนใจ (Marketplace featured items) จาก Supabase
-      List<_RentalItemData> loadedFeatured = [];
+      List<UserProfileRentalItemData> loadedFeatured = [];
       try {
         final featuredResp = await client
             .from('item_tb')
             .select(
-                'id, user_id, item_name, item_image_url, description, category, price, status')
+              'id, user_id, item_name, item_image_url, description, category, price, status',
+            )
             .order('id', ascending: false)
             .limit(10);
 
@@ -137,8 +141,10 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
       // 4. ดึงคะแนนรีวิวจริงจาก review_tb ถ้ามี
       if (loadedUserItems.isNotEmpty) {
         try {
-          final itemIds =
-              loadedUserItems.map((e) => e.id).whereType<int>().toList();
+          final itemIds = loadedUserItems
+              .map((e) => e.id)
+              .whereType<int>()
+              .toList();
           if (itemIds.isNotEmpty) {
             final reviewsResp = await client
                 .from('review_tb')
@@ -174,8 +180,8 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
     }
   }
 
-  List<_RentalItemData> _parseItems(List rawList) {
-    final List<_RentalItemData> result = [];
+  List<UserProfileRentalItemData> _parseItems(List rawList) {
+    final List<UserProfileRentalItemData> result = [];
     for (final raw in rawList) {
       if (raw is! Map) continue;
       final item = Map<String, dynamic>.from(raw);
@@ -187,7 +193,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
       final (iconData, colorSeed) = _mapCategoryToStyle(category);
 
       result.add(
-        _RentalItemData(
+        UserProfileRentalItemData(
           id: id,
           title: title,
           pricePerDay: price,
@@ -276,7 +282,8 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
     final currentUid = SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentUser?.id
         : null;
-    final isCurrentUser = currentUid != null &&
+    final isCurrentUser =
+        currentUid != null &&
         currentUid.isNotEmpty &&
         currentUid == widget.args.userId;
 
@@ -308,9 +315,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
         elevation: 0,
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryColor),
-            )
+          ? const UserProfileLoadingSkeleton()
           : RefreshIndicator(
               color: AppColors.primaryColor,
               onRefresh: _loadSupabaseData,
@@ -320,7 +325,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ── Profile header ───────────────────────────────────
-                    _ProfileHeaderSection(
+                    UserProfileHeaderSection(
                       displayName: _displayName,
                       avatarUrl: _avatarUrl,
                       bio: _bio,
@@ -358,10 +363,11 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                           itemCount: _featuredItems.length,
                           separatorBuilder: (context, i) =>
                               const SizedBox(width: 12),
-                          itemBuilder: (context, index) => _RentalCard(
-                            item: _featuredItems[index],
-                            width: 158,
-                          ),
+                          itemBuilder: (context, index) =>
+                              UserProfileRentalCard(
+                                item: _featuredItems[index],
+                                width: 158,
+                              ),
                         ),
                       ),
                       const SizedBox(height: 22),
@@ -399,11 +405,15 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                     if (_userItems.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 28),
+                            horizontal: 20,
+                            vertical: 28,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
@@ -489,413 +499,20 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.82,
-                        ),
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 0.82,
+                            ),
                         itemCount: _userItems.length,
                         itemBuilder: (context, index) =>
-                            _RentalCard(item: _userItems[index]),
+                            UserProfileRentalCard(item: _userItems[index]),
                       ),
                     const SizedBox(height: 28),
                   ],
                 ),
               ),
             ),
-    );
-  }
-}
-
-// ─── Profile Header ───────────────────────────────────────────────────────────
-
-class _ProfileHeaderSection extends StatelessWidget {
-  final String displayName;
-  final String? avatarUrl;
-  final String? bio;
-  final double rating;
-  final bool isVerified;
-  final bool isCurrentUser;
-  final VoidCallback onEditProfile;
-
-  const _ProfileHeaderSection({
-    required this.displayName,
-    required this.avatarUrl,
-    required this.bio,
-    required this.rating,
-    required this.isVerified,
-    required this.isCurrentUser,
-    required this.onEditProfile,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-      child: Column(
-        children: [
-          // Avatar with gradient ring
-          _GradientAvatar(
-            avatarUrl: avatarUrl,
-            displayName: displayName,
-          ),
-          const SizedBox(height: 14),
-
-          // Name
-          Text(
-            displayName,
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1A1A2E),
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Badges row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (isVerified) ...[
-                _InfoBadge(
-                  icon: Icons.verified_rounded,
-                  label: 'ยืนยันตัว',
-                  iconColor: AppColors.primaryColor,
-                  textColor: AppColors.primaryColor,
-                  bgColor: const Color(0xFFF3E8FF),
-                ),
-                const SizedBox(width: 8),
-              ],
-              _InfoBadge(
-                icon: Icons.star_rounded,
-                label: rating > 0 ? rating.toStringAsFixed(1) : '5.0',
-                iconColor: const Color(0xFFFF9800),
-                textColor: const Color(0xFFE65100),
-                bgColor: const Color(0xFFFFF3E0),
-              ),
-            ],
-          ),
-
-          // Bio
-          if (bio != null && bio!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              bio!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: AppTextStyles.fontFamily,
-                fontSize: 13,
-                color: AppColors.labelColor,
-                height: 1.6,
-              ),
-            ),
-          ],
-          const SizedBox(height: 18),
-
-          // Action button
-          ElevatedButton(
-            onPressed: isCurrentUser ? onEditProfile : () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryColor,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-              ),
-              minimumSize: const Size(double.infinity, 48),
-            ),
-            child: Text(
-              isCurrentUser ? 'แก้ไขโปรไฟล์' : 'แชทกับ $displayName',
-              style: const TextStyle(
-                fontFamily: AppTextStyles.fontFamily,
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Gradient Avatar ──────────────────────────────────────────────────────────
-
-class _GradientAvatar extends StatelessWidget {
-  final String? avatarUrl;
-  final String displayName;
-
-  const _GradientAvatar({required this.avatarUrl, required this.displayName});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 94,
-      height: 94,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [AppColors.gradient2, AppColors.primaryColor],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      padding: const EdgeInsets.all(3.5),
-      child: ClipOval(
-        child: avatarUrl != null && avatarUrl!.trim().isNotEmpty
-            ? Image.network(
-                avatarUrl!.trim(),
-                fit: BoxFit.cover,
-                errorBuilder: (ctx, err, st) =>
-                    _InitialCircle(name: displayName),
-              )
-            : _InitialCircle(name: displayName),
-      ),
-    );
-  }
-}
-
-class _InitialCircle extends StatelessWidget {
-  final String name;
-  const _InitialCircle({required this.name});
-
-  @override
-  Widget build(BuildContext context) {
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
-    return Container(
-      color: const Color(0xFFF3E8FF),
-      child: Center(
-        child: Text(
-          initial,
-          style: const TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontSize: 36,
-            fontWeight: FontWeight.bold,
-            color: AppColors.primaryColor,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Info Badge ───────────────────────────────────────────────────────────────
-
-class _InfoBadge extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color iconColor;
-  final Color textColor;
-  final Color bgColor;
-
-  const _InfoBadge({
-    required this.icon,
-    required this.label,
-    required this.iconColor,
-    required this.textColor,
-    required this.bgColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: iconColor),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontSize: 12,
-              color: textColor,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Rental Item Card ─────────────────────────────────────────────────────────
-
-class _RentalItemData {
-  final int? id;
-  final String title;
-  final double pricePerDay;
-  final double rating;
-  final String? imageUrl;
-  final IconData iconData;
-  final Color colorSeed;
-
-  const _RentalItemData({
-    this.id,
-    required this.title,
-    required this.pricePerDay,
-    required this.rating,
-    this.imageUrl,
-    required this.iconData,
-    required this.colorSeed,
-  });
-}
-
-class _RentalCard extends StatelessWidget {
-  final _RentalItemData item;
-  final double? width;
-
-  const _RentalCard({required this.item, this.width});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (item.id != null) {
-          AppRoutes.openItemDetail(context, itemId: item.id!);
-        }
-      },
-      child: SizedBox(
-        width: width,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.07),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Image section ──────────────────────────────
-              Expanded(
-                child: ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Real Image from Supabase or Fallback
-                      if (item.imageUrl != null && item.imageUrl!.isNotEmpty)
-                        Image.network(
-                          item.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (ctx, err, st) => Container(
-                            color: item.colorSeed,
-                            child: Center(
-                              child: Icon(
-                                item.iconData,
-                                color: Colors.white.withValues(alpha: 0.6),
-                                size: 44,
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                        Container(
-                          color: item.colorSeed,
-                          child: Center(
-                            child: Icon(
-                              item.iconData,
-                              color: Colors.white.withValues(alpha: 0.6),
-                              size: 44,
-                            ),
-                          ),
-                        ),
-                      // Price badge (bottom left)
-                      Positioned(
-                        bottom: 8,
-                        left: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryColor,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${item.pricePerDay.toInt()} ฿/วัน',
-                            style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 10,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Rating badge (bottom right)
-                      Positioned(
-                        bottom: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.55),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.star_rounded,
-                                color: Color(0xFFFF9800),
-                                size: 12,
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                item.rating > 0
-                                    ? item.rating.toStringAsFixed(1)
-                                    : '5.0',
-                                style: const TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 10,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // ── Title section ──────────────────────────────
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: Color(0xFF1A1A2E),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

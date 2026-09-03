@@ -11,7 +11,7 @@ import '../../../chat/presentation/bloc/chat_list_bloc.dart';
 import '../../../chat/presentation/bloc/chat_list_event.dart';
 import '../../../chat/presentation/bloc/chat_list_state.dart';
 import '../../../chat/presentation/pages/chat.dart';
-import '../../../profile/presentation/pages/profile.dart';
+import '../../../profile/presentation/pages/profile/profile.dart';
 import '../../../wallet/presentation/pages/wallet.dart';
 import '../../data/repositories/home_repository_impl.dart';
 import '../../domain/usecases/get_home_feed_usecase.dart';

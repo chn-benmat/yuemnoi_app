@@ -2,9 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/navigation/app_routes.dart';
+import '../../../../../core/theme/app_text_styles.dart';
+import '../../widgets/account/change_account_widgets.dart';
 
 class ChangeAccountScreen extends StatefulWidget {
   const ChangeAccountScreen({super.key});
@@ -71,11 +72,13 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
             message,
             style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
           ),
-          backgroundColor:
-              isError ? Colors.red.shade700 : AppColors.primaryColor,
+          backgroundColor: isError
+              ? Colors.red.shade700
+              : AppColors.primaryColor,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
   }
@@ -179,8 +182,11 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                         contentPadding: EdgeInsets.zero,
                         leading: CircleAvatar(
                           backgroundColor: const Color(0xFFFEE2E2),
-                          child: const Icon(Icons.block_rounded,
-                              color: Colors.red, size: 20),
+                          child: const Icon(
+                            Icons.block_rounded,
+                            color: Colors.red,
+                            size: 20,
+                          ),
                         ),
                         title: Text(
                           username,
@@ -314,8 +320,11 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                         contentPadding: EdgeInsets.zero,
                         leading: CircleAvatar(
                           backgroundColor: const Color(0xFFF3E8FF),
-                          child: const Icon(Icons.visibility_off_outlined,
-                              color: AppColors.primaryColor, size: 20),
+                          child: const Icon(
+                            Icons.visibility_off_outlined,
+                            color: AppColors.primaryColor,
+                            size: 20,
+                          ),
                         ),
                         title: Text(
                           username,
@@ -331,7 +340,8 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                             setSheetState(() {});
                             _saveStringList('sec_hidden_users', _hiddenUsers);
                             _showSnackBar(
-                                'ยกเลิกการซ่อน $username เรียบร้อยแล้ว');
+                              'ยกเลิกการซ่อน $username เรียบร้อยแล้ว',
+                            );
                           },
                           child: const Text(
                             'เลิกซ่อน',
@@ -403,7 +413,9 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 ),
               ),
               title: Text(
-                kIsWeb ? 'เว็บเบราว์เซอร์ (ปัจจุบัน)' : 'โทรศัพท์เครื่องนี้ (ปัจจุบัน)',
+                kIsWeb
+                    ? 'เว็บเบราว์เซอร์ (ปัจจุบัน)'
+                    : 'โทรศัพท์เครื่องนี้ (ปัจจุบัน)',
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontWeight: FontWeight.bold,
@@ -418,8 +430,11 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                   fontSize: 12,
                 ),
               ),
-              trailing: const Icon(Icons.check_circle_rounded,
-                  color: Color(0xFF2E7D32), size: 20),
+              trailing: const Icon(
+                Icons.check_circle_rounded,
+                color: Color(0xFF2E7D32),
+                size: 20,
+              ),
             ),
             const SizedBox(height: 20),
             OutlinedButton.icon(
@@ -427,7 +442,11 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 Navigator.pop(ctx);
                 _showSnackBar('ออกจากระบบจากอุปกรณ์อื่นทั้งหมดเรียบร้อยแล้ว');
               },
-              icon: const Icon(Icons.logout_rounded, color: Colors.red, size: 18),
+              icon: const Icon(
+                Icons.logout_rounded,
+                color: Colors.red,
+                size: 18,
+              ),
               label: const Text(
                 'ออกจากระบบจากอุปกรณ์อื่นทั้งหมด',
                 style: TextStyle(
@@ -491,8 +510,10 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _showSnackBar('ส่งคำขอลบบัญชีแล้ว โปรดรอการยืนยันทางอีเมล',
-                  isError: true);
+              _showSnackBar(
+                'ส่งคำขอลบบัญชีแล้ว โปรดรอการยืนยันทางอีเมล',
+                isError: true,
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -600,7 +621,7 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
             // ── Section: บัญชีและความปลอดภัย ──
             _buildSectionHeader('บัญชีและความปลอดภัย'),
             _buildCardGroup([
-              _SecurityItem(
+              AccountSecurityItem(
                 icon: Icons.lock_outline_rounded,
                 iconBgColor: const Color(0xFFF3E8FF),
                 iconColor: AppColors.primaryColor,
@@ -609,7 +630,7 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 onTap: () => AppRoutes.openProfileChangePassword(context),
               ),
               _buildDivider(),
-              _SecuritySwitchItem(
+              AccountSecuritySwitchItem(
                 icon: Icons.fingerprint_rounded,
                 iconBgColor: const Color(0xFFE8F5E9),
                 iconColor: const Color(0xFF2E7D32),
@@ -619,13 +640,15 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 onChanged: (val) {
                   setState(() => _biometricEnabled = val);
                   _saveBool('sec_biometric', val);
-                  _showSnackBar(val
-                      ? 'เปิดใช้งานการสแกนลายนิ้วมือ/ใบหน้าแล้ว'
-                      : 'ปิดใช้งานการสแกนลายนิ้วมือ/ใบหน้าแล้ว');
+                  _showSnackBar(
+                    val
+                        ? 'เปิดใช้งานการสแกนลายนิ้วมือ/ใบหน้าแล้ว'
+                        : 'ปิดใช้งานการสแกนลายนิ้วมือ/ใบหน้าแล้ว',
+                  );
                 },
               ),
               _buildDivider(),
-              _SecuritySwitchItem(
+              AccountSecuritySwitchItem(
                 icon: Icons.verified_user_outlined,
                 iconBgColor: const Color(0xFFE3F2FF),
                 iconColor: const Color(0xFF1565C0),
@@ -635,9 +658,11 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 onChanged: (val) {
                   setState(() => _twoFactorEnabled = val);
                   _saveBool('sec_2fa', val);
-                  _showSnackBar(val
-                      ? 'เปิดใช้งานการยืนยันตัวตน 2 ขั้นตอนแล้ว'
-                      : 'ปิดใช้งานการยืนยันตัวตน 2 ขั้นตอนแล้ว');
+                  _showSnackBar(
+                    val
+                        ? 'เปิดใช้งานการยืนยันตัวตน 2 ขั้นตอนแล้ว'
+                        : 'ปิดใช้งานการยืนยันตัวตน 2 ขั้นตอนแล้ว',
+                  );
                 },
               ),
             ]),
@@ -647,7 +672,7 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
             // ── Section: การจัดการการโต้ตอบและความเป็นส่วนตัว ──
             _buildSectionHeader('ความเป็นส่วนตัวและการบล็อก'),
             _buildCardGroup([
-              _SecurityItem(
+              AccountSecurityItem(
                 icon: Icons.block_rounded,
                 iconBgColor: const Color(0xFFFEE2E2),
                 iconColor: Colors.red.shade700,
@@ -658,7 +683,7 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 onTap: _showBlockedUsersSheet,
               ),
               _buildDivider(),
-              _SecurityItem(
+              AccountSecurityItem(
                 icon: Icons.visibility_off_outlined,
                 iconBgColor: const Color(0xFFFEF3C7),
                 iconColor: const Color(0xFFD97706),
@@ -669,7 +694,7 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 onTap: _showHiddenUsersSheet,
               ),
               _buildDivider(),
-              _SecuritySwitchItem(
+              AccountSecuritySwitchItem(
                 icon: Icons.person_search_outlined,
                 iconBgColor: const Color(0xFFF3E8FF),
                 iconColor: AppColors.primaryColor,
@@ -688,7 +713,7 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
             // ── Section: การแจ้งเตือนความปลอดภัย ──
             _buildSectionHeader('การแจ้งเตือน'),
             _buildCardGroup([
-              _SecuritySwitchItem(
+              AccountSecuritySwitchItem(
                 icon: Icons.notifications_off_outlined,
                 iconBgColor: const Color(0xFFEDE9FE),
                 iconColor: const Color(0xFF7C3AED),
@@ -698,13 +723,15 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 onChanged: (val) {
                   setState(() => _muteNotifications = val);
                   _saveBool('sec_mute_notif', val);
-                  _showSnackBar(val
-                      ? 'ปิดการแจ้งเตือนทั้งหมดแล้ว'
-                      : 'เปิดรับการแจ้งเตือนตามปกติแล้ว');
+                  _showSnackBar(
+                    val
+                        ? 'ปิดการแจ้งเตือนทั้งหมดแล้ว'
+                        : 'เปิดรับการแจ้งเตือนตามปกติแล้ว',
+                  );
                 },
               ),
               _buildDivider(),
-              _SecuritySwitchItem(
+              AccountSecuritySwitchItem(
                 icon: Icons.security_rounded,
                 iconBgColor: const Color(0xFFE0F2FE),
                 iconColor: const Color(0xFF0284C7),
@@ -723,7 +750,7 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
             // ── Section: เซสชันและการจัดการบัญชี ──
             _buildSectionHeader('อุปกรณ์และการจัดการบัญชี'),
             _buildCardGroup([
-              _SecurityItem(
+              AccountSecurityItem(
                 icon: Icons.devices_outlined,
                 iconBgColor: const Color(0xFFE2E8F0),
                 iconColor: const Color(0xFF475569),
@@ -732,7 +759,7 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 onTap: _showActiveSessionsSheet,
               ),
               _buildDivider(),
-              _SecurityItem(
+              AccountSecurityItem(
                 icon: Icons.delete_outline_rounded,
                 iconBgColor: const Color(0xFFFEE2E2),
                 iconColor: Colors.red.shade700,
@@ -776,163 +803,16 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: children,
-      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
 
   Widget _buildDivider() {
-    return Divider(height: 1, indent: 64, endIndent: 16, color: Colors.grey.shade100);
-  }
-}
-
-// ─── Security Item (Tap) ──────────────────────────────────────────────────────
-
-class _SecurityItem extends StatelessWidget {
-  final IconData icon;
-  final Color iconBgColor;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final bool isDanger;
-  final VoidCallback? onTap;
-
-  const _SecurityItem({
-    required this.icon,
-    required this.iconBgColor,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    this.isDanger = false,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: iconBgColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isDanger ? Colors.red.shade700 : const Color(0xFF1A1A2E),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 12,
-                      color: isDanger ? Colors.red.shade300 : AppColors.hintTextColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: isDanger ? Colors.red.shade300 : AppColors.hintTextColor,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Security Item (Switch) ───────────────────────────────────────────────────
-
-class _SecuritySwitchItem extends StatelessWidget {
-  final IconData icon;
-  final Color iconBgColor;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _SecuritySwitchItem({
-    required this.icon,
-    required this.iconBgColor,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: iconBgColor,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A2E),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 12,
-                    color: AppColors.hintTextColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: value,
-            activeTrackColor: AppColors.primaryColor,
-            onChanged: onChanged,
-          ),
-        ],
-      ),
+    return Divider(
+      height: 1,
+      indent: 64,
+      endIndent: 16,
+      color: Colors.grey.shade100,
     );
   }
 }

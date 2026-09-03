@@ -25,6 +25,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
   final Set<int> _pendingAssistantAnimations = <int>{};
   final Set<int> _startedAssistantAnimations = <int>{};
   int _observedMessageCount = 0;
+  int? _editingMessageIndex;
   bool _showScrollToBottomButton = false;
 
   @override
@@ -46,9 +47,82 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
     final query = _messageController.text.trim();
     if (query.isEmpty || state.isSending) return;
 
-    context.read<ChatbotBloc>().add(ChatbotMessageSubmitted(query));
+    final editingMessageIndex = _editingMessageIndex;
+    if (editingMessageIndex != null) {
+      context.read<ChatbotBloc>().add(
+        ChatbotMessageEdited(index: editingMessageIndex, content: query),
+      );
+      setState(() => _editingMessageIndex = null);
+    } else {
+      context.read<ChatbotBloc>().add(ChatbotMessageSubmitted(query));
+    }
     _messageController.clear();
     _messageFocusNode.requestFocus();
+  }
+
+  void _startEditingMessage(int index, ChatMessage message) {
+    setState(() {
+      _editingMessageIndex = index;
+      _messageController.text = message.content;
+      _messageController.selection = TextSelection.collapsed(
+        offset: _messageController.text.length,
+      );
+    });
+    _messageFocusNode.requestFocus();
+  }
+
+  void _cancelEditingMessage() {
+    setState(() {
+      _editingMessageIndex = null;
+      _messageController.clear();
+    });
+    _messageFocusNode.requestFocus();
+  }
+
+  Future<void> _showMessageActions(int index, ChatMessage message) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => SafeArea(
+        child: Container(
+          key: const Key('chatbot-message-action-sheet'),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF26262A),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton.icon(
+                key: const Key('chatbot-edit-message-action'),
+                onPressed: () {
+                  Navigator.of(modalContext).pop();
+                  _startEditingMessage(index, message);
+                },
+                icon: const Icon(Icons.edit_rounded),
+                label: const Text('แก้ไข'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _handleScrollPosition() {
@@ -184,6 +258,15 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                                 onAnimationStarted: () =>
                                     _markAssistantAnimationStarted(index),
                                 onTextProgress: _keepLatestMessageVisible,
+                                onEdit:
+                                    state.messages[index].role ==
+                                            ChatMessageRole.user &&
+                                        !state.isSending
+                                    ? () => _showMessageActions(
+                                        index,
+                                        state.messages[index],
+                                      )
+                                    : null,
                               );
                             },
                           ),
@@ -194,6 +277,10 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                       controller: _messageController,
                       focusNode: _messageFocusNode,
                       isSending: state.isSending,
+                      editingMessage: _editingMessageIndex == null
+                          ? null
+                          : state.messages[_editingMessageIndex!],
+                      onCancelEdit: _cancelEditingMessage,
                       onSend: () => _sendMessage(state),
                     ),
                   ],
@@ -339,12 +426,16 @@ class _ChatComposer extends StatelessWidget {
     required this.focusNode,
     required this.isSending,
     required this.onSend,
+    this.editingMessage,
+    this.onCancelEdit,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool isSending;
   final VoidCallback onSend;
+  final ChatMessage? editingMessage;
+  final VoidCallback? onCancelEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -362,81 +453,152 @@ class _ChatComposer extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
-          child: Container(
-            key: const Key('chatbot-composer'),
-            constraints: const BoxConstraints(minHeight: 64),
-            padding: const EdgeInsets.fromLTRB(20, 6, 8, 6),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x17000000),
-                  blurRadius: 18,
-                  offset: Offset(0, 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (editingMessage != null)
+                Container(
+                  key: const Key('chatbot-editing-banner'),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.primaryColor.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.edit_rounded,
+                        size: 18,
+                        color: AppColors.primaryColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'กำลังแก้ไขข้อความ',
+                              style: TextStyle(
+                                color: AppColors.primaryColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              editingMessage!.content,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF6B7280),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        key: const Key('chatbot-cancel-edit-button'),
+                        tooltip: 'ยกเลิกแก้ไข',
+                        onPressed: onCancelEdit,
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        color: const Color(0xFF9CA3AF),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: const Key('chatbot-message-field'),
-                    controller: controller,
-                    focusNode: focusNode,
-                    enabled: !isSending,
-                    maxLength: 200,
-                    minLines: 1,
-                    maxLines: 4,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => onSend(),
-                    buildCounter:
-                        (
-                          context, {
-                          required currentLength,
-                          required isFocused,
-                          required maxLength,
-                        }) => null,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'ถามข้อมูลเกี่ยวกับอุปกรณ์...',
-                      hintStyle: TextStyle(
-                        color: Color(0xFF8C8C94),
-                        fontSize: 14,
+              Container(
+                key: const Key('chatbot-composer'),
+                constraints: const BoxConstraints(minHeight: 64),
+                padding: const EdgeInsets.fromLTRB(20, 6, 8, 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x17000000),
+                      blurRadius: 18,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const Key('chatbot-message-field'),
+                        controller: controller,
+                        focusNode: focusNode,
+                        enabled: !isSending,
+                        maxLength: 200,
+                        minLines: 1,
+                        maxLines: 4,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => onSend(),
+                        buildCounter:
+                            (
+                              context, {
+                              required currentLength,
+                              required isFocused,
+                              required maxLength,
+                            }) => null,
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          hintText: editingMessage != null
+                              ? 'แก้ไขข้อความ...'
+                              : 'ถามข้อมูลเกี่ยวกับอุปกรณ์...',
+                          hintStyle: const TextStyle(
+                            color: Color(0xFF8C8C94),
+                            fontSize: 14,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  key: const Key('chatbot-send-gradient'),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSending ? const Color(0xFFC8A5DE) : null,
-                    gradient: isSending
-                        ? null
-                        : const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [AppColors.gradient1, AppColors.gradient2],
-                          ),
-                  ),
-                  child: IconButton(
-                    key: const Key('chatbot-send-button'),
-                    tooltip: 'ส่งข้อความ',
-                    onPressed: isSending ? null : onSend,
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      disabledBackgroundColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      disabledForegroundColor: Colors.white,
-                      minimumSize: const Size.square(48),
+                    const SizedBox(width: 8),
+                    Container(
+                      key: const Key('chatbot-send-gradient'),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isSending ? const Color(0xFFC8A5DE) : null,
+                        gradient: isSending
+                            ? null
+                            : const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  AppColors.gradient1,
+                                  AppColors.gradient2,
+                                ],
+                              ),
+                      ),
+                      child: IconButton(
+                        key: const Key('chatbot-send-button'),
+                        tooltip: editingMessage != null
+                            ? 'บันทึกแก้ไข'
+                            : 'ส่งข้อความ',
+                        onPressed: isSending ? null : onSend,
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          disabledBackgroundColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          disabledForegroundColor: Colors.white,
+                          minimumSize: const Size.square(48),
+                        ),
+                        icon: Icon(
+                          editingMessage != null
+                              ? Icons.check_rounded
+                              : Icons.arrow_upward_rounded,
+                          size: 25,
+                        ),
+                      ),
                     ),
-                    icon: const Icon(Icons.arrow_upward_rounded, size: 25),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

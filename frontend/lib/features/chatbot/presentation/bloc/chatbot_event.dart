@@ -15,3 +15,13 @@ class ChatbotMessageSubmitted extends ChatbotEvent {
   @override
   List<Object?> get props => [query];
 }
+
+class ChatbotMessageEdited extends ChatbotEvent {
+  const ChatbotMessageEdited({required this.index, required this.content});
+
+  final int index;
+  final String content;
+
+  @override
+  List<Object?> get props => [index, content];
+}

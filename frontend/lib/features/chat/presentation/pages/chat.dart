@@ -12,6 +12,7 @@ import '../bloc/chat_list_bloc.dart';
 import '../bloc/chat_list_event.dart';
 import '../bloc/chat_list_state.dart';
 import '../widgets/chat_avatar.dart';
+import '../widgets/chat_list_loading_skeleton.dart';
 import '../widgets/conversation_action_sheet.dart';
 
 enum _ConversationFilter { all, owner, renter }
@@ -183,11 +184,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                 builder: (context, state) {
                   if (state.status == ChatListStatus.loading &&
                       state.conversations.isEmpty) {
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primaryColor,
-                      ),
-                    );
+                    return const ChatListLoadingSkeleton();
                   }
 
                   if (state.status == ChatListStatus.failure &&
