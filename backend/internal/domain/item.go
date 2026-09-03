@@ -28,6 +28,14 @@ type Item struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+// RankedItem คือข้อมูลอุปกรณ์พร้อมสัญญาณจริงที่ใช้แสดงในฟีดหน้า Home
+type RankedItem struct {
+	Item
+	Rating           float64 `json:"rating"`
+	ReviewCount      int64   `json:"review_count"`
+	PaidBookingCount int64   `json:"paid_booking_count"`
+}
+
 // ItemImage คือไฟล์รูปอุปกรณ์ที่ผ่านการตรวจสอบจาก HTTP handler แล้ว
 type ItemImage struct {
 	Data        []byte
@@ -56,7 +64,7 @@ type UpdateItemRequest struct {
 
 type ItemRepository interface {
 	Insert(ctx context.Context, item *Item, images []ItemImage) (*Item, error)
-	FindAll(ctx context.Context) ([]Item, error)
+	FindAll(ctx context.Context) ([]RankedItem, error)
 	FindByID(ctx context.Context, id int64) (*Item, error)
 	Update(ctx context.Context, id int64, userID string, fields map[string]interface{}) (*Item, error)
 	Delete(ctx context.Context, id int64, userID string) error

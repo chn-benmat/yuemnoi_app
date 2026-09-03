@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 
 import '../../domain/entities/chat_conversation.dart';
+import '../../domain/entities/item_inquiry_data.dart';
 
 abstract final class ChatConversationModel {
   static ChatConversation fromRecords({
@@ -29,6 +30,13 @@ abstract final class ChatConversationModel {
     final String cleanPreview;
     if (rawLastMessage.isEmpty) {
       cleanPreview = 'เริ่มการสนทนา';
+    } else if (rawLastMessage.contains('[BOOKING_DATA:')) {
+      cleanPreview = '📋 คำขอเช่าอุปกรณ์';
+    } else if (ItemInquiryData.isInquiry(rawLastMessage)) {
+      final inquiry = ItemInquiryData.fromChatMessage(rawLastMessage);
+      cleanPreview = inquiry != null && inquiry.itemName.isNotEmpty
+          ? '💬 สนใจเช่า: ${inquiry.itemName}'
+          : '💬 สนใจเช่าอุปกรณ์';
     } else if (rawLastMessage.startsWith('↩ ตอบกลับ:') ||
         rawLastMessage.startsWith('💬 ตอบกลับ') ||
         rawLastMessage.startsWith('↪ ตอบกลับ')) {

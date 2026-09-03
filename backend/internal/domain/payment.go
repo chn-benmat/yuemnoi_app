@@ -102,4 +102,5 @@ type PaymentRepository interface {
 type PaymentGateway interface {
 	CreateCheckoutSession(ctx context.Context, request CheckoutRequest) (*CheckoutSession, error)
 	ParseWebhook(payload []byte, signature string) (*PaymentEvent, error)
+	RetrieveCheckoutSession(ctx context.Context, sessionID string) (*PaymentEvent, error)
 }

@@ -4,10 +4,12 @@ import '../../../../core/constants/colors.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../../item_detail/presentation/widgets/full_screen_image_viewer.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/item_inquiry_data.dart';
 import 'booking_request_bubble_card.dart';
 import 'chat_avatar.dart';
 import 'chat_message_action_sheet.dart';
 import 'chat_stacked_image_card.dart';
+import 'item_inquiry_bubble_card.dart';
 import 'stacked_images_grid_screen.dart';
 import 'swipe_to_reply.dart';
 
@@ -202,11 +204,14 @@ class ChatMessageBubble extends StatelessWidget {
       );
 
       if (bookingData != null) {
-        final bookingCard = BookingRequestBubbleCard(
-          message: message,
-          bookingData: bookingData,
-          senderName: otherUserName,
-          isOwner: isOwner,
+        final bookingCard = GestureDetector(
+          onLongPress: () => _showActions(context),
+          child: BookingRequestBubbleCard(
+            message: message,
+            bookingData: bookingData,
+            senderName: otherUserName,
+            isOwner: isOwner,
+          ),
         );
 
         final statusFailedWidget = isFailed
@@ -306,6 +311,141 @@ class ChatMessageBubble extends StatelessWidget {
                   else
                     const SizedBox(width: 36),
                   Flexible(child: bookingCard),
+                ],
+              );
+
+        final bubbleContainer = AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          decoration: BoxDecoration(
+            color: isHighlighted
+                ? AppColors.primaryColor.withValues(alpha: 0.15)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: body,
+        );
+
+        return SwipeToReply(
+          isMine: isMine,
+          onReply: () => onReply?.call(message),
+          child: bubbleContainer,
+        );
+      }
+    }
+
+    final isInquiry = ItemInquiryData.isInquiry(message.message);
+    if (isInquiry) {
+      final inquiryData = ItemInquiryData.fromChatMessage(
+        message.message,
+        imageUrl: message.imageUrl,
+      );
+
+      if (inquiryData != null) {
+        final inquiryCard = GestureDetector(
+          onLongPress: () => _showActions(context),
+          child: ItemInquiryBubbleCard(
+            message: message,
+            inquiryData: inquiryData,
+          ),
+        );
+
+        final statusFailedWidget = isFailed
+            ? GestureDetector(
+                onTap: onRetry,
+                child: const Padding(
+                  padding: EdgeInsets.only(right: 6, bottom: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline_rounded,
+                          color: Color(0xFFEF4444), size: 15),
+                      SizedBox(width: 3),
+                      Text(
+                        'ส่งไม่สำเร็จ',
+                        key: ValueKey('chat-message-failed-status'),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : null;
+
+        final statusTextWidget = (isMine && showDeliveryStatus && !isRead)
+            ? Padding(
+                padding: const EdgeInsets.only(right: 6, bottom: 4),
+                child: Text(
+                  deliveryStatus ?? 'ส่งแล้ว',
+                  key: const ValueKey('chat-message-delivery-status'),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF8A8E92),
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              )
+            : null;
+
+        final avatarStatusWidget = (isMine && showDeliveryStatus && isRead)
+            ? Container(
+                key: const ValueKey('chat-message-delivery-status'),
+                width: 16,
+                height: 16,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                ),
+                child: ChatAvatar(
+                  asset: otherAvatarAsset ?? 'assets/images/user.png',
+                  size: 16,
+                  showStatus: false,
+                ),
+              )
+            : null;
+
+        final body = isMine
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  ?statusFailedWidget,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      inquiryCard,
+                      if (statusTextWidget != null)
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(top: 3, right: 6, bottom: 2),
+                          child: statusTextWidget,
+                        ),
+                      if (avatarStatusWidget != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, right: 2),
+                          child: avatarStatusWidget,
+                        ),
+                    ],
+                  ),
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (showAvatar)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8, bottom: 2),
+                      child: ChatAvatar(
+                        asset: otherAvatarAsset ?? 'assets/images/user1.png',
+                        size: 28,
+                        showStatus: false,
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 36),
+                  Flexible(child: inquiryCard),
                 ],
               );
 

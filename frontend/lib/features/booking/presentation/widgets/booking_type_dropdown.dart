@@ -9,10 +9,12 @@ class BookingTypeDropdown extends StatelessWidget {
     super.key,
     required this.selectedType,
     required this.onChanged,
+    this.showError = false,
   });
 
-  final BookingRentalType selectedType;
+  final BookingRentalType? selectedType;
   final ValueChanged<BookingRentalType> onChanged;
+  final bool showError;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +59,10 @@ class BookingTypeDropdown extends StatelessWidget {
                 itemBuilder: (ctx) => [
                   PopupMenuItem<BookingRentalType>(
                     value: BookingRentalType.hourly,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     child: _DropdownOptionTile(
                       title: 'ต่อชั่วโมง (Hourly)',
                       subtitle: 'เหมาะสำหรับการใช้งานสั้นๆ ไม่กี่ชั่วโมง',
@@ -67,7 +72,10 @@ class BookingTypeDropdown extends StatelessWidget {
                   ),
                   PopupMenuItem<BookingRentalType>(
                     value: BookingRentalType.daily,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     child: _DropdownOptionTile(
                       title: 'ต่อวัน (Daily)',
                       subtitle: 'เช่ารายวันเต็มวันขึ้นไป',
@@ -77,7 +85,10 @@ class BookingTypeDropdown extends StatelessWidget {
                   ),
                 ],
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(26),
@@ -88,17 +99,27 @@ class BookingTypeDropdown extends StatelessWidget {
                         offset: const Offset(0, 3),
                       ),
                     ],
+                    border: Border.all(
+                      color: showError
+                          ? const Color(0xFFDC2626)
+                          : Colors.transparent,
+                      width: 1.5,
+                    ),
                   ),
                   child: Row(
                     children: [
                       Expanded(
                         child: Text(
-                          selectedType.label,
-                          style: const TextStyle(
+                          selectedType?.label ?? 'กรุณาเลือก',
+                          style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E2022),
+                            color: showError
+                                ? const Color(0xFFDC2626)
+                                : selectedType == null
+                                ? const Color(0xFF777A7C)
+                                : const Color(0xFF1E2022),
                           ),
                         ),
                       ),
@@ -114,6 +135,20 @@ class BookingTypeDropdown extends StatelessWidget {
             },
           ),
         ),
+        if (showError) ...[
+          const SizedBox(height: 6),
+          const Padding(
+            padding: EdgeInsets.only(left: 16),
+            child: Text(
+              'กรุณาเลือกประเภทการเช่า',
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontSize: 12,
+                color: Color(0xFFDC2626),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -173,8 +208,7 @@ class _DropdownOptionTile extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 14,
-                    fontWeight:
-                        isSelected ? FontWeight.bold : FontWeight.w600,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                     color: isSelected
                         ? AppColors.primaryColor
                         : const Color(0xFF1E2022),

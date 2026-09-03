@@ -204,6 +204,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       emit(currentState.copyWith(isRefreshing: true));
     }
 
+    homeRepository.clearCache();
+
     try {
       final data = await getHomeFeed(
         categoryId: categoryId,

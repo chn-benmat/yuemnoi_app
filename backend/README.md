@@ -133,7 +133,7 @@ Adapter สำหรับติดต่อกับ **AI Service** (Python Fas
 
 | Method   | Endpoint            | Handler                           | คำอธิบาย                            |
 | :------- | :------------------ | :-------------------------------- | :---------------------------------- |
-| `GET`    | `/api/v1/items`     | `ItemHandler.GetAllItems`         | ดึงรายการอุปกรณ์เช่าทั้งหมด         |
+| `GET`    | `/api/v1/items`     | `ItemHandler.GetAllItems`         | ดึงฟีดอุปกรณ์พร้อมเช่าที่จัดอันดับแล้ว |
 | `GET`    | `/api/v1/items/:id` | `ItemHandler.GetItemByID`         | ดึงข้อมูลอุปกรณ์ตาม ID              |
 | `POST`   | `/api/v1/items`     | `ItemHandler.CreateItem`          | เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ |
 | `PUT`    | `/api/v1/items/:id` | `ItemHandler.UpdateItem`          | แก้ไขอุปกรณ์ของเจ้าของรายการ        |
@@ -147,6 +147,10 @@ Adapter สำหรับติดต่อกับ **AI Service** (Python Fas
 ```http
 Authorization: Bearer <SUPABASE_ACCESS_TOKEN>
 ```
+
+`GET /api/v1/items` เรียงฟีดจากยอดเช่าที่ชำระแล้ว คะแนนรีวิว ความใหม่
+และความหลากหลายของหมวดหมู่/เจ้าของ โดยคืน `rating`, `review_count` และ
+`paid_booking_count` เพิ่มเติม แต่ไม่เปิดเผยคะแนนจัดอันดับภายใน
 
 `POST /api/v1/chat/contact` ต้องส่ง access token เช่นกัน และจะคืนข้อมูลติดต่อ
 เฉพาะเมื่อผู้ใช้เป็นผู้เช่าหรือเจ้าของในห้องสนทนาที่ระบุเท่านั้น

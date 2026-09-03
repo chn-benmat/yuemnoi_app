@@ -25,19 +25,27 @@ class FeedItemModel extends FeedItem {
     return FeedItemModel(
       id: json['id']?.toString() ?? '',
       title: json['title'] as String? ?? json['item_name'] as String? ?? '',
-      categoryId: json['category_id'] as String? ?? json['category'] as String? ?? 'all',
+      categoryId:
+          json['category_id'] as String? ??
+          json['category'] as String? ??
+          'all',
       price: (json['price'] as num?)?.toInt() ?? 0,
       priceUnit: json['price_unit'] as String? ?? '/ วัน',
-      rating: (json['rating'] as num?)?.toDouble() ?? 5.0,
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
       distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 1.0,
       isVerified: json['is_verified'] as bool? ?? true,
-      ownerName: json['owner_name'] as String? ?? 'Jessica',
+      ownerName: json['owner_name'] as String? ?? 'Yuemnoi Verified',
       ownerAvatarUrl: json['owner_avatar_url'] as String?,
-      imageUrl: json['image_url'] as String? ?? json['item_image_url'] as String? ?? '',
+      imageUrl:
+          json['image_url'] as String? ??
+          json['item_image_url'] as String? ??
+          '',
       isCurated: json['is_curated'] as bool? ?? false,
       isFavorite: json['is_favorite'] as bool? ?? false,
-      tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          const [],
       locationName: json['location_name'] as String? ?? 'กรุงเทพฯ',
     );
   }

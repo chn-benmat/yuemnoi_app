@@ -1,36 +1,65 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/network/api_client.dart';
-import '../../../../core/network/supabase_client.dart';
 import '../models/feed_category_model.dart';
 import '../models/feed_item_model.dart';
 import 'home_mock_data_source.dart';
 
 /// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงผ่าน Go Backend REST API (`/api/v1/items`)
+/// พร้อม fallback จาก Go API ไปยัง Local Cache
 class HomeSupabaseDataSource {
   HomeSupabaseDataSource({
-    SupabaseClient? client,
     ApiClient? apiClient,
     HomeMockDataSource? fallbackDataSource,
-  })  : _client = client,
-        _apiClient = apiClient ?? DioApiClient(),
-        _fallbackDataSource = fallbackDataSource ?? HomeMockDataSource();
+  }) : _apiClient = apiClient ?? DioApiClient(),
+       _fallbackDataSource = fallbackDataSource ?? HomeMockDataSource();
 
-  final SupabaseClient? _client;
+  static const String _cacheKey = 'cached_home_feed_items_v2_ranked';
+
   final ApiClient _apiClient;
   final HomeMockDataSource _fallbackDataSource;
   final Set<String> _favoriteItemIds = {};
 
-  SupabaseClient? get client {
-    if (_client != null) return _client;
-    if (SupabaseConfig.isInitialized) {
-      try {
-        return SupabaseConfig.client;
-      } catch (_) {
-        return null;
-      }
+  List<FeedItemModel>? _cachedFeedItems;
+  DateTime? _lastFetchTime;
+
+  void clearMemoryCache() {
+    _cachedFeedItems = null;
+    _lastFetchTime = null;
+  }
+
+  Future<void> _saveCachedItems(List<FeedItemModel> items) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = items.map((item) => jsonEncode(item.toJson())).toList();
+      await prefs.setStringList(_cacheKey, jsonList);
+    } catch (e) {
+      debugPrint('Save cached home items error: $e');
     }
-    return null;
+  }
+
+  Future<List<FeedItemModel>> _loadCachedItems() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stringList = prefs.getStringList(_cacheKey);
+      if (stringList != null && stringList.isNotEmpty) {
+        final items = stringList.map((str) {
+          final decoded = jsonDecode(str);
+          final map = decoded is Map<String, dynamic>
+              ? decoded
+              : Map<String, dynamic>.from(decoded as Map);
+          return FeedItemModel.fromJson(map);
+        }).toList();
+        return items;
+      }
+    } catch (e) {
+      debugPrint('Load cached home items error: $e');
+    }
+    return const [];
   }
 
   /// ดึงหมวดหมู่มาตรฐาน 11 หมวดหมู่
@@ -163,97 +192,140 @@ class HomeSupabaseDataSource {
     return list[index % list.length];
   }
 
-  /// ดึงข้อมูลทั้งหมดผ่าน Go Backend API (`/api/v1/items`) และแปลงเป็น `List<FeedItemModel>`
-  Future<List<FeedItemModel>> _fetchAllSupabaseItems() async {
+  List<FeedItemModel> _mapRawListToFeedItems(
+    List rawItems, {
+    Map<String, Map<String, dynamic>>? profilesMap,
+  }) {
+    final List<FeedItemModel> items = [];
+    for (int i = 0; i < rawItems.length; i++) {
+      final item = rawItems[i] is Map<String, dynamic>
+          ? rawItems[i] as Map<String, dynamic>
+          : Map<String, dynamic>.from(rawItems[i] as Map);
+      final id = item['id'].toString();
+      final title = item['item_name']?.toString() ?? 'อุปกรณ์ให้เช่า';
+      final description = item['description']?.toString() ?? '';
+      final rawCategory = item['category']?.toString();
+      final categoryId = mapDbCategoryToId(rawCategory);
+      final price = (item['price'] is num)
+          ? (item['price'] as num).toInt()
+          : int.tryParse(item['price']?.toString() ?? '0') ?? 0;
+      final type = item['type']?.toString();
+      final priceUnit = (type == 'รายชั่วโมง') ? '/ ชม.' : '/ วัน';
+
+      String imageUrl = '';
+      if (item['item_image_url'] is List &&
+          (item['item_image_url'] as List).isNotEmpty) {
+        final firstImg = (item['item_image_url'] as List).first?.toString();
+        if (firstImg != null && firstImg.trim().isNotEmpty) {
+          imageUrl = firstImg.trim();
+        }
+      } else if (item['item_image_url'] is String &&
+          (item['item_image_url'] as String).trim().isNotEmpty) {
+        imageUrl = (item['item_image_url'] as String).trim();
+      }
+
+      var ownerName = item['owner_name']?.toString().trim();
+      var ownerAvatar = item['owner_avatar_url']?.toString();
+
+      if (ownerName == null || ownerName.isEmpty) {
+        final profile = profilesMap?[item['user_id']?.toString()];
+        final email = profile?['email']?.toString() ?? '';
+        if (email.contains('@')) {
+          ownerName = email.split('@').first;
+        } else if (email.isNotEmpty) {
+          ownerName = email;
+        } else {
+          ownerName = 'Yuemnoi Verified';
+        }
+        ownerAvatar ??= profile?['user_image_url']?.toString();
+      }
+
+      const locationName = 'กรุงเทพฯ';
+
+      List<String> tags = [];
+      if (rawCategory != null && rawCategory.isNotEmpty) {
+        tags.add(rawCategory);
+      }
+      if (description.isNotEmpty) {
+        final words = description
+            .split(RegExp(r'[,\s]+'))
+            .where((w) => w.length >= 3 && w.length <= 15)
+            .take(2)
+            .toList();
+        tags.addAll(words);
+      }
+
+      final rating = item['rating'] is num
+          ? (item['rating'] as num).toDouble()
+          : double.tryParse(item['rating']?.toString() ?? '') ?? 0;
+      final reviewCount = item['review_count'] is num
+          ? (item['review_count'] as num).toInt()
+          : int.tryParse(item['review_count']?.toString() ?? '') ?? 0;
+      final distanceKm = 0.8 + ((i % 6) * 0.6);
+
+      items.add(
+        FeedItemModel(
+          id: id,
+          title: title,
+          categoryId: categoryId,
+          price: price,
+          priceUnit: priceUnit,
+          rating: double.parse(rating.toStringAsFixed(1)),
+          reviewCount: reviewCount,
+          distanceKm: double.parse(distanceKm.toStringAsFixed(1)),
+          isVerified: true,
+          ownerName: ownerName.isEmpty ? 'Yuemnoi Verified' : ownerName,
+          ownerAvatarUrl: ownerAvatar,
+          imageUrl: imageUrl,
+          isCurated: i < 4,
+          isFavorite: _favoriteItemIds.contains(id),
+          tags: tags,
+          locationName: locationName,
+        ),
+      );
+    }
+    return items;
+  }
+
+  /// ดึงข้อมูลทั้งหมดผ่าน Go Backend API (`/api/v1/items`) หรือ Local Cache
+  Future<List<FeedItemModel>> _fetchAllSupabaseItems({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh &&
+        _cachedFeedItems != null &&
+        _lastFetchTime != null &&
+        DateTime.now().difference(_lastFetchTime!).inSeconds < 15) {
+      return _cachedFeedItems!;
+    }
+
+    // Tier 1: Try Go Backend API
     try {
       final response = await _apiClient.get('/api/v1/items');
       if (response.statusCode == 200 && response.data is List) {
         final rawItems = response.data as List;
-        if (rawItems.isNotEmpty) {
-          final List<FeedItemModel> items = [];
-          for (int i = 0; i < rawItems.length; i++) {
-            final item = rawItems[i] is Map<String, dynamic>
-                ? rawItems[i] as Map<String, dynamic>
-                : Map<String, dynamic>.from(rawItems[i] as Map);
-            final id = item['id'].toString();
-            final title = item['item_name']?.toString() ?? 'อุปกรณ์ให้เช่า';
-            final description = item['description']?.toString() ?? '';
-            final rawCategory = item['category']?.toString();
-            final categoryId = mapDbCategoryToId(rawCategory);
-            final price = (item['price'] is num)
-                ? (item['price'] as num).toInt()
-                : int.tryParse(item['price']?.toString() ?? '0') ?? 0;
-            final type = item['type']?.toString();
-            final priceUnit = (type == 'รายชั่วโมง') ? '/ ชม.' : '/ วัน';
-
-            // จัดการรูปภาพ (ดึงจาก item_image_url ถ้าไม่มีให้ปล่อยว่างเพื่อแสดง no picture icon)
-            String imageUrl = '';
-            if (item['item_image_url'] is List &&
-                (item['item_image_url'] as List).isNotEmpty) {
-              final firstImg =
-                  (item['item_image_url'] as List).first?.toString();
-              if (firstImg != null && firstImg.trim().isNotEmpty) {
-                imageUrl = firstImg.trim();
-              }
-            }
-
-            final ownerName = item['owner_name']?.toString().trim().isNotEmpty == true
-                ? item['owner_name'].toString().trim()
-                : 'Yuemnoi Verified';
-            final ownerAvatar = item['owner_avatar_url']?.toString();
-            const locationName = 'กรุงเทพฯ';
-
-            // ดึงแท็กจากคำอธิบาย
-            List<String> tags = [];
-            if (rawCategory != null && rawCategory.isNotEmpty) {
-              tags.add(rawCategory);
-            }
-            if (description.isNotEmpty) {
-              final words = description
-                  .split(RegExp(r'[,\s]+'))
-                  .where((w) => w.length >= 3 && w.length <= 15)
-                  .take(2)
-                  .toList();
-              tags.addAll(words);
-            }
-
-            final rating = 4.7 + ((i % 4) * 0.1);
-            final reviewCount = 8 + (i * 3);
-            final distanceKm = 0.8 + ((i % 6) * 0.6);
-
-            items.add(
-              FeedItemModel(
-                id: id,
-                title: title,
-                categoryId: categoryId,
-                price: price,
-                priceUnit: priceUnit,
-                rating: double.parse(rating.toStringAsFixed(1)),
-                reviewCount: reviewCount,
-                distanceKm: double.parse(distanceKm.toStringAsFixed(1)),
-                isVerified: true,
-                ownerName: ownerName,
-                ownerAvatarUrl: ownerAvatar,
-                imageUrl: imageUrl,
-                isCurated: i < 4,
-                isFavorite: _favoriteItemIds.contains(id),
-                tags: tags,
-                locationName: locationName,
-              ),
-            );
-          }
-
-          return items;
-        }
-        return const [];
+        final items = _mapRawListToFeedItems(rawItems);
+        _cachedFeedItems = items;
+        _lastFetchTime = DateTime.now();
+        unawaited(_saveCachedItems(items));
+        return items;
       }
-      throw const FormatException('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่');
-    } catch (_) {
-      throw const FormatException('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่');
+    } catch (e) {
+      debugPrint('Home Go Backend API fetch error: $e');
     }
+
+    // Tier 2: Try Local Cache from SharedPreferences
+    final cached = await _loadCachedItems();
+    if (cached.isNotEmpty) {
+      _cachedFeedItems = cached;
+      return cached;
+    }
+
+    throw const FormatException(
+      'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่',
+    );
   }
 
-  /// ดึงรายการแนะนำพิเศษ (Curated Daily) จาก Supabase
+  /// ดึงรายการแนะนำพิเศษ (Curated Daily) จาก Supabase / Backend
   Future<List<FeedItemModel>> fetchCuratedItems() async {
     final allItems = await _fetchAllSupabaseItems();
     final curated = allItems.where((i) => i.isCurated).toList();
@@ -263,7 +335,7 @@ class HomeSupabaseDataSource {
     return curated;
   }
 
-  /// ดึงรายการอุปกรณ์ใกล้เคียงจาก Supabase พร้อมตัวกรองหมวดหมู่, คำค้นหา, ราคา, คะแนนรีวิว
+  /// ดึงรายการอุปกรณ์ใกล้เคียงจาก Supabase / Backend พร้อมตัวกรองหมวดหมู่, คำค้นหา, ราคา, คะแนนรีวิว
   Future<List<FeedItemModel>> fetchNearbyItems({
     String? categoryId,
     String? searchQuery,
@@ -282,10 +354,10 @@ class HomeSupabaseDataSource {
       items = items.where((item) {
         final matchesTitle = item.title.toLowerCase().contains(query);
         final matchesCategory = item.categoryId.toLowerCase().contains(query);
-        final matchesTags =
-            item.tags.any((t) => t.toLowerCase().contains(query));
-        final matchesLocation =
-            item.locationName.toLowerCase().contains(query);
+        final matchesTags = item.tags.any(
+          (t) => t.toLowerCase().contains(query),
+        );
+        final matchesLocation = item.locationName.toLowerCase().contains(query);
         final matchesOwner = item.ownerName.toLowerCase().contains(query);
         return matchesTitle ||
             matchesCategory ||
