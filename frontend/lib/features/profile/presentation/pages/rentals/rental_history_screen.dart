@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/network/supabase_client.dart';
-import '../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/network/supabase_client.dart';
+import '../../../../../core/theme/app_text_styles.dart';
+import '../../widgets/rentals/rental_history_widgets.dart';
 
 class RentalHistoryScreen extends StatefulWidget {
   const RentalHistoryScreen({super.key});
@@ -15,7 +15,7 @@ class RentalHistoryScreen extends StatefulWidget {
 
 class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
   bool _isLoading = true;
-  List<_RentalHistoryItemData> _history = [];
+  List<RentalHistoryItemData> _history = [];
 
   @override
   void initState() {
@@ -44,7 +44,8 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
       final bookingsResp = await client
           .from('booking_tb')
           .select(
-              'id, user_id, item_id, start_date, end_date, start_at, end_at, price, total_price, status, type, created_at')
+            'id, user_id, item_id, start_date, end_date, start_at, end_at, price, total_price, status, type, created_at',
+          )
           .eq('user_id', currentUserId)
           .order('created_at', ascending: false);
 
@@ -107,8 +108,9 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
               final uid = p['user_id']?.toString();
               final email = p['email']?.toString() ?? '';
               if (uid != null) {
-                ownerNames[uid] =
-                    email.isNotEmpty ? email.split('@').first : 'เจ้าของอุปกรณ์';
+                ownerNames[uid] = email.isNotEmpty
+                    ? email.split('@').first
+                    : 'เจ้าของอุปกรณ์';
               }
             }
           }
@@ -116,7 +118,7 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
       }
 
       // 4. ประกอบข้อมูลประวัติการเช่า
-      final List<_RentalHistoryItemData> result = [];
+      final List<RentalHistoryItemData> result = [];
 
       for (final b in rawBookings) {
         final itemId = (b['item_id'] as num?)?.toInt();
@@ -162,7 +164,10 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
             : startDate;
         if (createdDate != null) {
           try {
-            dateStr = DateFormat('d MMM yyyy', 'th').format(createdDate.toLocal());
+            dateStr = DateFormat(
+              'd MMM yyyy',
+              'th',
+            ).format(createdDate.toLocal());
           } catch (_) {
             dateStr =
                 '${createdDate.day}/${createdDate.month}/${createdDate.year}';
@@ -170,11 +175,12 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
         }
 
         // สถานะ
-        final (statusText, statusColor, statusBg) =
-            _formatStatus(b['status']?.toString());
+        final (statusText, statusColor, statusBg) = _formatStatus(
+          b['status']?.toString(),
+        );
 
         result.add(
-          _RentalHistoryItemData(
+          RentalHistoryItemData(
             itemId: itemId,
             title: title,
             ownerName: ownerName,
@@ -203,35 +209,15 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
     switch (status?.toLowerCase()) {
       case 'completed':
       case 'finished':
-        return (
-          'เสร็จสิ้น',
-          const Color(0xFF2E7D32),
-          const Color(0xFFE8F5E9),
-        );
+        return ('เสร็จสิ้น', const Color(0xFF2E7D32), const Color(0xFFE8F5E9));
       case 'active':
-        return (
-          'กำลังเช่า',
-          const Color(0xFF1565C0),
-          const Color(0xFFE3F2FF),
-        );
+        return ('กำลังเช่า', const Color(0xFF1565C0), const Color(0xFFE3F2FF));
       case 'pending_payment':
-        return (
-          'รอชำระเงิน',
-          const Color(0xFFE65100),
-          const Color(0xFFFFF3E0),
-        );
+        return ('รอชำระเงิน', const Color(0xFFE65100), const Color(0xFFFFF3E0));
       case 'cancelled':
-        return (
-          'ยกเลิกแล้ว',
-          const Color(0xFFC62828),
-          const Color(0xFFFFEBEE),
-        );
+        return ('ยกเลิกแล้ว', const Color(0xFFC62828), const Color(0xFFFFEBEE));
       default:
-        return (
-          'เสร็จสิ้น',
-          const Color(0xFF2E7D32),
-          const Color(0xFFE8F5E9),
-        );
+        return ('เสร็จสิ้น', const Color(0xFF2E7D32), const Color(0xFFE8F5E9));
     }
   }
 
@@ -295,26 +281,26 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
         elevation: 0,
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryColor),
-            )
+          ? const RentalHistoryLoadingSkeleton()
           : _history.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  color: AppColors.primaryColor,
-                  onRefresh: _loadRentalHistory,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 24),
-                    itemCount: _history.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final item = _history[index];
-                      return _RentalHistoryCard(item: item);
-                    },
-                  ),
+          ? _buildEmptyState()
+          : RefreshIndicator(
+              color: AppColors.primaryColor,
+              onRefresh: _loadRentalHistory,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 24,
                 ),
+                itemCount: _history.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final item = _history[index];
+                  return RentalHistoryCard(item: item);
+                },
+              ),
+            ),
     );
   }
 
@@ -368,8 +354,10 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 12,
+                ),
               ),
               child: const Text(
                 'ค้นหาอุปกรณ์เพื่อเช่า',
@@ -377,162 +365,6 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
                   fontFamily: AppTextStyles.fontFamily,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Data Model ───────────────────────────────────────────────────────────────
-
-class _RentalHistoryItemData {
-  final int? itemId;
-  final String title;
-  final String ownerName;
-  final String duration;
-  final String date;
-  final String status;
-  final Color statusColor;
-  final Color statusBgColor;
-  final IconData iconData;
-
-  _RentalHistoryItemData({
-    this.itemId,
-    required this.title,
-    required this.ownerName,
-    required this.duration,
-    required this.date,
-    required this.status,
-    required this.statusColor,
-    required this.statusBgColor,
-    required this.iconData,
-  });
-}
-
-// ─── Card Widget ──────────────────────────────────────────────────────────────
-
-class _RentalHistoryCard extends StatelessWidget {
-  final _RentalHistoryItemData item;
-
-  const _RentalHistoryCard({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: item.itemId != null
-          ? () => AppRoutes.openItemDetail(context, itemId: item.itemId!)
-          : null,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Icon Box ──
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3E8FF),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                item.iconData,
-                color: AppColors.primaryColor,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            // ── Details ──
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A2E),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'เช่าจาก: ${item.ownerName}',
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 12,
-                      color: AppColors.labelColor,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      if (item.date.isNotEmpty) ...[
-                        Text(
-                          item.date,
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 11,
-                            color: AppColors.hintTextColor,
-                          ),
-                        ),
-                        const Text(
-                          ' • ',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.hintTextColor,
-                          ),
-                        ),
-                      ],
-                      Text(
-                        item.duration,
-                        style: const TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 11,
-                          color: AppColors.hintTextColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            // ── Status Badge ──
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: item.statusBgColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                item.status,
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: item.statusColor,
                 ),
               ),
             ),

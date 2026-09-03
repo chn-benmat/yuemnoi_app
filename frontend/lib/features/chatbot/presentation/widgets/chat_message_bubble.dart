@@ -12,6 +12,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.animateAssistantResponse = false,
     this.onAnimationStarted,
     this.onTextProgress,
+    this.onEdit,
     super.key,
   });
 
@@ -20,6 +21,7 @@ class ChatMessageBubble extends StatelessWidget {
   final bool animateAssistantResponse;
   final VoidCallback? onAnimationStarted;
   final VoidCallback? onTextProgress;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +67,7 @@ class ChatMessageBubble extends StatelessWidget {
               constraints: BoxConstraints(
                 maxWidth: constraints.maxWidth * 0.82,
               ),
-              child: bubble,
+              child: GestureDetector(onLongPress: onEdit, child: bubble),
             ),
           );
         },

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/network/supabase_client.dart';
-import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/utils/phone_formatter.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/navigation/app_routes.dart';
+import '../../../../../core/network/supabase_client.dart';
+import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/utils/phone_formatter.dart';
+import '../../widgets/account/setting_account_widgets.dart';
 
 class SettingAccountScreen extends StatelessWidget {
   const SettingAccountScreen({super.key});
@@ -55,7 +56,7 @@ class SettingAccountScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _SettingItem(
+              AccountSettingItem(
                 icon: Icons.person_outline_rounded,
                 iconBgColor: const Color(0xFFF3E8FF),
                 iconColor: AppColors.primaryColor,
@@ -63,8 +64,13 @@ class SettingAccountScreen extends StatelessWidget {
                 subtitle: 'ชื่อแสดงตัวตน, ชื่อผู้ใช้',
                 onTap: () => AppRoutes.openEditProfile(context),
               ),
-              Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey.shade100),
-              _SettingItem(
+              Divider(
+                height: 1,
+                indent: 16,
+                endIndent: 16,
+                color: Colors.grey.shade100,
+              ),
+              AccountSettingItem(
                 icon: Icons.contact_mail_outlined,
                 iconBgColor: const Color(0xFFE3F2FF),
                 iconColor: const Color(0xFF1976D2),
@@ -72,8 +78,13 @@ class SettingAccountScreen extends StatelessWidget {
                 subtitle: phoneSubtitle,
                 onTap: () => AppRoutes.openEditContact(context),
               ),
-              Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey.shade100),
-              _SettingItem(
+              Divider(
+                height: 1,
+                indent: 16,
+                endIndent: 16,
+                color: Colors.grey.shade100,
+              ),
+              AccountSettingItem(
                 icon: Icons.security_outlined,
                 iconBgColor: const Color(0xFFE8F5E9),
                 iconColor: const Color(0xFF388E3C),
@@ -84,79 +95,6 @@ class SettingAccountScreen extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Setting Item Widget ──────────────────────────────────────────────────────
-
-class _SettingItem extends StatelessWidget {
-  final IconData icon;
-  final Color iconBgColor;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final bool showDivider;
-  final VoidCallback? onTap;
-
-  const _SettingItem({
-    required this.icon,
-    required this.iconBgColor,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    this.showDivider = true,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: iconBgColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1A1A2E),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 12,
-                      color: AppColors.hintTextColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.hintTextColor),
-          ],
         ),
       ),
     );

@@ -3,11 +3,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/network/api_client.dart';
-import '../../../../core/network/supabase_client.dart';
-import '../../../../core/services/app_permission_service.dart';
-import '../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/network/api_client.dart';
+import '../../../../../core/network/supabase_client.dart';
+import '../../../../../core/services/app_permission_service.dart';
+import '../../../../../core/theme/app_text_styles.dart';
+import '../../widgets/account/edit_profile_widgets.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -35,14 +36,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final meta = user?.userMetadata ?? {};
 
     _displayNameCtrl = TextEditingController(
-      text: (meta['display_name'] ?? meta['full_name'] ?? user?.email?.split('@').first ?? '').toString(),
+      text:
+          (meta['display_name'] ??
+                  meta['full_name'] ??
+                  user?.email?.split('@').first ??
+                  '')
+              .toString(),
     );
     _usernameCtrl = TextEditingController(
-      text: (meta['username'] ?? user?.email?.split('@').first ?? '').toString(),
+      text: (meta['username'] ?? user?.email?.split('@').first ?? '')
+          .toString(),
     );
-    _bioCtrl = TextEditingController(
-      text: (meta['bio'] ?? '').toString(),
-    );
+    _bioCtrl = TextEditingController(text: (meta['bio'] ?? '').toString());
     _avatarUrl = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
     if (_avatarUrl!.isEmpty) _avatarUrl = null;
 
@@ -65,16 +70,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (response.statusCode == 200 && response.data is Map && mounted) {
         final data = response.data as Map;
         setState(() {
-          if (data['display_name'] != null && data['display_name'].toString().isNotEmpty) {
+          if (data['display_name'] != null &&
+              data['display_name'].toString().isNotEmpty) {
             _displayNameCtrl.text = data['display_name'].toString();
           }
-          if (data['username'] != null && data['username'].toString().isNotEmpty) {
+          if (data['username'] != null &&
+              data['username'].toString().isNotEmpty) {
             _usernameCtrl.text = data['username'].toString();
           }
           if (data['bio'] != null && data['bio'].toString().isNotEmpty) {
             _bioCtrl.text = data['bio'].toString();
           }
-          if (data['user_image_url'] != null && data['user_image_url'].toString().isNotEmpty) {
+          if (data['user_image_url'] != null &&
+              data['user_image_url'].toString().isNotEmpty) {
             _avatarUrl = data['user_image_url'].toString();
           }
         });
@@ -91,12 +99,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _pickImage() async {
-    final hasPermission =
-        await AppPermissionService.requestGalleryPermission(context);
+    final hasPermission = await AppPermissionService.requestGalleryPermission(
+      context,
+    );
     if (!hasPermission || !mounted) return;
 
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
     if (picked != null) {
       final bytes = await picked.readAsBytes();
       setState(() {
@@ -163,13 +175,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             backgroundColor: AppColors.primaryColor,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
         Navigator.of(context).pop(true);
         return;
       } else {
-        final errorMsg = response.data is Map ? response.data['error']?.toString() : null;
+        final errorMsg = response.data is Map
+            ? response.data['error']?.toString()
+            : null;
         throw Exception(errorMsg ?? 'บันทึกข้อมูลไม่สำเร็จ');
       }
     } catch (e) {
@@ -183,7 +199,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     }
@@ -234,17 +252,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       padding: const EdgeInsets.all(3),
                       child: ClipOval(
                         child: _pickedImageBytes != null
-                            ? Image.memory(_pickedImageBytes!, fit: BoxFit.cover)
+                            ? Image.memory(
+                                _pickedImageBytes!,
+                                fit: BoxFit.cover,
+                              )
                             : _avatarUrl != null
-                                ? Image.network(_avatarUrl!, fit: BoxFit.cover)
-                                : Container(
-                                    color: const Color(0xFFF3E8FF),
-                                    child: const Icon(
-                                      Icons.person_rounded,
-                                      size: 48,
-                                      color: AppColors.primaryColor,
-                                    ),
-                                  ),
+                            ? Image.network(_avatarUrl!, fit: BoxFit.cover)
+                            : Container(
+                                color: const Color(0xFFF3E8FF),
+                                child: const Icon(
+                                  Icons.person_rounded,
+                                  size: 48,
+                                  color: AppColors.primaryColor,
+                                ),
+                              ),
                       ),
                     ),
                     GestureDetector(
@@ -269,9 +290,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 28),
 
               // ── Section: ข้อมูลตัวตน ─────────────────────────
-              const _SectionTitle(title: 'ข้อมูลตัวตน'),
+              const EditProfileSectionTitle(title: 'ข้อมูลตัวตน'),
               const SizedBox(height: 12),
-              _FormField(
+              EditProfileFormField(
                 controller: _displayNameCtrl,
                 label: 'ชื่อแสดงตัวตน',
                 hint: 'กรอกชื่อที่ต้องการแสดง',
@@ -280,14 +301,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     (v == null || v.trim().isEmpty) ? 'กรุณากรอกชื่อ' : null,
               ),
               const SizedBox(height: 14),
-              _FormField(
+              EditProfileFormField(
                 controller: _usernameCtrl,
                 label: 'ชื่อผู้ใช้',
                 hint: 'username',
                 icon: Icons.alternate_email_rounded,
               ),
               const SizedBox(height: 14),
-              _FormField(
+              EditProfileFormField(
                 controller: _bioCtrl,
                 label: 'ชีวประวัติ / แนะนำตัว',
                 hint: 'เขียนอะไรสักอย่างเกี่ยวกับตัวคุณ...',
@@ -302,7 +323,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryColor,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: AppColors.primaryColor.withValues(alpha: 0.6),
+                  disabledBackgroundColor: AppColors.primaryColor.withValues(
+                    alpha: 0.6,
+                  ),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
@@ -314,7 +337,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
                       )
                     : const Text(
                         'บันทึกข้อมูล',
@@ -326,108 +351,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Shared Widgets ───────────────────────────────────────────────────────────
-
-class _SectionTitle extends StatelessWidget {
-  final String title;
-  const _SectionTitle({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontFamily: AppTextStyles.fontFamily,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: AppColors.labelColor,
-        letterSpacing: 0.4,
-      ),
-    );
-  }
-}
-
-class _FormField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String hint;
-  final IconData icon;
-  final int maxLines;
-  final String? Function(String?)? validator;
-
-  const _FormField({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.icon,
-    this.maxLines = 1,
-    this.validator,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: controller,
-        maxLines: maxLines,
-        validator: validator,
-        style: const TextStyle(
-          fontFamily: AppTextStyles.fontFamily,
-          fontSize: 14,
-          color: Color(0xFF1A1A2E),
-        ),
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          labelStyle: const TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontSize: 13,
-            color: AppColors.hintTextColor,
-          ),
-          hintStyle: const TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontSize: 13,
-            color: AppColors.hintTextColor,
-          ),
-          prefixIcon: Icon(icon, color: AppColors.fieldIconColor, size: 20),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          filled: true,
-          fillColor: Colors.white,
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.grey.shade200),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide:
-                const BorderSide(color: AppColors.primaryColor, width: 1.5),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Colors.red),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Colors.red, width: 1.5),
           ),
         ),
       ),

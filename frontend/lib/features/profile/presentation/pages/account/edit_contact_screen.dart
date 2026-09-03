@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/network/api_client.dart';
-import '../../../../core/network/supabase_client.dart';
-import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/utils/phone_formatter.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/network/api_client.dart';
+import '../../../../../core/network/supabase_client.dart';
+import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/utils/phone_formatter.dart';
+import '../../widgets/account/edit_contact_widgets.dart';
 
 class EditContactScreen extends StatefulWidget {
   const EditContactScreen({super.key});
@@ -27,8 +28,8 @@ class _EditContactScreenState extends State<EditContactScreen> {
         ? SupabaseConfig.client.auth.currentUser
         : null;
 
-    final rawPhone =
-        (user?.userMetadata?['phone'] ?? user?.phone ?? '').toString();
+    final rawPhone = (user?.userMetadata?['phone'] ?? user?.phone ?? '')
+        .toString();
 
     _emailCtrl = TextEditingController(text: user?.email ?? '');
     _phoneCtrl = TextEditingController(
@@ -55,8 +56,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
         final data = response.data as Map;
         if (data['phone'] != null && data['phone'].toString().isNotEmpty) {
           setState(() {
-            _phoneCtrl.text =
-                PhoneFormatter.formatForDisplay(data['phone'].toString());
+            _phoneCtrl.text = PhoneFormatter.formatForDisplay(
+              data['phone'].toString(),
+            );
           });
         }
       }
@@ -104,9 +106,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
       // บันทึกลงใน Supabase User Metadata ให้เป็น +66 โดยตรงด้วย
       try {
         await SupabaseConfig.client.auth.updateUser(
-          UserAttributes(
-            data: {'phone': phoneForSupabase},
-          ),
+          UserAttributes(data: {'phone': phoneForSupabase}),
         );
       } catch (_) {}
 
@@ -122,7 +122,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
           ),
           backgroundColor: AppColors.primaryColor,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     } catch (e) {
@@ -135,7 +137,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
           ),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     } finally {
@@ -170,7 +174,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Email ────────────────────────────────────────
-              _ContactField(
+              EditContactField(
                 controller: _emailCtrl,
                 label: 'อีเมลที่อยู่',
                 hint: 'กรอกอีเมลของคุณ',
@@ -185,7 +189,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
               const SizedBox(height: 14),
 
               // ── Phone ────────────────────────────────────────
-              _ContactField(
+              EditContactField(
                 controller: _phoneCtrl,
                 label: 'หมายเลขโทรศัพท์ที่เชื่อมต่อกัน',
                 hint: '0xx-xxx-xxxx',
@@ -208,8 +212,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryColor,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor:
-                      AppColors.primaryColor.withValues(alpha: 0.6),
+                  disabledBackgroundColor: AppColors.primaryColor.withValues(
+                    alpha: 0.6,
+                  ),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
@@ -221,7 +226,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
                       )
                     : const Text(
                         'บันทึกข้อมูล',
@@ -233,89 +240,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
                       ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Contact Field ────────────────────────────────────────────────────────────
-
-class _ContactField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String hint;
-  final IconData icon;
-  final TextInputType? keyboardType;
-  final String? Function(String?)? validator;
-
-  const _ContactField({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.icon,
-    this.keyboardType,
-    this.validator,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        validator: validator,
-        style: const TextStyle(
-          fontFamily: AppTextStyles.fontFamily,
-          fontSize: 14,
-          color: Color(0xFF1A1A2E),
-        ),
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          labelStyle: const TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontSize: 13,
-            color: AppColors.hintTextColor,
-          ),
-          hintStyle: const TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontSize: 13,
-            color: AppColors.hintTextColor,
-          ),
-          prefixIcon: Icon(icon, color: AppColors.fieldIconColor, size: 20),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          filled: true,
-          fillColor: Colors.white,
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.grey.shade200),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide:
-                const BorderSide(color: AppColors.primaryColor, width: 1.5),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Colors.red),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Colors.red, width: 1.5),
           ),
         ),
       ),
