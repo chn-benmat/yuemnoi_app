@@ -102,15 +102,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F9),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _ProfileHeader(
-                displayName: _displayName,
-                avatarUrl: _avatarUrl,
-              ),
-              const SizedBox(height: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ProfileHeader(
+              displayName: _displayName,
+              avatarUrl: _avatarUrl,
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 20),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: _QuickActionsRow(
@@ -239,6 +243,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -270,16 +277,6 @@ class _ProfileHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Profile Page',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontSize: 13,
-              color: Colors.white70,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          const SizedBox(height: 16),
           Row(
             children: [
               _AvatarWidget(avatarUrl: avatarUrl, displayName: displayName),
