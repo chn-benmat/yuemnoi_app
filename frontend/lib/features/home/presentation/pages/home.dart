@@ -44,14 +44,17 @@ class HomeScreen extends StatelessWidget {
           )..add(const LoadChatListStarted()),
         ),
       ],
-      child: _HomeScreenContent(initialIndex: initialIndex),
+      child: _HomeScreenContent(
+        key: ValueKey('home_content_$initialIndex'),
+        initialIndex: initialIndex,
+      ),
     );
   }
 }
 
 class _HomeScreenContent extends StatefulWidget {
   final int initialIndex;
-  const _HomeScreenContent({this.initialIndex = 0});
+  const _HomeScreenContent({super.key, this.initialIndex = 0});
 
   @override
   State<_HomeScreenContent> createState() => _HomeScreenContentState();
@@ -64,6 +67,17 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeScreenContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialIndex != widget.initialIndex ||
+        _selectedIndex != widget.initialIndex) {
+      setState(() {
+        _selectedIndex = widget.initialIndex;
+      });
+    }
   }
 
   List<Widget> get _pages => [

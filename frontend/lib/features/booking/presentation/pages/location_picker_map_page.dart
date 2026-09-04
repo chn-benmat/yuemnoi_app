@@ -92,6 +92,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
     );
 
     _searchController.addListener(_onSearchQueryChanged);
+    _searchFocusNode.addListener(_onSearchFocusChanged);
 
     // ทำ Reverse Geocoding เพื่อดึงที่อยู่เริ่มต้น
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -104,26 +105,62 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
     _debounceTimer?.cancel();
     _nameController.dispose();
     _searchController.dispose();
+    _searchFocusNode.removeListener(_onSearchFocusChanged);
     _searchFocusNode.dispose();
     _pinAnimController.dispose();
     _mapController.dispose();
     super.dispose();
   }
 
+  void _onSearchFocusChanged() {
+    if (_searchFocusNode.hasFocus) {
+      if (_searchController.text.trim().isEmpty) {
+        setState(() {
+          _searchResults = LocationService.popularLandmarks;
+        });
+      }
+    } else {
+      if (mounted && _searchResults.isNotEmpty) {
+        setState(() {
+          _searchResults = [];
+          _isSearching = false;
+        });
+      }
+    }
+  }
+
+  void _closeSearch() {
+    _debounceTimer?.cancel();
+    _searchFocusNode.unfocus();
+    if (mounted && (_searchResults.isNotEmpty || _isSearching)) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+    }
+  }
+
   void _onSearchQueryChanged() {
     final query = _searchController.text.trim();
     if (query.isEmpty) {
-      setState(() {
-        _searchResults = LocationService.popularLandmarks;
-      });
+      _debounceTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _searchResults = _searchFocusNode.hasFocus
+              ? LocationService.popularLandmarks
+              : [];
+          _isSearching = false;
+        });
+      }
       return;
     }
 
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 350), () async {
+      if (!mounted) return;
       setState(() => _isSearching = true);
       final results = await LocationService.instance.searchLocations(query);
-      if (mounted) {
+      if (mounted && _searchFocusNode.hasFocus) {
         setState(() {
           _searchResults = results;
           _isSearching = false;
@@ -267,16 +304,21 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
       ),
       body: Stack(
         children: [
-          // 1. แผนที่ Interactive OpenStreetMap
+          // 1. แผนที่ Interactive (Google Maps Clean Style)
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _currentCenter,
               initialZoom: _currentZoom,
               minZoom: 4,
-              maxZoom: 18.5,
+              maxZoom: 20,
               onPositionChanged: (camera, hasGesture) {
                 if (hasGesture) {
+                  if (_searchFocusNode.hasFocus ||
+                      _searchResults.isNotEmpty ||
+                      _isSearching) {
+                    _closeSearch();
+                  }
                   _currentCenter = camera.center;
                   _currentZoom = camera.zoom;
                   _triggerReverseGeocode(
@@ -286,15 +328,22 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                 }
               },
               onTap: (tapPosition, point) {
-                _searchFocusNode.unfocus();
-                _animateMapTo(point);
+                if (_searchFocusNode.hasFocus ||
+                    _searchResults.isNotEmpty ||
+                    _isSearching) {
+                  _closeSearch();
+                } else {
+                  _animateMapTo(point);
+                }
               },
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate:
+                    'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                subdomains: const ['0', '1', '2', '3'],
                 userAgentPackageName: 'com.example.frontend',
-                maxZoom: 19,
+                maxZoom: 20,
               ),
             ],
           ),
@@ -397,6 +446,20 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
             ),
           ),
 
+          // 2.5 พื้นหลังดักการแตะหน้าจอเพื่อออกจากโหมดค้นหา
+          if (_searchFocusNode.hasFocus ||
+              _searchResults.isNotEmpty ||
+              _isSearching)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _closeSearch,
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.12),
+                ),
+              ),
+            ),
+
           // 3. แถบค้นหาและตัวเลือกสถานที่ยอดนิยมด้านบน
           Positioned(
             top: 12,
@@ -421,12 +484,19 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                   child: TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E2022),
+                    ),
                     decoration: InputDecoration(
                       hintText: 'ค้นหาสถานที่, ห้าง, สถานี BTS/MRT...',
                       hintStyle: const TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
                         fontSize: 13.5,
-                        color: Color(0xFF94A3B8),
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF64748B),
                       ),
                       prefixIcon: const Icon(
                         Icons.search_rounded,
@@ -438,7 +508,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                               icon: const Icon(Icons.clear_rounded, size: 18),
                               onPressed: () {
                                 _searchController.clear();
-                                setState(() => _searchResults = []);
+                                _closeSearch();
                               },
                             )
                           : null,
@@ -467,70 +537,76 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                         ),
                       ],
                     ),
-                    child: _isSearching
-                        ? const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Center(
-                              child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: AppColors.primaryColor,
-                                ),
-                              ),
-                            ),
-                          )
-                        : ListView.separated(
-                            shrinkWrap: true,
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            itemCount: _searchResults.length,
-                            separatorBuilder: (_, _) => const Divider(
-                              height: 1,
-                              color: Color(0xFFF1F5F9),
-                            ),
-                            itemBuilder: (context, index) {
-                              final item = _searchResults[index];
-                              return ListTile(
-                                dense: true,
-                                leading: Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primaryColor.withValues(
-                                      alpha: 0.1,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: _isSearching
+                            ? const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: AppColors.primaryColor,
                                     ),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.place_rounded,
-                                    color: AppColors.primaryColor,
-                                    size: 18,
                                   ),
                                 ),
-                                title: Text(
-                                  item.name,
-                                  style: const TextStyle(
-                                    fontFamily: AppTextStyles.fontFamily,
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1E2022),
-                                  ),
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 6),
+                                itemCount: _searchResults.length,
+                                separatorBuilder: (_, _) => const Divider(
+                                  height: 1,
+                                  color: Color(0xFFF1F5F9),
                                 ),
-                                subtitle: Text(
-                                  item.displayName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontFamily: AppTextStyles.fontFamily,
-                                    fontSize: 11.5,
-                                    color: Color(0xFF64748B),
-                                  ),
-                                ),
-                                onTap: () => _selectSearchResult(item),
-                              );
-                            },
-                          ),
+                                itemBuilder: (context, index) {
+                                  final item = _searchResults[index];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryColor
+                                            .withValues(alpha: 0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.place_rounded,
+                                        color: AppColors.primaryColor,
+                                        size: 18,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      item.name,
+                                      style: const TextStyle(
+                                        fontFamily: AppTextStyles.fontFamily,
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF1E2022),
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      item.displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontFamily: AppTextStyles.fontFamily,
+                                        fontSize: 11.5,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                    onTap: () => _selectSearchResult(item),
+                                  );
+                                },
+                              ),
+                      ),
+                    ),
                   ),
 
                 // ชิปสถานที่ยอดนิยม (Quick Landmark Chips)

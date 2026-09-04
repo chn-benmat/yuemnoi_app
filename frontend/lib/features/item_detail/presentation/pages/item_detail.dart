@@ -900,7 +900,7 @@ class _OwnerCard extends StatelessWidget {
             userId: owner.userId,
             displayName: owner.displayName,
             avatarUrl: owner.imageUrl,
-            rating: item.averageRating > 0 ? item.averageRating : 4.9,
+            rating: item.averageRating,
             isVerified: true,
             bio: 'สนใจกล้องตัวไหนโปรดติดต่อฉัน',
           ),

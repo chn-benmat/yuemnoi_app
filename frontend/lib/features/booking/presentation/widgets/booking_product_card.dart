@@ -2,10 +2,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/services/item_review_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/booking_request_model.dart';
 
-class BookingProductCard extends StatelessWidget {
+class BookingProductCard extends StatefulWidget {
   const BookingProductCard({
     super.key,
     required this.item,
@@ -14,7 +15,48 @@ class BookingProductCard extends StatelessWidget {
   final BookingItemInfo item;
 
   @override
+  State<BookingProductCard> createState() => _BookingProductCardState();
+}
+
+class _BookingProductCardState extends State<BookingProductCard> {
+  late double _rating;
+  late int _reviewCount;
+
+  @override
+  void initState() {
+    super.initState();
+    _rating = widget.item.rating;
+    _reviewCount = widget.item.reviewCount;
+    _loadStats();
+  }
+
+  @override
+  void didUpdateWidget(covariant BookingProductCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.id != widget.item.id) {
+      _rating = widget.item.rating;
+      _reviewCount = widget.item.reviewCount;
+      _loadStats();
+    }
+  }
+
+  Future<void> _loadStats() async {
+    if (widget.item.id <= 0) return;
+    try {
+      final stats = await ItemReviewService.fetchStats(widget.item.id);
+      if (mounted) {
+        setState(() {
+          _rating = stats.rating;
+          _reviewCount = stats.reviewCount;
+        });
+      }
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final hasReviews = _reviewCount > 0 && _rating > 0.0;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
@@ -40,9 +82,9 @@ class BookingProductCard extends StatelessWidget {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
-              child: item.imageUrl.startsWith('http')
+              child: widget.item.imageUrl.startsWith('http')
                   ? CachedNetworkImage(
-                      imageUrl: item.imageUrl,
+                      imageUrl: widget.item.imageUrl,
                       fit: BoxFit.cover,
                       placeholder: (context, url) => const Center(
                         child: SizedBox(
@@ -61,7 +103,7 @@ class BookingProductCard extends StatelessWidget {
                       ),
                     )
                   : Image.asset(
-                      item.imageUrl,
+                      widget.item.imageUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) => const Icon(
                         Icons.photo_camera_back_rounded,
@@ -79,7 +121,7 @@ class BookingProductCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  item.title,
+                  widget.item.title,
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 18,
@@ -93,19 +135,28 @@ class BookingProductCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.star_outline_rounded,
-                      size: 17,
-                      color: Color(0xFF757778),
+                    Icon(
+                      hasReviews
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      size: 18,
+                      color: hasReviews
+                          ? const Color(0xFFFFB800)
+                          : const Color(0xFF9E9E9E),
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${item.rating.toStringAsFixed(1)} (${item.reviewCount} reviews)',
-                      style: const TextStyle(
+                      hasReviews
+                          ? '${_rating.toStringAsFixed(1)} ($_reviewCount reviews)'
+                          : 'ยังไม่มีรีวิว',
+                      style: TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
                         fontSize: 13,
-                        color: Color(0xFF757778),
-                        fontWeight: FontWeight.w400,
+                        color: hasReviews
+                            ? const Color(0xFF757778)
+                            : const Color(0xFF9E9E9E),
+                        fontWeight:
+                            hasReviews ? FontWeight.w500 : FontWeight.w400,
                       ),
                     ),
                   ],

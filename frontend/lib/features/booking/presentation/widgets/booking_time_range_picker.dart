@@ -429,9 +429,9 @@ class BookingTimeRangePicker extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'เริ่มเช่า',
-                    style: TextStyle(
+                  Text(
+                    isHourly ? 'เวลาเริ่มเช่า' : 'วันที่เริ่มเช่า',
+                    style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -468,14 +468,14 @@ class BookingTimeRangePicker extends StatelessWidget {
                 ),
               ),
             ),
-            // ฝั่งสิ้นสุดการเช่า
+            // ฝั่งคืนของ
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'สิ้นสุดการเช่า',
-                    style: TextStyle(
+                  Text(
+                    isHourly ? 'เวลาคืนของ' : 'วันที่คืนของ',
+                    style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -507,7 +507,7 @@ class BookingTimeRangePicker extends StatelessWidget {
           Text(
             isHourly
                 ? 'กรุณาเลือกวันที่เช่า'
-                : 'กรุณาเลือกวันเริ่มและวันสิ้นสุดการเช่า',
+                : 'กรุณาเลือกวันเริ่มและวันที่คืนของ',
             style: const TextStyle(
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 12,

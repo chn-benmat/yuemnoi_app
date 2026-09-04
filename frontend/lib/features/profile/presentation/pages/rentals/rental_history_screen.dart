@@ -212,8 +212,14 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
         return ('เสร็จสิ้น', const Color(0xFF2E7D32), const Color(0xFFE8F5E9));
       case 'active':
         return ('กำลังเช่า', const Color(0xFF1565C0), const Color(0xFFE3F2FF));
-      case 'pending_payment':
-        return ('รอชำระเงิน', const Color(0xFFE65100), const Color(0xFFFFF3E0));
+      case 'pending':
+        return (
+          'รอการยืนยัน',
+          const Color(0xFFE65100),
+          const Color(0xFFFFF3E0),
+        );
+      case 'confirmed':
+        return ('ยืนยันแล้ว', const Color(0xFF2E7D32), const Color(0xFFE8F5E9));
       case 'cancelled':
         return ('ยกเลิกแล้ว', const Color(0xFFC62828), const Color(0xFFFFEBEE));
       default:

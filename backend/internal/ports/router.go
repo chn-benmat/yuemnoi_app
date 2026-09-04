@@ -12,8 +12,7 @@ func SetupRouter(
 	authGateway domain.AuthGateway,
 	contactRepository domain.ConversationContactRepository,
 	aiService domain.AIService,
-	paymentRepository domain.PaymentRepository,
-	paymentGateway domain.PaymentGateway,
+	rentalRepository domain.RentalRepository,
 ) *gin.Engine {
 
 	// ใช้ Logger และ Recovery Middleware (ป้องกันเซิร์ฟเวอร์พังเวลาเกิด Panic โค้ดเอ๋อ)
@@ -48,19 +47,14 @@ func SetupRouter(
 
 	// นำเข้าคอนโทรลเลอร์ต่างๆ
 	itemController := NewItemHandler(itemRepo, authGateway)
-	rentalController := NewRentalHandler(paymentRepository, paymentGateway, itemRepo, authGateway)
+	rentalController := NewRentalHandler(rentalRepository, authGateway)
 	userController := NewUserHandler(authGateway)
 	aiHandler := NewAIHandler(aiService)
 	pushController := NewPushHandler()
 	chatContactController := NewChatContactHandler(contactRepository, authGateway)
-	router.GET("/payments/return", rentalController.PaymentReturnPage)
-
 	// จัดการกลุ่มเส้นทาง API
 	v1 := router.Group("/api/v1")
 	{
-		// Stripe เรียกเส้นทางนี้จากภายนอก จึงตรวจ Stripe-Signature แทน Bearer JWT
-		v1.POST("/webhooks/stripe", rentalController.HandleStripeWebhook)
-
 		// ทุกอย่างเกี่ยวกับการยืนยันตัวตน (Authentication)
 		user := v1.Group("/auth")
 		{
@@ -111,8 +105,6 @@ func SetupRouter(
 		rentals := v1.Group("/rentals")
 		{
 			rentals.POST("", rentalController.CreateRentalOrder)
-			rentals.POST("/:id/checkout-session", rentalController.CreateCheckoutSession)
-			rentals.GET("/:id/payment-status", rentalController.GetPaymentStatus)
 		}
 
 		// ทุกอย่างเกี่ยวกับ AI

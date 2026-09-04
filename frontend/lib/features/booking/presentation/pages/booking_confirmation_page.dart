@@ -2,49 +2,47 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../payment/domain/entities/payment.dart';
-import '../../../payment/presentation/bloc/payment_cubit.dart';
-import '../../../payment/presentation/bloc/payment_state.dart';
-import '../../../wallet/presentation/bloc/wallet_cubit.dart';
-import '../../../wallet/presentation/bloc/wallet_state.dart';
-import '../../../wallet/presentation/widgets/wallet_insufficient_bottom_sheet.dart';
 import '../../domain/entities/booking_request_model.dart';
+import '../../domain/entities/rental_request.dart';
+import '../bloc/rental_request_cubit.dart';
+import '../bloc/rental_request_state.dart';
 import '../widgets/booking_location_card.dart';
-import '../widgets/booking_payment_method_tile.dart';
+import '../widgets/booking_payment_method_card.dart';
 import '../widgets/booking_price_summary_card.dart';
 import '../widgets/booking_product_card.dart';
 import '../widgets/booking_security_badge.dart';
 import '../widgets/booking_time_range_picker.dart';
 
 class BookingConfirmationPage extends StatefulWidget {
-  const BookingConfirmationPage({super.key, this.bookingData});
+  const BookingConfirmationPage({
+    super.key,
+    this.bookingData,
+    this.isDetailView = false,
+  });
 
   final BookingRequestData? bookingData;
+  final bool isDetailView;
 
   @override
   State<BookingConfirmationPage> createState() =>
       _BookingConfirmationPageState();
 }
 
-class _BookingConfirmationPageState extends State<BookingConfirmationPage>
-    with WidgetsBindingObserver {
+class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
   late BookingRequestData _bookingData;
-  BookingPaymentMethod _selectedPaymentMethod =
-      BookingPaymentMethod.bankTransfer;
+  String _selectedPaymentMethod = 'cash';
   bool _didShowSuccess = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
     _bookingData =
         widget.bookingData ??
         BookingRequestData(
@@ -59,145 +57,30 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
           latitude: 13.7115884,
           longitude: 100.4341077,
         );
-
     _selectedPaymentMethod = _bookingData.paymentMethod;
   }
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      unawaited(_checkPaymentStatusWithPolling());
-    }
-  }
-
-  Future<void> _checkPaymentStatusWithPolling() async {
-    if (!mounted) return;
-    final cubit = context.read<PaymentCubit>();
-    if (cubit.state.flowStatus == PaymentFlowStatus.paid) {
-      return;
-    }
-    for (int i = 0; i < 6; i++) {
-      if (!mounted) return;
-      if (cubit.state.flowStatus == PaymentFlowStatus.paid) {
-        return;
-      }
-      await cubit.refresh();
-      if (cubit.state.flowStatus == PaymentFlowStatus.paid) {
-        return;
-      }
-      if (i < 5) {
-        await Future<void>.delayed(const Duration(milliseconds: 1200));
-      }
-    }
-  }
-
-  void _onPaymentMethodChanged(BookingPaymentMethod method) {
-    setState(() {
-      _selectedPaymentMethod = method;
-      _bookingData = _bookingData.copyWith(paymentMethod: method);
-    });
-  }
-
-  PaymentRentalDraft _buildRentalDraft() {
-    final startAt = DateTime(
-      _bookingData.startDate.year,
-      _bookingData.startDate.month,
-      _bookingData.startDate.day,
-      _bookingData.startTime.hour,
-      _bookingData.startTime.minute,
-    );
-    final endAt = _bookingData.rentalType == BookingRentalType.daily
-        ? DateTime(
-            _bookingData.endDate.year,
-            _bookingData.endDate.month,
-            _bookingData.endDate.day,
-            _bookingData.startTime.hour,
-            _bookingData.startTime.minute,
-          )
-        : DateTime(
-            _bookingData.startDate.year,
-            _bookingData.startDate.month,
-            _bookingData.startDate.day,
-            _bookingData.endTime.hour,
-            _bookingData.endTime.minute,
-          );
-
-    return PaymentRentalDraft(
+  RentalRequestDraft _buildRentalDraft() {
+    return RentalRequestDraft(
       itemId: _bookingData.item.id,
-      startAt: startAt,
-      endAt: endAt,
+      startAt: _bookingData.startDateTime,
+      endAt: _bookingData.endDateTime,
       rentalType: _bookingData.rentalType.name,
       pickupLocation: _bookingData.location,
     );
   }
 
-  Future<void> _handlePayment() async {
-    final draft = _buildRentalDraft();
-
-    if (_selectedPaymentMethod == BookingPaymentMethod.wallet) {
-      final walletBalance = context.read<WalletCubit>().state.balance;
-      if (walletBalance < _bookingData.totalPrice) {
-        WalletInsufficientBottomSheet.show(
-          context,
-          requiredAmount: _bookingData.totalPrice,
-          currentBalance: walletBalance,
-        );
-        return;
-      }
-
-      final success = await context.read<PaymentCubit>().payWithWallet(draft);
-      if (success && mounted) {
-        final rentalId = context.read<PaymentCubit>().state.rentalId ?? 0;
-        await context.read<WalletCubit>().payRental(
-          rentalId: rentalId,
-          amount: _bookingData.totalPrice,
-        );
-      }
-      return;
-    }
-
-    final checkoutUrl = await context.read<PaymentCubit>().start(draft);
-    if (!mounted || checkoutUrl == null) return;
-    await _launchCheckout(checkoutUrl);
-    if (mounted) {
-      await _checkPaymentStatusWithPolling();
-    }
-  }
-
-  Future<void> _launchCheckout(Uri checkoutUrl) async {
-    try {
-      final launched = await launchUrl(
-        checkoutUrl,
-        mode: LaunchMode.inAppBrowserView,
-      );
-      if (!launched) {
-        final fallback = await launchUrl(
-          checkoutUrl,
-          mode: LaunchMode.externalApplication,
-        );
-        if (!mounted) return;
-        if (!fallback) context.read<PaymentCubit>().markLaunchFailed();
-      }
-    } catch (_) {
-      final fallback = await launchUrl(
-        checkoutUrl,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!mounted) return;
-      if (!fallback) context.read<PaymentCubit>().markLaunchFailed();
-    }
-  }
-
-  Future<void> _showPaymentSuccess({String providerName = 'Stripe'}) async {
+  Future<void> _showSuccess() async {
     if (_didShowSuccess || !mounted) return;
     _didShowSuccess = true;
-    final currencyFormatter = NumberFormat('#,##0.00', 'en_US');
+
+    // บันทึกว่าคำขอเช่าอุปกรณ์นี้ได้รับการกดยืนยันแล้ว
+    await BookingConfirmationTracker.markConfirmed(
+      messageId: _bookingData.originalMessageId ?? '',
+      itemId: _bookingData.item.id,
+    );
+
+    if (!mounted) return;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -206,187 +89,358 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_rounded,
-                    color: Color(0xFF10B981),
-                    size: 48,
-                  ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'ชำระเงินสำเร็จแล้ว!',
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E2022),
-                  ),
+                child: const Icon(
+                  Icons.mark_email_read_rounded,
+                  color: Color(0xFF10B981),
+                  size: 44,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'ยอดชำระ ${currencyFormatter.format(_bookingData.totalPrice)} ฿ ยืนยันโดย $providerName',
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF777A7C),
-                  ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'ส่งคำขอเช่าเรียบร้อยแล้ว',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E2022),
                 ),
-                const SizedBox(height: 18),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7F8FA),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFFEBECEE)),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'อุปกรณ์:',
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 13,
-                              color: Color(0xFF777A7C),
-                            ),
-                          ),
-                          Text(
-                            _bookingData.item.title,
-                            style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E2022),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'สถานที่นัดรับ:',
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 13,
-                              color: Color(0xFF777A7C),
-                            ),
-                          ),
-                          Text(
-                            _bookingData.location,
-                            style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1E2022),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'สถานะ:',
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 13,
-                              color: Color(0xFF777A7C),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE8F5E9),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'รอรับอุปกรณ์',
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.fontFamily,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF2E7D32),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'คำขออยู่ระหว่างรอเจ้าของอุปกรณ์ยืนยัน คุณสามารถตรวจสอบสถานะได้ตลอดเวลา',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 14,
+                  color: Color(0xFF777A7C),
+                  height: 1.5,
                 ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryColor,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(26),
-                      ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _selectedPaymentMethod == 'promptpay'
+                          ? Icons.qr_code_2_rounded
+                          : Icons.payments_rounded,
+                      size: 16,
+                      color: _selectedPaymentMethod == 'promptpay'
+                          ? const Color(0xFF2563EB)
+                          : const Color(0xFF059669),
                     ),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                    },
-                    child: const Text(
-                      'กลับไปยังห้องแชท',
-                      style: TextStyle(
+                    const SizedBox(width: 6),
+                    Text(
+                      'วิธีชำระเงิน: ${_selectedPaymentMethod == 'promptpay' ? 'PromptPay' : 'เงินสด'}',
+                      style: const TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E2022),
                       ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.maybePop(context, true);
+                    AppRoutes.openRentalStatus(context);
+                  },
+                  child: const Text(
+                    'ตรวจสอบสถานะ',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
 
-    if (!mounted) return;
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+    if (mounted) {
+      Navigator.maybePop(context, true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<PaymentCubit, PaymentState>(
+    final scaffold = Scaffold(
+      backgroundColor: const Color(0xFFF7F8FA),
+      appBar: AppBar(
+        backgroundColor: AppColors.primaryColor,
+        foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, size: 24),
+          onPressed: () => Navigator.maybePop(context),
+        ),
+        title: Text(
+          widget.isDetailView ? 'รายละเอียดที่นัดรับ' : 'ยืนยันคำขอเช่า',
+          style: const TextStyle(
+            fontFamily: AppTextStyles.fontFamily,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: true,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (widget.isDetailView) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFA7F3D0)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.check_circle_rounded,
+                              color: Color(0xFF10B981),
+                              size: 24,
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'ยืนยันการนัดรับเรียบร้อยแล้ว',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.fontFamily,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF065F46),
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'โปรดตรวจสอบวันเวลาและจุดนัดรับอุปกรณ์ด้านล่าง',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.fontFamily,
+                                      fontSize: 12,
+                                      color: Color(0xFF047857),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                    ],
+                    BookingProductCard(item: _bookingData.item),
+                    const SizedBox(height: 18),
+                    BookingTimeRangePicker(
+                      rentalType: _bookingData.rentalType,
+                      startDate: _bookingData.startDate,
+                      endDate: _bookingData.endDate,
+                      startTime: _bookingData.startTime,
+                      endTime: _bookingData.endTime,
+                      isEditable: false,
+                    ),
+                    const SizedBox(height: 18),
+                    BookingLocationCard(
+                      location: _bookingData.location,
+                      locationNote: _bookingData.locationNote,
+                      latitude: _bookingData.latitude,
+                      longitude: _bookingData.longitude,
+                      isEditable: false,
+                    ),
+                    const SizedBox(height: 18),
+                    BookingPriceSummaryCard(bookingData: _bookingData),
+                    const SizedBox(height: 18),
+                    BookingPaymentMethodCard(
+                      selectedMethod: _selectedPaymentMethod,
+                      isEditable: !widget.isDetailView,
+                      onMethodChanged: widget.isDetailView
+                          ? null
+                          : (method) {
+                              setState(() {
+                                _selectedPaymentMethod = method;
+                                _bookingData = _bookingData.copyWith(
+                                  paymentMethod: method,
+                                );
+                              });
+                            },
+                    ),
+                    const SizedBox(height: 20),
+                    const BookingSecurityBadge(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: widget.isDetailView
+                  ? SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        key: const ValueKey('view-route-on-map-button'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          foregroundColor: Colors.white,
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(26),
+                          ),
+                        ),
+                        onPressed: () {
+                          AppRoutes.openRentalTrackingMap(
+                            context,
+                            bookingData: _bookingData,
+                          );
+                        },
+                        icon: const Icon(Icons.near_me_rounded, size: 20),
+                        label: const Text(
+                          'ดูเส้นทางนัดรับบนแผนที่',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    )
+                  : BlocBuilder<RentalRequestCubit, RentalRequestState>(
+                      builder: (context, state) {
+                        final isSubmitting =
+                            state.status == RentalRequestStatus.submitting;
+                        final isSuccess =
+                            state.status == RentalRequestStatus.success;
+                        return SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton(
+                            key: const ValueKey('submit-rental-request-button'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryColor,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: AppColors.primaryColor
+                                  .withValues(alpha: 0.55),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(28),
+                              ),
+                            ),
+                            onPressed: isSubmitting
+                                ? null
+                                : isSuccess
+                                ? () => AppRoutes.openRentalStatus(context)
+                                : () =>
+                                    context.read<RentalRequestCubit>().submit(
+                                          _buildRentalDraft(),
+                                        ),
+                            child: isSubmitting
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.4,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      if (isSuccess) ...[
+                                        const Icon(
+                                          Icons.assignment_outlined,
+                                          size: 20,
+                                          color: Colors.white,
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      Text(
+                                        isSuccess ? 'ตรวจสอบสถานะ' : 'ยืนยัน',
+                                        style: const TextStyle(
+                                          fontFamily: AppTextStyles.fontFamily,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (widget.isDetailView) {
+      return scaffold;
+    }
+
+    return BlocListener<RentalRequestCubit, RentalRequestState>(
       listener: (context, state) {
-        if (state.flowStatus == PaymentFlowStatus.paid) {
-          final provider = _selectedPaymentMethod == BookingPaymentMethod.wallet
-              ? 'Yuemnoi Wallet'
-              : 'Stripe';
-          unawaited(_showPaymentSuccess(providerName: provider));
+        if (state.status == RentalRequestStatus.success) {
+          unawaited(_showSuccess());
         }
         final errorMessage = state.errorMessage;
         if (errorMessage != null && errorMessage.isNotEmpty) {
@@ -395,242 +449,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage>
             ..showSnackBar(SnackBar(content: Text(errorMessage)));
         }
       },
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF7F8FA),
-        appBar: AppBar(
-          backgroundColor: AppColors.primaryColor,
-          foregroundColor: Colors.white,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, size: 24),
-            onPressed: () => Navigator.maybePop(context),
-          ),
-          title: const Text(
-            'ยืนยันการจอง',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          centerTitle: true,
-          elevation: 0,
-        ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // 1. การ์ดสินค้า
-                      BookingProductCard(item: _bookingData.item),
-                      const SizedBox(height: 18),
-
-                      // 2. วันที่เริ่มเช่า-สิ้นสุด
-                      BookingTimeRangePicker(
-                        sectionTitle: 'วันที่เริ่มเช่า-สิ้นสุด',
-                        rentalType: _bookingData.rentalType,
-                        startDate: _bookingData.startDate,
-                        endDate: _bookingData.endDate,
-                        startTime: _bookingData.startTime,
-                        endTime: _bookingData.endTime,
-                        isEditable: false,
-                      ),
-                      const SizedBox(height: 18),
-
-                      // 3. สถานที่นัดพบ
-                      BookingLocationCard(
-                        location: _bookingData.location,
-                        locationNote: _bookingData.locationNote,
-                        latitude: _bookingData.latitude,
-                        longitude: _bookingData.longitude,
-                        isEditable: false,
-                      ),
-                      const SizedBox(height: 18),
-
-                      // 4. สรุปราคา
-                      BookingPriceSummaryCard(bookingData: _bookingData),
-                      const SizedBox(height: 20),
-
-                      // 5. วิธีการชำระเงิน
-                      BlocBuilder<WalletCubit, WalletState>(
-                        builder: (context, walletState) {
-                          return BookingPaymentMethodSelector(
-                            selectedMethod: _selectedPaymentMethod,
-                            onChanged: _onPaymentMethodChanged,
-                            walletBalance: walletState.balance,
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 20),
-
-                      // 6. ตราประทับความปลอดภัย
-                      const BookingSecurityBadge(),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-              ),
-
-              // 7. ปุ่ม "ชำระเงิน"
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: BlocBuilder<PaymentCubit, PaymentState>(
-                  builder: (context, state) {
-                    final isBusy =
-                        state.flowStatus ==
-                            PaymentFlowStatus.creatingCheckout ||
-                        state.flowStatus == PaymentFlowStatus.checkingStatus;
-
-                    if (state.flowStatus == PaymentFlowStatus.awaitingPayment &&
-                        _selectedPaymentMethod != BookingPaymentMethod.wallet) {
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            height: 52,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
-                                foregroundColor: Colors.white,
-                                elevation: 3,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(28),
-                                ),
-                              ),
-                              onPressed: isBusy
-                                  ? null
-                                  : () => _checkPaymentStatusWithPolling(),
-                              icon: isBusy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.check_circle_outline_rounded,
-                                      size: 20,
-                                    ),
-                              label: Text(
-                                isBusy
-                                    ? 'กำลังตรวจสอบสถานะการชำระเงิน...'
-                                    : 'ตรวจสอบสถานะการชำระเงิน',
-                                style: const TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 15.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 46,
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.primaryColor,
-                                side: BorderSide(
-                                  color: AppColors.primaryColor.withValues(
-                                    alpha: 0.5,
-                                  ),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                              ),
-                              onPressed: isBusy
-                                  ? null
-                                  : () {
-                                      final checkoutUrl = state.checkoutUrl;
-                                      if (checkoutUrl != null) {
-                                        _launchCheckout(checkoutUrl).then((_) {
-                                          if (mounted) {
-                                            _checkPaymentStatusWithPolling();
-                                          }
-                                        });
-                                      } else {
-                                        _handlePayment();
-                                      }
-                                    },
-                              icon: const Icon(
-                                Icons.open_in_browser_rounded,
-                                size: 18,
-                              ),
-                              label: const Text(
-                                'เปิดหน้าชำระเงิน Stripe อีกครั้ง',
-                                style: TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    }
-
-                    String buttonLabel;
-                    if (_selectedPaymentMethod == BookingPaymentMethod.wallet) {
-                      buttonLabel = 'ชำระด้วย Yuemnoi Wallet';
-                    } else {
-                      buttonLabel = 'ชำระเงินผ่าน Stripe';
-                    }
-
-                    return SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryColor,
-                          foregroundColor: Colors.white,
-                          elevation: 3,
-                          shadowColor: AppColors.primaryColor.withValues(
-                            alpha: 0.35,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28),
-                          ),
-                        ),
-                        onPressed: isBusy ? null : _handlePayment,
-                        child: isBusy
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                buttonLabel,
-                                style: const TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      child: scaffold,
     );
   }
 }

@@ -159,8 +159,10 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
               double sum = 0;
               int count = 0;
               for (final r in reviewsResp) {
-                if (r['rating'] is num) {
-                  sum += (r['rating'] as num).toDouble();
+                final raw = r['rating'];
+                final parsed = raw is num ? raw.toDouble() : double.tryParse('$raw');
+                if (parsed != null && parsed >= 1.0 && parsed <= 5.0) {
+                  sum += parsed;
                   count++;
                 }
               }

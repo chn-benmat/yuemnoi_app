@@ -189,10 +189,11 @@ class BookingLocationCard extends StatelessWidget {
                                 children: [
                                   TileLayer(
                                     urlTemplate:
-                                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                        'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                                    subdomains: const ['0', '1', '2', '3'],
                                     userAgentPackageName:
                                         'com.example.frontend',
-                                    maxZoom: 19,
+                                    maxZoom: 20,
                                   ),
                                   MarkerLayer(
                                     markers: [

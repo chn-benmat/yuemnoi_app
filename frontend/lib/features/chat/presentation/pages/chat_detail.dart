@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/services/item_review_service.dart';
 import '../../../../core/services/phone_call_service.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/active_conversation_tracker.dart';
@@ -571,7 +572,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   bool get _isCurrentUserOwner =>
       _conversation.role == ChatParticipantRole.renter;
 
-  void _openBookingRequest([ItemInquiryData? activeInquiry]) {
+  Future<void> _openBookingRequest([ItemInquiryData? activeInquiry]) async {
     if (!_isCurrentUserOwner) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -639,6 +640,9 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       price = (_conversation.itemPrice ?? 100).toDouble();
     }
 
+    final reviewStats = await ItemReviewService.fetchStats(itemId);
+    if (!mounted) return;
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
@@ -646,8 +650,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       id: itemId,
       title: title,
       imageUrl: imageUrl,
-      rating: 4.9,
-      reviewCount: 10,
+      rating: reviewStats.rating,
+      reviewCount: reviewStats.reviewCount,
       hourlyRate: rentalType == BookingRentalType.hourly
           ? price
           : (price / 8).roundToDouble(),
@@ -934,6 +938,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                 isFailed: state.failedMessageIds.contains(
                                   item.message.id,
                                 ),
+                                isOwner: _conversation.role ==
+                                    ChatParticipantRole.renter,
                                 onRetry: () {
                                   context.read<ChatDetailBloc>().add(
                                     ChatRetryMessageSent(
