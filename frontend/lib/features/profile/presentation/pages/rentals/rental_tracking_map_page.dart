@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -11,6 +12,8 @@ import '../../../../../core/services/location_service.dart';
 import '../../../../../core/services/phone_call_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../booking/domain/entities/booking_request_model.dart';
+import '../../widgets/rentals/rental_handover_modal.dart';
+import '../../widgets/rentals/rental_return_modal.dart';
 
 /// หน้าจอแผนที่ติดตามสถานะและเส้นทางนัดรับอุปกรณ์ (สไตล์ Bolt / Grab / LINE MAN)
 class RentalTrackingMapPage extends StatefulWidget {
@@ -77,6 +80,134 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   late String _resolvedOwnerName;
   late String _resolvedPeriod;
   late double _resolvedPrice;
+  late String _currentStatusCode;
+
+  DateTime? get _startDate {
+    return widget.bookingData?.startDate;
+  }
+
+  bool get _isBeforeMeetupDate {
+    final start = _startDate;
+    if (start == null) return false;
+    final now = DateTime.now();
+    final startDay = DateTime(start.year, start.month, start.day);
+    final today = DateTime(now.year, now.month, now.day);
+    return today.isBefore(startDay);
+  }
+
+  int get _daysUntilMeetup {
+    final start = _startDate;
+    if (start == null) return 0;
+    final now = DateTime.now();
+    final startDay = DateTime(start.year, start.month, start.day);
+    final today = DateTime(now.year, now.month, now.day);
+    return startDay.difference(today).inDays;
+  }
+
+  void _openPaymentOrHandover() {
+    if (_isBeforeMeetupDate) {
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.calendar_today_rounded, color: Color(0xFF2563EB)),
+              SizedBox(width: 8),
+              Text(
+                'ยังไม่ถึงวันนัดเช่า',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'วันนัดรับอุปกรณ์คือ ${_startDate != null ? DateFormat('d MMMM yyyy', 'th').format(_startDate!) : 'ตามที่ตกลง'}\n\nระบบจะเปิดให้ตรวจรับสินค้าและชำระเงินในวันนัดรับของจริง เพื่อความปลอดภัยของผู้เช่าและผู้ปล่อยเช่า',
+            style: const TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 13.5,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'เข้าใจแล้ว',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showHandoverModal();
+              },
+              child: const Text(
+                'ดูตัวอย่างหน้าตรวจรับ',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    _showHandoverModal();
+  }
+
+  void _showHandoverModal() {
+    RentalHandoverModal.show(
+      context,
+      bookingId: null,
+      itemTitle: _resolvedTitle,
+      itemImageUrl: _resolvedImageUrl,
+      ownerName: _resolvedOwnerName,
+      renterName: 'ผู้เช่า',
+      totalPrice: _resolvedPrice,
+      paymentMethod: widget.bookingData?.paymentMethod ?? 'promptpay',
+      initialIsOwner: false,
+      onHandoverSuccess: (newStatus) {
+        setState(() {
+          _currentStatusCode = newStatus;
+        });
+      },
+    );
+  }
+
+  void _openReturnModal() {
+    RentalReturnModal.show(
+      context,
+      bookingId: null,
+      itemTitle: _resolvedTitle,
+      itemImageUrl: _resolvedImageUrl,
+      ownerName: _resolvedOwnerName,
+      renterName: 'ผู้เช่า',
+      depositAmount: 0.0,
+      initialIsOwner: false,
+      onReturnSuccess: (newStatus) {
+        setState(() {
+          _currentStatusCode = newStatus;
+        });
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -114,6 +245,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
         ? b.formattedPeriodSummary
         : (widget.periodText ?? '1 วัน');
     _resolvedPrice = b?.totalPrice ?? widget.totalPrice ?? 0.0;
+    _currentStatusCode = widget.statusCode ?? 'confirmed';
 
     // Resolve Destination Coordinates
     final destLat = b?.latitude ?? widget.destinationLat;
@@ -707,6 +839,15 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                   onTap: _fitBoundsToRoute,
                 ),
                 const SizedBox(height: 10),
+                // ปุ่มนำทาง Google Maps ภายนอก
+                _buildMapFloatingButton(
+                  icon: Icons.near_me_rounded,
+                  tooltip: 'นำทางด้วย Google Maps',
+                  color: const Color(0xFF10B981),
+                  iconColor: Colors.white,
+                  onTap: _openExternalNavigation,
+                ),
+                const SizedBox(height: 10),
                 // ปุ่มพิกัดตัวเรา
                 _buildMapFloatingButton(
                   icon: Icons.my_location_rounded,
@@ -1015,6 +1156,40 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                 const SizedBox(height: 12),
               ],
 
+              // แบนเนอร์แจ้งเตือนกรณี "ยังไม่ถึงวันนัดเช่า"
+              if (_isBeforeMeetupDate) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_month_rounded,
+                        color: Color(0xFF2563EB),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'นัดรับอีก $_daysUntilMeetup วัน (${_startDate != null ? DateFormat('d MMM', 'th').format(_startDate!) : ''}) • ชำระเงินเมื่อตรวจรับของจริง',
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1D4ED8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               // 2. ข้อมูลอุปกรณ์ & จุดนัดรับ
               Container(
                 padding: const EdgeInsets.all(12),
@@ -1188,28 +1363,39 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // ปุ่มนำทาง Google Maps
+                  // ปุ่มชำระเงิน หรือ ส่งคืนอุปกรณ์
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryColor,
+                        backgroundColor: _currentStatusCode == 'active'
+                            ? const Color(0xFF10B981)
+                            : AppColors.primaryColor,
                         foregroundColor: Colors.white,
                         elevation: 2,
-                        shadowColor: AppColors.primaryColor.withValues(alpha: 0.3),
+                        shadowColor: (_currentStatusCode == 'active'
+                                ? const Color(0xFF10B981)
+                                : AppColors.primaryColor)
+                            .withValues(alpha: 0.3),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      onPressed: _openExternalNavigation,
-                      icon: const Icon(
-                        Icons.near_me_rounded,
+                      onPressed: _currentStatusCode == 'active'
+                          ? _openReturnModal
+                          : _openPaymentOrHandover,
+                      icon: Icon(
+                        _currentStatusCode == 'active'
+                            ? Icons.assignment_return_rounded
+                            : Icons.payments_rounded,
                         size: 18,
                         color: Colors.white,
                       ),
-                      label: const Text(
-                        'เริ่มนำทาง',
-                        style: TextStyle(
+                      label: Text(
+                        _currentStatusCode == 'active'
+                            ? 'ส่งคืนอุปกรณ์'
+                            : 'ชำระเงิน',
+                        style: const TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 13,
                           fontWeight: FontWeight.bold,

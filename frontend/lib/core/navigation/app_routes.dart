@@ -8,6 +8,7 @@ import '../../features/auth/presentation/pages/forget_password.dart';
 import '../../features/auth/presentation/pages/login.dart';
 import '../../features/auth/presentation/pages/one_time_verification.dart';
 import '../../features/auth/presentation/pages/register.dart';
+import '../utils/auth_guard.dart';
 import '../../features/booking/presentation/pages/booking.dart';
 import '../../features/booking/presentation/pages/location_picker_map_page.dart';
 import '../../features/booking/data/datasources/rental_request_remote_data_source.dart';
@@ -100,7 +101,7 @@ abstract final class AppRoutes {
   static GoRouter? get router => _currentRouter;
 
   static GoRouter createRouter({
-    String initialLocation = login,
+    String initialLocation = home,
     Object? initialExtra,
   }) {
     return _currentRouter = GoRouter(
@@ -488,6 +489,10 @@ abstract final class AppRoutes {
     context.go(login);
   }
 
+  static Future<bool?> pushLogin(BuildContext context) {
+    return context.push<bool>(login);
+  }
+
   static void goToLogin(BuildContext context) {
     context.go(login);
   }
@@ -588,7 +593,14 @@ abstract final class AppRoutes {
     );
   }
 
-  static Future<void> openAddRentalItem(BuildContext context) {
+  static Future<void> openAddRentalItem(BuildContext context) async {
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อปล่อยเช่าอุปกรณ์',
+      message:
+          'กรุณาเข้าสู่ระบบหรือสมัครสมาชิกก่อนลงประกาศปล่อยเช่าอุปกรณ์ของคุณ เพื่อความปลอดภัยและการติดต่อกับผู้เช่า',
+    );
+    if (!authed || !context.mounted) return;
     return context.push<void>(addRentalItem);
   }
 

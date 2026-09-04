@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../domain/entities/chat_message.dart';
@@ -179,13 +180,42 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
         Semantics(
           label: widget.message.content,
           child: ExcludeSemantics(
-            child: Text(
-              visibleText,
-              key: ValueKey(
-                'chatbot-animated-response-${widget.message.content}',
-              ),
-              style: ChatMessageBubble._messageStyle(isUser: false),
-            ),
+            child: _isComplete
+                ? MarkdownBody(
+                    key: ValueKey(
+                      'chatbot-markdown-response-${widget.message.content}',
+                    ),
+                    data: visibleText,
+                    selectable: true,
+                    styleSheet: MarkdownStyleSheet(
+                      p: ChatMessageBubble._messageStyle(isUser: false),
+                      strong: const TextStyle(
+                        fontFamily: 'Prompt',
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF18181B),
+                      ),
+                      em: const TextStyle(
+                        fontFamily: 'Prompt',
+                        fontStyle: FontStyle.italic,
+                        fontSize: 13.5,
+                        color: Color(0xFF52525B),
+                      ),
+                      listBullet: const TextStyle(
+                        fontFamily: 'Prompt',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: AppColors.primaryColor,
+                      ),
+                      blockSpacing: 8,
+                    ),
+                  )
+                : Text(
+                    visibleText,
+                    key: ValueKey(
+                      'chatbot-animated-response-${widget.message.content}',
+                    ),
+                    style: ChatMessageBubble._messageStyle(isUser: false),
+                  ),
           ),
         ),
         if (_isComplete)

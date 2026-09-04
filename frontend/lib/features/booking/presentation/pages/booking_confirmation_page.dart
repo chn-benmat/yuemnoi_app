@@ -90,27 +90,27 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 72,
-                height: 72,
+                width: 68,
+                height: 68,
                 decoration: BoxDecoration(
                   color: const Color(0xFF10B981).withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  Icons.mark_email_read_rounded,
+                  Icons.check_circle_rounded,
                   color: Color(0xFF10B981),
-                  size: 44,
+                  size: 42,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               const Text(
-                'ส่งคำขอเช่าเรียบร้อยแล้ว',
+                'ส่งคำขอเช่าเรียบร้อยแล้ว!',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
@@ -119,64 +119,131 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                   color: Color(0xFF1E2022),
                 ),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'คำขออยู่ระหว่างรอเจ้าของอุปกรณ์ยืนยัน คุณสามารถตรวจสอบสถานะได้ตลอดเวลา',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 14,
-                  color: Color(0xFF777A7C),
-                  height: 1.5,
+              const SizedBox(height: 12),
+              // กล่องแจ้งเตือนเรื่องเงิน ชัดเจน ป้องกันการสับสน
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          color: Color(0xFF2563EB),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'ยังไม่มีการหักเงินในขั้นตอนนี้',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1D4ED8),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'คุณเลือกชำระด้วย ${_selectedPaymentMethod == 'promptpay' ? 'พร้อมเพย์ (PromptPay)' : 'เงินสด (Cash)'} โดยจะชำระเงินใน "วันนัดรับของจริง" หลังจากได้ตรวจเช็กสภาพอุปกรณ์เรียบร้อยแล้วเท่านั้น',
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 12.5,
+                        color: Color(0xFF1E40AF),
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 14),
+              // สรุปข้อมูลการเช่า
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 7,
-                ),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: Column(
                   children: [
-                    Icon(
-                      _selectedPaymentMethod == 'promptpay'
-                          ? Icons.qr_code_2_rounded
-                          : Icons.payments_rounded,
-                      size: 16,
-                      color: _selectedPaymentMethod == 'promptpay'
-                          ? const Color(0xFF2563EB)
-                          : const Color(0xFF059669),
+                    _buildSummaryRow(
+                      icon: Icons.inventory_2_outlined,
+                      label: 'อุปกรณ์',
+                      value: _bookingData.item.title,
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'วิธีชำระเงิน: ${_selectedPaymentMethod == 'promptpay' ? 'PromptPay' : 'เงินสด'}',
-                      style: const TextStyle(
+                    const Divider(height: 14, color: Color(0xFFE2E8F0)),
+                    _buildSummaryRow(
+                      icon: Icons.calendar_today_outlined,
+                      label: 'ระยะเวลา',
+                      value: _bookingData.formattedPeriodSummary,
+                    ),
+                    const Divider(height: 14, color: Color(0xFFE2E8F0)),
+                    _buildSummaryRow(
+                      icon: Icons.location_on_outlined,
+                      label: 'สถานที่นัดรับ',
+                      value: _bookingData.location,
+                    ),
+                    const Divider(height: 14, color: Color(0xFFE2E8F0)),
+                    _buildSummaryRow(
+                      icon: Icons.payments_outlined,
+                      label: 'ยอดชำระเมื่อรับของ',
+                      value: '${_bookingData.totalPrice.toStringAsFixed(0)} ฿',
+                      isBold: true,
+                      valueColor: AppColors.primaryColor,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // ไทม์ไลน์ 3 ขั้นตอนถัดไป
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ขั้นตอนต่อไปที่คุณต้องทำ:',
+                      style: TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1E2022),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF374151),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    _buildStepRow('1', 'รอเจ้าของอุปกรณ์ตรวจสอบและกดยืนยันคำขอ'),
+                    const SizedBox(height: 6),
+                    _buildStepRow('2', 'พูดคุยตกลงเวลาและจุดนัดพบที่ชัดเจนผ่านแชท'),
+                    const SizedBox(height: 6),
+                    _buildStepRow('3', 'พบกันในวันนัด ตรวจสภาพของ และชำระเงิน'),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
-                height: 52,
+                height: 50,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,
-                    elevation: 0,
+                    elevation: 1,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(26),
+                      borderRadius: BorderRadius.circular(25),
                     ),
                   ),
                   onPressed: () {
@@ -185,10 +252,10 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     AppRoutes.openRentalStatus(context);
                   },
                   child: const Text(
-                    'ตรวจสอบสถานะ',
+                    'ตรวจสอบสถานะการเช่า',
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 16,
+                      fontSize: 15.5,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -414,7 +481,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                                         const SizedBox(width: 8),
                                       ],
                                       Text(
-                                        isSuccess ? 'ตรวจสอบสถานะ' : 'ยืนยัน',
+                                        isSuccess ? 'ตรวจสอบสถานะ' : 'ส่งคำขอเช่า',
                                         style: const TextStyle(
                                           fontFamily: AppTextStyles.fontFamily,
                                           fontSize: 16,
@@ -452,4 +519,81 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
       child: scaffold,
     );
   }
+
+  Widget _buildSummaryRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    bool isBold = false,
+    Color? valueColor,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: const Color(0xFF64748B)),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: AppTextStyles.fontFamily,
+            fontSize: 12.5,
+            color: Color(0xFF64748B),
+          ),
+        ),
+        const Spacer(),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 12.5,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+              color: valueColor ?? const Color(0xFF1E2022),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepRow(String number, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 18,
+          height: 18,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primaryColor.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            number,
+            style: const TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryColor,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 12,
+              color: Color(0xFF4B5563),
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
+

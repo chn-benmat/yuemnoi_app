@@ -180,6 +180,7 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
         final (statusText, statusColor) = _formatStatus(
           b['status']?.toString(),
           isRenter: true,
+          startDate: startDate,
         );
 
         rentingResult.add(
@@ -223,6 +224,7 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
         final (statusText, statusColor) = _formatStatus(
           b['status']?.toString(),
           isRenter: false,
+          startDate: startDate,
         );
 
         lendingResult.add(
@@ -317,7 +319,11 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
     return null;
   }
 
-  (String, Color) _formatStatus(String? rawStatus, {required bool isRenter}) {
+  (String, Color) _formatStatus(
+    String? rawStatus, {
+    required bool isRenter,
+    DateTime? startDate,
+  }) {
     final status = rawStatus?.toLowerCase().trim();
     switch (status) {
       case 'pending':
@@ -326,6 +332,18 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
           const Color(0xFFFFD54F),
         );
       case 'confirmed':
+        if (startDate != null) {
+          final now = DateTime.now();
+          final startDay = DateTime(startDate.year, startDate.month, startDate.day);
+          final today = DateTime(now.year, now.month, now.day);
+          if (today.isBefore(startDay)) {
+            final days = startDay.difference(today).inDays;
+            return (
+              'รอนัดรับ (อีก $days วัน)',
+              const Color(0xFF60A5FA),
+            );
+          }
+        }
         return (
           'ยืนยันแล้ว / นัดรับของ',
           const Color(0xFF80DEEA),

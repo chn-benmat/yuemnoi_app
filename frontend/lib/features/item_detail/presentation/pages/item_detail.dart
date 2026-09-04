@@ -6,9 +6,9 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/colors.dart';
-import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/utils/auth_guard.dart';
 import '../../../../core/navigation/item_deep_link.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
@@ -113,39 +113,12 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _openChat(ItemDetail item) async {
-    if (!AuthSession.isAuthenticated) {
-      final shouldLogin = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'เข้าสู่ระบบเพื่อใช้งานแชท',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          content: const Text(
-            'กรุณาเข้าสู่ระบบก่อนเริ่มการสนทนากับผู้ปล่อยเช่าอุปกรณ์',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-              ),
-              child: const Text('เข้าสู่ระบบ'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldLogin == true && mounted) {
-        AppRoutes.goToLogin(context);
-      }
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อใช้งานแชท',
+      message: 'กรุณาเข้าสู่ระบบก่อนเริ่มการสนทนากับผู้ปล่อยเช่าอุปกรณ์',
+    );
+    if (!authed || !mounted) {
       return;
     }
 

@@ -19,7 +19,7 @@ import 'features/chat/presentation/widgets/global_chat_notification_listener.dar
 import 'features/wallet/presentation/bloc/wallet_cubit.dart';
 
 class YuemnoiApp extends StatefulWidget {
-  const YuemnoiApp({super.key, this.initialRoute = AppRoutes.login});
+  const YuemnoiApp({super.key, this.initialRoute = AppRoutes.home});
 
   final String initialRoute;
 

@@ -390,13 +390,26 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     value: _formatPrice(widget.bookingData.totalPrice),
                     isPrice: true,
                   ),
+                  const SizedBox(height: 6),
+
+                  // แถววิธีชำระเงิน
+                  _buildMiniInfoRow(
+                    icon: widget.bookingData.paymentMethod == 'promptpay'
+                        ? Icons.qr_code_2_rounded
+                        : Icons.account_balance_wallet_outlined,
+                    iconColor: const Color(0xFF3B82F6),
+                    label: 'การชำระเงิน',
+                    value: widget.bookingData.paymentMethod == 'promptpay'
+                        ? 'พร้อมเพย์ (ชำระเมื่อรับของ)'
+                        : 'เงินสด (ชำระเมื่อรับของ)',
+                  ),
                 ],
               ),
             ),
 
             const SizedBox(height: 12),
 
-            // 4. ปุ่ม Action (เมื่อกดยืนยันแล้ว แสดงปุ่ม "รายละเอียด" ทั้งฝั่งผู้เช่าและปล่อยเช่า)
+            // 4. ปุ่ม Action (เมื่อกดยืนยันแล้ว แสดงปุ่ม "รายละเอียดนัดรับ" ทั้งฝั่งผู้เช่าและปล่อยเช่า)
             if (_isConfirmed)
               SizedBox(
                 width: double.infinity,
@@ -416,12 +429,12 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   ),
                   onPressed: () => _handleAction(context, isOwnerUser),
                   icon: const Icon(
-                    Icons.description_outlined,
+                    Icons.event_available_rounded,
                     size: 18,
                     color: Colors.white,
                   ),
                   label: const Text(
-                    'รายละเอียด',
+                    'รายละเอียดนัดรับ',
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13.5,

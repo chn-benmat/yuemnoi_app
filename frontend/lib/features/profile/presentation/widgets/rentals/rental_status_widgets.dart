@@ -318,7 +318,7 @@ class RentalStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => _openTrackingMap(context),
+      onTap: () => _showDetailModal(context),
       borderRadius: BorderRadius.circular(20),
       child: Container(
         decoration: BoxDecoration(
@@ -492,7 +492,7 @@ class RentalStatusCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
-              // ── Tracking route button ─────────────────────────────
+              // ── Tracking route & action button ─────────────────────────────
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
@@ -507,14 +507,21 @@ class RentalStatusCard extends StatelessWidget {
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.near_me_rounded, size: 16),
-                      SizedBox(width: 6),
+                      Icon(
+                        item.statusCode.toLowerCase() == 'active'
+                            ? Icons.assignment_return_rounded
+                            : Icons.near_me_rounded,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
                       Text(
-                        'ดูเส้นทางนัดรับบนแผนที่',
-                        style: TextStyle(
+                        item.statusCode.toLowerCase() == 'active'
+                            ? 'ส่งคืนอุปกรณ์ / ดูจุดนัดคืน'
+                            : 'ดูเส้นทางนัดรับ & ตรวจรับของ',
+                        style: const TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -621,7 +628,7 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                           ? CachedNetworkImage(
                               imageUrl: item.imageUrl!,
                               fit: BoxFit.cover,
-                              errorWidget: (_, __, ___) => Icon(
+                              errorWidget: (context, url, error) => Icon(
                                 item.iconData,
                                 color: AppColors.primaryColor,
                                 size: 26,
@@ -778,10 +785,17 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                       },
                     );
                   },
-                  icon: const Icon(Icons.near_me_rounded, size: 18),
-                  label: const Text(
-                    'ดูเส้นทางนัดรับบนแผนที่',
-                    style: TextStyle(
+                  icon: Icon(
+                    item.statusCode.toLowerCase() == 'active'
+                        ? Icons.assignment_return_rounded
+                        : Icons.near_me_rounded,
+                    size: 18,
+                  ),
+                  label: Text(
+                    item.statusCode.toLowerCase() == 'active'
+                        ? 'ส่งคืนอุปกรณ์ / ดูจุดนัดคืน'
+                        : 'ดูเส้นทางนัดรับ & ตรวจรับของ',
+                    style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontWeight: FontWeight.bold,
                       fontSize: 14,

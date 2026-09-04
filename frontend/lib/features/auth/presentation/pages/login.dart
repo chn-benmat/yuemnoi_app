@@ -60,6 +60,14 @@ class _LoginScreenState extends State<LoginScreen> {
     AppRoutes.goToHome(context);
   }
 
+  void _handleSuccess() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(true);
+    } else {
+      _goToHome();
+    }
+  }
+
   void _showMessage(String message, {bool isError = false}) {
     if (!mounted) return;
 
@@ -118,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
             _isLoading = false;
             _isGoogleLoading = false;
           });
-          _goToHome();
+          _handleSuccess();
         } else if (state is LoginFailure) {
           setState(() {
             _isLoading = false;
@@ -129,6 +137,21 @@ class _LoginScreenState extends State<LoginScreen> {
       },
       child: Scaffold(
         backgroundColor: Colors.white,
+        appBar: Navigator.of(context).canPop()
+            ? AppBar(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: Colors.black87,
+                    size: 20,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(false),
+                  tooltip: 'ย้อนกลับ',
+                ),
+              )
+            : null,
         body: ResponsivePageBody(
           child: Form(
             key: _formKey,

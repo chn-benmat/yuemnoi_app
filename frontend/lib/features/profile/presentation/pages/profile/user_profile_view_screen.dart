@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
-import '../../../../../core/network/auth_session.dart';
+import '../../../../../core/utils/auth_guard.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/utils/phone_formatter.dart';
@@ -330,43 +330,12 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
   }
 
   Future<void> _handleChatPressed() async {
-    if (!AuthSession.isAuthenticated) {
-      final shouldLogin = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'เข้าสู่ระบบเพื่อใช้งานแชท',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          content: const Text(
-            'กรุณาเข้าสู่ระบบก่อนเริ่มการสนทนากับผู้ใช้นี้',
-            style: TextStyle(fontFamily: AppTextStyles.fontFamily),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-              ),
-              child: const Text('เข้าสู่ระบบ'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldLogin == true && mounted) {
-        AppRoutes.goToLogin(context);
-      }
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อใช้งานแชท',
+      message: 'กรุณาเข้าสู่ระบบก่อนเริ่มการสนทนากับผู้ใช้นี้',
+    );
+    if (!authed || !mounted) {
       return;
     }
 
