@@ -25,3 +25,25 @@ class ChatbotMessageEdited extends ChatbotEvent {
   @override
   List<Object?> get props => [index, content];
 }
+
+class ChatbotFeedbackSubmitted extends ChatbotEvent {
+  const ChatbotFeedbackSubmitted({
+    required this.messageIndex,
+    required this.isLiked,
+    this.reasonCategory,
+    this.feedbackComment,
+  });
+
+  final int messageIndex;
+  final bool isLiked;
+  final String? reasonCategory;
+  final String? feedbackComment;
+
+  @override
+  List<Object?> get props => [
+    messageIndex,
+    isLiked,
+    reasonCategory,
+    feedbackComment,
+  ];
+}

@@ -1,14 +1,5 @@
 test/
-!test/
-test/*
-!test/features/
-test/features/*
-!test/features/booking/
-test/features/booking/*
-!test/features/booking/rental_request_cubit_test.dart
-!test/features/wallet/
-test/features/wallet/*
-!test/features/wallet/wallet_test.dart
+
 .qa/
 design-qa.md
 .serena/

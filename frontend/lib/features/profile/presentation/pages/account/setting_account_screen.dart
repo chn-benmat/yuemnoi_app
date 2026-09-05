@@ -10,6 +10,14 @@ import '../../widgets/account/setting_account_widgets.dart';
 class SettingAccountScreen extends StatelessWidget {
   const SettingAccountScreen({super.key});
 
+  void _handleBack(BuildContext context) {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      AppRoutes.goToProfile(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = SupabaseConfig.isInitialized
@@ -22,23 +30,31 @@ class SettingAccountScreen extends StatelessWidget {
         ? 'เบอร์โทร: $formattedPhone'
         : 'อีเมล, เบอร์โทรศัพท์';
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F9),
-      appBar: AppBar(
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
-        leading: const BackButton(),
-        title: const Text(
-          'ตั้งค่าบัญชี',
-          style: TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack(context);
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F7F9),
+        appBar: AppBar(
+          backgroundColor: AppColors.primaryColor,
+          foregroundColor: Colors.white,
+          leading: BackButton(
+            onPressed: () => _handleBack(context),
           ),
+          title: const Text(
+            'ตั้งค่าบัญชี',
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          centerTitle: true,
+          elevation: 0,
         ),
-        centerTitle: true,
-        elevation: 0,
-      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Container(
@@ -97,6 +113,7 @@ class SettingAccountScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

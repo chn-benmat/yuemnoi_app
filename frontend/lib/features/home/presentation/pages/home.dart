@@ -81,8 +81,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
   @override
   void didUpdateWidget(covariant _HomeScreenContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialIndex != widget.initialIndex ||
-        _selectedIndex != widget.initialIndex) {
+    if (oldWidget.initialIndex != widget.initialIndex) {
       setState(() {
         _selectedIndex = widget.initialIndex;
       });

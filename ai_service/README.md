@@ -93,7 +93,7 @@ async def stream_ai_response(payload: ChatRequest):
 | ตัวแปร                  | คำอธิบาย                                           | ค่าตั้งต้น               |
 | :---------------------- | :------------------------------------------------- | :----------------------- |
 | `SUPABASE_URL`          | URL ของ Supabase Project                           | — (ต้องกำหนด)            |
-| `SUPABASE_KEY`          | API Key ของ Supabase                               | — (ต้องกำหนด)            |
+| `SUPABASE_KEY`          | Service Role Secret Key ของ Supabase (สำหรับจัดการ Feedback / In-Context Learning) | — (ต้องกำหนด)            |
 | `SERPER_API_KEY`        | API Key สำหรับ Serper.dev (Google Search)          | — (ต้องกำหนด)            |
 | `MODEL_NAME`            | ชื่อโมเดล Ollama ที่ใช้งาน                         | `qwen3:8b`               |
 | `OLLAMA_ENDPOINT`       | Native endpoint ของ Ollama                         | `http://localhost:11434` |
@@ -159,9 +159,9 @@ Catalog: [{ id: 9, category: "กล้อง", price: 1500, ... }, ...]
 สร้างไฟล์ `.env` ในโฟลเดอร์ `ai_service/` :
 
 ```env
-# Supabase
+# Supabase (ใช้ Service Role Key เพื่อจัดการ Feedback และ In-Context Learning)
 SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_KEY=eyJhbGciOi...
+SUPABASE_KEY=eyJhbGciOi... (Service Role Key)
 
 # Google Search (Serper.dev)
 SERPER_API_KEY=your_serper_api_key

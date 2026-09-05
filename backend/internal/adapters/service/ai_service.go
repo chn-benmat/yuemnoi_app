@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -74,6 +75,80 @@ func (s *aiService) GetAIResponse(ctx context.Context, query string, history []d
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode ai service response: %w", err)
+	}
+
+	return result, nil
+}
+
+// StreamAIResponse ส่งคำขอไปยัง AI Service สำหรับ SSE streaming และคืนค่า Response Body
+func (s *aiService) StreamAIResponse(ctx context.Context, query string, history []domain.ChatMessage) (io.ReadCloser, error) {
+	url := fmt.Sprintf("%s/api/ai/chat/stream", s.baseURL)
+
+	reqPayload := domain.ChatRequest{
+		Query:   query,
+		History: history,
+	}
+
+	jsonData, err := json.Marshal(reqPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+
+	streamClient := &http.Client{
+		Transport: s.httpClient.Transport,
+	}
+
+	resp, err := streamClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send stream request to ai service: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("ai service returned non-200 status: %d", resp.StatusCode)
+	}
+
+	return resp.Body, nil
+}
+
+// SubmitFeedback ส่งฟีดแบ็กความพึงพอใจไปยัง AI Service
+func (s *aiService) SubmitFeedback(ctx context.Context, reqPayload domain.AIFeedbackRequest) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/api/ai/feedback", s.baseURL)
+
+	jsonData, err := json.Marshal(reqPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal feedback payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send feedback request to ai service: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ai service returned non-200 status: %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode feedback response: %w", err)
 	}
 
 	return result, nil

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/constants/colors.dart';
-import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../data/repositories/rental_management_repository_impl.dart';
+import '../../../domain/usecases/update_booking_status_usecase.dart';
 
 /// Modal สำหรับกระบวนการ "ตรวจรับอุปกรณ์ & ชำระเงิน" เมื่อนัดพบกัน (In-Person Handover)
 class RentalHandoverModal extends StatefulWidget {
@@ -15,6 +16,7 @@ class RentalHandoverModal extends StatefulWidget {
   final String paymentMethod; // 'promptpay' หรือ 'cash'
   final bool initialIsOwner;
   final ValueChanged<String>? onHandoverSuccess;
+  final UpdateBookingStatusUseCase? updateBookingStatusUseCase;
 
   const RentalHandoverModal({
     super.key,
@@ -27,6 +29,7 @@ class RentalHandoverModal extends StatefulWidget {
     this.paymentMethod = 'promptpay',
     this.initialIsOwner = false,
     this.onHandoverSuccess,
+    this.updateBookingStatusUseCase,
   });
 
   static Future<void> show(
@@ -40,6 +43,7 @@ class RentalHandoverModal extends StatefulWidget {
     String paymentMethod = 'promptpay',
     bool initialIsOwner = false,
     ValueChanged<String>? onHandoverSuccess,
+    UpdateBookingStatusUseCase? updateBookingStatusUseCase,
   }) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -58,6 +62,7 @@ class RentalHandoverModal extends StatefulWidget {
         paymentMethod: paymentMethod,
         initialIsOwner: initialIsOwner,
         onHandoverSuccess: onHandoverSuccess,
+        updateBookingStatusUseCase: updateBookingStatusUseCase,
       ),
     );
   }
@@ -68,6 +73,7 @@ class RentalHandoverModal extends StatefulWidget {
 
 class _RentalHandoverModalState extends State<RentalHandoverModal> {
   late bool _isOwner;
+  late final UpdateBookingStatusUseCase _updateBookingStatusUseCase;
   int _currentStep = 0; // 0: ตรวจสภาพ, 1: ชำระเงิน, 2: รหัสยืนยัน PIN, 3: สำเร็จ
 
   // สเต็ป 1: Checklist
@@ -85,6 +91,8 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   void initState() {
     super.initState();
     _isOwner = widget.initialIsOwner;
+    _updateBookingStatusUseCase = widget.updateBookingStatusUseCase ??
+        UpdateBookingStatusUseCase(RentalManagementRepositoryImpl());
   }
 
   @override
@@ -96,13 +104,13 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   Future<void> _completeHandover() async {
     setState(() => _isSubmitting = true);
 
-    // บันทึกลง Supabase booking_tb เป็น status 'active' (ถ้ามี bookingId)
-    if (widget.bookingId != null && SupabaseConfig.isInitialized) {
+    // บันทึกลง booking_tb ผ่าน UseCase เป็น status 'active' (ถ้ามี bookingId)
+    if (widget.bookingId != null) {
       try {
-        await SupabaseConfig.client
-            .from('booking_tb')
-            .update({'status': 'active'})
-            .eq('id', widget.bookingId!);
+        await _updateBookingStatusUseCase.execute(
+          bookingId: widget.bookingId!,
+          status: 'active',
+        );
       } catch (_) {}
     }
 

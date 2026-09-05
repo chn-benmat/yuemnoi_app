@@ -511,6 +511,14 @@ abstract final class AppRoutes {
     context.go(home, extra: initialIndex);
   }
 
+  static void openProfile(BuildContext context) {
+    goToHome(context, initialIndex: 3);
+  }
+
+  static void goToProfile(BuildContext context) {
+    goToHome(context, initialIndex: 3);
+  }
+
   static Future<void> openChatbot(BuildContext context) {
     return context.push<void>(chatbot);
   }

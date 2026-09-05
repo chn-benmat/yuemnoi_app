@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/constants/colors.dart';
-import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../data/repositories/rental_management_repository_impl.dart';
+import '../../../domain/usecases/update_booking_status_usecase.dart';
 import 'rental_review_dialog.dart';
 
 /// Modal สำหรับกระบวนการ "ส่งคืนอุปกรณ์และจบการเช่า" (Return Inspection & Completion)
@@ -15,6 +16,7 @@ class RentalReturnModal extends StatefulWidget {
   final double depositAmount; // เงินประกัน (ถ้ามี)
   final bool initialIsOwner;
   final ValueChanged<String>? onReturnSuccess;
+  final UpdateBookingStatusUseCase? updateBookingStatusUseCase;
 
   const RentalReturnModal({
     super.key,
@@ -26,6 +28,7 @@ class RentalReturnModal extends StatefulWidget {
     this.depositAmount = 0.0,
     this.initialIsOwner = false,
     this.onReturnSuccess,
+    this.updateBookingStatusUseCase,
   });
 
   static Future<void> show(
@@ -38,6 +41,7 @@ class RentalReturnModal extends StatefulWidget {
     double depositAmount = 0.0,
     bool initialIsOwner = false,
     ValueChanged<String>? onReturnSuccess,
+    UpdateBookingStatusUseCase? updateBookingStatusUseCase,
   }) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -55,6 +59,7 @@ class RentalReturnModal extends StatefulWidget {
         depositAmount: depositAmount,
         initialIsOwner: initialIsOwner,
         onReturnSuccess: onReturnSuccess,
+        updateBookingStatusUseCase: updateBookingStatusUseCase,
       ),
     );
   }
@@ -65,6 +70,7 @@ class RentalReturnModal extends StatefulWidget {
 
 class _RentalReturnModalState extends State<RentalReturnModal> {
   late bool _isOwner;
+  late final UpdateBookingStatusUseCase _updateBookingStatusUseCase;
   int _currentStep = 0; // 0: ตรวจสภาพคืน, 1: คืนเงินประกัน/ค่าปรับ, 2: Return PIN, 3: สำเร็จ
 
   // สเต็ป 0: Checklist รับคืน
@@ -83,6 +89,8 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
   void initState() {
     super.initState();
     _isOwner = widget.initialIsOwner;
+    _updateBookingStatusUseCase = widget.updateBookingStatusUseCase ??
+        UpdateBookingStatusUseCase(RentalManagementRepositoryImpl());
   }
 
   @override
@@ -94,13 +102,13 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
   Future<void> _completeReturn() async {
     setState(() => _isSubmitting = true);
 
-    // บันทึกลง Supabase booking_tb เป็น status 'completed' (ถ้ามี bookingId)
-    if (widget.bookingId != null && SupabaseConfig.isInitialized) {
+    // บันทึกลง booking_tb ผ่าน UseCase เป็น status 'completed' (ถ้ามี bookingId)
+    if (widget.bookingId != null) {
       try {
-        await SupabaseConfig.client
-            .from('booking_tb')
-            .update({'status': 'completed'})
-            .eq('id', widget.bookingId!);
+        await _updateBookingStatusUseCase.execute(
+          bookingId: widget.bookingId!,
+          status: 'completed',
+        );
       } catch (_) {}
     }
 

@@ -4,6 +4,7 @@ import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/widgets/skeleton_shimmer.dart';
+import '../../../domain/entities/user_item.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,18 @@ class MyItemData {
     this.imageUrl,
     required this.iconData,
   });
+
+  factory MyItemData.fromEntity(UserItem entity, IconData icon) {
+    return MyItemData(
+      id: entity.id,
+      title: entity.title,
+      subtitle: entity.subtitle,
+      price: entity.price,
+      imageCount: entity.imageCount,
+      imageUrl: entity.imageUrl,
+      iconData: icon,
+    );
+  }
 }
 
 class MyItemsLoadingSkeleton extends StatelessWidget {

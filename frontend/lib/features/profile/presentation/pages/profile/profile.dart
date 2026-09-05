@@ -96,7 +96,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       message: 'กรุณาเข้าสู่ระบบก่อนเข้าสู่หน้าตั้งค่าบัญชี',
     );
     if (authed && mounted) {
-      AppRoutes.openSettingAccount(context);
+      await AppRoutes.openSettingAccount(context);
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 

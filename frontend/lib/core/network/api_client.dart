@@ -44,6 +44,12 @@ abstract interface class ApiClient {
     Map<String, String>? headers,
   });
 
+  Future<Stream<String>> postStream(
+    String path, {
+    Map<String, dynamic>? data,
+    Map<String, String>? headers,
+  });
+
   Future<ApiResponse> postMultipart(
     String path, {
     required Map<String, String> fields,
@@ -126,6 +132,39 @@ class DioApiClient implements ApiClient {
     Map<String, String>? headers,
   }) {
     return _send(path, method: 'POST', data: data, headers: headers);
+  }
+
+  @override
+  Future<Stream<String>> postStream(
+    String path, {
+    Map<String, dynamic>? data,
+    Map<String, String>? headers,
+  }) async {
+    try {
+      final response = await _dio.post<ResponseBody>(
+        path,
+        data: data,
+        options: Options(
+          responseType: ResponseType.stream,
+          headers: {
+            if (headers != null) ...headers,
+            'Accept': 'text/event-stream',
+          },
+        ),
+      );
+
+      final responseBody = response.data;
+      if (responseBody == null) {
+        throw const ApiClientException(ApiClientErrorType.invalidResponse);
+      }
+
+      return responseBody.stream
+          .cast<List<int>>()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter());
+    } on DioException catch (error) {
+      throw ApiClientException(_errorType(error));
+    }
   }
 
   @override

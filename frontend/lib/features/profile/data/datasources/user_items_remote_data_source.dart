@@ -1,0 +1,93 @@
+import '../../../../core/network/supabase_client.dart';
+import '../../../../core/services/favorite_service.dart';
+import '../models/favorite_item_model.dart';
+import '../models/user_item_model.dart';
+
+// คำอธิบาย: Data Source สำหรับดึงข้อมูลอุปกรณ์ของผู้ใช้และรายการที่กดถูกใจจาก Supabase
+class UserItemsRemoteDataSource {
+  Future<List<UserItemModel>> getMyItems(String userId) async {
+    if (!SupabaseConfig.isInitialized || userId.isEmpty) {
+      return [];
+    }
+
+    try {
+      final response = await SupabaseConfig.client
+          .from('item_tb')
+          .select(
+            'id, user_id, item_name, item_image_url, description, category, price, status',
+          )
+          .eq('user_id', userId)
+          .order('id', ascending: false);
+
+      final List<UserItemModel> items = [];
+      for (final raw in (response as List)) {
+        if (raw is Map) {
+          items.add(UserItemModel.fromJson(Map<String, dynamic>.from(raw)));
+        }
+      }
+      return items;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<FavoriteItemModel>> getFavorites() async {
+    final favIds = await FavoriteService.instance.getFavoriteIds();
+    if (favIds.isEmpty || !SupabaseConfig.isInitialized) {
+      return [];
+    }
+
+    try {
+      final client = SupabaseConfig.client;
+      final response = await client
+          .from('item_tb')
+          .select(
+            'id, user_id, item_name, item_image_url, description, category, price, status',
+          )
+          .inFilter('id', favIds);
+
+      final Set<String> ownerIds = {};
+      final List<Map<String, dynamic>> rawList = [];
+
+      for (final raw in (response as List)) {
+        if (raw is Map) {
+          final map = Map<String, dynamic>.from(raw);
+          rawList.add(map);
+          final ownerId = map['user_id']?.toString() ?? '';
+          if (ownerId.isNotEmpty) ownerIds.add(ownerId);
+        }
+      }
+
+      final Map<String, String> ownerNames = {};
+      if (ownerIds.isNotEmpty) {
+        try {
+          final profiles = await client
+              .from('profile_tb')
+              .select('user_id, email')
+              .inFilter('user_id', ownerIds.toList());
+
+          for (final p in (profiles as List)) {
+            if (p is Map) {
+              final uid = p['user_id']?.toString();
+              final email = p['email']?.toString() ?? '';
+              if (uid != null && email.isNotEmpty) {
+                ownerNames[uid] = email.split('@').first;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      final List<FavoriteItemModel> items = [];
+      for (final map in rawList) {
+        final ownerId = map['user_id']?.toString() ?? '';
+        final ownerName = ownerNames[ownerId] ?? 'เจ้าของอุปกรณ์';
+        items.add(FavoriteItemModel.fromJson(map, ownerName: ownerName));
+      }
+
+      return items;
+    } catch (_) {
+      return [];
+    }
+  }
+}

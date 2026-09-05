@@ -6,6 +6,7 @@ import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/widgets/skeleton_shimmer.dart';
+import '../../../domain/entities/rental_booking.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data Model
@@ -47,6 +48,31 @@ class RentalStatusItemData {
     this.totalPrice,
     this.pickupLocation,
   });
+
+  factory RentalStatusItemData.fromEntity(
+    RentalBooking entity,
+    Color statusColor,
+    IconData iconData,
+  ) {
+    return RentalStatusItemData(
+      bookingId: entity.bookingId,
+      itemId: entity.itemId,
+      title: entity.title,
+      ownerName: entity.partnerName,
+      ownerPhone: entity.partnerPhone,
+      partnerRole: entity.partnerRole,
+      status: entity.status,
+      statusCode: entity.statusCode,
+      statusColor: statusColor,
+      iconData: iconData,
+      imageUrl: entity.imageUrl,
+      startDate: entity.startDate,
+      endDate: entity.endDate,
+      duration: entity.duration,
+      totalPrice: entity.totalPrice.toInt(),
+      pickupLocation: entity.pickupLocation,
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

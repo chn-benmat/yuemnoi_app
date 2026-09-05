@@ -116,6 +116,8 @@ func SetupRouter(
 		ai := v1.Group("/chat-ai")
 		{
 			ai.POST("", aiHandler.HandleChat)
+			ai.POST("/stream", aiHandler.HandleStreamChat)
+			ai.POST("/feedback", aiHandler.HandleFeedback)
 		}
 
 		// Push Notification
