@@ -73,6 +73,7 @@ class DioApiClient implements ApiClient {
   DioApiClient({
     Dio? dio,
     String? baseUrl,
+    String? appSecret,
     Duration requestTimeout = _defaultRequestTimeout,
   }) : _dio =
            dio ??
@@ -85,7 +86,20 @@ class DioApiClient implements ApiClient {
                headers: const {'Accept': 'application/json'},
                validateStatus: (status) => status != null && status < 600,
              ),
-           );
+           ) {
+    final configuredSecret = (appSecret ?? dotenv.env['APP_SECRET_KEY'] ?? '')
+        .trim();
+    if (configuredSecret.isNotEmpty) {
+      _dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            options.headers['X-App-Secret'] = configuredSecret;
+            handler.next(options);
+          },
+        ),
+      );
+    }
+  }
 
   static const Duration _defaultRequestTimeout = Duration(seconds: 20);
 
@@ -188,7 +202,9 @@ class DioApiClient implements ApiClient {
         );
       } on DioException catch (error) {
         final isRetryable = _isRetryable(error);
-        if (attempt <= maxRetries && isRetryable && (method == 'GET' || method == 'HEAD')) {
+        if (attempt <= maxRetries &&
+            isRetryable &&
+            (method == 'GET' || method == 'HEAD')) {
           await Future<void>.delayed(Duration(milliseconds: 500 * attempt));
           continue;
         }
@@ -252,7 +268,9 @@ class DioApiClient implements ApiClient {
     var configuredUrl = (baseUrl ?? dotenv.env['API_URL'] ?? '').trim();
     if ((configuredUrl.startsWith('"') && configuredUrl.endsWith('"')) ||
         (configuredUrl.startsWith("'") && configuredUrl.endsWith("'"))) {
-      configuredUrl = configuredUrl.substring(1, configuredUrl.length - 1).trim();
+      configuredUrl = configuredUrl
+          .substring(1, configuredUrl.length - 1)
+          .trim();
     }
     while (configuredUrl.endsWith('/')) {
       configuredUrl = configuredUrl.substring(0, configuredUrl.length - 1);

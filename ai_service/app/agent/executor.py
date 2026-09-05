@@ -1,4 +1,9 @@
 import json
+import asyncio
+from uuid import uuid4
+from .conversation_context import resolve, kinds
+from .dialogue import Intent, Answer, AnswerValidationError, compact_schema, interpretation_messages, answer_messages, hard_filter, candidates, validate_answer
+from ..telemetry import logger, stage, request_id, model_calls
 import re
 from typing import Any, List, Literal, Optional
 
@@ -107,7 +112,7 @@ class AgentExecutor:
             await self.ollama.warmup()
             print(f"[Ollama Warmup]: {settings.MODEL_NAME} is ready")
         except Exception as exc:
-            print(f"[Ollama Warmup Warning]: {exc}")
+            logger.warning("Ollama Warmup Warning error=%s", type(exc).__name__)
 
     async def aclose(self) -> None:
         await self.http_client.aclose()
@@ -269,8 +274,7 @@ class AgentExecutor:
             "web_query and classify its semantic web_question_type. Treat indirect "
             "comparisons, rankings, extremes, winners, and best-choice questions as "
             "comparison without relying on particular words. For direct_response, provide "
-            "the complete natural reply in "
-            "direct_answer without making claims about current inventory. Reply in the "
+            "only the routing action, never an answer. Reply in the "
             "language of the latest user message."
         )
         messages: list[dict[str, Any]] = [{"role": "system", "content": prompt}]
@@ -287,14 +291,71 @@ class AgentExecutor:
         messages.append({"role": "user", "content": user_query})
         return messages
 
+    @classmethod
+    def _fast_route_decision(
+        cls, user_query: str, history: Optional[List[dict]] = None
+    ) -> Optional[RoutingDecision]:
+        q = " ".join([str(m.get("content") or "") for m in (history or [])] + [user_query]).casefold()
+
+        # 1. Spec research & comparison
+        spec_terms = (
+            "เปรียบเทียบ", "เทียบ", "สเปค", " vs ", "ความละเอียดกี่", "ดีกว่ายังไง",
+            "ต่างกันยังไง", "จุดเด่น", "specification"
+        )
+        if any(term in q for term in spec_terms):
+            return RoutingDecision(
+                action="search_web_specs",
+                web_query=user_query,
+                web_question_type="comparison",
+            )
+
+        # 2. General browsing / Immediate Recommendation
+        browse_terms = (
+            "มีอุปกรณ์แนะนำให้เช่าบ้างไหม", "มีอะไรให้เช่าบ้าง", "มีอะไรบ้าง", "ขอดูรายการเช่า", "ขอดูของทั้งหมด",
+            "แนะนำของหน่อย", "มีสินค้าอะไรบ้าง", "ของให้เช่ามีอะไรบ้าง", "ดูรายการของ",
+            "ดูของทั้งหมด", "ของทั้งหมด", "รายการทั้งหมด", "เช่าอะไรได้บ้าง",
+            "แนะนำสินค้า", "แนะนำสินค้าหน่อย", "มีอะไรแนะนำบ้าง", "แนะนำของ", "ขอดูของหน่อย"
+        )
+        if any(term in q for term in browse_terms):
+            return RoutingDecision(
+                action="browse_inventory",
+            )
+
+        # 3. Direct rental search
+        rental_intents = (
+            "เช่า", "ยืม", "อยากได้", "หา", "มีไหม", "มีมั้ย", "ตัวไหนดี", "อันไหนดี",
+            "แนะนำ", "ช่วยแนะนำ", "ต้องการ", "มองหา", "rent", "recommend", "find"
+        )
+        product_terms = (
+            "กล้อง", "ถ่ายภาพ", "ถ่ายรูป", "เลนส์", "ไมค์", "เสียง", "ลำโพง", "ไฟ", "สตูดิโอ",
+            "เต็นท์", "แคมป์", "เกม", "ps5", "คอม", "โน้ตบุ๊ก", "macbook", "สว่าน", "เครื่องมือ",
+            "รถ", "บ้าน", "พูลวิลล่า", "โปรเจคเตอร์", "โดรน", "จักรยาน", "โทรศัพท์", "iphone", "samsung",
+            "อุปกรณ์", "คอนเสิต", "คอนเสิร์ต", "แคมป์", "camera", "camping", "บ้านพัก"
+        )
+        has_intent = any(term in q for term in rental_intents)
+        has_product = any(term in q for term in product_terms)
+
+        if (has_intent and has_product) or (kinds(q) and not any(term in q for term in ("กี่", "อย่างไร", "ยังไง", "why", "how"))):
+            return RoutingDecision(
+                action="search_inventory",
+                requested_item_kind=user_query,
+            )
+
+        return None
+
     async def _route_request(
         self, user_query: str, history: Optional[List[dict]]
     ) -> RoutingDecision:
+        schema = RoutingDecision.model_json_schema()
+        schema["properties"].pop("direct_answer", None)
+        for field in schema["properties"].values():
+            field.pop("description", None)
+            field.pop("title", None)
         raw_decision = await self.ollama.chat_json(
             messages=self._routing_messages(user_query, history),
-            schema=RoutingDecision.model_json_schema(),
+            schema=schema,
             max_tokens=settings.ROUTING_MAX_TOKENS,
-            timeout=30.0,
+            timeout=settings.ROUTING_TIMEOUT,
         )
         decision = RoutingDecision.model_validate_json(raw_decision)
         if decision.action == "browse_inventory" and decision.requested_item_kind:
@@ -373,10 +434,196 @@ class AgentExecutor:
         return ""
 
     @classmethod
+    def _quick_greeting_response(cls, user_query: str) -> Optional[str]:
+        cleaned = user_query.strip().casefold()
+        greeting_terms = {
+            "สวัสดี", "สวัสดีครับ", "สวัสดีค่ะ", "สวัสดีคะ", "หวัดดี", "หวัดดีครับ", "หวัดดีค่ะ",
+            "ดีครับ", "ดีค่ะ", "hello", "hi", "hey", "good morning", "good afternoon"
+        }
+        if cleaned in greeting_terms:
+            if cls._is_thai(user_query):
+                return (
+                    "สวัสดีค่ะ! ยินดีต้อนรับสู่ **Yuemnoi** ผู้ช่วยค้นหาและแนะนำอุปกรณ์เช่าค่ะ ✨\n\n"
+                    "สามารถบอกสิ่งที่กำลังมองหา เช่น ประเภทอุปกรณ์ งบประมาณ หรือกิจกรรมที่ต้องการใช้งานได้เลยนะคะ 😊"
+                )
+            return (
+                "Hello! Welcome to **Yuemnoi**, your equipment rental assistant ✨\n\n"
+                "Feel free to ask for any rental equipment, budget, or activity you need! 😊"
+            )
+
+        thanks_terms = {
+            "ขอบคุณ", "ขอบคุณครับ", "ขอบคุณค่ะ", "ขอบคุณคะ", "ขอบคุณมาก", "ขอบคุณมากๆ",
+            "thank you", "thanks", "thx"
+        }
+        if cleaned in thanks_terms:
+            if cls._is_thai(user_query):
+                return "ยินดีให้บริการเสมอค่ะ! หากต้องการค้นหาหรือสอบถามเรื่องอุปกรณ์เช่าเพิ่มเติม บอก Yuemnoi ได้ตลอดเลยนะคะ ✨"
+            return "You're very welcome! If you need help with any other rental items, feel free to ask anytime ✨"
+
+        identity_terms = {
+            "คุณคือใคร", "คุณชื่ออะไร", "เธอคือใคร", "ชื่ออะไร", "yuemnoi คืออะไร",
+            "ยืมหน่อยคืออะไร", "ทำอะไรได้บ้าง", "ทำไรได้บ้าง", "what can you do", "who are you", "what is yuemnoi"
+        }
+        if cleaned in identity_terms:
+            if cls._is_thai(user_query):
+                return (
+                    "**Yuemnoi** เป็นผู้ช่วยอัจฉริยะสำหรับค้นหาและแนะนำอุปกรณ์เช่าในแพลตฟอร์มยืมหน่อยค่ะ 🛠️\n\n"
+                    "ช่วยแนะนำอุปกรณ์ เช่น กล้องถ่ายภาพ, โดรน, อุปกรณ์แคมป์ปิ้ง, เครื่องเสียงจัดงาน และอื่น ๆ ได้ตามงบประมาณและระยะเวลาที่ต้องการเลยค่ะ ✨"
+                )
+            return (
+                "I am **Yuemnoi**, your smart equipment rental assistant! 🛠️\n\n"
+                "I can help you find and recommend rental gear such as cameras, camping equipment, party gear, and more based on your budget and needs ✨"
+            )
+
+        return None
+
+    @classmethod
+    def _is_consultative_query(
+        cls, user_query: str, history: Optional[List[dict]] = None
+    ) -> bool:
+        """ตรวจสอบว่าผู้ใช้ต้องการคำปรึกษา/ยังไม่แน่ใจ โดยยังไม่ได้ระบุงบ/สเปก/ของชัดเจน และไม่ได้สั่งให้แนะนำสินค้าเลย"""
+        q = user_query.strip().casefold()
+
+        # 1. ข้ามทันทีถ้ามีคีย์เวิร์ดร้องขอการแนะนำสินค้าโดยตรง (ให้แนะนำสินค้าทันทีตามความต้องการผู้ใช้)
+        direct_recommend_triggers = (
+            "แนะนำสินค้า", "มีอะไรแนะนำ", "แนะนำของ", "แนะนำหน่อย", "ขอดูของ",
+            "มีอะไรให้เช่าบ้าง", "มีอะไรบ้าง", "มีสินค้าอะไรบ้าง", "แนะนำให้หน่อย",
+            "แนะนำกล้องหน่อย", "แนะนำเต็นท์หน่อย", "แนะนำโดรนหน่อย", "แนะนำไมค์หน่อย",
+            "แนะนำเครื่องเสียงหน่อย", "มีกล้องอะไรแนะนำ", "มีเต็นท์อะไรแนะนำ",
+            "ดูของทั้งหมด", "ของทั้งหมด", "รายการทั้งหมด"
+        )
+        if any(trigger in q for trigger in direct_recommend_triggers):
+            return False
+
+        # 2. ข้ามถ้าผู้ใช้ระบุงบประมาณ, ระยะเวลา, หรือสเปกชัดเจนมาแล้ว
+        if re.search(r"(?:งบ|งบประมาณ|ราคา|ไม่เกิน|ต่ำกว่า)\s*[0-9,]+", q):
+            return False
+        if re.search(r"[0-9,]+\s*(?:บาท|thb)", q):
+            return False
+        if re.search(r"\d+\s*(?:วัน|ชั่วโมง|ชม|คน|ท่าน)", q):
+            return False
+
+        # 3. ข้ามถ้าประวัติการสนทนาเพิ่งถามคำถามปรึกษาไปแล้ว (ป้องกันการถามวนซ้ำ)
+        if history:
+            last_assistant_msgs = [
+                str(m.get("content") or "")
+                for m in history[-3:]
+                if m.get("role") == "assistant"
+            ]
+            if any("งบประมาณ" in msg and "ระยะเวลา" in msg for msg in last_assistant_msgs):
+                return False
+
+        # 4. คำศัพท์ที่แสดงว่าต้องการคำปรึกษา / เลือกไม่ถูก / ถามว่าต้องใช้อะไรบ้าง
+        consultative_triggers = (
+            "เลือกไม่ถูก", "ช่วยเลือก", "ต้องใช้อะไรบ้าง", "ใช้อะไรดี", "เอาอะไรดี",
+            "มีอะไรจำเป็นบ้าง", "ต้องเตรียมอะไรบ้าง", "สำหรับมือใหม่", "มือใหม่เลือกยังไง",
+            "อยากเช่าของไป", "อยากเช่าอุปกรณ์ไป", "จะจัดงาน", "จะไปทำคลิป", "จะไปเที่ยว",
+            "อยากได้อุปกรณ์ไป", "ช่วยจัดเซ็ต", "ควรเช่าอะไรดี", "แนะนำยังไงดี", "ช่วยแนะนำทีว่าต้องใช้อะไร"
+        )
+        return any(term in q for term in consultative_triggers)
+
+    @classmethod
+    def _consultative_question_response(cls, user_query: str) -> str:
+        return "ต้องการใช้อุปกรณ์สำหรับกิจกรรมอะไรคะ" if cls._is_thai(user_query) else "What activity do you need equipment for?"
+
+    @classmethod
+    def _format_inventory_answer(
+        cls, user_query: str, items: list[dict], history: Optional[List[dict]] = None
+    ) -> str:
+        is_thai = cls._is_thai(user_query)
+        if not items:
+            return cls._inventory_no_results_answer(user_query)
+
+        lines = []
+        if is_thai:
+            signals = InventoryGrounder._extract_intent_signals(user_query, history)
+            budget_max = signals.get("budget_max")
+            activities = signals.get("activities", set())
+            specs = signals.get("specs", [])
+            summary_parts = []
+            if budget_max is not None:
+                summary_parts.append(f"งบประมาณไม่เกิน **{budget_max:,.2f} บาท**")
+            if activities:
+                summary_parts.append(f"สำหรับกิจกรรม **{', '.join(sorted(activities))}**")
+            if specs:
+                summary_parts.append(f"สเปก **{', '.join(specs)}**")
+
+            if summary_parts and history:
+                lines.append(f"Yuemnoi สรุปความต้องการของคุณ ({', '.join(summary_parts)}) และคัดสรรอุปกรณ์ที่ตอบโจทย์ที่สุดดังนี้ค่ะ:")
+            elif summary_parts:
+                lines.append(f"Yuemnoi คัดสรรอุปกรณ์ที่ตรงกับความต้องการ ({', '.join(summary_parts)}) ให้ดังนี้ค่ะ:")
+            else:
+                lines.append("Yuemnoi มีอุปกรณ์ให้เช่าที่ตรงกับคำขอของคุณดังนี้ค่ะ:")
+            lines.append("")
+            for item in items[: settings.MAX_SEARCH_RESULTS]:
+                name = str(item.get("item_name") or "อุปกรณ์").strip()
+                price = item.get("price")
+                db_type = str(item.get("type", "")).strip().casefold()
+                unit = (
+                    "ชั่วโมง"
+                    if ("ชั่วโมง" in db_type or "hour" in db_type)
+                    else ("สัปดาห์" if "week" in db_type else "วัน")
+                )
+                desc = str(item.get("description") or "").strip()
+                if len(desc) > 80:
+                    desc = desc[:77] + "..."
+                price_str = (
+                    f"{price:,.2f}".removesuffix(".00")
+                    if isinstance(price, (int, float))
+                    else str(price or "")
+                )
+                if desc:
+                    lines.append(
+                        f"• **{name}** — {desc} | ราคา **{price_str} บาท/{unit}**"
+                    )
+                else:
+                    lines.append(f"• **{name}** | ราคา **{price_str} บาท/{unit}**")
+
+            lines.append("")
+            lines.append(
+                "💡 *เลือกดูรายละเอียดเพิ่มเติมและทำการจองเช่าผ่านการ์ดด้านล่างได้เลยนะคะ*"
+            )
+        else:
+            lines.append(
+                "Yuemnoi found these rental items that match your request:"
+            )
+            lines.append("")
+            for item in items[: settings.MAX_SEARCH_RESULTS]:
+                name = str(item.get("item_name") or "Equipment").strip()
+                price = item.get("price")
+                db_type = str(item.get("type", "")).strip().casefold()
+                unit = (
+                    "hour"
+                    if ("ชั่วโมง" in db_type or "hour" in db_type)
+                    else "day"
+                )
+                desc = str(item.get("description") or "").strip()
+                if len(desc) > 80:
+                    desc = desc[:77] + "..."
+                price_str = (
+                    f"{price:,.2f}".removesuffix(".00")
+                    if isinstance(price, (int, float))
+                    else str(price or "")
+                )
+                if desc:
+                    lines.append(
+                        f"• **{name}** — {desc} | Price: **{price_str} THB/{unit}**"
+                    )
+                else:
+                    lines.append(f"• **{name}** | Price: **{price_str} THB/{unit}**")
+
+            lines.append("")
+            lines.append(
+                "💡 *You can select and rent any item directly from the cards below.*"
+            )
+
+        return "\n".join(lines)
+
+    @classmethod
     def _inventory_no_results_answer(cls, user_query: str) -> str:
         if cls._is_thai(user_query):
-            return "ขออภัยค่ะ ตอนนี้ไม่พบรายการให้เช่าที่ตรงกับคำขอนี้"
-        return "Sorry, there are currently no rental items matching your request."
+            return "ขออภัยค่ะ ไม่พบรายการที่ตรงกับคำขอในรายการที่ตรวจสอบครั้งนี้"
+        return "Sorry, no matching rental items were found in the catalog entries checked."
 
     @classmethod
     def _inventory_results_answer(cls, user_query: str) -> str:
@@ -505,7 +752,7 @@ class AgentExecutor:
             rewritten = RewrittenAnswer.model_validate_json(raw_rewrite).answer.strip()
             return self._normalize_answer_style(rewritten, user_query)
         except Exception as exc:
-            print(f"[LLM Language Repair Error]: {exc}")
+            logger.warning("LLM Language Repair Error error=%s", type(exc).__name__)
             return normalized
 
     async def _execute_tools(
@@ -517,6 +764,8 @@ class AgentExecutor:
         history: Optional[List[dict]],
         recommendation_limit: Optional[int] = None,
     ) -> tuple[list[dict], str]:
+        user_query = " ".join([str(m.get("content") or "") for m in (history or [])] + [user_query])
+        history = []
         inventory_items: list[dict] = []
         search_status = "tool_no_results"
 
@@ -527,9 +776,10 @@ class AgentExecutor:
 
             if tool_name in {"browse_inventory", "search_inventory"}:
                 try:
-                    catalog_items = await self.db_tool.list_items()
+                    with stage("catalog"):
+                        catalog_items = await self.db_tool.list_items()
                 except InventoryCatalogError as exc:
-                    print(f"[Inventory Catalog Error]: {exc}")
+                    logger.warning("Inventory Catalog Error error=%s", type(exc).__name__)
                     search_status = "inventory_unavailable"
                     tool_payload = {"error": "Inventory catalog is unavailable"}
                 else:
@@ -538,20 +788,30 @@ class AgentExecutor:
                     )
                     try:
                         if tool_name == "browse_inventory":
-                            items = [
-                                item
-                                for item in catalog_items
-                                if str(item.get("status") or "").casefold()
-                                == "available"
-                            ][: settings.MAX_SEARCH_RESULTS]
+                            items = self.inventory_grounder.diverse_browse_items(
+                                catalog_items, limit=settings.MAX_SEARCH_RESULTS
+                            )
                         else:
                             items = await self.inventory_grounder.match(
                                 user_query=user_query,
                                 history=history,
                                 catalog_items=catalog_items,
                             )
+                        with stage("verification"):
+                            fresh = await self.db_tool.get_items([int(item["id"]) for item in items]) if items else []
+                            fresh_by_id = {int(item["id"]): item for item in fresh}
+                            for item in items:
+                                latest = fresh_by_id.get(int(item["id"]))
+                                if latest and any(latest.get(key) != item.get(key) for key in ("item_name", "category", "description")):
+                                    raise InventoryGroundingError("Selected item changed during verification")
+                            items = [fresh_by_id[int(item["id"])] for item in items if int(item["id"]) in fresh_by_id]
+                            items = InventoryGrounder.eligible_items(user_query, items)
+                            items = self._filter_catalog_by_rental_type(items, user_query)
+                    except InventoryCatalogError:
+                        search_status = "inventory_unavailable"
+                        tool_payload = {"error": "Inventory verification unavailable"}
                     except InventoryGroundingError as exc:
-                        print(f"[Inventory Grounding Error]: {exc}")
+                        logger.warning("Inventory Grounding Error error=%s", type(exc).__name__)
                         search_status = "inventory_match_failed"
                         tool_payload = {
                             "error": "Inventory matching is temporarily unavailable"
@@ -623,24 +883,40 @@ class AgentExecutor:
         if selected_id not in valid_ids:
             selected_id = None
 
-        mentioned_ids = []
+        items_map = {item.get("id"): item for item in db_results}
+
+        # รักษาลำดับตามที่ถูกกล่าวถึงในคำตอบ (Answer order) หรือลำดับที่ AI จัดอันดับไว้
+        ordered_ids: list[Any] = []
         if answer:
             normalized_answer = answer.casefold()
-            mentioned_ids = [
-                item.get("id")
-                for item in db_results
-                if str(item.get("item_name") or "").casefold() in normalized_answer
-            ]
+            found_positions: list[tuple[int, Any]] = []
+            for item in db_results:
+                name = str(item.get("item_name") or "").casefold()
+                if name and name in normalized_answer:
+                    pos = normalized_answer.find(name)
+                    found_positions.append((pos, item.get("id")))
+            found_positions.sort(key=lambda x: x[0])
+            for _, item_id in found_positions:
+                if item_id not in ordered_ids:
+                    ordered_ids.append(item_id)
 
-        visible_ids = set(mentioned_ids)
-        if not visible_ids and selected_id is not None:
-            visible_ids = {selected_id}
+        # หากไม่ได้ระบุชื่อในคำตอบ ให้ใช้ลำดับตามความตรงใจที่จัดอันดับไว้ใน db_results (ไม่เรียงตาม ID)
+        if not ordered_ids:
+            if selected_id is not None:
+                ordered_ids = [selected_id]
+            else:
+                ordered_ids = [
+                    item.get("id")
+                    for item in db_results[: settings.MAX_SEARCH_RESULTS]
+                ]
 
         recommended_items = []
-        for item in db_results[: settings.MAX_SEARCH_RESULTS]:
-            item_id = item.get("id")
-            if visible_ids and item_id not in visible_ids:
+        seen = set()
+        for item_id in ordered_ids:
+            if item_id in seen or item_id not in items_map:
                 continue
+            seen.add(item_id)
+            item = items_map[item_id]
 
             db_type = str(item.get("type", "")).strip()
             normalized_type = db_type.casefold()
@@ -677,159 +953,126 @@ class AgentExecutor:
             )
         return recommended_items
 
-    async def run_pipeline_non_stream(
-        self, user_query: str, history: Optional[List[dict]] = None
-    ) -> dict:
-        cleaned_query = user_query.strip()
-        if len(cleaned_query) > 200:
-            answer = (
-                "กรุณาพิมพ์คำถามให้กระชับและสั้นลงค่ะ"
-                if self._is_thai(cleaned_query)
-                else "Please shorten your question."
-            )
-            return {
-                "status": "failed",
-                "search_status": "input_too_long",
-                "items_found": 0,
-                "answer": answer,
-                "recommended_items": [],
-            }
-
+    async def run_pipeline_non_stream(self, user_query: str, history=None) -> dict:
+        token = request_id.set(uuid4().hex if request_id.get() == "-" else request_id.get())
+        count_token = model_calls.set(0)
         try:
-            decision = await self._route_request(cleaned_query, history)
-        except Exception as exc:
-            print(f"[LLM Routing Error]: {exc}")
-            answer = (
-                "ขออภัยค่ะ ระบบผู้ช่วยไม่พร้อมใช้งานชั่วคราว"
-                if self._is_thai(cleaned_query)
-                else "Sorry, the assistant is temporarily unavailable."
+            with stage("total"):
+                async with asyncio.timeout(settings.PIPELINE_TIMEOUT):
+                    return await self._run_pipeline(user_query, history)
+        except TimeoutError:
+            logger.warning("ai_timeout request_id=%s", request_id.get())
+            return {"status": "failed", "search_status": "inventory_match_failed", "items_found": 0,
+                    "answer": self._inventory_unavailable_answer(user_query), "recommended_items": []}
+        finally:
+            logger.info("ai_complete request_id=%s model_calls=%s", request_id.get(), model_calls.get())
+            model_calls.reset(count_token)
+            request_id.reset(token)
+
+    @staticmethod
+    def _envelope(answer: str, status: str = "direct_response", items=None, failed=False) -> dict:
+        cards = items or []
+        return {"status": "failed" if failed else "success", "search_status": status,
+                "items_found": len(cards), "answer": answer, "recommended_items": cards}
+
+    async def _interpret(self, query: str, history: list[dict]) -> Intent:
+        with stage("interpretation"):
+            raw = await self.ollama.chat_json(
+                messages=interpretation_messages(query, history), schema=compact_schema(Intent),
+                max_tokens=settings.INTERPRETATION_MAX_TOKENS, timeout=settings.ROUTING_TIMEOUT,
             )
-            return {
-                "status": "failed",
-                "search_status": "llm_failed",
-                "items_found": 0,
-                "answer": answer,
-                "recommended_items": [],
-            }
+        return Intent.model_validate_json(raw)
 
-        recommendation_limit = self._requested_recommendation_limit(cleaned_query)
-        if recommendation_limit is None:
-            recommendation_limit = getattr(decision, "recommendation_limit", None)
+    async def _compose(self, intent: Intent, items: list[dict], source: str, query: str) -> Answer:
+        with stage("answer"):
+            raw = await self.ollama.chat_json(
+                messages=answer_messages(intent, items, source, query), schema=compact_schema(Answer),
+                max_tokens=settings.CONVERSATIONAL_MAX_TOKENS, timeout=settings.MATCH_TIMEOUT,
+            )
+        return Answer.model_validate_json(raw)
 
-        if decision.action == "direct_response":
-            answer = str(decision.direct_answer or "").strip()
-            if not answer:
-                answer = (
-                    "สอบถามเรื่องอุปกรณ์เช่าได้เลยค่ะ"
-                    if self._is_thai(cleaned_query)
-                    else "How can I help with your rental equipment needs?"
-                )
-            answer = await self._ensure_answer_language(answer, cleaned_query)
-            return {
-                "status": "success",
-                "search_status": "direct_response",
-                "items_found": 0,
-                "answer": answer,
-                "recommended_items": [],
-            }
-
-        tool_calls = self._decision_tool_calls(decision, cleaned_query)
-        messages = self._conversation_messages(cleaned_query, history)
-        first_message = {
-            "role": "assistant",
-            "content": "",
-            "tool_calls": tool_calls,
-        }
-        messages.append(first_message)
-        db_results, search_status = await self._execute_tools(
-            tool_calls=tool_calls,
-            messages=messages,
-            user_query=cleaned_query,
-            history=history,
-            recommendation_limit=recommendation_limit,
-        )
-        reference_context = self._web_reference_context(messages)
-
-        if search_status in {"inventory_unavailable", "inventory_match_failed"}:
-            return {
-                "status": "failed",
-                "search_status": search_status,
-                "items_found": 0,
-                "answer": self._inventory_unavailable_answer(cleaned_query),
-                "recommended_items": [],
-            }
-
-        if decision.action in {"browse_inventory", "search_inventory"} and not db_results:
-            return {
-                "status": "success",
-                "search_status": "inventory_no_results",
-                "items_found": 0,
-                "answer": self._inventory_no_results_answer(cleaned_query),
-                "recommended_items": [],
-            }
-
-        if decision.action == "search_web_specs" and not reference_context:
-            return {
-                "status": "success",
-                "search_status": search_status,
-                "items_found": 0,
-                "answer": self._web_unverified_answer(cleaned_query),
-                "recommended_items": [],
-            }
-
+    async def _run_pipeline(self, user_query: str, history=None) -> dict:
+        query = user_query.strip()
+        if not query or len(query) > 200:
+            return self._envelope("กรุณาพิมพ์คำถามให้กระชับค่ะ" if self._is_thai(query) else "Please enter a short question.", "input_too_long", failed=True)
+        greeting = self._quick_greeting_response(query)
+        if greeting:
+            return self._envelope(greeting)
+        bounded_history = [
+            {"role": message["role"], "content": str(message.get("content") or "")[:500]}
+            for message in (history or [])[-settings.MAX_HISTORY_MESSAGES:]
+            if message.get("role") in {"user", "assistant"}
+        ]
         try:
-            raw_content = await self.ollama.chat_json(
-                messages=messages,
-                schema=AssistantResponse.model_json_schema(),
-                max_tokens=settings.FINAL_RESPONSE_MAX_TOKENS,
-                timeout=35.0,
-            )
-            parsed = AssistantResponse.model_validate_json(raw_content)
-            if (
-                decision.action == "search_web_specs"
-                and not self._web_answer_has_sufficient_sources(
-                    parsed,
-                    reference_context=reference_context,
-                    minimum_sources=(
-                        1
-                        if getattr(decision, "web_question_type", None)
-                        == "single_fact"
-                        else 2
-                    ),
-                )
-            ):
-                return {
-                    "status": "success",
-                    "search_status": search_status,
-                    "items_found": 0,
-                    "answer": self._web_unverified_answer(cleaned_query),
-                    "recommended_items": [],
-                }
-            answer = await self._ensure_answer_language(
-                self._normalize_inventory_answer(
-                    parsed.answer.strip(), user_query=cleaned_query
-                ),
-                cleaned_query,
-            )
-            selected_id = parsed.selected_item_id
+            intent = await self._interpret(query, bounded_history)
         except Exception as exc:
-            print(f"[LLM Final Response Error]: {type(exc).__name__}")
-            answer = (
-                self._inventory_results_answer(cleaned_query)
-                if db_results
-                else (
-                    "ขออภัยค่ะ ยังไม่สามารถสรุปข้อมูลให้ได้ในขณะนี้"
-                    if self._is_thai(cleaned_query)
-                    else "Sorry, I couldn't summarize the results right now."
-                )
-            )
-            selected_id = None
+            logger.warning("ai_interpretation_failure request_id=%s error=%s", request_id.get(), type(exc).__name__)
+            return self._envelope(self._inventory_unavailable_answer(query), "inventory_match_failed", failed=True)
+        logger.info("ai_route request_id=%s action=%s relation=%s", request_id.get(), intent.action, intent.relation)
+        if intent.action == "reply":
+            if not intent.reply.strip():
+                return self._envelope(self._inventory_unavailable_answer(query), failed=True)
+            return self._envelope(intent.reply.strip())
 
-        recommended_items = self._recommended_items(db_results, selected_id, answer)
-        return {
-            "status": "success",
-            "search_status": search_status,
-            "items_found": len(recommended_items),
-            "answer": answer,
-            "recommended_items": recommended_items,
-        }
+        inventory = intent.action in {"inventory", "inventory_specs"}
+        source = ""
+        current_items = []
+        search_status = "direct_response"
+        if inventory:
+            try:
+                with stage("catalog"):
+                    catalog = await self.db_tool.list_items()
+                    shortlist = candidates(catalog, intent)
+                with stage("freshness"):
+                    fresh = await self.db_tool.get_items([item["id"] for item in shortlist]) if shortlist else []
+                    current_items = hard_filter(fresh, intent)
+                logger.info("ai_candidates request_id=%s catalog=%s shortlisted=%s fresh=%s filtered=%s", request_id.get(), len(catalog), len(shortlist), len(current_items), len(fresh) - len(current_items))
+                search_status = "using_supabase" if current_items else "inventory_no_results"
+            except InventoryCatalogError:
+                return self._envelope(self._inventory_unavailable_answer(query), "inventory_unavailable", failed=True)
+        if intent.action in {"specs", "inventory_specs"}:
+            with stage("specifications"):
+                source, web_status = await self.google_tool.search_spec(intent.web_query or intent.request)
+            if not inventory:
+                search_status = web_status
+            if web_status == "google_search_failed":
+                return self._envelope(self._web_unverified_answer(query), web_status, failed=True)
+        try:
+            parsed = await self._compose(intent, current_items, source, query)
+            selected = validate_answer(parsed, current_items, source, intent)
+        except Exception as exc:
+            reason = str(exc) if isinstance(exc, AnswerValidationError) else "invalid_model_response"
+            logger.warning("ai_answer_failure request_id=%s error=%s reason=%s", request_id.get(), type(exc).__name__, reason)
+            return self._envelope(self._inventory_unavailable_answer(query), "inventory_match_failed", failed=True)
+        if inventory:
+            search_status = "using_supabase" if selected else "direct_response" if parsed.outcome == "insufficient" and current_items else "inventory_no_results"
+        logger.info("ai_selection request_id=%s outcome=%s candidates=%s selected=%s", request_id.get(), parsed.outcome, len(current_items), len(selected))
+        if selected:
+            try:
+                with stage("final_freshness"):
+                    refreshed = await self.db_tool.get_items([item["id"] for item in selected])
+                    refreshed_by_id = {item["id"]: item for item in hard_filter(refreshed, intent)}
+                    for item in selected:
+                        fresh = refreshed_by_id.get(item["id"])
+                        if fresh is None or any(fresh.get(field) != item.get(field) for field in ("item_name", "description", "category")):
+                            raise InventoryCatalogError("Selected inventory changed")
+                    selected = [refreshed_by_id[item["id"]] for item in selected]
+            except InventoryCatalogError:
+                return self._envelope(self._inventory_unavailable_answer(query), "inventory_unavailable", failed=True)
+        answer = parsed.answer.strip()
+        if inventory and parsed.outcome == "no_match":
+            # จำกัดข้อสรุปไว้ที่ผลค้นหาครั้งนี้ แม้โมเดลเขียนว่าไม่มีทั้งระบบ
+            answer = self._inventory_no_results_answer(query)
+        cards = self._recommended_items(selected, None)
+        if cards:
+            thai = self._is_thai(query)
+            lines = []
+            for card in cards:
+                price = f"{card['price']:,.2f}".removesuffix(".00")
+                rental_unit = card["unit"] if thai else {"วัน": "day", "ชั่วโมง": "hour", "สัปดาห์": "week"}.get(card["unit"], "day")
+                currency = "บาท" if thai else "THB"
+                lines.append(f"• **{card['item_name']}** — **{price} {currency}/{rental_unit}**")
+            answer += "\n\n" + "\n".join(lines)
+        if parsed.source_urls:
+            answer += "\n\n" + " · ".join(f"[Source {index}]({url})" for index, url in enumerate(parsed.source_urls, 1))
+        return self._envelope(answer, search_status, cards)

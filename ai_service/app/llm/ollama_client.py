@@ -3,6 +3,7 @@ from typing import Any
 import httpx
 
 from config import settings
+from ..telemetry import logger, request_id, model_calls
 
 
 class OllamaClient:
@@ -24,6 +25,9 @@ class OllamaClient:
                 "messages": [],
                 "stream": False,
                 "keep_alive": settings.OLLAMA_KEEP_ALIVE,
+                "options": {
+                    "num_ctx": settings.OLLAMA_CONTEXT_LENGTH,
+                },
             },
             timeout=120.0,
         )
@@ -38,6 +42,7 @@ class OllamaClient:
         timeout: float,
         think: bool = False,
     ) -> str:
+        model_calls.set(model_calls.get() + 1)
         response = await self.client.post(
             self.api_url,
             json={
@@ -58,4 +63,8 @@ class OllamaClient:
         )
         response.raise_for_status()
         result = response.json()
+        metrics = {key: result.get(key) for key in ("load_duration", "prompt_eval_duration", "eval_duration", "prompt_eval_count", "eval_count", "done_reason")}
+        logger.info("ai_model request_id=%s metrics=%s", request_id.get(), metrics)
+        if not result.get("done") or result.get("done_reason") == "length":
+            raise ValueError("Incomplete model response")
         return result.get("message", {}).get("content", "").strip()

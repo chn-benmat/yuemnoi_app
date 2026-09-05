@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     OLLAMA_ENDPOINT: str = "http://localhost:11434"
     OLLAMA_CONTEXT_LENGTH: int = 4096
     OLLAMA_KEEP_ALIVE: int = -1
+    PIPELINE_TIMEOUT: float = 45.0
+    ROUTING_TIMEOUT: float = 35.0
+    MATCH_TIMEOUT: float = 35.0
 
     # จำกัดข้อมูลที่ส่งเข้าโมเดลและผลลัพธ์จากฐานข้อมูล
     MAX_SEARCH_RESULTS: int = 5
@@ -22,11 +25,13 @@ class Settings(BaseSettings):
 
     # Output budgets for each structured Qwen task. These must leave enough room
     # for complete JSON; truncated JSON is treated as an unavailable assistant.
-    ROUTING_MAX_TOKENS: int = 600
-    LANGUAGE_REPAIR_MAX_TOKENS: int = 300
-    FINAL_RESPONSE_MAX_TOKENS: int = 400
-    INVENTORY_MATCH_MAX_TOKENS: int = 240
-    INVENTORY_VERIFICATION_MAX_TOKENS: int = 600
+    INTERPRETATION_MAX_TOKENS: int = 384
+    CONVERSATIONAL_MAX_TOKENS: int = 512
+    ROUTING_MAX_TOKENS: int = 256
+    LANGUAGE_REPAIR_MAX_TOKENS: int = 150
+    FINAL_RESPONSE_MAX_TOKENS: int = 250
+    INVENTORY_MATCH_MAX_TOKENS: int = 150
+    INVENTORY_VERIFICATION_MAX_TOKENS: int = 80
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

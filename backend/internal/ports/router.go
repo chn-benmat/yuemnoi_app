@@ -1,7 +1,10 @@
 package ports
 
 import (
+	"crypto/subtle"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/gin-gonic/gin"
@@ -19,6 +22,7 @@ func SetupRouter(
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
+	router.Use(blockScannerPaths())
 
 	// ตั้งค่า CORS เพื่อให้ Flutter Web / Mobile ยิงเข้ามาหาได้ไม่ติดบล็อก
 	router.Use(func(c *gin.Context) {
@@ -30,7 +34,7 @@ func SetupRouter(
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-App-Secret")
 
 		// ถ้าระบบส่ง OPTIONS มาถามทาง ให้ตอบกลับ 204 แล้วจบงานตรงนี้เลย
 		if c.Request.Method == "OPTIONS" {
@@ -39,6 +43,7 @@ func SetupRouter(
 		}
 		c.Next()
 	})
+	router.Use(verifyAppSecret(os.Getenv("APP_SECRET_KEY")))
 
 	// Health check สำหรับ Docker และระบบเฝ้าระวัง โดยไม่เปิดเผยข้อมูลภายใน
 	router.GET("/health", func(c *gin.Context) {
@@ -127,4 +132,35 @@ func SetupRouter(
 	}
 
 	return router
+}
+
+func blockScannerPaths() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := strings.ToLower(c.Request.URL.Path)
+		if strings.Contains(path, ".env") ||
+			strings.Contains(path, ".git") ||
+			strings.Contains(path, ".php") {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func verifyAppSecret(expectedSecret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if expectedSecret == "" || c.Request.Method == http.MethodOptions || c.Request.URL.Path == "/health" {
+			c.Next()
+			return
+		}
+
+		providedSecret := c.GetHeader("X-App-Secret")
+		if subtle.ConstantTimeCompare([]byte(providedSecret), []byte(expectedSecret)) != 1 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		c.Next()
+	}
 }
