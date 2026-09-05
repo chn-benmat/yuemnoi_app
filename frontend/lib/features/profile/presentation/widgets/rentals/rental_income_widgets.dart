@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../domain/entities/rental_income.dart';
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,16 @@ class RentalIncomeTransaction {
     required this.amount,
     required this.status,
   });
+
+  factory RentalIncomeTransaction.fromEntity(RentalIncomeEntry entry) {
+    return RentalIncomeTransaction(
+      itemName: entry.itemName,
+      date: entry.date,
+      duration: entry.duration,
+      amount: entry.amount,
+      status: entry.status,
+    );
+  }
 }
 
 // ─── Widgets ──────────────────────────────────────────────────────────────────

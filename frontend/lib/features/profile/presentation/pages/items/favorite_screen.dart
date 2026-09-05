@@ -1,10 +1,11 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../core/constants/colors.dart';
-import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/services/favorite_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../bloc/favorite_cubit.dart';
+import '../../bloc/favorite_state.dart';
 import '../../widgets/items/favorite_widgets.dart';
 
 class FavoriteScreen extends StatefulWidget {
@@ -15,13 +16,13 @@ class FavoriteScreen extends StatefulWidget {
 }
 
 class _FavoriteScreenState extends State<FavoriteScreen> {
-  bool _isLoading = true;
-  List<FavoriteItemData> _items = [];
+  late final FavoriteCubit _cubit;
 
   @override
   void initState() {
     super.initState();
-    _loadFavorites();
+    _cubit = FavoriteCubit();
+    _cubit.loadFavorites();
     FavoriteService.instance.favoritesNotifier.addListener(_onFavoritesChanged);
   }
 
@@ -30,163 +31,50 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
     FavoriteService.instance.favoritesNotifier.removeListener(
       _onFavoritesChanged,
     );
+    _cubit.close();
     super.dispose();
   }
 
   void _onFavoritesChanged() {
-    _loadFavorites();
-  }
-
-  Future<void> _loadFavorites() async {
-    final favIds = await FavoriteService.instance.getFavoriteIds();
-
-    if (favIds.isEmpty) {
-      if (mounted) {
-        setState(() {
-          _items = [];
-          _isLoading = false;
-        });
-      }
-      return;
-    }
-
-    if (!SupabaseConfig.isInitialized) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-
-    try {
-      final client = SupabaseConfig.client;
-
-      // 1. ดึงข้อมูลอุปกรณ์ที่กดถูกใจจาก Supabase
-      final response = await client
-          .from('item_tb')
-          .select(
-            'id, user_id, item_name, item_image_url, description, category, price, status',
-          )
-          .inFilter('id', favIds);
-
-      final List<FavoriteItemData> loaded = [];
-      final Set<String> ownerIds = {};
-
-      for (final raw in (response as List)) {
-        if (raw is! Map) continue;
-        final map = Map<String, dynamic>.from(raw);
-        final id = (map['id'] as num).toInt();
-        final title = map['item_name']?.toString() ?? 'อุปกรณ์';
-        final ownerId = map['user_id']?.toString() ?? '';
-        final price = (map['price'] as num?)?.toDouble() ?? 0.0;
-        final imageUrl = _extractFirstImageUrl(map['item_image_url']);
-        final category = map['category']?.toString() ?? '';
-
-        if (ownerId.isNotEmpty) ownerIds.add(ownerId);
-
-        loaded.add(
-          FavoriteItemData(
-            id: id,
-            title: title,
-            ownerId: ownerId,
-            ownerName: 'เจ้าของอุปกรณ์',
-            imageUrl: imageUrl,
-            price: price,
-            category: category,
-          ),
-        );
-      }
-
-      // 2. ดึงชื่อเจ้าของจาก profile_tb
-      if (ownerIds.isNotEmpty) {
-        try {
-          final profiles = await client
-              .from('profile_tb')
-              .select('user_id, email, user_image_url')
-              .inFilter('user_id', ownerIds.toList());
-
-          final Map<String, String> nameMap = {};
-          for (final p in (profiles as List)) {
-            if (p is Map) {
-              final uid = p['user_id']?.toString();
-              final email = p['email']?.toString() ?? '';
-              if (uid != null) {
-                final display = email.isNotEmpty
-                    ? email.split('@').first
-                    : 'เจ้าของอุปกรณ์';
-                nameMap[uid] = display;
-              }
-            }
-          }
-
-          for (final item in loaded) {
-            if (nameMap.containsKey(item.ownerId)) {
-              item.ownerName = nameMap[item.ownerId]!;
-            }
-          }
-        } catch (_) {}
-      }
-
-      if (mounted) {
-        setState(() {
-          _items = loaded;
-          _isLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  String? _extractFirstImageUrl(dynamic raw) {
-    if (raw == null) return null;
-    if (raw is List) {
-      for (final el in raw) {
-        if (el != null && el.toString().trim().isNotEmpty) {
-          return el.toString().trim();
-        }
-      }
-      return null;
-    }
-    if (raw is String) {
-      final trimmed = raw.trim();
-      if (trimmed.isEmpty) return null;
-      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-        try {
-          final decoded = jsonDecode(trimmed);
-          if (decoded is List && decoded.isNotEmpty) {
-            return decoded.first.toString().trim();
-          }
-        } catch (_) {}
-      }
-      return trimmed;
-    }
-    return null;
+    _cubit.loadFavorites();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F9),
-      appBar: AppBar(
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
-        leading: const BackButton(),
-        title: const Text(
-          'อุปกรณ์เช่าที่ถูกใจ',
-          style: TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
+    return BlocProvider.value(
+      value: _cubit,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F7F9),
+        appBar: AppBar(
+          backgroundColor: AppColors.primaryColor,
+          foregroundColor: Colors.white,
+          leading: const BackButton(),
+          title: const Text(
+            'อุปกรณ์เช่าที่ถูกใจ',
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
           ),
+          centerTitle: true,
+          elevation: 0,
         ),
-        centerTitle: true,
-        elevation: 0,
-      ),
-      body: _isLoading
-          ? const FavoriteLoadingSkeleton()
-          : _items.isEmpty
-          ? _buildEmptyState()
-          : RefreshIndicator(
+        body: BlocBuilder<FavoriteCubit, FavoriteState>(
+          builder: (context, state) {
+            if (state is FavoriteLoading || state is FavoriteInitial) {
+              return const FavoriteLoadingSkeleton();
+            }
+
+            final items = state is FavoriteLoaded ? state.items : [];
+
+            if (items.isEmpty) {
+              return _buildEmptyState();
+            }
+
+            return RefreshIndicator(
               color: AppColors.primaryColor,
-              onRefresh: _loadFavorites,
+              onRefresh: () async => _cubit.loadFavorites(),
               child: GridView.builder(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -198,18 +86,22 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                   mainAxisSpacing: 16,
                   childAspectRatio: 0.85,
                 ),
-                itemCount: _items.length,
+                itemCount: items.length,
                 itemBuilder: (context, index) {
-                  final item = _items[index];
+                  final item = items[index];
+                  final cardData = FavoriteItemData.fromEntity(item);
                   return FavoriteItemCard(
-                    item: item,
+                    item: cardData,
                     onRemoveFavorite: () async {
                       await FavoriteService.instance.toggleFavorite(item.id);
                     },
                   );
                 },
               ),
-            ),
+            );
+          },
+        ),
+      ),
     );
   }
 

@@ -4,22 +4,29 @@ import 'package:intl/intl.dart';
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../data/repositories/rental_management_repository_impl.dart';
+import '../../../domain/usecases/get_rental_history_usecase.dart';
 import '../../widgets/rentals/rental_history_widgets.dart';
 
 class RentalHistoryScreen extends StatefulWidget {
-  const RentalHistoryScreen({super.key});
+  final GetRentalHistoryUseCase? getRentalHistoryUseCase;
+
+  const RentalHistoryScreen({super.key, this.getRentalHistoryUseCase});
 
   @override
   State<RentalHistoryScreen> createState() => _RentalHistoryScreenState();
 }
 
 class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
+  late final GetRentalHistoryUseCase _getRentalHistoryUseCase;
   bool _isLoading = true;
   List<RentalHistoryItemData> _history = [];
 
   @override
   void initState() {
     super.initState();
+    _getRentalHistoryUseCase = widget.getRentalHistoryUseCase ??
+        GetRentalHistoryUseCase(RentalManagementRepositoryImpl());
     _loadRentalHistory();
   }
 
@@ -38,158 +45,35 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final client = SupabaseConfig.client;
-
-      // 1. ดึงข้อมูลการจอง/เช่าของผู้ใช้จาก booking_tb
-      final bookingsResp = await client
-          .from('booking_tb')
-          .select(
-            'id, user_id, item_id, start_date, end_date, start_at, end_at, price, total_price, status, type, created_at',
-          )
-          .eq('user_id', currentUserId)
-          .order('created_at', ascending: false);
-
-      final List<Map<String, dynamic>> rawBookings =
-          List<Map<String, dynamic>>.from(bookingsResp as List);
-
-      if (rawBookings.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _history = [];
-            _isLoading = false;
-          });
-        }
-        return;
-      }
-
-      // 2. ดึงข้อมูลอุปกรณ์จาก item_tb ตาม item_id
-      final itemIds = rawBookings
-          .map((b) => (b['item_id'] as num?)?.toInt())
-          .whereType<int>()
-          .toSet()
-          .toList();
-
-      final Map<int, Map<String, dynamic>> itemsMap = {};
-      final Set<String> ownerIds = {};
-
-      if (itemIds.isNotEmpty) {
-        try {
-          final itemsResp = await client
-              .from('item_tb')
-              .select('id, user_id, item_name, category, item_image_url')
-              .inFilter('id', itemIds);
-
-          for (final it in (itemsResp as List)) {
-            if (it is Map) {
-              final id = (it['id'] as num?)?.toInt();
-              if (id != null) {
-                itemsMap[id] = Map<String, dynamic>.from(it);
-                final ownerId = it['user_id']?.toString();
-                if (ownerId != null && ownerId.isNotEmpty) {
-                  ownerIds.add(ownerId);
-                }
-              }
-            }
-          }
-        } catch (_) {}
-      }
-
-      // 3. ดึงชื่อเจ้าของอุปกรณ์จาก profile_tb
-      final Map<String, String> ownerNames = {};
-      if (ownerIds.isNotEmpty) {
-        try {
-          final profilesResp = await client
-              .from('profile_tb')
-              .select('user_id, email')
-              .inFilter('user_id', ownerIds.toList());
-
-          for (final p in (profilesResp as List)) {
-            if (p is Map) {
-              final uid = p['user_id']?.toString();
-              final email = p['email']?.toString() ?? '';
-              if (uid != null) {
-                ownerNames[uid] = email.isNotEmpty
-                    ? email.split('@').first
-                    : 'เจ้าของอุปกรณ์';
-              }
-            }
-          }
-        } catch (_) {}
-      }
-
-      // 4. ประกอบข้อมูลประวัติการเช่า
+      final bookings = await _getRentalHistoryUseCase.execute(currentUserId);
       final List<RentalHistoryItemData> result = [];
 
-      for (final b in rawBookings) {
-        final itemId = (b['item_id'] as num?)?.toInt();
-        final itemData = itemId != null ? itemsMap[itemId] : null;
-
-        final title = itemData?['item_name']?.toString() ?? 'อุปกรณ์เช่า';
-        final category = itemData?['category']?.toString() ?? '';
-        final ownerId = itemData?['user_id']?.toString() ?? '';
-        final ownerName = ownerNames[ownerId] ?? 'เจ้าของอุปกรณ์';
-
-        // คำนวณระยะเวลา
-        String duration = 'เช่า 1 วัน';
-        DateTime? startDate;
-        DateTime? endDate;
-
-        if (b['start_at'] != null) {
-          startDate = DateTime.tryParse(b['start_at'].toString());
-        } else if (b['start_date'] != null) {
-          startDate = DateTime.tryParse(b['start_date'].toString());
-        }
-
-        if (b['end_at'] != null) {
-          endDate = DateTime.tryParse(b['end_at'].toString());
-        } else if (b['end_date'] != null) {
-          endDate = DateTime.tryParse(b['end_date'].toString());
-        }
-
-        if (startDate != null && endDate != null) {
-          final diff = endDate.difference(startDate);
-          if (b['type'] == 'รายชั่วโมง' || diff.inDays == 0) {
-            final hours = diff.inHours > 0 ? diff.inHours : 1;
-            duration = 'เช่า $hours ชั่วโมง';
-          } else {
-            final days = diff.inDays > 0 ? diff.inDays : 1;
-            duration = 'เช่า $days วัน';
-          }
-        }
-
-        // แปลงวันที่
+      for (final b in bookings) {
+        final (statusText, statusColor, statusBg) = _formatStatus(b.statusCode);
         String dateStr = '';
-        final createdDate = b['created_at'] != null
-            ? DateTime.tryParse(b['created_at'].toString())
-            : startDate;
-        if (createdDate != null) {
+        if (b.startDate != null) {
           try {
             dateStr = DateFormat(
               'd MMM yyyy',
               'th',
-            ).format(createdDate.toLocal());
+            ).format(b.startDate!.toLocal());
           } catch (_) {
             dateStr =
-                '${createdDate.day}/${createdDate.month}/${createdDate.year}';
+                '${b.startDate!.day}/${b.startDate!.month}/${b.startDate!.year}';
           }
         }
 
-        // สถานะ
-        final (statusText, statusColor, statusBg) = _formatStatus(
-          b['status']?.toString(),
-        );
-
         result.add(
           RentalHistoryItemData(
-            itemId: itemId,
-            title: title,
-            ownerName: ownerName,
-            duration: duration,
+            itemId: b.itemId,
+            title: b.title,
+            ownerName: b.partnerName,
+            duration: b.duration,
             date: dateStr,
             status: statusText,
             statusColor: statusColor,
             statusBgColor: statusBg,
-            iconData: _mapCategoryToIcon(category),
+            iconData: _mapCategoryToIcon(b.category),
           ),
         );
       }
@@ -212,8 +96,14 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
         return ('เสร็จสิ้น', const Color(0xFF2E7D32), const Color(0xFFE8F5E9));
       case 'active':
         return ('กำลังเช่า', const Color(0xFF1565C0), const Color(0xFFE3F2FF));
-      case 'pending_payment':
-        return ('รอชำระเงิน', const Color(0xFFE65100), const Color(0xFFFFF3E0));
+      case 'pending':
+        return (
+          'รอการยืนยัน',
+          const Color(0xFFE65100),
+          const Color(0xFFFFF3E0),
+        );
+      case 'confirmed':
+        return ('ยืนยันแล้ว', const Color(0xFF2E7D32), const Color(0xFFE8F5E9));
       case 'cancelled':
         return ('ยกเลิกแล้ว', const Color(0xFFC62828), const Color(0xFFFFEBEE));
       default:

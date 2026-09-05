@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../bloc/wallet_cubit.dart';
@@ -16,33 +15,11 @@ class WalletPaymentScreen extends StatefulWidget {
   State<WalletPaymentScreen> createState() => _WalletPaymentScreenState();
 }
 
-class _WalletPaymentScreenState extends State<WalletPaymentScreen>
-    with WidgetsBindingObserver {
-  String _selectedPaymentMethod = 'stripe_card'; // 'stripe_card' or 'promptpay'
+class _WalletPaymentScreenState extends State<WalletPaymentScreen> {
+  String _selectedPaymentMethod = 'bank';
   bool _isProcessing = false;
-  bool _openedCheckout = false;
 
   final _currencyFormat = NumberFormat('#,##0.00', 'en_US');
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _openedCheckout) {
-      _openedCheckout = false;
-      _completePayment();
-    }
-  }
 
   String _formatAmount(double val) {
     if (val == val.roundToDouble()) {
@@ -56,39 +33,10 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen>
       _isProcessing = true;
     });
 
-    final cubit = context.read<WalletCubit>();
-    final checkoutUrl = await cubit.startTopUp(amount: widget.amount);
-
-    if (!mounted) return;
-
-    if (checkoutUrl != null) {
-      _openedCheckout = true;
-      try {
-        final launched = await launchUrl(
-          checkoutUrl,
-          mode: LaunchMode.inAppBrowserView,
-        );
-        if (!launched) {
-          await launchUrl(checkoutUrl, mode: LaunchMode.externalApplication);
-        }
-      } catch (_) {
-        await launchUrl(checkoutUrl, mode: LaunchMode.externalApplication);
-      }
-      setState(() {
-        _isProcessing = false;
-      });
-    } else {
-      await _completePayment();
-    }
-  }
-
-  Future<void> _completePayment() async {
-    if (!mounted) return;
-    setState(() {
-      _isProcessing = true;
-    });
-
-    await context.read<WalletCubit>().onTopUpCompleted(amount: widget.amount);
+    await context.read<WalletCubit>().topUp(
+      amount: widget.amount,
+      paymentMethod: _selectedPaymentMethod,
+    );
 
     if (!mounted) return;
 
@@ -118,7 +66,7 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen>
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
-          'ชำระเงินเติมกระเป๋า',
+          'เติมเงินจำลอง',
           style: TextStyle(
             fontFamily: AppTextStyles.fontFamily,
             fontSize: 18,
@@ -231,7 +179,7 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen>
                     ),
                     const SizedBox(height: 20),
 
-                    // ── Card 2: วิธีการชำระเงิน (Stripe Gateway) ──
+                    // ── Card 2: วิธีการเติมเงินจำลอง ──
                     Container(
                       width: double.infinity,
                       decoration: const BoxDecoration(
@@ -248,7 +196,7 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen>
                           const Padding(
                             padding: EdgeInsets.only(left: 4, bottom: 12),
                             child: Text(
-                              'เลือกช่องทางชำระเงินผ่าน Stripe',
+                              'เลือกช่องทางสำหรับข้อมูลจำลอง',
                               style: TextStyle(
                                 fontFamily: AppTextStyles.fontFamily,
                                 fontSize: 15,
@@ -261,7 +209,7 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen>
                           // Method 1: บัตรเครดิต/เดบิต
                           _PaymentMethodTile(
                             title: 'บัตรเครดิต / เดบิต',
-                            subtitle: 'Visa, Mastercard, JCB (Stripe)',
+                            subtitle: 'ข้อมูลจำลอง ไม่มีการตัดเงินจริง',
                             iconWidget: Container(
                               width: 44,
                               height: 44,
@@ -275,10 +223,10 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen>
                                 size: 22,
                               ),
                             ),
-                            isSelected: _selectedPaymentMethod == 'stripe_card',
+                            isSelected: _selectedPaymentMethod == 'bank',
                             onTap: () {
                               setState(() {
-                                _selectedPaymentMethod = 'stripe_card';
+                                _selectedPaymentMethod = 'bank';
                               });
                             },
                           ),
@@ -287,7 +235,7 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen>
                           // Method 2: PromptPay
                           _PaymentMethodTile(
                             title: 'PromptPay QR',
-                            subtitle: 'สแกน QR Code จ่ายทันที (Stripe)',
+                            subtitle: 'ข้อมูลจำลอง ไม่มีการสร้าง QR จริง',
                             iconWidget: Container(
                               width: 44,
                               height: 44,
@@ -353,8 +301,8 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen>
                       onPressed: _isProcessing ? null : _handlePayment,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryColor,
-                        disabledBackgroundColor:
-                            AppColors.primaryColor.withValues(alpha: 0.6),
+                        disabledBackgroundColor: AppColors.primaryColor
+                            .withValues(alpha: 0.6),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(28),
@@ -371,7 +319,7 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen>
                               ),
                             )
                           : Text(
-                              'ชำระเงินผ่าน Stripe ($amountFormatted บาท)',
+                              'เติมเงินจำลอง ($amountFormatted บาท)',
                               style: const TextStyle(
                                 fontFamily: AppTextStyles.fontFamily,
                                 fontSize: 16,
@@ -416,7 +364,9 @@ class _PaymentMethodTile extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isSelected ? AppColors.primaryColor : const Color(0xFFE5E7EB),
+            color: isSelected
+                ? AppColors.primaryColor
+                : const Color(0xFFE5E7EB),
             width: isSelected ? 1.5 : 1.0,
           ),
           boxShadow: isSelected
@@ -466,7 +416,9 @@ class _PaymentMethodTile extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? AppColors.primaryColor : const Color(0xFF111827),
+                  color: isSelected
+                      ? AppColors.primaryColor
+                      : const Color(0xFF111827),
                   width: 2,
                 ),
               ),

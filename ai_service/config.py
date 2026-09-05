@@ -2,33 +2,31 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Supabase
+    # Supabase credentials
     SUPABASE_URL: str
     SUPABASE_KEY: str
 
-    # ใช้ Serper.dev สำหรับดึงสเปคอุปกรณ์ภายนอก
-    SERPER_API_KEY: str
+    # Optional external tool (if needed)
+    SERPER_API_KEY: str = ""
 
-    # โมเดล Qwen ที่รันภายในเครื่องผ่าน Ollama
+    # Ollama Local Model
     MODEL_NAME: str = "qwen3:8b"
     OLLAMA_ENDPOINT: str = "http://localhost:11434"
-    OLLAMA_CONTEXT_LENGTH: int = 4096
+    OLLAMA_CONTEXT_LENGTH: int = 8192
     OLLAMA_KEEP_ALIVE: int = -1
+    PIPELINE_TIMEOUT: float = 45.0
 
-    # จำกัดข้อมูลที่ส่งเข้าโมเดลและผลลัพธ์จากฐานข้อมูล
-    MAX_SEARCH_RESULTS: int = 5
+    # Catalog & Chat limits
     MAX_CATALOG_ITEMS: int = 50
     MAX_HISTORY_MESSAGES: int = 6
+    MAX_RECOMMENDED_ITEMS: int = 4
 
-    # Output budgets for each structured Qwen task. These must leave enough room
-    # for complete JSON; truncated JSON is treated as an unavailable assistant.
-    ROUTING_MAX_TOKENS: int = 600
-    LANGUAGE_REPAIR_MAX_TOKENS: int = 300
-    FINAL_RESPONSE_MAX_TOKENS: int = 400
-    INVENTORY_MATCH_MAX_TOKENS: int = 240
-    INVENTORY_VERIFICATION_MAX_TOKENS: int = 600
-
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # Allow extra fields in .env without crashing
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 settings = Settings()

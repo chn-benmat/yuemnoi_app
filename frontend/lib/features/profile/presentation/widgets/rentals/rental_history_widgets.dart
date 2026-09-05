@@ -4,6 +4,7 @@ import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/widgets/skeleton_shimmer.dart';
+import '../../../domain/entities/rental_booking.dart';
 
 class RentalHistoryLoadingSkeleton extends StatelessWidget {
   const RentalHistoryLoadingSkeleton({super.key});
@@ -89,6 +90,30 @@ class RentalHistoryItemData {
     required this.statusBgColor,
     required this.iconData,
   });
+
+  factory RentalHistoryItemData.fromEntity(
+    RentalBooking entity,
+    Color statusColor,
+    Color statusBgColor,
+    IconData iconData,
+  ) {
+    String dateStr = '';
+    if (entity.startDate != null) {
+      dateStr =
+          '${entity.startDate!.day}/${entity.startDate!.month}/${entity.startDate!.year}';
+    }
+    return RentalHistoryItemData(
+      itemId: entity.itemId,
+      title: entity.title,
+      ownerName: entity.partnerName,
+      duration: entity.duration,
+      date: dateStr,
+      status: entity.status,
+      statusColor: statusColor,
+      statusBgColor: statusBgColor,
+      iconData: iconData,
+    );
+  }
 }
 
 // ─── Card Widget ──────────────────────────────────────────────────────────────

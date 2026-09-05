@@ -26,6 +26,43 @@ class LocationSearchResult {
   String toString() => '$name ($latitude, $longitude)';
 }
 
+/// ข้อมูลเส้นทางการเดินทางและระยะทาง
+class DrivingRouteResult {
+  final List<LatLng> points;
+  final double distanceMeters;
+  final double durationSeconds;
+
+  const DrivingRouteResult({
+    required this.points,
+    required this.distanceMeters,
+    required this.durationSeconds,
+  });
+
+  /// ระยะทางในรูปแบบที่อ่านง่าย เช่น "3.5 กม." หรือ "850 ม."
+  String get formattedDistance {
+    if (distanceMeters >= 1000) {
+      final km = distanceMeters / 1000.0;
+      return '${km.toStringAsFixed(1)} กม.';
+    } else {
+      return '${distanceMeters.toStringAsFixed(0)} ม.';
+    }
+  }
+
+  /// เวลาเดินทางโดยประมาณ เช่น "15 นาที" หรือ "1 ชม. 20 นาที"
+  String get formattedDuration {
+    final totalMinutes = (durationSeconds / 60).round();
+    if (totalMinutes < 1) {
+      return '< 1 นาที';
+    } else if (totalMinutes < 60) {
+      return '$totalMinutes นาที';
+    } else {
+      final hours = totalMinutes ~/ 60;
+      final mins = totalMinutes % 60;
+      return mins > 0 ? '$hours ชม. $mins นาที' : '$hours ชม.';
+    }
+  }
+}
+
 /// บริการจัดการพิกัด แผนที่ และการค้นหาสถานที่
 class LocationService {
   LocationService._();
@@ -370,6 +407,23 @@ class LocationService {
     }
   }
 
+  /// สตรีมติดตามตำแหน่งพิกัดแบบ Real-time เมื่อผู้ใช้เคลื่อนที่
+  Stream<Position>? getPositionStream({
+    LocationAccuracy accuracy = LocationAccuracy.high,
+    int distanceFilter = 3,
+  }) {
+    try {
+      final locationSettings = LocationSettings(
+        accuracy: accuracy,
+        distanceFilter: distanceFilter,
+      );
+      return Geolocator.getPositionStream(locationSettings: locationSettings);
+    } catch (e) {
+      debugPrint('Error getting position stream: $e');
+      return null;
+    }
+  }
+
   /// เปิดตำแหน่งในแอป Google Maps หรือเบราว์เซอร์ภายนอก
   static Uri buildGoogleMapsUri(double latitude, double longitude) {
     return Uri.https('www.google.com', '/maps/search/', {
@@ -396,5 +450,71 @@ class LocationService {
     } catch (e) {
       debugPrint('Cannot launch map: $e');
     }
+  }
+
+  /// ดึงข้อมูลเส้นทางการขับรถบนถนนจริงระหว่างสองพิกัด (ผ่าน OSRM)
+  Future<DrivingRouteResult?> fetchDrivingRoute(
+    LatLng start,
+    LatLng destination,
+  ) async {
+    try {
+      final url =
+          'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson';
+
+      final response = await _dio.get(url);
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data;
+        if (data is Map<String, dynamic> && data['code'] == 'Ok') {
+          final routes = data['routes'] as List?;
+          if (routes != null && routes.isNotEmpty) {
+            final firstRoute = routes[0] as Map<String, dynamic>;
+            final distance =
+                (firstRoute['distance'] as num?)?.toDouble() ?? 0.0;
+            final duration =
+                (firstRoute['duration'] as num?)?.toDouble() ?? 0.0;
+
+            final geometry = firstRoute['geometry'] as Map<String, dynamic>?;
+            final coordinates = geometry?['coordinates'] as List?;
+
+            final points = <LatLng>[];
+            if (coordinates != null) {
+              for (final coord in coordinates) {
+                if (coord is List && coord.length >= 2) {
+                  final lon = (coord[0] as num).toDouble();
+                  final lat = (coord[1] as num).toDouble();
+                  points.add(LatLng(lat, lon));
+                }
+              }
+            }
+
+            if (points.isNotEmpty) {
+              return DrivingRouteResult(
+                points: points,
+                distanceMeters: distance,
+                durationSeconds: duration,
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching driving route from OSRM: $e');
+    }
+
+    // Fallback: ถ้า OSRM ติดต่อไม่ได้ ให้ลากเส้นตรงระหว่าง 2 จุดพร้อมคำนวณระยะทาง
+    final distanceMeters = Geolocator.distanceBetween(
+      start.latitude,
+      start.longitude,
+      destination.latitude,
+      destination.longitude,
+    );
+    // ประมาณความเร็วในเมือง 25 กม./ชม. = ~416 ม./นาที
+    final estimatedSeconds = (distanceMeters / 416.0) * 60;
+
+    return DrivingRouteResult(
+      points: [start, destination],
+      distanceMeters: distanceMeters,
+      durationSeconds: estimatedSeconds,
+    );
   }
 }

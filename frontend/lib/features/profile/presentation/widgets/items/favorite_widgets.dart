@@ -4,6 +4,7 @@ import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/widgets/skeleton_shimmer.dart';
+import '../../../domain/entities/favorite_item.dart';
 
 class FavoriteLoadingSkeleton extends StatelessWidget {
   const FavoriteLoadingSkeleton({super.key});
@@ -79,6 +80,18 @@ class FavoriteItemData {
     this.price = 0.0,
     this.category = '',
   });
+
+  factory FavoriteItemData.fromEntity(FavoriteItem entity) {
+    return FavoriteItemData(
+      id: entity.id,
+      title: entity.title,
+      ownerId: entity.ownerId,
+      ownerName: entity.ownerName,
+      imageUrl: entity.imageUrl,
+      price: entity.price,
+      category: entity.category,
+    );
+  }
 }
 
 // ─── Favorite Card ────────────────────────────────────────────────────────────

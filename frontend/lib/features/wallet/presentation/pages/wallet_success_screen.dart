@@ -62,7 +62,7 @@ class WalletSuccessScreen extends StatelessWidget {
 
                 // ── Title & Subtitle ──
                 const Text(
-                  'ชำระเงินเสร็จสิ้น',
+                  'เติมเงินจำลองเสร็จสิ้น',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
@@ -73,7 +73,7 @@ class WalletSuccessScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'ยินดีด้วยคุณชำระเงินเสร็จสิ้นสำเร็จ!',
+                  'ยอดจำลองถูกเพิ่มในกระเป๋าเงินบนอุปกรณ์นี้แล้ว',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
@@ -94,7 +94,9 @@ class WalletSuccessScreen extends StatelessWidget {
                       backgroundColor: AppColors.primaryColor,
                       foregroundColor: Colors.white,
                       elevation: 4,
-                      shadowColor: AppColors.primaryColor.withValues(alpha: 0.4),
+                      shadowColor: AppColors.primaryColor.withValues(
+                        alpha: 0.4,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(28),
                       ),

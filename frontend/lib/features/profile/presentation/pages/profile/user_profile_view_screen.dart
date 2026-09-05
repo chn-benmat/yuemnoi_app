@@ -1,13 +1,16 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
-import '../../../../../core/network/auth_session.dart';
+import '../../../../../core/utils/auth_guard.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/utils/phone_formatter.dart';
 import '../../../../chat/data/repositories/chat_repository_impl.dart';
+import '../../../data/repositories/profile_repository_impl.dart';
+import '../../../data/repositories/user_items_repository_impl.dart';
+import '../../../domain/usecases/get_my_items_usecase.dart';
+import '../../../domain/usecases/get_user_profile_usecase.dart';
 import '../../widgets/profile/user_profile_widgets.dart';
 
 // ─── Data model ───────────────────────────────────────────────────────────────
@@ -35,14 +38,23 @@ class UserProfileViewArgs {
 
 class UserProfileViewScreen extends StatefulWidget {
   final UserProfileViewArgs args;
+  final GetUserProfileUseCase? getUserProfileUseCase;
+  final GetMyItemsUseCase? getMyItemsUseCase;
 
-  const UserProfileViewScreen({super.key, required this.args});
+  const UserProfileViewScreen({
+    super.key,
+    required this.args,
+    this.getUserProfileUseCase,
+    this.getMyItemsUseCase,
+  });
 
   @override
   State<UserProfileViewScreen> createState() => _UserProfileViewScreenState();
 }
 
 class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
+  late final GetUserProfileUseCase _getUserProfileUseCase;
+  late final GetMyItemsUseCase _getMyItemsUseCase;
   bool _isLoading = true;
   bool _isChatLoading = false;
   String _displayName = '';
@@ -51,7 +63,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
   double _rating = 0.0;
   bool _isVerified = false;
 
-  List<UserProfileRentalItemData> _featuredItems = [];
+  final List<UserProfileRentalItemData> _featuredItems = [];
   List<UserProfileRentalItemData> _userItems = [];
 
   @override
@@ -63,178 +75,65 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
     _rating = widget.args.rating > 0 ? widget.args.rating : 4.9;
     _isVerified = widget.args.isVerified;
 
-    _loadSupabaseData();
+    _getUserProfileUseCase = widget.getUserProfileUseCase ??
+        GetUserProfileUseCase(ProfileRepositoryImpl());
+    _getMyItemsUseCase = widget.getMyItemsUseCase ??
+        GetMyItemsUseCase(UserItemsRepositoryImpl());
+
+    _loadData();
   }
 
-  Future<void> _loadSupabaseData() async {
-    if (!SupabaseConfig.isInitialized) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-
-    final client = SupabaseConfig.client;
-    final currentUser = client.auth.currentUser;
+  Future<void> _loadData() async {
+    final currentUserId = SupabaseConfig.isInitialized
+        ? SupabaseConfig.client.auth.currentUser?.id
+        : null;
     final targetUserId = widget.args.userId.isNotEmpty
         ? widget.args.userId
-        : currentUser?.id ?? '';
+        : currentUserId ?? '';
 
     try {
-      // 1. ดึงข้อมูลโปรไฟล์ล่าสุดของผู้ใช้จาก Supabase
       if (targetUserId.isNotEmpty) {
+        // 1. ดึงโปรไฟล์ผ่าน UseCase
         try {
-          final profileResp = await client
-              .from('profile_tb')
-              .select('user_id, user_image_url')
-              .eq('user_id', targetUserId)
-              .maybeSingle();
-
-          if (profileResp != null && mounted) {
-            final img = profileResp['user_image_url'] as String?;
-            if (img != null && img.trim().isNotEmpty) {
-              _avatarUrl = img.trim();
-            }
+          final profile =
+              await _getUserProfileUseCase.execute(userId: targetUserId);
+          if (profile.displayName.isNotEmpty) {
+            _displayName = profile.displayName;
           }
+          if (profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty) {
+            _avatarUrl = profile.avatarUrl;
+          }
+          if (profile.bio.isNotEmpty) {
+            _bio = profile.bio;
+          }
+          if (profile.rating > 0) {
+            _rating = profile.rating;
+          }
+          _isVerified = profile.isVerified;
         } catch (_) {}
 
-        // ถ้าเป็นผู้ใช้ปัจจุบัน นำ metadata จาก Auth มาเสริม
-        if (currentUser != null && currentUser.id == targetUserId) {
-          final meta = currentUser.userMetadata ?? {};
-          final name =
-              meta['display_name'] as String? ??
-              meta['full_name'] as String? ??
-              currentUser.email?.split('@').first;
-          if (name != null && name.isNotEmpty) _displayName = name;
-          final bio = meta['bio'] as String?;
-          if (bio != null && bio.isNotEmpty) _bio = bio;
-          final avatar =
-              meta['avatar_url'] as String? ?? meta['picture'] as String?;
-          if (avatar != null && avatar.isNotEmpty) _avatarUrl = avatar;
-        }
-      }
-
-      // 2. ดึงรายการอุปกรณ์จริงที่เป็นของผู้ใช้นี้ (user_id = targetUserId)
-      List<UserProfileRentalItemData> loadedUserItems = [];
-      if (targetUserId.isNotEmpty) {
+        // 2. ดึงรายการอุปกรณ์ของผู้ใช้ผ่าน UseCase
         try {
-          final userItemsResp = await client
-              .from('item_tb')
-              .select(
-                'id, user_id, item_name, item_image_url, description, category, price, status',
-              )
-              .eq('user_id', targetUserId)
-              .order('id', ascending: false);
-
-          loadedUserItems = _parseItems(userItemsResp);
-        } catch (_) {}
-      }
-
-      // 3. ดึงรายการแนะนำที่น่าสนใจ (Marketplace featured items) จาก Supabase
-      List<UserProfileRentalItemData> loadedFeatured = [];
-      try {
-        final featuredResp = await client
-            .from('item_tb')
-            .select(
-              'id, user_id, item_name, item_image_url, description, category, price, status',
-            )
-            .order('id', ascending: false)
-            .limit(10);
-
-        loadedFeatured = _parseItems(featuredResp);
-      } catch (_) {}
-
-      // 4. ดึงคะแนนรีวิวจริงจาก review_tb ถ้ามี
-      if (loadedUserItems.isNotEmpty) {
-        try {
-          final itemIds = loadedUserItems
-              .map((e) => e.id)
-              .whereType<int>()
-              .toList();
-          if (itemIds.isNotEmpty) {
-            final reviewsResp = await client
-                .from('review_tb')
-                .select('rating')
-                .inFilter('item_id', itemIds);
-
-            if (reviewsResp.isNotEmpty) {
-              double sum = 0;
-              int count = 0;
-              for (final r in reviewsResp) {
-                if (r['rating'] is num) {
-                  sum += (r['rating'] as num).toDouble();
-                  count++;
-                }
-              }
-              if (count > 0) {
-                _rating = (sum / count);
-              }
-            }
-          }
+          final items = await _getMyItemsUseCase.execute(targetUserId);
+          _userItems = items.map((it) {
+            final (iconData, colorSeed) = _mapCategoryToStyle(it.category);
+            return UserProfileRentalItemData.fromUserItem(
+              it,
+              iconData,
+              colorSeed,
+            );
+          }).toList();
         } catch (_) {}
       }
 
       if (mounted) {
         setState(() {
-          _userItems = loadedUserItems;
-          _featuredItems = loadedFeatured;
           _isLoading = false;
         });
       }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  List<UserProfileRentalItemData> _parseItems(List rawList) {
-    final List<UserProfileRentalItemData> result = [];
-    for (final raw in rawList) {
-      if (raw is! Map) continue;
-      final item = Map<String, dynamic>.from(raw);
-      final id = (item['id'] as num?)?.toInt();
-      final title = item['item_name']?.toString() ?? 'อุปกรณ์';
-      final price = (item['price'] as num?)?.toDouble() ?? 0.0;
-      final category = item['category']?.toString() ?? '';
-      final imageUrl = _extractFirstImageUrl(item['item_image_url']);
-      final (iconData, colorSeed) = _mapCategoryToStyle(category);
-
-      result.add(
-        UserProfileRentalItemData(
-          id: id,
-          title: title,
-          pricePerDay: price,
-          rating: 4.9,
-          imageUrl: imageUrl,
-          iconData: iconData,
-          colorSeed: colorSeed,
-        ),
-      );
-    }
-    return result;
-  }
-
-  String? _extractFirstImageUrl(dynamic raw) {
-    if (raw == null) return null;
-    if (raw is List) {
-      for (final el in raw) {
-        if (el != null && el.toString().trim().isNotEmpty) {
-          return el.toString().trim();
-        }
-      }
-      return null;
-    }
-    if (raw is String) {
-      final trimmed = raw.trim();
-      if (trimmed.isEmpty) return null;
-      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-        try {
-          final decoded = jsonDecode(trimmed);
-          if (decoded is List && decoded.isNotEmpty) {
-            return decoded.first.toString().trim();
-          }
-        } catch (_) {}
-      }
-      return trimmed;
-    }
-    return null;
   }
 
   (IconData, Color) _mapCategoryToStyle(String? category) {
@@ -328,43 +227,12 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
   }
 
   Future<void> _handleChatPressed() async {
-    if (!AuthSession.isAuthenticated) {
-      final shouldLogin = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'เข้าสู่ระบบเพื่อใช้งานแชท',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          content: const Text(
-            'กรุณาเข้าสู่ระบบก่อนเริ่มการสนทนากับผู้ใช้นี้',
-            style: TextStyle(fontFamily: AppTextStyles.fontFamily),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-              ),
-              child: const Text('เข้าสู่ระบบ'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldLogin == true && mounted) {
-        AppRoutes.goToLogin(context);
-      }
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อใช้งานแชท',
+      message: 'กรุณาเข้าสู่ระบบก่อนเริ่มการสนทนากับผู้ใช้นี้',
+    );
+    if (!authed || !mounted) {
       return;
     }
 
@@ -460,7 +328,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
           ? const UserProfileLoadingSkeleton()
           : RefreshIndicator(
               color: AppColors.primaryColor,
-              onRefresh: _loadSupabaseData,
+              onRefresh: _loadData,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Column(
@@ -477,7 +345,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                       isChatLoading: _isChatLoading,
                       onEditProfile: () async {
                         await AppRoutes.openEditProfile(context);
-                        _loadSupabaseData();
+                        _loadData();
                       },
                       onChat: _handleChatPressed,
                     ),
@@ -613,7 +481,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                                 ElevatedButton.icon(
                                   onPressed: () async {
                                     await AppRoutes.openAddRentalItem(context);
-                                    _loadSupabaseData();
+                                    _loadData();
                                   },
                                   icon: const Icon(Icons.add_rounded, size: 18),
                                   label: const Text(

@@ -12,17 +12,6 @@ enum BookingRentalType {
   final String unit;
 }
 
-/// วิธีการชำระเงิน
-enum BookingPaymentMethod {
-  bankTransfer('บัตรเครดิต/เดบิต', 'ชำระด้วยบัตรธนาคารผ่าน Stripe'),
-  wallet('เงินในบัญชี', 'กระเป๋าเงิน Yuemnoi Pay'),
-  promptPay('PromptPay', 'พร้อมเพย์ QR Code');
-
-  const BookingPaymentMethod(this.title, this.subtitle);
-  final String title;
-  final String subtitle;
-}
-
 /// ข้อมูลอุปกรณ์สำหรับการจอง
 class BookingItemInfo {
   final int id;
@@ -57,8 +46,8 @@ class BookingItemInfo {
     title: 'Sony Alpha a7 IV',
     imageUrl:
         'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop',
-    rating: 4.9,
-    reviewCount: 124,
+    rating: 0.0,
+    reviewCount: 0,
     hourlyRate: 100.0,
     dailyRate: 500.0,
     defaultLocation: 'ซีคอน บางแค',
@@ -66,6 +55,34 @@ class BookingItemInfo {
     latitude: 13.7115884,
     longitude: 100.4341077,
   );
+
+  BookingItemInfo copyWith({
+    int? id,
+    String? title,
+    String? imageUrl,
+    double? rating,
+    int? reviewCount,
+    double? hourlyRate,
+    double? dailyRate,
+    String? defaultLocation,
+    String? ownerName,
+    double? latitude,
+    double? longitude,
+  }) {
+    return BookingItemInfo(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      imageUrl: imageUrl ?? this.imageUrl,
+      rating: rating ?? this.rating,
+      reviewCount: reviewCount ?? this.reviewCount,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
+      dailyRate: dailyRate ?? this.dailyRate,
+      defaultLocation: defaultLocation ?? this.defaultLocation,
+      ownerName: ownerName ?? this.ownerName,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -86,8 +103,8 @@ class BookingItemInfo {
       id: (json['id'] as num?)?.toInt() ?? 1,
       title: json['title'] as String? ?? 'อุปกรณ์เช่า',
       imageUrl: json['imageUrl'] as String? ?? '',
-      rating: (json['rating'] as num?)?.toDouble() ?? 4.9,
-      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 10,
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
       hourlyRate: (json['hourlyRate'] as num?)?.toDouble() ?? 100.0,
       dailyRate: (json['dailyRate'] as num?)?.toDouble() ?? 500.0,
       defaultLocation: json['defaultLocation'] as String? ?? 'นัดรับตามตกลง',
@@ -110,10 +127,10 @@ class BookingRequestData {
   final String locationNote;
   final double? latitude;
   final double? longitude;
-  final BookingPaymentMethod paymentMethod;
   final String? conversationId;
   final String? ownerId;
   final String? originalMessageId;
+  final String paymentMethod;
 
   static const String bookingPayloadPrefix = '📋 คำขอเช่าอุปกรณ์';
   static const String metaStartTag = '[BOOKING_DATA:';
@@ -130,16 +147,20 @@ class BookingRequestData {
     this.locationNote = 'เลือกโดยผู้ปล่อยเช่า',
     this.latitude,
     this.longitude,
-    this.paymentMethod = BookingPaymentMethod.bankTransfer,
     this.conversationId,
     this.ownerId,
     this.originalMessageId,
+    this.paymentMethod = 'cash',
   });
 
   /// ตรวจสอบว่าข้อความเป็นข้อความคำขอเช่าหรือไม่
   static bool isBookingRequest(String text) {
     return text.startsWith(bookingPayloadPrefix) || text.contains(metaStartTag);
   }
+
+  /// ข้อมูลวิธีชำระเงิน
+  bool get isPromptPay => paymentMethod == 'promptpay';
+  String get paymentMethodLabel => isPromptPay ? 'PromptPay' : 'เงินสด';
 
   /// แปลงข้อมูลคำขอเช่าเป็น Payload ข้อความสำหรับส่งในแชท
   String toChatMessagePayload() {
@@ -168,8 +189,8 @@ class BookingRequestData {
       'locationNote': locationNote,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
-      'paymentMethod': paymentMethod.name,
       'totalPrice': totalPrice,
+      'paymentMethod': paymentMethod,
       'conversationId': conversationId,
       'ownerId': ownerId,
       if (originalMessageId != null) 'originalMessageId': originalMessageId,
@@ -181,6 +202,7 @@ class BookingRequestData {
 อุปกรณ์: ${item.title}
 ช่วงเวลา: $periodText
 สถานที่นัดพบ: $location
+วิธีชำระเงิน: $paymentMethodLabel
 ยอดรวม: ${totalPrice.toStringAsFixed(0)} ฿
 $metaStartTag$jsonString$metaEndTag''';
   }
@@ -205,8 +227,8 @@ $metaStartTag$jsonString$metaEndTag''';
             imageUrl: (imageUrl != null && imageUrl.isNotEmpty)
                 ? imageUrl
                 : (map['imageUrl'] as String? ?? ''),
-            rating: (map['rating'] as num?)?.toDouble() ?? 4.9,
-            reviewCount: (map['reviewCount'] as num?)?.toInt() ?? 10,
+            rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
+            reviewCount: (map['reviewCount'] as num?)?.toInt() ?? 0,
             hourlyRate: (map['hourlyRate'] as num?)?.toDouble() ?? 100.0,
             dailyRate: (map['dailyRate'] as num?)?.toDouble() ?? 500.0,
             defaultLocation:
@@ -239,11 +261,6 @@ $metaStartTag$jsonString$metaEndTag''';
             minute: (map['endMinute'] as num?)?.toInt() ?? 0,
           );
 
-          final paymentMethod = BookingPaymentMethod.values.firstWhere(
-            (p) => p.name == map['paymentMethod'],
-            orElse: () => BookingPaymentMethod.bankTransfer,
-          );
-
           final resolvedOriginalMessageId =
               (map['originalMessageId'] as String?) ?? messageId;
 
@@ -266,10 +283,10 @@ $metaStartTag$jsonString$metaEndTag''';
                 map['locationNote'] as String? ?? 'เลือกโดยผู้ปล่อยเช่า',
             latitude: lat,
             longitude: lng,
-            paymentMethod: paymentMethod,
             conversationId: map['conversationId'] as String?,
             ownerId: map['ownerId'] as String?,
             originalMessageId: resolvedOriginalMessageId,
+            paymentMethod: map['paymentMethod'] as String? ?? 'cash',
           );
         }
       }
@@ -284,8 +301,8 @@ $metaStartTag$jsonString$metaEndTag''';
           id: 1,
           title: 'อุปกรณ์เช่า',
           imageUrl: '',
-          rating: 4.9,
-          reviewCount: 10,
+          rating: 0.0,
+          reviewCount: 0,
           hourlyRate: 100.0,
           dailyRate: 500.0,
           defaultLocation: 'นัดรับตามตกลง',
@@ -401,10 +418,10 @@ $metaStartTag$jsonString$metaEndTag''';
     String? locationNote,
     double? latitude,
     double? longitude,
-    BookingPaymentMethod? paymentMethod,
     String? conversationId,
     String? ownerId,
     String? originalMessageId,
+    String? paymentMethod,
   }) {
     return BookingRequestData(
       item: item ?? this.item,
@@ -417,10 +434,10 @@ $metaStartTag$jsonString$metaEndTag''';
       locationNote: locationNote ?? this.locationNote,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
-      paymentMethod: paymentMethod ?? this.paymentMethod,
       conversationId: conversationId ?? this.conversationId,
       ownerId: ownerId ?? this.ownerId,
       originalMessageId: originalMessageId ?? this.originalMessageId,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
     );
   }
 }

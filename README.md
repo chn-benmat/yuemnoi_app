@@ -75,15 +75,7 @@ PORT=8080
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 AI_SERVICE_URL=http://localhost:8000
-STRIPE_SECRET_KEY=sk_test_your_test_key
-STRIPE_WEBHOOK_SECRET=whsec_your_test_webhook_secret
-STRIPE_PAYMENT_SUCCESS_URL=https://your-api.example.com/payments/return
-STRIPE_PAYMENT_CANCEL_URL=https://your-api.example.com/payments/return
 ```
-
-ตัวแปร Stripe ใช้สำหรับ Stripe-hosted Checkout เท่านั้น โดย Backend เป็นผู้คำนวณยอดและเก็บ secret ทั้งหมด แอป Flutter จะได้รับเฉพาะ Checkout URL และสถานะการชำระเงินเท่านั้น หากยังไม่ตั้งค่า Stripe ตัว Backend ส่วนอื่นยังเริ่มทำงานได้ แต่ endpoint สร้าง Checkout จะตอบว่า service ยังไม่พร้อม
-
-ก่อนทดสอบการชำระเงิน ให้ตรวจ migration ที่ [`supabase/migrations/20260903115705_stripe_checkout_payments.sql`](supabase/migrations/20260903115705_stripe_checkout_payments.sql) แล้วจึงรันกับ Supabase project ที่ต้องการ ไฟล์นี้ยังไม่ถูกนำไปใช้กับฐานข้อมูลโดยอัตโนมัติ
 
 Backend อ่านค่าจาก environment ของ process จึงต้อง export ค่าจากไฟล์ก่อนรัน ตัวอย่างสำหรับ PowerShell:
 
@@ -159,13 +151,7 @@ go run ./cmd/server/main.go
 
 Backend จะเปิดที่ `http://localhost:8080` และตรวจสอบได้ที่ `GET /health`
 
-สำหรับ Stripe test mode ให้ตั้ง webhook มาที่ `POST /api/v1/webhooks/stripe` และเปิด payment methods ที่ต้องการใน Stripe Dashboard (บัตรและ PromptPay) สามารถ forward event จาก Stripe CLI ระหว่างพัฒนาได้ เช่น:
-
-```bash
-stripe listen --forward-to localhost:8080/api/v1/webhooks/stripe
-```
-
-นำ signing secret ที่ CLI แสดงไปตั้งเป็น `STRIPE_WEBHOOK_SECRET` ใน process เท่านั้น ห้าม commit ลง Git การกลับจาก Checkout ผ่าน `GET /payments/return` มีหน้าที่พาผู้ใช้กลับเข้าแอป ส่วน webhook ที่ตรวจลายเซ็นแล้วเท่านั้นที่ยืนยันสถานะ `paid`
+การส่งคำขอเช่าใช้ `POST /api/v1/rentals` โดย Backend และฐานข้อมูลเป็นผู้ตรวจสอบช่วงเวลาและคำนวณราคาจากข้อมูลอุปกรณ์ปัจจุบัน ใบจองใหม่จะอยู่ในสถานะ `pending` จนกว่าเจ้าของอุปกรณ์จะยืนยัน
 
 ### 4. รัน Flutter App
 

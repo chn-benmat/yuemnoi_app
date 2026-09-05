@@ -44,6 +44,12 @@ abstract interface class ApiClient {
     Map<String, String>? headers,
   });
 
+  Future<Stream<String>> postStream(
+    String path, {
+    Map<String, dynamic>? data,
+    Map<String, String>? headers,
+  });
+
   Future<ApiResponse> postMultipart(
     String path, {
     required Map<String, String> fields,
@@ -73,6 +79,7 @@ class DioApiClient implements ApiClient {
   DioApiClient({
     Dio? dio,
     String? baseUrl,
+    String? appSecret,
     Duration requestTimeout = _defaultRequestTimeout,
   }) : _dio =
            dio ??
@@ -85,7 +92,20 @@ class DioApiClient implements ApiClient {
                headers: const {'Accept': 'application/json'},
                validateStatus: (status) => status != null && status < 600,
              ),
-           );
+           ) {
+    final configuredSecret = (appSecret ?? dotenv.env['APP_SECRET_KEY'] ?? '')
+        .trim();
+    if (configuredSecret.isNotEmpty) {
+      _dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            options.headers['X-App-Secret'] = configuredSecret;
+            handler.next(options);
+          },
+        ),
+      );
+    }
+  }
 
   static const Duration _defaultRequestTimeout = Duration(seconds: 20);
 
@@ -112,6 +132,39 @@ class DioApiClient implements ApiClient {
     Map<String, String>? headers,
   }) {
     return _send(path, method: 'POST', data: data, headers: headers);
+  }
+
+  @override
+  Future<Stream<String>> postStream(
+    String path, {
+    Map<String, dynamic>? data,
+    Map<String, String>? headers,
+  }) async {
+    try {
+      final response = await _dio.post<ResponseBody>(
+        path,
+        data: data,
+        options: Options(
+          responseType: ResponseType.stream,
+          headers: {
+            if (headers != null) ...headers,
+            'Accept': 'text/event-stream',
+          },
+        ),
+      );
+
+      final responseBody = response.data;
+      if (responseBody == null) {
+        throw const ApiClientException(ApiClientErrorType.invalidResponse);
+      }
+
+      return responseBody.stream
+          .cast<List<int>>()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter());
+    } on DioException catch (error) {
+      throw ApiClientException(_errorType(error));
+    }
   }
 
   @override
@@ -188,7 +241,9 @@ class DioApiClient implements ApiClient {
         );
       } on DioException catch (error) {
         final isRetryable = _isRetryable(error);
-        if (attempt <= maxRetries && isRetryable && (method == 'GET' || method == 'HEAD')) {
+        if (attempt <= maxRetries &&
+            isRetryable &&
+            (method == 'GET' || method == 'HEAD')) {
           await Future<void>.delayed(Duration(milliseconds: 500 * attempt));
           continue;
         }
@@ -252,7 +307,9 @@ class DioApiClient implements ApiClient {
     var configuredUrl = (baseUrl ?? dotenv.env['API_URL'] ?? '').trim();
     if ((configuredUrl.startsWith('"') && configuredUrl.endsWith('"')) ||
         (configuredUrl.startsWith("'") && configuredUrl.endsWith("'"))) {
-      configuredUrl = configuredUrl.substring(1, configuredUrl.length - 1).trim();
+      configuredUrl = configuredUrl
+          .substring(1, configuredUrl.length - 1)
+          .trim();
     }
     while (configuredUrl.endsWith('/')) {
       configuredUrl = configuredUrl.substring(0, configuredUrl.length - 1);

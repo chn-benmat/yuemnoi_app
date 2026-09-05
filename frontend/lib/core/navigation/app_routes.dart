@@ -8,8 +8,13 @@ import '../../features/auth/presentation/pages/forget_password.dart';
 import '../../features/auth/presentation/pages/login.dart';
 import '../../features/auth/presentation/pages/one_time_verification.dart';
 import '../../features/auth/presentation/pages/register.dart';
+import '../utils/auth_guard.dart';
 import '../../features/booking/presentation/pages/booking.dart';
 import '../../features/booking/presentation/pages/location_picker_map_page.dart';
+import '../../features/booking/data/datasources/rental_request_remote_data_source.dart';
+import '../../features/booking/data/repositories/rental_request_repository_impl.dart';
+import '../../features/booking/domain/usecases/submit_rental_request_usecase.dart';
+import '../../features/booking/presentation/bloc/rental_request_cubit.dart';
 import '../../features/chatbot/data/datasources/chatbot_remote_data_source.dart';
 import '../../features/chatbot/data/repositories/chatbot_repository_impl.dart';
 import '../../features/chatbot/domain/usecases/send_chat_message_usecase.dart'
@@ -29,12 +34,6 @@ import '../../features/item_detail/presentation/bloc/item_detail_event.dart';
 import '../../features/item_detail/presentation/pages/edit_item.dart';
 import '../../features/item_detail/presentation/pages/item_detail.dart';
 import '../../features/home/presentation/pages/home.dart';
-import '../../features/payment/data/datasources/payment_remote_data_source.dart';
-import '../../features/payment/data/repositories/payment_repository_impl.dart';
-import '../../features/payment/domain/usecases/get_payment_status_usecase.dart';
-import '../../features/payment/domain/usecases/start_payment_usecase.dart';
-import '../../features/payment/presentation/bloc/payment_cubit.dart';
-import '../../features/payment/presentation/pages/payment_return_page.dart';
 import '../../features/rental_item/data/datasources/rental_item_remote_data_source.dart';
 import '../../features/rental_item/data/repositories/rental_item_repository_impl.dart';
 import '../../features/rental_item/domain/usecases/create_rental_item_usecase.dart';
@@ -53,11 +52,13 @@ import '../../features/profile/presentation/pages/profile/user_profile_view_scre
 import '../../features/profile/presentation/pages/rentals/rental_history_screen.dart';
 import '../../features/profile/presentation/pages/rentals/rental_income_screen.dart';
 import '../../features/profile/presentation/pages/rentals/rental_status_screen.dart';
+import '../../features/profile/presentation/pages/rentals/rental_tracking_map_page.dart';
 import '../../features/profile/presentation/pages/support/contact_screen.dart';
 import '../../features/profile/presentation/pages/support/faq_screen.dart';
 import '../../features/wallet/presentation/pages/wallet.dart';
 import '../../features/wallet/presentation/pages/wallet_payment_screen.dart';
 import '../../features/wallet/presentation/pages/wallet_success_screen.dart';
+
 abstract final class AppRoutes {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
@@ -78,6 +79,7 @@ abstract final class AppRoutes {
   static const contact = '/profile/contact';
   static const faq = '/profile/faq';
   static const rentalStatus = '/profile/rental-status';
+  static const rentalTrackingMap = '/rental-tracking-map';
   static const favorite = '/profile/favorite';
   static const rentalIncome = '/profile/rental-income';
   static const rentalHistory = '/profile/rental-history';
@@ -94,13 +96,12 @@ abstract final class AppRoutes {
   static const wallet = '/wallet';
   static const walletPayment = '/wallet/payment';
   static const walletSuccess = '/wallet/success';
-  static const paymentReturn = '/payments/:rentalId';
 
   static GoRouter? _currentRouter;
   static GoRouter? get router => _currentRouter;
 
   static GoRouter createRouter({
-    String initialLocation = login,
+    String initialLocation = home,
     Object? initialExtra,
   }) {
     return _currentRouter = GoRouter(
@@ -126,7 +127,10 @@ abstract final class AppRoutes {
             final initialIndex = (state.extra as int?) ?? 0;
             return CustomTransitionPage<void>(
               key: state.pageKey,
-              child: HomeScreen(initialIndex: initialIndex),
+              child: HomeScreen(
+                key: ValueKey('home_screen_$initialIndex'),
+                initialIndex: initialIndex,
+              ),
               transitionDuration: const Duration(milliseconds: 600),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
@@ -142,9 +146,7 @@ abstract final class AppRoutes {
             child: BlocProvider(
               create: (context) => ChatbotBloc(
                 sendMessage: chatbot_uc.SendChatMessageUseCase(
-                  ChatbotRepositoryImpl(
-                    ChatbotRemoteDataSource(),
-                  ),
+                  ChatbotRepositoryImpl(ChatbotRemoteDataSource()),
                 ),
               ),
               child: const ChatBotScreen(),
@@ -160,7 +162,6 @@ abstract final class AppRoutes {
             ),
           ),
         ),
-
 
         GoRoute(
           path: addRentalItem,
@@ -192,10 +193,8 @@ abstract final class AppRoutes {
         ),
         GoRoute(
           path: faq,
-          pageBuilder: (context, state) => MaterialPage<void>(
-            key: state.pageKey,
-            child: const FaqScreen(),
-          ),
+          pageBuilder: (context, state) =>
+              MaterialPage<void>(key: state.pageKey, child: const FaqScreen()),
         ),
         GoRoute(
           path: rentalStatus,
@@ -203,6 +202,41 @@ abstract final class AppRoutes {
             key: state.pageKey,
             child: const RentalStatusScreen(),
           ),
+        ),
+        GoRoute(
+          path: rentalTrackingMap,
+          pageBuilder: (context, state) {
+            final extra = state.extra;
+            if (extra is BookingRequestData) {
+              return MaterialPage<void>(
+                key: state.pageKey,
+                child: RentalTrackingMapPage(bookingData: extra),
+              );
+            } else if (extra is Map<String, dynamic>) {
+              return MaterialPage<void>(
+                key: state.pageKey,
+                child: RentalTrackingMapPage(
+                  bookingData: extra['bookingData'] as BookingRequestData?,
+                  itemTitle: extra['itemTitle'] as String?,
+                  itemImageUrl: extra['itemImageUrl'] as String?,
+                  pickupLocation: extra['pickupLocation'] as String?,
+                  pickupNote: extra['pickupNote'] as String?,
+                  destinationLat: (extra['destinationLat'] as num?)?.toDouble(),
+                  destinationLng: (extra['destinationLng'] as num?)?.toDouble(),
+                  ownerName: extra['ownerName'] as String?,
+                  ownerPhone: extra['ownerPhone'] as String?,
+                  periodText: extra['periodText'] as String?,
+                  totalPrice: (extra['totalPrice'] as num?)?.toDouble(),
+                  conversationId: extra['conversationId'] as String?,
+                  statusCode: extra['statusCode'] as String?,
+                ),
+              );
+            }
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: const RentalTrackingMapPage(),
+            );
+          },
         ),
         GoRoute(
           path: favorite,
@@ -333,9 +367,7 @@ abstract final class AppRoutes {
           path: userProfileView,
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
-            child: UserProfileViewScreen(
-              args: _requiredUserProfileArgs(state),
-            ),
+            child: UserProfileViewScreen(args: _requiredUserProfileArgs(state)),
           ),
         ),
         GoRoute(
@@ -400,35 +432,17 @@ abstract final class AppRoutes {
             final data = state.extra is BookingRequestData
                 ? state.extra as BookingRequestData
                 : null;
-            final repository = PaymentRepositoryImpl(PaymentRemoteDataSource());
+            final repository = RentalRequestRepositoryImpl(
+              RentalRequestRemoteDataSource(),
+            );
             return MaterialPage<void>(
               key: state.pageKey,
               child: BlocProvider(
-                create: (context) => PaymentCubit(
-                  startPayment: StartPaymentUseCase(repository),
-                  getPaymentStatus: GetPaymentStatusUseCase(repository),
+                create: (context) => RentalRequestCubit(
+                  submitRentalRequest: SubmitRentalRequestUseCase(repository),
                   repository: repository,
                 ),
                 child: BookingConfirmationPage(bookingData: data),
-              ),
-            );
-          },
-        ),
-        GoRoute(
-          path: paymentReturn,
-          pageBuilder: (context, state) {
-            final rentalId = _requiredRentalId(state);
-            final repository = PaymentRepositoryImpl(PaymentRemoteDataSource());
-            return MaterialPage<void>(
-              key: state.pageKey,
-              child: BlocProvider(
-                create: (context) => PaymentCubit(
-                  startPayment: StartPaymentUseCase(repository),
-                  getPaymentStatus: GetPaymentStatusUseCase(repository),
-                  repository: repository,
-                  initialRentalId: rentalId,
-                ),
-                child: PaymentReturnPage(rentalId: rentalId),
               ),
             );
           },
@@ -475,16 +489,34 @@ abstract final class AppRoutes {
     context.go(login);
   }
 
+  static Future<bool?> pushLogin(BuildContext context) {
+    return context.push<bool>(login);
+  }
+
   static void goToLogin(BuildContext context) {
     context.go(login);
   }
 
   static void openHome(BuildContext context, {int initialIndex = 0}) {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
     context.go(home, extra: initialIndex);
   }
 
   static void goToHome(BuildContext context, {int initialIndex = 0}) {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
     context.go(home, extra: initialIndex);
+  }
+
+  static void openProfile(BuildContext context) {
+    goToHome(context, initialIndex: 3);
+  }
+
+  static void goToProfile(BuildContext context) {
+    goToHome(context, initialIndex: 3);
   }
 
   static Future<void> openChatbot(BuildContext context) {
@@ -531,11 +563,23 @@ abstract final class AppRoutes {
     return context.push<void>(booking, extra: initialData);
   }
 
-  static Future<void> openBookingConfirmation(
+  static Future<bool?> openBookingConfirmation(
     BuildContext context, {
     BookingRequestData? bookingData,
+    bool isDetailView = false,
   }) {
-    return context.push<void>(bookingConfirmation, extra: bookingData);
+    if (isDetailView) {
+      return Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          settings: const RouteSettings(name: '/booking-detail-view'),
+          builder: (_) => BookingConfirmationPage(
+            bookingData: bookingData,
+            isDetailView: true,
+          ),
+        ),
+      );
+    }
+    return context.push<bool>(bookingConfirmation, extra: bookingData);
   }
 
   static Future<LocationPickerResult?> openLocationPicker(
@@ -557,8 +601,14 @@ abstract final class AppRoutes {
     );
   }
 
-  static Future<void> openAddRentalItem(BuildContext context) {
-
+  static Future<void> openAddRentalItem(BuildContext context) async {
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อปล่อยเช่าอุปกรณ์',
+      message:
+          'กรุณาเข้าสู่ระบบหรือสมัครสมาชิกก่อนลงประกาศปล่อยเช่าอุปกรณ์ของคุณ เพื่อความปลอดภัยและการติดต่อกับผู้เช่า',
+    );
+    if (!authed || !context.mounted) return;
     return context.push<void>(addRentalItem);
   }
 
@@ -576,6 +626,36 @@ abstract final class AppRoutes {
 
   static Future<void> openRentalStatus(BuildContext context) {
     return context.push<void>(rentalStatus);
+  }
+
+  static Future<void> openRentalTrackingMap(
+    BuildContext context, {
+    BookingRequestData? bookingData,
+    Map<String, dynamic>? trackingArgs,
+  }) {
+    final page = RentalTrackingMapPage(
+      bookingData: bookingData ??
+          (trackingArgs?['bookingData'] as BookingRequestData?),
+      itemTitle: trackingArgs?['itemTitle'] as String?,
+      itemImageUrl: trackingArgs?['itemImageUrl'] as String?,
+      pickupLocation: trackingArgs?['pickupLocation'] as String?,
+      pickupNote: trackingArgs?['pickupNote'] as String?,
+      destinationLat: (trackingArgs?['destinationLat'] as num?)?.toDouble(),
+      destinationLng: (trackingArgs?['destinationLng'] as num?)?.toDouble(),
+      ownerName: trackingArgs?['ownerName'] as String?,
+      ownerPhone: trackingArgs?['ownerPhone'] as String?,
+      periodText: trackingArgs?['periodText'] as String?,
+      totalPrice: (trackingArgs?['totalPrice'] as num?)?.toDouble(),
+      conversationId: trackingArgs?['conversationId'] as String?,
+      statusCode: trackingArgs?['statusCode'] as String?,
+    );
+
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: rentalTrackingMap),
+        builder: (_) => page,
+      ),
+    );
   }
 
   static Future<void> openFavorite(BuildContext context) {
@@ -697,7 +777,6 @@ abstract final class AppRoutes {
     } catch (_) {}
   }
 
-
   static String _requiredStringExtra(GoRouterState state, String argumentName) {
     final value = state.extra;
     if (value is String && value.isNotEmpty) {
@@ -715,7 +794,8 @@ abstract final class AppRoutes {
     final value = state.extra;
     if (value is ChatConversation) return value;
 
-    if (value is Map<String, dynamic> && value['conversation'] is ChatConversation) {
+    if (value is Map<String, dynamic> &&
+        value['conversation'] is ChatConversation) {
       return value['conversation'] as ChatConversation;
     }
 
@@ -741,17 +821,6 @@ abstract final class AppRoutes {
       state.pathParameters['itemId'],
       'itemId',
       'Route ${state.uri.path} requires a positive item id.',
-    );
-  }
-
-  static int _requiredRentalId(GoRouterState state) {
-    final value = int.tryParse(state.pathParameters['rentalId'] ?? '');
-    if (value != null && value > 0) return value;
-
-    throw ArgumentError.value(
-      state.pathParameters['rentalId'],
-      'rentalId',
-      'Route ${state.uri.path} requires a positive rental id.',
     );
   }
 

@@ -3,7 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/widgets/custom_bottom_navbar.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../chat/data/datasources/chat_remote_data_source.dart';
 import '../../../chat/data/repositories/chat_repository_impl.dart';
 import '../../../chat/domain/usecases/get_conversations_usecase.dart';
@@ -39,19 +42,28 @@ class HomeScreen extends StatelessWidget {
           )..add(const LoadHomeFeedStarted()),
         ),
         BlocProvider<ChatListBloc>(
-          create: (context) => ChatListBloc(
-            getConversations: GetConversationsUseCase(chatRepository),
-          )..add(const LoadChatListStarted()),
+          create: (context) {
+            final bloc = ChatListBloc(
+              getConversations: GetConversationsUseCase(chatRepository),
+            );
+            if (AuthSession.isAuthenticated) {
+              bloc.add(const LoadChatListStarted());
+            }
+            return bloc;
+          },
         ),
       ],
-      child: _HomeScreenContent(initialIndex: initialIndex),
+      child: _HomeScreenContent(
+        key: ValueKey('home_content_$initialIndex'),
+        initialIndex: initialIndex,
+      ),
     );
   }
 }
 
 class _HomeScreenContent extends StatefulWidget {
   final int initialIndex;
-  const _HomeScreenContent({this.initialIndex = 0});
+  const _HomeScreenContent({super.key, this.initialIndex = 0});
 
   @override
   State<_HomeScreenContent> createState() => _HomeScreenContentState();
@@ -64,6 +76,16 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeScreenContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialIndex != widget.initialIndex) {
+      setState(() {
+        _selectedIndex = widget.initialIndex;
+      });
+    }
   }
 
   List<Widget> get _pages => [
@@ -81,42 +103,49 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: _pages),
-      floatingActionButton: _selectedIndex == 0
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox.square(
-                  dimension: 64,
-                  child: FloatingActionButton(
-                    heroTag: 'chatbot-fab',
-                    tooltip: 'แชตบอต',
-                    backgroundColor: AppColors.primaryColor,
-                    foregroundColor: Colors.white,
-                    shape: const CircleBorder(),
-                    onPressed: () => AppRoutes.openChatbot(context),
-                    child: const Icon(Icons.smart_toy_rounded, size: 34),
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, authState) {
+        if (authState is LoginSuccess || authState is GoogleLoginSuccess) {
+          context.read<ChatListBloc>().add(const LoadChatListStarted());
+        }
+      },
+      child: Scaffold(
+        body: IndexedStack(index: _selectedIndex, children: _pages),
+        floatingActionButton: _selectedIndex == 0
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox.square(
+                    dimension: 64,
+                    child: FloatingActionButton(
+                      heroTag: 'chatbot-fab',
+                      tooltip: 'แชตบอต',
+                      backgroundColor: AppColors.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: const CircleBorder(),
+                      onPressed: () => AppRoutes.openChatbot(context),
+                      child: const Icon(Icons.smart_toy_rounded, size: 34),
+                    ),
                   ),
-                ),
-              ],
-            )
-          : null,
-      bottomNavigationBar: BlocBuilder<ChatListBloc, ChatListState>(
-        builder: (context, chatState) {
-          final hasUnread =
-              chatState.conversations.any((c) => c.hasUnreadMessage);
+                ],
+              )
+            : null,
+        bottomNavigationBar: BlocBuilder<ChatListBloc, ChatListState>(
+          builder: (context, chatState) {
+            final hasUnread =
+                chatState.conversations.any((c) => c.hasUnreadMessage);
 
-          return CustomBottomNavbar(
-            selectedIndex: _selectedIndex,
-            hasUnreadChat: hasUnread,
-            onTabChange: (index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-          );
-        },
+            return CustomBottomNavbar(
+              selectedIndex: _selectedIndex,
+              hasUnreadChat: hasUnread,
+              onTabChange: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
+            );
+          },
+        ),
       ),
     );
   }

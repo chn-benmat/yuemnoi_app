@@ -4,6 +4,7 @@ import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/widgets/skeleton_shimmer.dart';
+import '../../../domain/entities/user_item.dart';
 
 class UserProfileLoadingSkeleton extends StatelessWidget {
   const UserProfileLoadingSkeleton({super.key});
@@ -349,6 +350,22 @@ class UserProfileRentalItemData {
     required this.iconData,
     required this.colorSeed,
   });
+
+  factory UserProfileRentalItemData.fromUserItem(
+    UserItem item,
+    IconData iconData,
+    Color colorSeed,
+  ) {
+    return UserProfileRentalItemData(
+      id: item.id,
+      title: item.title,
+      pricePerDay: item.price,
+      rating: 4.9,
+      imageUrl: item.imageUrl,
+      iconData: iconData,
+      colorSeed: colorSeed,
+    );
+  }
 }
 
 class UserProfileRentalCard extends StatelessWidget {

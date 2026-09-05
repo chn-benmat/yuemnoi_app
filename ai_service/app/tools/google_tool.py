@@ -1,6 +1,7 @@
 # tools/google_tool.py
 import httpx
 from config import settings
+from ..telemetry import logger
 
 
 class GoogleTool:
@@ -49,5 +50,5 @@ class GoogleTool:
 
             return "\n\n".join(sources), "checked_google"
         except Exception as e:
-            print(f"[Google Search Error]: {str(e)}")
+            logger.warning("Google search error=%s", type(e).__name__)
             return "", "google_search_failed"

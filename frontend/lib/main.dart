@@ -65,8 +65,8 @@ Future<void> main() async {
   }
 
   runApp(
-    YuemnoiApp(
-      initialRoute: isAuthenticated ? AppRoutes.home : AppRoutes.login,
+    const YuemnoiApp(
+      initialRoute: AppRoutes.home,
     ),
   );
 }

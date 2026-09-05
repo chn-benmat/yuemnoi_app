@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/utils/auth_guard.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/utils/app_image_compressor.dart';
@@ -25,6 +27,23 @@ class AddRentalItemScreen extends StatefulWidget {
 }
 
 class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!AuthSession.isAuthenticated && mounted) {
+        AuthGuard.requireAuth(
+          context,
+          title: 'เข้าสู่ระบบเพื่อปล่อยเช่าอุปกรณ์',
+          message: 'กรุณาเข้าสู่ระบบก่อนลงประกาศปล่อยเช่าอุปกรณ์ของคุณ',
+        ).then((authed) {
+          if (!authed && mounted) {
+            AppRoutes.pop(context);
+          }
+        });
+      }
+    });
+  }
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();

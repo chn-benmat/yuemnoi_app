@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../../auth/presentation/bloc/auth_state.dart';
+import '../../../../../core/network/auth_session.dart';
+import '../../../../../core/utils/auth_guard.dart';
 import '../../../../auth/presentation/bloc/auth_event.dart';
 import 'user_profile_view_screen.dart';
 import '../../widgets/profile/profile_widgets.dart';
@@ -28,7 +31,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String get _displayName {
     final user = _currentUser;
-    if (user == null) return 'ผู้ใช้';
+    if (user == null) return 'ผู้เยี่ยมชม (Guest)';
     return user.userMetadata?['display_name'] as String? ??
         user.userMetadata?['full_name'] as String? ??
         user.email?.split('@').first ??
@@ -42,14 +45,81 @@ class _ProfileScreenState extends State<ProfileScreen> {
         user.userMetadata?['picture'] as String?;
   }
 
-  void _openUserProfile() {
+  Future<void> _handleMyItems() async {
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อดูอุปกรณ์',
+      message: 'กรุณาเข้าสู่ระบบก่อนจัดการอุปกรณ์ที่คุณปล่อยเช่า',
+    );
+    if (authed && mounted) {
+      AppRoutes.openMyItems(context);
+    }
+  }
+
+  Future<void> _handleRentalIncome() async {
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อดูรายได้',
+      message: 'กรุณาเข้าสู่ระบบก่อนดูรายได้จากการปล่อยเช่า',
+    );
+    if (authed && mounted) {
+      AppRoutes.openRentalIncome(context);
+    }
+  }
+
+  Future<void> _handleRentalStatus() async {
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อดูสถานะ',
+      message: 'กรุณาเข้าสู่ระบบก่อนตรวจสอบสถานะการเช่า',
+    );
+    if (authed && mounted) {
+      AppRoutes.openRentalStatus(context);
+    }
+  }
+
+  Future<void> _handleRentalHistory() async {
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อดูประวัติ',
+      message: 'กรุณาเข้าสู่ระบบก่อนดูประวัติการเช่า',
+    );
+    if (authed && mounted) {
+      AppRoutes.openRentalHistory(context);
+    }
+  }
+
+  Future<void> _handleSettingAccount() async {
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบ',
+      message: 'กรุณาเข้าสู่ระบบก่อนเข้าสู่หน้าตั้งค่าบัญชี',
+    );
+    if (authed && mounted) {
+      await AppRoutes.openSettingAccount(context);
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  void _openUserProfile() async {
     final user = _currentUser;
-    final meta = user?.userMetadata ?? {};
+    if (user == null) {
+      final authed = await AuthGuard.requireAuth(
+        context,
+        title: 'เข้าสู่ระบบโปรไฟล์',
+        message: 'กรุณาเข้าสู่ระบบเพื่อดูและจัดการข้อมูลส่วนตัวของคุณ',
+      );
+      if (authed && mounted) setState(() {});
+      return;
+    }
+    final meta = user.userMetadata ?? {};
     final bio = (meta['bio'] as String?)?.trim();
     AppRoutes.openUserProfile(
       context,
       args: UserProfileViewArgs(
-        userId: user?.id ?? '',
+        userId: user.id,
         displayName: _displayName,
         avatarUrl: _avatarUrl,
         rating: 4.9,
@@ -113,14 +183,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await SupabaseConfig.client.auth.signOut();
       }
     } catch (_) {}
+    AuthSession.clear();
     if (!mounted) return;
     context.read<AuthBloc>().add(const AuthResetState());
-    AppRoutes.goToLogin(context);
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (mounted) setState(() {});
+      },
+      child: Scaffold(
       backgroundColor: const Color(0xFFF7F7F9),
       body: SafeArea(
         child: Column(
@@ -144,17 +219,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ProfileQuickActionData(
                             icon: Icons.inventory_2_outlined,
                             label: 'อุปกรณ์ของฉัน',
-                            onTap: () => AppRoutes.openMyItems(context),
+                            onTap: _handleMyItems,
                           ),
                           ProfileQuickActionData(
                             icon: Icons.monetization_on_outlined,
                             label: 'รายได้',
-                            onTap: () => AppRoutes.openRentalIncome(context),
+                            onTap: _handleRentalIncome,
                           ),
                           ProfileQuickActionData(
                             icon: Icons.local_shipping_outlined,
                             label: 'สถานะการเช่า',
-                            onTap: () => AppRoutes.openRentalStatus(context),
+                            onTap: _handleRentalStatus,
                           ),
                           ProfileQuickActionData(
                             icon: Icons.favorite_border_rounded,
@@ -164,11 +239,90 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ProfileQuickActionData(
                             icon: Icons.calendar_today_outlined,
                             label: 'ประวัติการเช่า',
-                            onTap: () => AppRoutes.openRentalHistory(context),
+                            onTap: _handleRentalHistory,
                           ),
                         ],
                       ),
                     ),
+                    if (_currentUser == null) ...[
+                      const SizedBox(height: 14),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.04),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Icon(
+                                  Icons.add_business_rounded,
+                                  color: AppColors.primaryColor,
+                                  size: 26,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    Text(
+                                      'มีอุปกรณ์ไม่ได้ใช้?',
+                                      style: TextStyle(
+                                        fontFamily: AppTextStyles.fontFamily,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'นำมาปล่อยเช่าเพื่อสร้างรายได้ง่ายๆ',
+                                      style: TextStyle(
+                                        fontFamily: AppTextStyles.fontFamily,
+                                        fontSize: 12,
+                                        color: Color(0xFF6B7280),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              FilledButton(
+                                onPressed: () => AppRoutes.openAddRentalItem(context),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppColors.primaryColor,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                ),
+                                child: const Text(
+                                  'ปล่อยเช่า',
+                                  style: TextStyle(
+                                    fontFamily: AppTextStyles.fontFamily,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -181,8 +335,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ProfileMenuItemData(
                                 icon: Icons.manage_accounts_outlined,
                                 title: 'ตั้งค่าบัญชี',
-                                onTap: () =>
-                                    AppRoutes.openSettingAccount(context),
+                                onTap: _handleSettingAccount,
                               ),
                             ],
                           ),
@@ -241,7 +394,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             width: double.infinity,
                             height: 54,
                             child: ElevatedButton(
-                              onPressed: _logout,
+                              onPressed: _currentUser != null
+                                  ? _logout
+                                  : () async {
+                                      final authed = await AppRoutes.pushLogin(context);
+                                      if (authed == true && mounted) setState(() {});
+                                    },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primaryColor,
                                 foregroundColor: Colors.white,
@@ -250,9 +408,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   borderRadius: BorderRadius.circular(30),
                                 ),
                               ),
-                              child: const Text(
-                                'ออกจากระบบ',
-                                style: TextStyle(
+                              child: Text(
+                                _currentUser != null ? 'ออกจากระบบ' : 'เข้าสู่ระบบ / สมัครสมาชิก',
+                                style: const TextStyle(
                                   fontFamily: AppTextStyles.fontFamily,
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -270,6 +428,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

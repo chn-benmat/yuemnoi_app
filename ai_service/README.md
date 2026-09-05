@@ -2,6 +2,9 @@
 
 # 🤖 Yuemnoi — AI Service
 
+รายละเอียดการจัดการบริบท การตรวจข้อมูลล่าสุด และผลทดสอบ performance:
+[AI pipeline verification](PIPELINE_VERIFICATION.md)
+
 ### ระบบ AI ผู้ช่วยอัจฉริยะของแอปพลิเคชัน "ยืมหน่อย"
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
@@ -26,11 +29,11 @@ AI Service ของ Yuemnoi เป็น **Agentic AI Pipeline** ที่อ�
 
 | ขั้นตอน | ชื่อ                      | รายละเอียด                                                                               |
 | :-----: | :------------------------ | :--------------------------------------------------------------------------------------- |
-|    ①    | **Conversational Agent**  | Qwen อ่านคำถามและประวัติแชททุกครั้ง แล้วตอบบทสนทนาทั่วไปเองโดยไม่มี keyword router       |
-|    ②    | **Inventory Tool Call**   | Qwen เรียก typed tool เมื่อต้องใช้ข้อมูลสินค้า ราคา หรือคำแนะนำจาก Supabase               |
-|    ③    | **Specification Tool**    | Qwen เลือกค้นแหล่งข้อมูลสเปกภายนอกเมื่อคำถามต้องใช้ข้อมูลอ้างอิง                          |
-|    ④    | **Grounded Response**     | Qwen อ่านผลจาก tool แล้วเรียบเรียง structured JSON แบบปิด thinking                       |
-|    ⑤    | **Item Selection**        | กรองเฉพาะอุปกรณ์ที่ AI เลือกส่งกลับไปแสดงผลเป็นการ์ด                                     |
+|    ①    | **Intent** | ตีความคำถามและ history ครั้งเดียวเป็นชนิดข้อมูลภายใน; คำทักทาย/ขอบคุณ/ความสามารถที่ชัดเจนตอบทันที |
+|    ②    | **Inventory** | จัด candidate จากเจตนา อ่านข้อมูลสด แล้วตรวจงบ หน่วย และสถานะ |
+|    ③    | **Specifications** | เรียกค้นสเปคเฉพาะเมื่อจำเป็น แยกข้อมูลเว็บออกจากราคาเช่า |
+|    ④    | **Conversation** | โมเดลเลือกสินค้าและเรียบเรียงคำตอบร่วมกัน พร้อม ID และหลักฐาน |
+|    ⑤    | **Validation** | ตรวจ ID/หลักฐาน อ่านรายการที่เลือกซ้ำ แล้วสร้างราคาและการ์ดจากข้อมูลชุดเดียวกัน |
 
 ---
 
@@ -90,7 +93,7 @@ async def stream_ai_response(payload: ChatRequest):
 | ตัวแปร                  | คำอธิบาย                                           | ค่าตั้งต้น               |
 | :---------------------- | :------------------------------------------------- | :----------------------- |
 | `SUPABASE_URL`          | URL ของ Supabase Project                           | — (ต้องกำหนด)            |
-| `SUPABASE_KEY`          | API Key ของ Supabase                               | — (ต้องกำหนด)            |
+| `SUPABASE_KEY`          | Service Role Secret Key ของ Supabase (สำหรับจัดการ Feedback / In-Context Learning) | — (ต้องกำหนด)            |
 | `SERPER_API_KEY`        | API Key สำหรับ Serper.dev (Google Search)          | — (ต้องกำหนด)            |
 | `MODEL_NAME`            | ชื่อโมเดล Ollama ที่ใช้งาน                         | `qwen3:8b`               |
 | `OLLAMA_ENDPOINT`       | Native endpoint ของ Ollama                         | `http://localhost:11434` |
@@ -105,64 +108,19 @@ async def stream_ai_response(payload: ChatRequest):
 
 `AgentExecutor` เป็นตัวควบคุม Pipeline ทั้งหมด ภายในฟังก์ชัน `run_pipeline_non_stream()`:
 
-#### 1. 🛡️ Guard & Filter (การกรองข้อความ)
+- `app/agent/dialogue.py` กำหนด `Intent`, `Answer`, หลักฐาน และ prompt ร่วมกัน โดยส่งคำถามล่าสุดหลัง history เสมอ
+- คำถามที่ต้องตีความเรียกโมเดลหนึ่งครั้ง; หากใช้เครื่องมือเรียกอีกหนึ่งครั้งเพื่อเลือกสินค้าและอธิบาย ไม่มี verifier ที่ตีความคำถามซ้ำ
+- จำกัด history 6 ข้อความ ข้อความละ 500 ตัวอักษร, candidate 8 รายการ, คำตอบไม่เกิน 5 รายการ และ deadline รวม 45 วินาที
+- Inventory ใช้ catalog cache 60 วินาทีเพื่อจัดอันดับ อ่าน candidate สดก่อนสร้างคำตอบ และอ่าน ID ที่เลือกอีกครั้งก่อนส่ง เพื่อรับราคาที่เปลี่ยนหรือหยุดแสดงสินค้าที่ไม่ว่าง
+- มีเครื่องมือเชิงตรรกะสองประเภทคือ inventory และ specifications โดย inventory อาจใช้หลาย HTTP reads สำหรับตรวจความสด ไม่มี agent loop หรือ retry โมเดล
+- กรองงบ/สถานะ/หน่วยด้วยโค้ด ไม่กรองความเหมาะสมจาก substring ของชื่อสินค้า; โมเดลเลือกชนิดที่เกี่ยวข้องและอธิบายข้อจำกัดของหลักฐาน
+- คำตอบภายในมี `outcome`, `answer`, `item_ids`, `evidence`, `source_urls`; response ภายนอกยังคง envelope เดิม
+- ราคา ชื่อ หน่วย และการ์ดมาจากข้อมูลสด ส่วนคำแนะนำเป็นข้อความโมเดล ตรวจ ID, quote หลักฐาน, URL และตัวเลขสเปคก่อนส่ง
+- ไม่พบ candidate, ข้อมูลไม่พอยืนยัน และบริการล้มเหลวเป็นคนละสถานการณ์; ไม่ใช้ผลเก่าหรือสินค้าไม่เกี่ยวข้องกลบ error
+- ค่าเริ่มต้น `INTERPRETATION_MAX_TOKENS=384`, `CONVERSATIONAL_MAX_TOKENS=512`, `think=False`; ไม่เปลี่ยนโมเดลหรือเพิ่ม streaming
+- Log ใช้ request ID, route, จำนวน candidate, outcome, model calls, token counts และเวลารายขั้น ไม่บันทึกข้อความสนทนาปกติ
 
-```
-คำถามจากผู้ใช้
-    ├── ยาวเกิน 200 ตัวอักษร? → ขอให้พิมพ์ใหม่แบบกระชับ
-    └── ส่งคำถาม + history ให้ Qwen ตีความอย่างอิสระ
-```
-
-#### 2. 🗄️ Database Query
-
-- Qwen เลือกเรียก `search_inventory` เองเมื่อคำถามต้องใช้ข้อมูลสินค้าปัจจุบัน
-- tool โหลด catalog ปัจจุบันจาก Supabase โดยไม่ผูกกับชื่อ category ภาษาใดภาษาหนึ่ง
-- Qwen วิเคราะห์ความหมาย หมวดหมู่ ราคา และข้อจำกัดจากข้อความผู้ใช้เทียบกับ catalog จริง
-- ระบบรับเฉพาะ ID ที่มีอยู่ใน catalog และคืนผลว่างเมื่อไม่มีรายการตรง เพื่อป้องกันการแต่งสินค้า
-
-#### 3. 🔍 Google Verification
-
-- Qwen เลือกเรียก `search_web_specs` เมื่อคำถามต้องใช้ข้อมูลสเปกภายนอก
-- ไม่ใช้ web tool สำหรับราคา สถานะ หรือสินค้าในคลัง Yuemnoi
-- ส่งชื่อแหล่งข้อมูล URL และข้อมูลสรุปสูงสุด 5 แหล่งให้ AI ตรวจสอบก่อนตอบ
-
-#### 4. 💬 LLM Response Generation
-
-- รอบแรกส่งประวัติแชทล่าสุดไม่เกิน 6 ข้อความให้ Qwen ตัดสินใจด้วย structured semantic routing เพียงครั้งเดียว
-- บทสนทนาทั่วไปใช้คำตอบจาก routing ได้ทันที ส่วน inventory คืนข้อความเกริ่นสั้นและรายการจริงเป็นการ์ดโดยไม่สร้างลิสต์ข้อความซ้ำ
-- ปิด thinking, จำกัด output และบังคับคำตอบหลัง tool ด้วย JSON schema รูปแบบ:
-  ```json
-  {
-    "answer": "ข้อความคำตอบสุภาพ ลงท้ายด้วย ค่ะ/คะ",
-    "selected_item_id": 42
-  }
-  ```
-
-#### 5. 📦 Item Selection & Response
-
-- คืนอุปกรณ์ที่ผ่าน semantic matching เป็น `recommended_items` สำหรับแสดงเป็นการ์ด
-- จัดรูปแบบข้อมูลรูปภาพ, ราคา, หน่วย (วัน/สัปดาห์)
-- ส่ง Response กลับ:
-  ```json
-  {
-    "status": "success",
-    "search_status": "checked_google",
-    "items_found": 1,
-    "answer": "กล้อง Sony RX100 IV ตัวนี้ถ่าย 4K ได้ค่ะ ราคาเช่าวันละ 500 บาทเท่านั้น",
-    "recommended_items": [{ ... }]
-  }
-  ```
-
-ค่า `search_status` ที่เป็นไปได้:
-
-- `using_supabase` — พบข้อมูลใน Supabase และไม่ได้เรียก Google
-- `inventory_no_results` — Qwen เรียก inventory tool แต่ไม่พบสินค้าตรงเงื่อนไข
-- `direct_response` — Qwen ตอบบทสนทนาโดยตรงและไม่จำเป็นต้องเรียก tool
-- `checked_google` — ค้นสำเร็จและมีแหล่งข้อมูลส่งให้ AI ตรวจสอบ
-- `google_no_results` — Google ไม่พบผลลัพธ์ที่ใช้เป็นบริบทได้
-- `google_search_failed` — เรียกบริการค้นหาไม่สำเร็จ
-- `input_too_long` — คำถามยาวเกิน 200 ตัวอักษร
-- `llm_failed` — Ollama/Qwen ไม่พร้อมใช้งานชั่วคราว
+รายละเอียดผลทดสอบและข้อจำกัดอยู่ใน [PIPELINE_VERIFICATION.md](PIPELINE_VERIFICATION.md)
 
 ---
 
@@ -191,7 +149,7 @@ Catalog: [{ id: 9, category: "กล้อง", price: 1500, ... }, ...]
 ค้นหาข้อมูลสเปคและรีวิวจาก Google ผ่าน **Serper.dev API**:
 
 - โฟกัสผลลัพธ์ในประเทศไทย (`gl: th`, `hl: th`)
-- ดึง Organic Search Snippets 3 อันดับแรก
+- ดึง Organic Search Snippets สูงสุด 5 อันดับแรก
 - ส่งข้อมูลเป็นบริบทเสริมให้ AI ตอบเรื่องสเปคได้ถูกต้อง
 
 ---
@@ -201,9 +159,9 @@ Catalog: [{ id: 9, category: "กล้อง", price: 1500, ... }, ...]
 สร้างไฟล์ `.env` ในโฟลเดอร์ `ai_service/` :
 
 ```env
-# Supabase
+# Supabase (ใช้ Service Role Key เพื่อจัดการ Feedback และ In-Context Learning)
 SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_KEY=eyJhbGciOi...
+SUPABASE_KEY=eyJhbGciOi... (Service Role Key)
 
 # Google Search (Serper.dev)
 SERPER_API_KEY=your_serper_api_key

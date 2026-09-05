@@ -1,7 +1,10 @@
 package ports
 
 import (
+	"crypto/subtle"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/gin-gonic/gin"
@@ -12,14 +15,14 @@ func SetupRouter(
 	authGateway domain.AuthGateway,
 	contactRepository domain.ConversationContactRepository,
 	aiService domain.AIService,
-	paymentRepository domain.PaymentRepository,
-	paymentGateway domain.PaymentGateway,
+	rentalRepository domain.RentalRepository,
 ) *gin.Engine {
 
 	// ใช้ Logger และ Recovery Middleware (ป้องกันเซิร์ฟเวอร์พังเวลาเกิด Panic โค้ดเอ๋อ)
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
+	router.Use(blockScannerPaths())
 
 	// ตั้งค่า CORS เพื่อให้ Flutter Web / Mobile ยิงเข้ามาหาได้ไม่ติดบล็อก
 	router.Use(func(c *gin.Context) {
@@ -31,7 +34,7 @@ func SetupRouter(
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-App-Secret")
 
 		// ถ้าระบบส่ง OPTIONS มาถามทาง ให้ตอบกลับ 204 แล้วจบงานตรงนี้เลย
 		if c.Request.Method == "OPTIONS" {
@@ -40,6 +43,7 @@ func SetupRouter(
 		}
 		c.Next()
 	})
+	router.Use(verifyAppSecret(os.Getenv("APP_SECRET_KEY")))
 
 	// Health check สำหรับ Docker และระบบเฝ้าระวัง โดยไม่เปิดเผยข้อมูลภายใน
 	router.GET("/health", func(c *gin.Context) {
@@ -48,19 +52,14 @@ func SetupRouter(
 
 	// นำเข้าคอนโทรลเลอร์ต่างๆ
 	itemController := NewItemHandler(itemRepo, authGateway)
-	rentalController := NewRentalHandler(paymentRepository, paymentGateway, itemRepo, authGateway)
+	rentalController := NewRentalHandler(rentalRepository, authGateway)
 	userController := NewUserHandler(authGateway)
 	aiHandler := NewAIHandler(aiService)
 	pushController := NewPushHandler()
 	chatContactController := NewChatContactHandler(contactRepository, authGateway)
-	router.GET("/payments/return", rentalController.PaymentReturnPage)
-
 	// จัดการกลุ่มเส้นทาง API
 	v1 := router.Group("/api/v1")
 	{
-		// Stripe เรียกเส้นทางนี้จากภายนอก จึงตรวจ Stripe-Signature แทน Bearer JWT
-		v1.POST("/webhooks/stripe", rentalController.HandleStripeWebhook)
-
 		// ทุกอย่างเกี่ยวกับการยืนยันตัวตน (Authentication)
 		user := v1.Group("/auth")
 		{
@@ -111,14 +110,14 @@ func SetupRouter(
 		rentals := v1.Group("/rentals")
 		{
 			rentals.POST("", rentalController.CreateRentalOrder)
-			rentals.POST("/:id/checkout-session", rentalController.CreateCheckoutSession)
-			rentals.GET("/:id/payment-status", rentalController.GetPaymentStatus)
 		}
 
 		// ทุกอย่างเกี่ยวกับ AI
 		ai := v1.Group("/chat-ai")
 		{
 			ai.POST("", aiHandler.HandleChat)
+			ai.POST("/stream", aiHandler.HandleStreamChat)
+			ai.POST("/feedback", aiHandler.HandleFeedback)
 		}
 
 		// Push Notification
@@ -135,4 +134,35 @@ func SetupRouter(
 	}
 
 	return router
+}
+
+func blockScannerPaths() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := strings.ToLower(c.Request.URL.Path)
+		if strings.Contains(path, ".env") ||
+			strings.Contains(path, ".git") ||
+			strings.Contains(path, ".php") {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func verifyAppSecret(expectedSecret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if expectedSecret == "" || c.Request.Method == http.MethodOptions || c.Request.URL.Path == "/health" {
+			c.Next()
+			return
+		}
+
+		providedSecret := c.GetHeader("X-App-Secret")
+		if subtle.ConstantTimeCompare([]byte(providedSecret), []byte(expectedSecret)) != 1 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		c.Next()
+	}
 }
