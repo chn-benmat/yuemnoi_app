@@ -6,6 +6,7 @@ from config import settings
 from .service import YuemnoiConsultantService
 from ..llm.ollama_client import OllamaClient
 from ..tools.database_tool import DatabaseTool
+from ..tools.google_tool import GoogleTool
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -29,17 +30,19 @@ class AgentExecutor:
             ollama = OllamaClient(self._http_client)
             db_tool = DatabaseTool(self._http_client)
             feedback_store = FeedbackStore(self._http_client)
+            google_tool = GoogleTool(self._http_client)
             self._service = YuemnoiConsultantService(
                 ollama=ollama,
                 db_tool=db_tool,
                 feedback_store=feedback_store,
+                google_tool=google_tool,
             )
         return self._service
 
     async def warmup_model(self) -> None:
         """Pre-warmup model on server launch."""
         service = self._ensure_initialized()
-        logger.info("Warming up Qwen3:8b model on %s...", settings.OLLAMA_ENDPOINT)
+        logger.info("Warming up %s model on %s...", settings.MODEL_NAME, settings.OLLAMA_ENDPOINT)
         await service.ollama.warmup()
         try:
             items = await service.db_tool.list_available_items(force_refresh=True)

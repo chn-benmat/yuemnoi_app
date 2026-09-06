@@ -13,7 +13,7 @@ flowchart LR
     API -->|Data & Auth| Supabase
     API -->|AI request| AI["Python + FastAPI"]
     AI -->|Inventory search| Supabase
-    AI -->|Local LLM| Ollama["Ollama / Qwen 3"]
+    AI -->|Local LLM| Ollama["Ollama / Typhoon 2 8B"]
     AI -->|Product information| Serper["Serper.dev"]
 ```
 
@@ -23,7 +23,7 @@ flowchart LR
 | --- | --- | --- |
 | `frontend/` | Mobile/Web client พัฒนาด้วย Flutter | [Frontend README](frontend/README.md) |
 | `backend/` | REST API พัฒนาด้วย Go และ Gin | [Backend README](backend/README.md) |
-| `ai_service/` | AI pipeline พัฒนาด้วย FastAPI และใช้ Qwen ผ่าน Ollama | [AI Service README](ai_service/README.md) |
+| `ai_service/` | AI pipeline พัฒนาด้วย FastAPI และใช้ Typhoon 2 8B ผ่าน Ollama | [AI Service README](ai_service/README.md) |
 
 ## เทคโนโลยีหลัก
 
@@ -31,7 +31,7 @@ flowchart LR
 - Go และ Gin สำหรับ Backend API
 - Python และ FastAPI สำหรับ AI Service
 - Supabase สำหรับ Authentication, PostgreSQL และ Storage
-- Ollama + Qwen 3 สำหรับโมเดลภาษาที่รันภายในเครื่อง
+- Ollama + Typhoon 2 8B สำหรับโมเดลภาษาที่รันภายในเครื่อง
 - Serper.dev สำหรับค้นหาข้อมูลผลิตภัณฑ์ภายนอก
 
 ## สิ่งที่ต้องติดตั้ง
@@ -95,7 +95,7 @@ go run ./cmd/server/main.go
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your_supabase_key
 SERPER_API_KEY=your_serper_api_key
-MODEL_NAME=qwen3:8b
+MODEL_NAME=scb10x/llama3.1-typhoon2-8b-instruct:latest
 OLLAMA_ENDPOINT=http://localhost:11434
 OLLAMA_CONTEXT_LENGTH=4096
 OLLAMA_KEEP_ALIVE=-1
@@ -108,7 +108,7 @@ OLLAMA_KEEP_ALIVE=-1
 ### 1. เตรียมโมเดล Ollama
 
 ```bash
-ollama pull qwen3:8b
+ollama pull scb10x/llama3.1-typhoon2-8b-instruct:latest
 ollama serve
 ```
 

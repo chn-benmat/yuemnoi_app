@@ -9,11 +9,11 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Qwen](https://img.shields.io/badge/Qwen_3-8B-7C3AED?style=for-the-badge&logo=ollama&logoColor=white)](https://ollama.com/library/qwen3)
+[![Typhoon 2](https://img.shields.io/badge/Typhoon_2-8B-7C3AED?style=for-the-badge&logo=ollama&logoColor=white)](https://ollama.com/scb10x/llama3.1-typhoon2-8b-instruct)
 
 <br/>
 
-> **AI Agent Pipeline** ที่ใช้โมเดลภาษา Qwen 3 วิเคราะห์คำถามจากลูกค้า
+> **AI Agent Pipeline** ที่ใช้โมเดลภาษา Typhoon 2 8B วิเคราะห์คำถามจากลูกค้า
 > ค้นหาอุปกรณ์ในฐานข้อมูล และเสริมข้อมูลสเปคจาก Google Search  
 > เพื่อตอบคำถามเรื่องการเช่า/ยืมอุปกรณ์ได้อย่างแม่นยำ
 
@@ -95,7 +95,7 @@ async def stream_ai_response(payload: ChatRequest):
 | `SUPABASE_URL`          | URL ของ Supabase Project                           | — (ต้องกำหนด)            |
 | `SUPABASE_KEY`          | Service Role Secret Key ของ Supabase (สำหรับจัดการ Feedback / In-Context Learning) | — (ต้องกำหนด)            |
 | `SERPER_API_KEY`        | API Key สำหรับ Serper.dev (Google Search)          | — (ต้องกำหนด)            |
-| `MODEL_NAME`            | ชื่อโมเดล Ollama ที่ใช้งาน                         | `qwen3:8b`               |
+| `MODEL_NAME`            | ชื่อโมเดล Ollama ที่ใช้งาน                         | `scb10x/llama3.1-typhoon2-8b-instruct:latest` |
 | `OLLAMA_ENDPOINT`       | Native endpoint ของ Ollama                         | `http://localhost:11434` |
 | `OLLAMA_CONTEXT_LENGTH` | Context ที่ใช้ต่อ request เพื่อควบคุม VRAM         | `4096`                   |
 | `OLLAMA_KEEP_ALIVE`     | ระยะเวลาคงโมเดลไว้ในหน่วยความจำ (`-1` = คงไว้ตลอด) | `-1`                     |
@@ -128,19 +128,19 @@ async def stream_ai_response(payload: ChatRequest):
 
 #### `database_tool.py` — DatabaseTool
 
-เครื่องมือค้นหาอุปกรณ์ในฐานข้อมูล Supabase ที่ถูกเรียกโดย Qwen:
+เครื่องมือค้นหาอุปกรณ์ในฐานข้อมูล Supabase ที่ถูกประมวลผลร่วมกับ Typhoon 2:
 
-1. **Tool Selection** — Qwen ตัดสินใจจากความหมายและประวัติสนทนาโดยไม่มี keyword router
+1. **Tool Selection** — Typhoon 2 ตัดสินใจจากความหมายและประวัติสนทนาโดยไม่มี keyword router
 2. **Catalog Grounding** — โหลดชื่อ คำอธิบาย category ราคา สถานะ และหน่วยเช่าจาก `item_tb`
-3. **Semantic Matching** — Qwen เทียบความหมายและข้อจำกัดโดยตรง จึงรองรับ category ภาษาไทยและคำพูดหลายรูปแบบโดยไม่ใช้ keyword mapping
+3. **Semantic Matching** — Typhoon 2 เทียบความหมายและข้อจำกัดโดยตรง จึงรองรับ category ภาษาไทยและคำพูดหลายรูปแบบโดยไม่ใช้ keyword mapping
 4. **Validated IDs** — Pydantic ตรวจโครงสร้างผลลัพธ์และระบบตัด ID ที่ไม่มีอยู่จริงออก
 5. **Safe Query** — AI ไม่สามารถส่ง SQL หรือสร้างข้อมูลสินค้าใหม่เองได้
 
 ```
 คำถาม: "เช่ากล้องราคาไม่เกิน 2,000 บาท"
-    ↓ Qwen calls search_inventory
+    ↓ Typhoon 2 calls search_inventory
 Catalog: [{ id: 9, category: "กล้อง", price: 1500, ... }, ...]
-    ↓ Qwen selects only matching catalog IDs
+    ↓ Typhoon 2 selects only matching catalog IDs
 ผลลัพธ์: [{ id: 9, item_name: "กล้อง Sony A7 IV พร้อมเลนส์ 24-70mm", price: 1500, ... }]
 ```
 
@@ -167,7 +167,7 @@ SUPABASE_KEY=eyJhbGciOi... (Service Role Key)
 SERPER_API_KEY=your_serper_api_key
 
 # Local LLM ผ่าน Ollama
-MODEL_NAME=qwen3:8b
+MODEL_NAME=scb10x/llama3.1-typhoon2-8b-instruct:latest
 OLLAMA_ENDPOINT=http://localhost:11434
 OLLAMA_CONTEXT_LENGTH=4096
 OLLAMA_KEEP_ALIVE=-1
@@ -180,7 +180,7 @@ OLLAMA_KEEP_ALIVE=-1
 ### ข้อกำหนดเบื้องต้น
 
 - [Python](https://www.python.org/downloads/) เวอร์ชัน 3.10 ขึ้นไป
-- [Ollama](https://ollama.com/download) สำหรับรันโมเดล Qwen 3 8B ภายในเครื่อง
+- [Ollama](https://ollama.com/download) สำหรับรันโมเดล Typhoon 2 8B ภายในเครื่อง
 - API Key จาก [Serper.dev](https://serper.dev/) สำหรับ Google Search
 
 ### ติดตั้ง Dependencies
@@ -201,8 +201,8 @@ pip install -r requirements.txt
 ### ดาวน์โหลดและรันโมเดล Local ด้วย Ollama
 
 ```powershell
-ollama pull qwen3:8b
-ollama run qwen3:8b --think=false
+ollama pull scb10x/llama3.1-typhoon2-8b-instruct:latest
+ollama run scb10x/llama3.1-typhoon2-8b-instruct:latest --think=false
 ```
 
 Ollama เปิด API ที่ `http://localhost:11434` โดยค่าเริ่มต้น
@@ -238,8 +238,8 @@ curl -X POST http://localhost:8000/api/ai/chat \
 | **Uvicorn**           | 0.30.1   | ASGI Server สำหรับรัน FastAPI                             |
 | **Pydantic Settings** | 2.2.1    | จัดการ Configuration & Environment Variables              |
 | **HTTPX**             | 0.27.0   | HTTP Client แบบ Async/Sync                                |
-| **Qwen 3**            | 8B       | โมเดลภาษาสำหรับสร้างคำตอบและ structured filter JSON       |
-| **Ollama**            | —        | รัน Qwen 3 8B ภายในเครื่องและให้บริการ API ที่พอร์ต 11434 |
+| **Typhoon 2**         | 8B       | โมเดลภาษาสำหรับวิเคราะห์เจตนา สร้างคำตอบ และเปรียบเทียบข้อมูล |
+| **Ollama**            | —        | รัน Typhoon 2 8B ภายในเครื่องและให้บริการ API ที่พอร์ต 11434 |
 | **Serper.dev**        | —        | Google Search API สำหรับดึงข้อมูลสเปค                     |
 | **Supabase**          | —        | ฐานข้อมูล PostgreSQL (ผ่าน REST API)                      |
 
@@ -252,7 +252,7 @@ AI Service มีระบบป้องกันหลายชั้น:
 | ชั้น | การป้องกัน            | รายละเอียด                                                       |
 | :--: | :-------------------- | :--------------------------------------------------------------- |
 |  🛡️  | **Input Validation**  | จำกัดความยาว Query ไม่เกิน 200 ตัวอักษร                          |
-|  🛡️  | **Agent Tool Policy** | Qwen ตอบบทสนทนาเองและต้องเรียก tool ก่อนอ้างข้อมูลปัจจุบัน        |
+|  🛡️  | **Agent Tool Policy** | AI ตอบบทสนทนาเองและต้องเรียก tool ก่อนอ้างข้อมูลปัจจุบัน        |
 |  🛡️  | **Typed Tools**       | โมเดลส่งได้เฉพาะ arguments ตาม schema และไม่สามารถส่ง SQL มารันได้ |
 |  🛡️  | **Bounded Query**     | backend เลือกคอลัมน์และจำกัดผลลัพธ์สูงสุด 5 รายการ               |
 |  🛡️  | **Structured Output** | บังคับและตรวจสอบ routing กับคำตอบด้วย Pydantic JSON Schema       |

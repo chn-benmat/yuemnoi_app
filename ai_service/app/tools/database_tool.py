@@ -108,15 +108,25 @@ class DatabaseTool:
         },
         {
             "category_indicators": ["กล้อง", "ถ่ายภาพ", "photo", "camera"],
-            "activity_keywords": ["ถ่ายรูป", "ถ่ายภาพ", "ถ่ายวิดีโอ", "ทำคลิป", "vlog", "พอร์ตเทรต", "กล้อง", "เลนส์", "โดรน", "โกโปร", "gopro"],
+            "activity_keywords": ["ถ่ายรูป", "ถ่ายภาพ", "ถ่ายวิดีโอ", "ทำคลิป", "vlog", "พอร์ตเทรต", "กล้อง", "เลนส์", "โดรน"],
         },
         {
             "category_indicators": ["คอมพิวเตอร์", "ไอที", "computer", "it"],
-            "activity_keywords": ["คอม", "คอมพิวเตอร์", "โน้ตบุ๊ก", "โน้ตบุค", "แล็ปท็อป", "macbook", "เขียนโค้ด", "ตัดต่อ", "ทำงาน"],
+            "activity_keywords": ["คอม", "คอมพิวเตอร์", "โน้ตบุ๊ก", "โน้ตบุค", "แล็ปท็อป", "เขียนโค้ด", "ตัดต่อ", "ทำงาน"],
         },
         {
-            "category_indicators": ["เครื่องเสียง", "จัดงาน", "ดนตรี", "audio"],
-            "activity_keywords": ["ปาร์ตี้", "จัดงาน", "สัมมนา", "อีเวนต์", "งานแต่ง", "คอนเสิร์ต", "ร้องเพลง", "ดนตรี", "ลำโพง", "ไมค์", "ไมโครโฟน"],
+            "category_indicators": ["เครื่องเสียง", "จัดงาน", "audio", "sound"],
+            "activity_keywords": [
+                "ปาร์ตี้", "จัดงาน", "สัมมนา", "อีเวนต์", "งานแต่ง", "คอนเสิร์ต", "ร้องเพลง",
+                "ลำโพง", "ไมค์", "ไมโครโฟน", "มิกเซอร์", "แอมป์",
+            ],
+        },
+        {
+            "category_indicators": ["ดนตรี", "เครื่องดนตรี", "music", "musical"],
+            "activity_keywords": [
+                "ดนตรี", "เล่นดนตรี", "ซ้อมดนตรี", "คอนเสิร์ต", "เครื่องดนตรี",
+                "กีตาร์", "กีต้าร์", "กีตาร์โปร่ง", "กีตาร์ไฟฟ้า", "คีย์บอร์ด", "เปียโน", "เบส", "กลอง",
+            ],
         },
         {
             "category_indicators": ["กีฬา", "ออกกำลังกาย", "sport", "fitness"],
@@ -235,10 +245,17 @@ class DatabaseTool:
         adjusted_threshold = 0.75 if tlen >= 6 else 0.82
         return (best_r >= adjusted_threshold), best_r
 
-    def rank_relevant_items(self, query: str, items: List[Dict[str, Any]], limit: int = 5) -> List[Dict[str, Any]]:
+    def rank_relevant_items(
+        self,
+        query: str,
+        items: List[Dict[str, Any]],
+        limit: int = 5,
+        domain_category: Optional[str] = None,
+        entities: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Rank items strictly based on relevance (keywords, semantic overlap, dynamic catalog tokens, and typo tolerance).
-        Fully dynamic and catalog-driven.
+        Fully dynamic, domain-aware, and catalog-driven.
         """
         if not items:
             return []
@@ -253,27 +270,52 @@ class DatabaseTool:
 
         scored: List[tuple[float, Dict[str, Any]]] = []
 
+        norm_domain = self._normalize_thai(domain_category or "").lower()
+        clean_entities = [self._normalize_thai(e).lower() for e in (entities or []) if e]
+
         for item in items:
             name = self._normalize_thai(item.get("item_name", ""))
             category = self._normalize_thai(item.get("category", ""))
             description = self._normalize_thai(item.get("description", ""))
 
             score = 0.0
+            has_entity_or_keyword_match = False
 
-            # 0. Activity / Theme Matching Boost (Maps user intentions like 'เดินป่า/ขึ้นเขา' to 'แคมปิ้งและกิจกรรมกลางแจ้ง')
+            # 0. Cognitive Domain Category Alignment Boost
+            if norm_domain:
+                if norm_domain in category or category in norm_domain:
+                    score += 18.0
+                elif any(w in category or w in name for w in norm_domain.split() if len(w) >= 3 and w not in self.STOP_WORDS):
+                    score += 12.0
+
+            # 0.1 Cognitive Entity Overlap Boost
+            for ent in clean_entities:
+                if ent in name:
+                    has_entity_or_keyword_match = True
+                    score += 25.0
+                elif any(tok in name for tok in ent.split() if len(tok) >= 3 and tok not in self.STOP_WORDS):
+                    has_entity_or_keyword_match = True
+                    score += 15.0
+                elif ent in description:
+                    has_entity_or_keyword_match = True
+                    score += 10.0
+
+            # 0.2 Activity / Theme Matching Boost (for user queries matching general activities)
             for theme in self.ACTIVITY_THEMES:
                 if any(ind in category for ind in theme["category_indicators"]):
                     matched_kws = [kw for kw in theme["activity_keywords"] if kw in norm_query or kw in q_clean]
                     if matched_kws:
-                        score += 15.0 * len(matched_kws)
+                        score += 12.0 * len(matched_kws)
 
             # 1. Direct full query match in title
             if norm_query in name and len(norm_query) >= 3:
+                has_entity_or_keyword_match = True
                 score += 20.0
 
             # 2. Individual query word matches
             for word in query_words:
                 if word in name:
+                    has_entity_or_keyword_match = True
                     score += 6.0
                 if word in category:
                     score += 4.0
@@ -287,8 +329,17 @@ class DatabaseTool:
                 if len(token_clean) >= 3 and token_clean not in self.STOP_WORDS:
                     matched, ratio = self._fuzzy_contains(norm_query, token, threshold=0.68)
                     if matched:
+                        if token in item.get("item_name", ""):
+                            has_entity_or_keyword_match = True
                         weight = 8.0 if token in item.get("item_name", "") else 6.0
                         score += weight * ratio
+
+            # Strict Grounding (Anthropic Principle 4): If user specified specific entities (e.g. "Martin"),
+            # an item must match at least one requested entity or query keyword.
+            # A broad domain_category match alone (e.g. category="ดนตรี") must NOT qualify
+            # an unstocked entity!
+            if clean_entities and not has_entity_or_keyword_match:
+                continue
 
             if score > 0:
                 scored.append((score, item))

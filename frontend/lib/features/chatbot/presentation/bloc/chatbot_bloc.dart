@@ -124,11 +124,16 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
             case ChatStatusEvent():
               return state;
             case ChatMetadataEvent(:final recommendedItems, :final questions):
+              final effectiveQuestions =
+                  questions.isNotEmpty ? questions : last.questions;
+              final effectiveRecommended = effectiveQuestions.isNotEmpty
+                  ? const <RecommendedItem>[]
+                  : (recommendedItems.isNotEmpty
+                      ? recommendedItems
+                      : last.recommendedItems);
               currentMessages[lastIndex] = last.copyWith(
-                recommendedItems: recommendedItems.isNotEmpty
-                    ? recommendedItems
-                    : last.recommendedItems,
-                questions: questions.isNotEmpty ? questions : last.questions,
+                recommendedItems: effectiveRecommended,
+                questions: effectiveQuestions,
               );
               return state.copyWith(messages: currentMessages);
             case ChatDeltaEvent(:final text):
@@ -142,14 +147,32 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
               :final questions,
             ):
               stopwatch.stop();
+              final effectiveQuestions =
+                  questions.isNotEmpty ? questions : last.questions;
+              final effectiveRecommended = effectiveQuestions.isNotEmpty
+                  ? const <RecommendedItem>[]
+                  : (recommendedItems.isNotEmpty
+                      ? recommendedItems
+                      : last.recommendedItems);
+              var effectiveContent = last.content;
+              if (effectiveContent.trim().isEmpty) {
+                if (effectiveQuestions.isNotEmpty) {
+                  effectiveContent =
+                      'เพื่อช่วยแนะนำอุปกรณ์ที่เหมาะสมและคุ้มค่าที่สุด รบกวนเลือกข้อมูลการใช้งานด้านล่างนี้ได้เลยนะคะ 😊';
+                } else if (effectiveRecommended.isNotEmpty) {
+                  effectiveContent = 'นี่คืออุปกรณ์ที่เราแนะนำสำหรับคุณค่ะ:';
+                } else {
+                  effectiveContent =
+                      'ขออภัยด้วยนะคะ ขณะนี้ระบบไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่อีกครั้งค่ะ';
+                }
+              }
               currentMessages[lastIndex] = last.copyWith(
+                content: effectiveContent,
                 suggestedReplies: suggestedReplies.isNotEmpty
                     ? suggestedReplies
                     : last.suggestedReplies,
-                recommendedItems: recommendedItems.isNotEmpty
-                    ? recommendedItems
-                    : last.recommendedItems,
-                questions: questions.isNotEmpty ? questions : last.questions,
+                recommendedItems: effectiveRecommended,
+                questions: effectiveQuestions,
                 responseDuration: stopwatch.elapsed,
                 isStreaming: false,
               );
@@ -166,7 +189,8 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
           if (currentMessages.isNotEmpty &&
               currentMessages.last.role == ChatMessageRole.assistant &&
               currentMessages.last.content.isEmpty &&
-              currentMessages.last.recommendedItems.isEmpty) {
+              currentMessages.last.recommendedItems.isEmpty &&
+              currentMessages.last.questions.isEmpty) {
             currentMessages.removeLast();
           } else if (currentMessages.isNotEmpty &&
               currentMessages.last.role == ChatMessageRole.assistant) {
@@ -189,12 +213,29 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
         final currentMessages = List<ChatMessage>.from(state.messages);
         if (currentMessages.isNotEmpty &&
             currentMessages.last.role == ChatMessageRole.assistant) {
-          currentMessages[currentMessages.length - 1] = currentMessages.last
-              .copyWith(
-                isStreaming: false,
-                responseDuration:
-                    currentMessages.last.responseDuration ?? stopwatch.elapsed,
-              );
+          final last = currentMessages.last;
+          final effectiveRecommended = last.questions.isNotEmpty
+              ? const <RecommendedItem>[]
+              : last.recommendedItems;
+          var effectiveContent = last.content;
+          if (effectiveContent.trim().isEmpty) {
+            if (last.questions.isNotEmpty) {
+              effectiveContent =
+                  'เพื่อช่วยแนะนำอุปกรณ์ที่เหมาะสมและคุ้มค่าที่สุด รบกวนเลือกข้อมูลการใช้งานด้านล่างนี้ได้เลยนะคะ 😊';
+            } else if (effectiveRecommended.isNotEmpty) {
+              effectiveContent = 'นี่คืออุปกรณ์ที่เราแนะนำสำหรับคุณค่ะ:';
+            } else {
+              effectiveContent =
+                  'ขออภัยด้วยนะคะ ขณะนี้ระบบไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่อีกครั้งค่ะ';
+            }
+          }
+          currentMessages[currentMessages.length - 1] = last.copyWith(
+            content: effectiveContent,
+            recommendedItems: effectiveRecommended,
+            isStreaming: false,
+            responseDuration:
+                last.responseDuration ?? stopwatch.elapsed,
+          );
         }
         emit(state.copyWith(messages: currentMessages, isSending: false));
       }

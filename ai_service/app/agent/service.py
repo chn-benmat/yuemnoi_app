@@ -1,11 +1,12 @@
 import json
 import logging
 import re
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 from config import settings
 from ..llm.ollama_client import OllamaClient
 from ..tools.database_tool import DatabaseTool
+from .cognitive_analyzer import CognitiveAnalyzer, CognitiveResult
 from .stream_parser import StreamJsonParser
 
 logger = logging.getLogger("uvicorn.error")
@@ -13,7 +14,7 @@ logger = logging.getLogger("uvicorn.error")
 
 class YuemnoiConsultantService:
     """
-    Intelligent, consultative rental AI service powered by local LLM (Typhoon 2 8B / Qwen 3 8B) and Supabase.
+    Intelligent, consultative rental AI service powered by local LLM (Typhoon 2 8B) and Supabase.
     Follows Gemini 3.8 Flash conversational patterns:
     - High accuracy, grounded in Supabase inventory
     - Never sorts by ID; ranks by semantic relevance and value
@@ -78,6 +79,7 @@ class YuemnoiConsultantService:
         "ลงของ", "ลงประกาศ", "สร้างรายได้", "ลงทะเบียน",
         # Recommendations & Inquiries
         "มีอะไร", "แนะนำ", "ช่วยเลือก", "หาของ", "ใช้อะไร", "มีไหม", "มีมั้ย", "มีป่าว",
+        "สนใจ", "อยากได้", "มองหา", "ต้องการ", "ขอดู", "อยากลอง",
         # Greetings & Acknowledgements
         "สวัสดี", "หวัดดี", "ดีครับ", "ดีค่ะ", "hello", "hi", "ขอบคุณ", "ขอบใจ", "thanks", "ok", "โอเค",
     ]
@@ -86,7 +88,7 @@ class YuemnoiConsultantService:
         "เดินป่า", "เดินเขา", "ปีนเขา", "ขึ้นเขา", "แคมป์", "แคมปิ้ง", "กางเต็นท์", "เที่ยว", "ทริป",
         "ถ่ายรูป", "ถ่ายภาพ", "ถ่ายวิดีโอ", "ทำคลิป", "vlog", "พอร์ตเทรต",
         "จัดงาน", "ปาร์ตี้", "สัมมนา", "อีเวนต์", "งานแต่ง", "งานแต่งงาน",
-        "ดนตรี", "เล่นดนตรี", "ซ้อมดนตรี", "คอนเสิร์ต",
+        "ดนตรี", "เล่นดนตรี", "ซ้อมดนตรี", "คอนเสิร์ต", "ร้องเพลง",
         "คอม", "ทำงาน", "ตัดต่อ", "เล่นเกม", "live", "สตรีม",
         "ออกกำลังกาย", "วิ่ง", "ฟิตเนส",
         "ดำน้ำ", "ดำน้ำตื้น", "ดำน้ำลึก", "สกินไดฟ์", "ฟรีไดฟ์",
@@ -99,6 +101,7 @@ class YuemnoiConsultantService:
         "เต็นท์", "โต๊ะแคมป์", "เก้าอี้แคมป์", "ตะเกียง", "ฟลายชีท", "อุปกรณ์แคมป์", "อุปกรณ์เดินป่า",
         "โน้ตบุ๊ก", "โน้ตบุค", "คอมพิวเตอร์", "คอม", "แล็ปท็อป", "แท็บเล็ต", "ipad",
         "เครื่องเสียง", "ลำโพง", "ไมค์", "ไมโครโฟน", "มิกเซอร์",
+        "เครื่องดนตรี", "ดนตรี", "กีตาร์", "กีต้าร์", "กีตาร์โปร่ง", "กีตาร์ไฟฟ้า", "คีย์บอร์ด", "เปียโน", "เบส", "กลอง",
         "ไฟสตูดิโอ", "ไฟต่อเนื่อง", "ขาตั้งกล้อง",
         "ลู่วิ่ง", "จักรยานออกกำลังกาย",
         "เครื่องฉีดน้ำ", "สว่าน", "เครื่องมือช่าง", "อุปกรณ์ดำน้ำ",
@@ -110,6 +113,7 @@ class YuemnoiConsultantService:
         "coleman", "k2", "naturehike", "quechua", "dod", "blackdeer",
         "macbook", "dell", "asus", "lenovo", "acer", "hp", "ipad", "iphone", "ps5", "playstation",
         "jbl", "marshall", "yamaha", "bose", "rode", "shure", "saramonic", "motorola",
+        "martin", "fender", "gibson", "taylor", "ibanez", "roland", "casio", "korg", "epiphone", "squier", "sennheiser", "audio-technica",
         "johnson", "bosch", "dyson", "xiaomi", "trek",
     ]
 
@@ -155,15 +159,33 @@ class YuemnoiConsultantService:
         "นโยบายการรับประกันและมัดจำ",
     ]
 
+    COMPARISON_KEYWORDS = (
+        "ต่างกับ", "ต่างจาก", "ต่างกัน", "เทียบกับ", "เทียบ", "เปรียบเทียบ",
+        "vs", "versus", "v.s.",
+        "อันไหนดีกว่า", "อันไหนน่าใช้กว่า", "ตัวไหนดีกว่า", "รุ่นไหนดีกว่า", "อันไหนเหมาะกว่า",
+        "ข้อดีข้อเสีย", "ข้อดี ข้อเสีย", "จุดเด่นจุดด้อย", "จุดเด่น จุดด้อย", "ข้อแตกต่าง",
+        "ต่างกันยังไง", "ต่างกันไง", "ต่างกันอย่างไร", "ต่างกันไหม", "ต่างกันมั้ย",
+        "เลือกอะไรดีระหว่าง", "เลือกรุ่นไหนดีระหว่าง", "เลือกตัวไหนดีระหว่าง",
+        "ความแตกต่าง",
+    )
+
+    COMPARISON_FOLLOWUP_KEYWORDS = (
+        "ถามว่าต่าง", "บอกว่าต่าง", "ว่าต่างกัน", "สรุปต่าง", "เทียบให้",
+        "สองตัวนี้", "สองอันนี้", "สองรุ่นนี้", "คู่นี้", "ทั้งสองตัว", "ทั้งสองอัน",
+    )
+
     def __init__(
         self,
         ollama: OllamaClient,
         db_tool: DatabaseTool,
         feedback_store: Optional[Any] = None,
+        google_tool: Optional[Any] = None,
     ):
         self.ollama = ollama
         self.db_tool = db_tool
         self.feedback_store = feedback_store
+        self.google_tool = google_tool
+        self.cognitive_analyzer = CognitiveAnalyzer(self.ollama)
 
     @staticmethod
     def _is_simple_greeting(query: str) -> bool:
@@ -281,30 +303,110 @@ class YuemnoiConsultantService:
         self,
         query: str,
         unsupported_domain: Optional[str] = None,
+        target_entity: Optional[str] = None,
+        domain_category: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Builds a polite, warm refusal response when the requested item or category does not exist in inventory.
         Guarantees recommended_items is strictly empty ([]) and no hallucinated recommendations occur.
+        If the query is a general/exploratory request (e.g. asking what is available), warmly guides the user instead of refusing.
         """
+        generic_inquiry_terms = {
+            "ไร", "อะไร", "ไรให้เช่า", "อะไรให้เช่า", "ของ", "ของเช่า", "ของให้เช่า",
+            "อะไรบ้าง", "อุปกรณ์", "อุปกรณ์เช่า", "มีอะไร", "มีไร", "มีไรให้เช่า", "มีอะไรให้เช่า",
+            "ชิ้น", "อัน", "บริการ", "แนะนำ", "ช่วย", "ช่วยแนะนำ", "สินค้า", "ช่วยหน่อย",
+            "มีของอะไรบ้าง", "ขอดูของ", "ขอดูของเช่า", "ขอดูของหน่อย"
+        }
+
         if unsupported_domain:
             target_desc = f"**{unsupported_domain}**"
+            is_generic_question = False
+        elif target_entity and target_entity.strip():
+            clean_target = self._clean_comparison_entity(target_entity.strip())
+            norm_target = clean_target.lower().strip()
+            if norm_target in generic_inquiry_terms or any(norm_target == term for term in generic_inquiry_terms):
+                is_generic_question = True
+                target_desc = "อุปกรณ์ดังกล่าว"
+            else:
+                target_desc = f"**{clean_target}**"
+                is_generic_question = False
         else:
-            clean_q = re.sub(r"^(อยากได้|อยากเช่า|ต้องการ|สนใจ|มี|ขอ|ช่วยแนะนำ|หา)\s*", "", query.strip())
-            clean_q = re.sub(r"\s*(ไหม|มั้ย|คะ|ครับ|บ้าง|หน่อย|นะ|จ๊ะ|รึเปล่า)$", "", clean_q).strip()
+            clean_q = re.sub(
+                r"^(?:เรา|ผม|หนู|ฉัน|พวกเรา|ทางเรา)?\s*(?:อยากได้|อยากเช่า|ต้องการ|สนใจ|มี|ขอ|ช่วยแนะนำ|หา|มองหา|อยากดู)\s*",
+                "",
+                query.strip(),
+                flags=re.IGNORECASE,
+            )
+            clean_q = re.sub(
+                r"\s*(?:ไหม|มั้ย|คะ|ครับ|บ้าง|หน่อย|นะ|จ๊ะ|รึเปล่า|หรือเปล่า|ได้ไหม|ได้มั้ย)$",
+                "",
+                clean_q,
+                flags=re.IGNORECASE,
+            ).strip()
+            clean_q = self._clean_comparison_entity(clean_q)
+
+            norm_cq = clean_q.lower().strip()
+            is_generic_question = (
+                not norm_cq
+                or norm_cq in generic_inquiry_terms
+                or any(norm_cq == term for term in generic_inquiry_terms)
+                or any(norm_cq.startswith(term) and len(norm_cq) <= len(term) + 4 for term in ("ไร", "อะไร", "ของเช่า", "มีอะไร", "มีไร"))
+            )
             target_desc = f"**{clean_q}**" if clean_q else "อุปกรณ์หรือบริการดังกล่าว"
 
         cats_text = (
             "- 📷 **กล้องและอุปกรณ์ถ่ายภาพ** (เช่น Sony A7 IV, เลนส์, โดรน DJI, ขาตั้งกล้อง)\n"
             "- ⛺ **แคมป์ปิงและกิจกรรมกลางแจ้ง** (เช่น เต็นท์ Naturehike/Coleman, เก้าอี้แคมป์)\n"
             "- 💻 **คอมพิวเตอร์และอุปกรณ์ไอที** (เช่น โน้ตบุ๊ก, แท็บเล็ต, หน้าจอ, อุปกรณ์เสริม)\n"
-            "- 🔊 **เครื่องเสียงและอุปกรณ์จัดงาน** (เช่น ลำโพง Marshall, ไมค์ลอย, เครื่องดนตรี)"
+            "- 🎸 **ดนตรีและเครื่องเสียง** (เช่น กีตาร์โปร่ง Yamaha, ลำโพง Marshall, ไมค์ลอย)"
         )
 
-        answer = (
-            f"ขออภัยด้วยนะคะ ขณะนี้แพลตฟอร์ม **Yuemnoi (ยืมน้อย)** ยังไม่มีบริการให้เช่า {target_desc} ในระบบค่ะ 🙏\n\n"
-            f"ปัจจุบัน Yuemnoi มุ่งเน้นการให้บริการเช่าอุปกรณ์ในหมวดหมู่ยอดนิยมดังนี้ค่ะ:\n{cats_text}\n\n"
-            "หากคุณลูกค้าสนใจอุปกรณ์ในหมวดหมู่ข้างต้น สามารถสอบถามหรือพิมพ์บอกความต้องการให้ Yuemnoi แนะนำได้เลยนะคะ 😊"
-        )
+        if is_generic_question:
+            answer = (
+                "ยินดีต้อนรับสู่ **Yuemnoi (ยืมน้อย)** ค่ะ! แพลตฟอร์มของเรามีบริการให้เช่าอุปกรณ์คุณภาพหลากหลายหมวดหมู่พร้อมให้บริการค่ะ 😊\n\n"
+                f"ปัจจุบัน Yuemnoi มุ่งเน้นการให้บริการเช่าอุปกรณ์ในหมวดหมู่ยอดนิยมดังนี้ค่ะ:\n{cats_text}\n\n"
+                "คุณลูกค้าสนใจอุปกรณ์ในหมวดหมู่ไหน หรือมีกิจกรรมที่ต้องการใช้งาน สามารถบอกความต้องการหรือให้ Yuemnoi แนะนำได้เลยนะคะ ✨"
+            )
+            suggested_replies = [
+                "แนะนำกล้องถ่ายรูป",
+                "มีอุปกรณ์แคมปิ้งอะไรบ้าง",
+                "อยากเช่าโน้ตบุ๊กทำงาน",
+                "ขั้นตอนการเช่าอุปกรณ์",
+            ]
+        else:
+            alt_text = ""
+            if domain_category:
+                dom_lower = domain_category.lower()
+                if any(m in dom_lower for m in ("ดนตรี", "เครื่องดนตรี", "กีตาร์", "guitar", "music")):
+                    alt_text = "\n\n💡 แต่ในหมวดเครื่องดนตรี Yuemnoi มีอุปกรณ์คุณภาพรุ่นอื่นที่พร้อมให้เช่า เช่น **กีตาร์โปร่ง Yamaha F310** ซึ่งเป็นรุ่นยอดนิยม เสียงดี เล่นง่าย และเหมาะสำหรับทั้งผู้เริ่มต้นและผู้เล่นทั่วไปค่ะ"
+                elif any(c in dom_lower for c in ("กล้อง", "ถ่ายภาพ", "camera", "photo")):
+                    alt_text = "\n\n💡 แต่ในหมวดกล้องและอุปกรณ์ถ่ายภาพ Yuemnoi มีอุปกรณ์คุณภาพพร้อมให้บริการ เช่น **Sony Alpha A7 IV**, **Fujifilm X-T5**, หรือโดรน **DJI Mini 4 Pro** ค่ะ"
+                elif any(cp in dom_lower for cp in ("แคมปิ้ง", "กลางแจ้ง", "camping", "outdoor")):
+                    alt_text = "\n\n💡 แต่ในหมวดแคมปิ้ง Yuemnoi มีอุปกรณ์คุณภาพพร้อมให้เช่า เช่น **เต็นท์ Naturehike Village 13**, เก้าอี้แคมป์ปิ้ง และชุดอุปกรณ์แคมป์ครบชุดค่ะ"
+                elif any(it in dom_lower for it in ("คอมพิวเตอร์", "ไอที", "it", "โน้ตบุ๊ก")):
+                    alt_text = "\n\n💡 แต่ในหมวดอุปกรณ์ไอที Yuemnoi มีอุปกรณ์พร้อมให้บริการ เช่น โน้ตบุ๊กและแท็บเล็ตประสิทธิภาพสูงค่ะ"
+
+            answer = (
+                f"ขออภัยด้วยนะคะ ขณะนี้แพลตฟอร์ม **Yuemnoi (ยืมน้อย)** ยังไม่มีบริการให้เช่า {target_desc} ในระบบค่ะ 🙏"
+                f"{alt_text}\n\n"
+                f"ปัจจุบัน Yuemnoi มุ่งเน้นการให้บริการเช่าอุปกรณ์ในหมวดหมู่ยอดนิยมดังนี้ค่ะ:\n{cats_text}\n\n"
+                "หากคุณลูกค้าสนใจอุปกรณ์ในหมวดหมู่ข้างต้น หรือต้องการให้ Yuemnoi แนะนำอุปกรณ์ทดแทน สามารถบอกได้เลยนะคะ 😊"
+            )
+
+            if domain_category and any(m in domain_category.lower() for m in ("ดนตรี", "เครื่องดนตรี", "กีตาร์", "guitar", "music")):
+                suggested_replies = [
+                    "สนใจเช่า Yamaha F310",
+                    "มีเครื่องดนตรีอะไรบ้าง",
+                    "ขั้นตอนการเช่าอุปกรณ์",
+                    "นโยบายเงินมัดจำ",
+                ]
+            else:
+                suggested_replies = [
+                    "แนะนำกล้องถ่ายรูป",
+                    "มีอุปกรณ์แคมปิ้งอะไรบ้าง",
+                    "อยากเช่าโน้ตบุ๊กทำงาน",
+                    "ขั้นตอนการเช่าอุปกรณ์",
+                ]
 
         return {
             "status": "success",
@@ -312,12 +414,7 @@ class YuemnoiConsultantService:
             "answer": answer,
             "questions": [],
             "recommended_items": [],
-            "suggested_replies": [
-                "แนะนำกล้องถ่ายรูป",
-                "มีอุปกรณ์แคมปิ้งอะไรบ้าง",
-                "อยากเช่าโน้ตบุ๊กทำงาน",
-                "ขั้นตอนการเช่าอุปกรณ์",
-            ],
+            "suggested_replies": suggested_replies,
         }
 
     def _is_query_in_scope(self, query: str, history: Optional[List[Dict[str, str]]] = None) -> bool:
@@ -377,6 +474,10 @@ class YuemnoiConsultantService:
         if any(re.search(p, norm) for p in self.FAQ_PATTERNS):
             return "faq"
 
+        # 1.1 Comparison Check (Direct comparisons, pros/cons, or contextual corrections like 'ไม่เราถามว่าต่างกันไง')
+        if self._is_comparison_query(norm, history):
+            return "comparison"
+
         # 2. Out-of-Scope Check (Guardrail for non-platform queries like general programming, weather, cooking, etc.)
         if not self._is_query_in_scope(norm, history):
             return "out_of_scope"
@@ -409,9 +510,16 @@ class YuemnoiConsultantService:
             if has_assistant_prompt and is_correction:
                 return "recommendation"
 
+            # Check if query is a fresh question or exploratory inquiry rather than answering questionnaire
+            is_new_inquiry = (
+                any(norm.startswith(p) for p in ("มี", "ขอ", "อยากรู้", "สอบถาม", "ทำไม", "คือ", "แล้ว", "ถ้า", "หา"))
+                or any(q in norm for q in ("อะไรบ้าง", "ไรบ้าง", "มีอะไร", "มีไร", "อะไรให้เช่า", "ไรให้เช่า", "เช่าอะไร", "ยืมอะไร", "อะไรดี", "แนะนำหน่อย", "ช่วยหน่อย", "มีของ"))
+            )
+
             # User answering questionnaire options or replying after questionnaire prompt
-            if (was_questionnaire_prompt and (prior_context or has_assistant_prompt)) or ((prior_context or has_assistant_prompt) and is_followup_answer):
-                return "recommendation"
+            if not is_new_inquiry:
+                if (was_questionnaire_prompt and (is_followup_answer or self._check_is_sufficiently_specific(norm))) or ((prior_context or has_assistant_prompt) and is_followup_answer):
+                    return "recommendation"
 
         # 4. Check if initial query is SPECIFIC ENOUGH:
         # If user asks clearly with brand, model, budget, duration, or specific purpose -> RECOMMEND IMMEDIATELY (no questionnaire)!
@@ -510,6 +618,263 @@ class YuemnoiConsultantService:
 
         return ""
 
+    def _is_comparison_query(self, norm: str, history: Optional[List[Dict[str, str]]] = None) -> bool:
+        """
+        Determines if the query is asking to compare devices/equipment, either directly
+        (e.g., 'ระหว่าง คีย์บอร์ด 61 คีย์ ต่างกับ กีตาร์โปร่ง Yamaha ไง', 'กล้อง A กับ กล้อง B อันไหนดีกว่า')
+        or contextually / as a follow-up correction (e.g., 'ไม่เราถามว่าต่างกันไง', 'แล้วสองตัวนี้ต่างกันยังไง').
+        """
+        # 1. Direct comparison keywords
+        if any(kw in norm for kw in self.COMPARISON_KEYWORDS):
+            return True
+
+        # 2. Pattern: ระหว่าง ... กับ ... (between X and Y) with comparison intent
+        if "ระหว่าง" in norm and any(sep in norm for sep in ("กับ", "และ", "เทียบ")):
+            return True
+
+        # 3. Follow-up / Contextual comparison with reference to previous turn
+        if any(kw in norm for kw in self.COMPARISON_FOLLOWUP_KEYWORDS):
+            if any(w in norm for w in ("ต่าง", "เทียบ", "ดีกว่า", "เหมาะกว่า", "ข้อดี", "ข้อเสีย")):
+                return True
+
+        # 4. Contextual correction: "ไม่/ไม่ใช่ ... ถามว่า/ว่า ... ต่าง"
+        if any(neg in norm for neg in ("ไม่", "ไม่ใช่", "เราถาม", "ถามว่า", "บอกว่า", "สรุป")):
+            if any(w in norm for w in ("ต่าง", "เทียบ", "ดีกว่า", "ข้อดีข้อเสีย", "ข้อดี", "ความต่าง")):
+                return True
+
+        return False
+
+    @staticmethod
+    def _clean_comparison_entity(text: str) -> str:
+        """
+        Cleans extracted comparison entity by stripping conversational prefixes,
+        fillers, question suffixes, and standardizing brand casing.
+        """
+        s = str(text or "").strip()
+        # Strip conversational prefixes and fillers
+        s = re.sub(
+            r"^(?:แล้ว(?:ถ้า)?|ถ้า|งั้น|สรุป|ระหว่าง|ช่วย|อยากรู้ว่า|อยากทราบว่า|ลอง|ขอ|เปรียบเทียบ|ดู|เลือก|เอา|พวก|แบบ|ตัว|รุ่น|แบรนด์|ยี่ห้อ)\s*",
+            "",
+            s,
+            flags=re.IGNORECASE,
+        ).strip()
+        # Strip leading conjunctions
+        s = re.sub(r"^(?:กับ|และ|หรือ|เทียบกับ|เปรียบเทียบกับ|vs\.?|versus)\s*", "", s, flags=re.IGNORECASE).strip()
+        # Strip comparison / question / politeness suffixes
+        s = re.sub(
+            r"\s*(?:ต่างกันยังไง|ต่างกันอย่างไร|ต่างกันไง|ต่างกันมั้ย|ต่างกันไหม|ต่างกันตรงไหน|ต่างกัน|ต่าง|ยังไง|อย่างไร|ไง|ตรงไหน|ข้อดีข้อเสีย|ข้อดี|ข้อเสีย|อันไหนดีกว่า|ตัวไหนดีกว่า|รุ่นไหนดีกว่า|อันไหนเหมาะกว่า|ตัวไหนเหมาะกว่า|อันไหนดี|ตัวไหนดี|ดีกว่า|เหมาะกว่า|หน่อย|ครับ|ค่ะ|นะคะ|หน่อยครับ|หน่อยค่ะ|บ้าง|ล่ะ|นะ)\??$",
+            "",
+            s,
+            flags=re.IGNORECASE,
+        ).strip()
+        # Remove surrounding markdown symbols, quotes or brackets
+        s = s.strip("*_`'\"() ")
+
+        # Common brand name casing preservation
+        known_brands_map = {
+            "martin": "Martin", "yamaha": "Yamaha", "fender": "Fender", "gibson": "Gibson",
+            "taylor": "Taylor", "ibanez": "Ibanez", "roland": "Roland", "casio": "Casio",
+            "korg": "Korg", "sony": "Sony", "canon": "Canon", "nikon": "Nikon", "fujifilm": "Fujifilm",
+            "fuji": "Fuji", "panasonic": "Panasonic", "lumix": "Lumix", "gopro": "GoPro", "dji": "DJI",
+            "apple": "Apple", "macbook": "MacBook", "ipad": "iPad", "iphone": "iPhone",
+            "asus": "ASUS", "dell": "Dell", "lenovo": "Lenovo", "acer": "Acer", "hp": "HP",
+            "k2": "K2", "coleman": "Coleman", "naturehike": "Naturehike", "quechua": "Quechua",
+            "dod": "DOD", "blackdeer": "Blackdeer", "bosch": "Bosch", "dyson": "Dyson",
+            "xiaomi": "Xiaomi", "marshall": "Marshall", "jbl": "JBL", "bose": "Bose",
+            "rode": "Rode", "shure": "Shure", "saramonic": "Saramonic",
+        }
+        low = s.lower()
+        if low in known_brands_map:
+            return known_brands_map[low]
+        for b_low, b_proper in known_brands_map.items():
+            if low == b_low:
+                return b_proper
+            if low.startswith(b_low + " "):
+                return b_proper + s[len(b_low):]
+        if s.isascii() and s.islower() and len(s) >= 2:
+            return s.title()
+        return s
+
+    def _extract_comparison_entities(
+        self,
+        query: str,
+        history: Optional[List[Dict[str, str]]] = None,
+    ) -> Tuple[str, str]:
+        """
+        Extracts the two entities being compared from the query or conversation history.
+        Handles both direct queries ('ระหว่าง X ต่างกับ Y ไง') and follow-ups ('ไม่เราถามว่าต่างกันไง').
+        """
+        norm = query.strip()
+
+        # Step 1: Direct extraction from current query
+        clean = norm
+        # Remove common conversational prefixes
+        clean = re.sub(
+            r"^(?:แล้ว(?:ถ้า)?|ถ้า|งั้น|สรุป|ระหว่าง|ช่วย|อยากรู้ว่า|อยากทราบว่า|ลอง|ขอ|เปรียบเทียบ)\s*",
+            "",
+            clean,
+            flags=re.IGNORECASE,
+        )
+        # Remove common question/politeness suffixes
+        clean = re.sub(
+            r"\s*(?:ต่างกันยังไง|ต่างกันอย่างไร|ต่างกันไง|ต่างกันมั้ย|ต่างกันไหม|ต่างกันตรงไหน|ต่างกัน|ต่าง|ยังไง|อย่างไร|ไง|ตรงไหน|ข้อดีข้อเสีย|ข้อดี|ข้อเสีย|อันไหนดีกว่า|ตัวไหนดีกว่า|รุ่นไหนดีกว่า|อันไหนเหมาะกว่า|ตัวไหนเหมาะกว่า|หน่อย|ครับ|ค่ะ|นะคะ|หน่อยครับ|หน่อยค่ะ|บ้าง|ล่ะ|นะ)\??$",
+            "",
+            clean,
+            flags=re.IGNORECASE,
+        )
+
+        delimiters = [
+            r"\s+ต่างกับ\s+",
+            r"\s+ต่างจาก\s+",
+            r"\s+เทียบกับ\s+",
+            r"\s+เปรียบเทียบกับ\s+",
+            r"\s+vs\.?\s+",
+            r"\s+versus\s+",
+            r"ต่างกับ",
+            r"ต่างจาก",
+            r"เทียบกับ",
+            r"\s+กับ\s+",
+        ]
+
+        item_a, item_b = "", ""
+        for delim in delimiters:
+            parts = re.split(delim, clean, maxsplit=1, flags=re.IGNORECASE)
+            if len(parts) == 2:
+                cand_a = self._clean_comparison_entity(parts[0])
+                cand_b = self._clean_comparison_entity(parts[1])
+                if len(cand_a) >= 2 and len(cand_b) >= 2:
+                    item_a, item_b = cand_a, cand_b
+                    break
+
+        if item_a and item_b:
+            return (item_a, item_b)
+
+        # Step 2: Contextual Extraction from History (e.g. user said "ไม่เราถามว่าต่างกันไง")
+        if history:
+            # 2A: Check previous user queries
+            for msg in reversed(history[-6:]):
+                if msg.get("role") == "user":
+                    prev_query = str(msg.get("content") or "").strip()
+                    if prev_query and prev_query != query:
+                        prev_clean = re.sub(
+                            r"^(?:แล้ว(?:ถ้า)?|ถ้า|งั้น|สรุป|ระหว่าง|ช่วย|อยากรู้ว่า|อยากทราบว่า|ลอง|ขอ|เปรียบเทียบ)\s*",
+                            "",
+                            prev_query,
+                            flags=re.IGNORECASE,
+                        )
+                        prev_clean = re.sub(
+                            r"\s*(?:ต่างกันยังไง|ต่างกันอย่างไร|ต่างกันไง|ต่างกันมั้ย|ต่างกันไหม|ต่างกันตรงไหน|ต่างกัน|ต่าง|ยังไง|อย่างไร|ไง|ตรงไหน|ข้อดีข้อเสีย|ข้อดี|ข้อเสีย|อันไหนดีกว่า|ตัวไหนดีกว่า|รุ่นไหนดีกว่า|อันไหนเหมาะกว่า|ตัวไหนเหมาะกว่า|หน่อย|ครับ|ค่ะ|นะคะ|ล่ะ|นะ)\??$",
+                            "",
+                            prev_clean,
+                            flags=re.IGNORECASE,
+                        )
+                        for delim in delimiters:
+                            parts = re.split(delim, prev_clean, maxsplit=1, flags=re.IGNORECASE)
+                            if len(parts) == 2:
+                                cand_a = self._clean_comparison_entity(parts[0])
+                                cand_b = self._clean_comparison_entity(parts[1])
+                                if len(cand_a) >= 2 and len(cand_b) >= 2:
+                                    return (cand_a, cand_b)
+
+            # 2B: Check previous assistant response for highlighted items (- **Item Name**)
+            for msg in reversed(history[-4:]):
+                if msg.get("role") == "assistant":
+                    content = str(msg.get("content") or "")
+                    bullet_items = re.findall(r"-\s*\*\*([^*]+)\*\*", content)
+                    if len(bullet_items) >= 2:
+                        return (self._clean_comparison_entity(bullet_items[0]), self._clean_comparison_entity(bullet_items[1]))
+
+        if item_a:
+            return (item_a, "อุปกรณ์เปรียบเทียบ")
+        return ("อุปกรณ์แรก", "อุปกรณ์ที่สอง")
+
+    def _find_catalog_items_for_entities(
+        self,
+        entities: Tuple[str, str],
+        catalog: List[Dict[str, Any]],
+        domain_category: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Finds items in catalog matching either of the compared entities with contextual affinity."""
+        matched = []
+        seen_ids = set()
+        norm_domain = (domain_category or "").lower().strip()
+        for entity in entities:
+            if not entity or len(entity) < 2 or entity in ("อุปกรณ์แรก", "อุปกรณ์ที่สอง", "อุปกรณ์เปรียบเทียบ"):
+                continue
+            entity_norm = entity.lower().strip()
+            tokens = [t for t in re.split(r"[\s,]+", entity_norm) if len(t) >= 2]
+            best_match = None
+            best_score = 0
+
+            # Determine other entity for contextual affinity
+            other_entities = [e.lower().strip() for e in entities if e != entity and e]
+            other_text = " ".join(other_entities)
+
+            for item in catalog:
+                i_id = item.get("id")
+                if i_id in seen_ids:
+                    continue
+                name = str(item.get("item_name") or "").lower()
+                desc = str(item.get("description") or "").lower()
+                cat = str(item.get("category") or "").lower()
+
+                score = 0
+                has_direct_entity_match = False
+                # Exact match or substring in name
+                if entity_norm in name:
+                    score += 100
+                    has_direct_entity_match = True
+                elif any(token in name for token in tokens):
+                    score += 40
+                    has_direct_entity_match = True
+
+                for token in tokens:
+                    if token in name:
+                        score += 20
+                        has_direct_entity_match = True
+                    elif token in desc:
+                        score += 5
+                        has_direct_entity_match = True
+
+                # If the item has no direct match with this specific compared entity, it cannot match
+                if not has_direct_entity_match:
+                    continue
+
+                # Contextual affinity with the other entity being compared:
+                # 1. Guitar / String instruments affinity
+                if any(g in other_text for g in ("martin", "fender", "gibson", "taylor", "กีตาร์", "กีต้าร์", "guitar")):
+                    if "กีตาร์" in name or "กีต้าร์" in name or "guitar" in name:
+                        score += 50
+                # 2. Keyboard / Piano affinity
+                elif any(k in other_text for k in ("roland", "casio", "korg", "คีย์บอร์ด", "เปียโน", "keyboard")):
+                    if "คีย์บอร์ด" in name or "เปียโน" in name or "keyboard" in name:
+                        score += 50
+                # 3. Camera / Photography affinity
+                elif any(c in other_text for c in ("sony", "canon", "nikon", "fujifilm", "fuji", "panasonic", "lumix", "กล้อง", "camera")):
+                    if "กล้อง" in name or "camera" in name or "lens" in name:
+                        score += 50
+                # 4. Camping / Outdoor affinity
+                elif any(cmp in other_text for cmp in ("coleman", "naturehike", "k2", "dod", "เต็นท์", "เต้นท์", "แคมปิ้ง", "camping")):
+                    if "เต็นท์" in name or "แคมปิ้ง" in name or "camping" in name:
+                        score += 50
+
+                # 5. Cognitive Domain Category Affinity
+                if norm_domain:
+                    if norm_domain in cat or cat in norm_domain:
+                        score += 35
+                    elif any(w in cat or w in name for w in norm_domain.split() if len(w) >= 3):
+                        score += 25
+
+                if score > best_score and score >= 20:
+                    best_score = score
+                    best_match = item
+
+            if best_match:
+                matched.append(best_match)
+                seen_ids.add(best_match.get("id"))
+
+        return matched
+
     def build_system_prompt(
         self,
         intent: str,
@@ -517,6 +882,9 @@ class YuemnoiConsultantService:
         learned_insights: Optional[Dict[str, List[str]]] = None,
         available_categories: Optional[List[str]] = None,
         followup_context: Optional[Dict[str, str]] = None,
+        comparison_search_data: Optional[str] = None,
+        compared_entities: Optional[Tuple[str, str]] = None,
+        domain_category: Optional[str] = None,
     ) -> str:
         """Builds specialized system prompt based on classified intent, catalog inventory, continuous learning, and multi-turn context."""
         learning_block = ""
@@ -565,7 +933,9 @@ class YuemnoiConsultantService:
                 "  2) 'recommended_item_ids': []\n"
                 "  3) 'questions': []\n"
                 "  4) 'answer': ข้อความตอบคำถามนโยบาย/บริการอย่างละเอียดและอบอุ่น (หากมีขั้นตอนให้ขึ้นบรรทัดใหม่เป็น 1. 2. 3. 4.)\n"
-                "  5) 'suggested_replies': ตัวเลือกคำถามที่เกี่ยวข้อง 2-3 ข้อ\n\n"
+                "  5) 'suggested_replies': ตัวเลือกคำถามที่เกี่ยวข้อง 2-3 ข้อ\n"
+                "- **ห้ามตอบเป็น JSON ของสินค้าชิ้นเดียวเด็ดขาด!** ต้องตอบในโครงสร้าง JSON ครบทุกคีย์เสมอ\n"
+                "- **ห้ามปล่อยให้คีย์ answer เป็นค่าว่าง (\"\") เด็ดขาด!**\n\n"
                 "ตัวอย่างรูปแบบ JSON ที่ต้องตอบ:\n"
                 "{\n"
                 '  "mode": "general_chat",\n'
@@ -575,45 +945,151 @@ class YuemnoiConsultantService:
                 '  "suggested_replies": ["นโยบายเงินมัดจำ", "มีประกันอุปกรณ์ไหม", "ค้นหาอุปกรณ์ที่ต้องการเช่า"]\n'
                 "}"
             )
+        elif intent == "comparison":
+            ent_a = compared_entities[0] if compared_entities else "อุปกรณ์แรก"
+            ent_b = compared_entities[1] if compared_entities else "อุปกรณ์ที่สอง"
+
+            search_section = ""
+            if comparison_search_data:
+                search_section = (
+                    f"### 🌐 ข้อมูลสเปกและข้อเท็จจริงที่ตรวจสอบจากอินเทอร์เน็ต (Verified Internet Search Data):\n"
+                    f"{comparison_search_data}\n\n"
+                )
+            else:
+                search_section = (
+                    f"### 🌐 ข้อมูลสเปกและข้อเท็จจริง:\n"
+                    f"นำข้อมูลสเปก จุดเด่น และข้อจำกัดที่เป็นจริงของ '{ent_a}' และ '{ent_b}' มาใช้เปรียบเทียบอย่างถูกต้องและเป็นกลาง\n\n"
+                )
+
+            base_prompt = (
+                "คุณคือ Yuemnoi AI ผู้ช่วยประจำแพลตฟอร์มเช่าอุปกรณ์ 'Yuemnoi' (ยืมน้อย) ผู้เชี่ยวชาญการเปรียบเทียบอุปกรณ์\n"
+                "มีบุคลิกภาพสุภาพ อบอุ่น เป็นมิตร เชี่ยวชาญ ให้ข้อมูลเปรียบเทียบเชิงลึกอย่างเป็นกลาง ถูกต้องตามสเปกจริง (ลงท้าย ค่ะ/คะ)\n\n"
+                f"อุปกรณ์ที่นำมาเปรียบเทียบ: '{ent_a}' กับ '{ent_b}'\n\n"
+                f"{search_section}"
+                "กฎเหล็กสำคัญที่สุดสำหรับการเปรียบเทียบ (CRITICAL COMPARISON RULES):\n"
+                "1. **ความถูกต้องแม่นยำและห้ามเดาสเปก (Strict Fact Grounding)**:\n"
+                "   - นำข้อมูลสเปก คุณสมบัติ จุดเด่น และข้อเท็จจริงจากข้อมูลที่ตรวจสอบด้านบนมาใช้ในการเปรียบเทียบ ห้ามกุสเปกทางเทคนิคขึ้นมาเองเด็ดขาด\n"
+                "   - หากข้อมูลสเปกบางจุดไม่ปรากฏอย่างชัดเจน ให้อธิบายตามข้อเท็จจริงทั่วไปของการใช้งานประเภทนั้นอย่างตรงไปตรงมา\n"
+                "2. **โครงสร้างคำตอบใน `answer`** (ต้องจัดรูปแบบด้วย Markdown ที่สวยงาม เป็นระเบียบ อ่านง่าย สบายตา):\n"
+                f"   - **เกริ่นนำสั้นๆ 1 ประโยค**: ทักทายพร้อมสรุปว่าเป็นการเปรียบเทียบระหว่าง {ent_a} และ {ent_b}\n"
+                "   - **📌 สรุปภาพรวมความแตกต่าง**: สรุปความแตกต่างหลักในภาพรวม 2-3 บรรทัด (เช่น ลักษณะการใช้งาน, ฟังก์ชันหลัก)\n"
+                "   - **⚖️ เปรียบเทียบจุดต่อจุด**: เปรียบเทียบเป็นหัวข้อย่อยชัดเจน (เช่น ฟังก์ชัน/รูปแบบเสียง, ความสะดวกในการพกพา, ความยากง่ายในการเล่น/ใช้งาน)\n"
+                "   - **🌟 ข้อดี - ข้อสังเกต (Pros & Cons)**:\n"
+                f"     - **{ent_a}**:\n"
+                "       - ข้อดี: ...\n"
+                "       - ข้อสังเกต: ...\n"
+                f"     - **{ent_b}**:\n"
+                "       - ข้อดี: ...\n"
+                "       - ข้อสังเกต: ...\n"
+                f"   - **🎯 คำแนะนำการเลือกใช้งาน**: สรุปชัดเจนว่าใครควรเลือก {ent_a} และใครควรเลือก {ent_b}\n"
+                "   - **ประโยคปิดท้าย 1 ประโยค**: เชิญชวนสอบถามหรือสนใจเช่าอุปกรณ์ชิ้นไหนสามารถแจ้งได้เลยค่ะ\n"
+                "3. **ห้ามถามคำถามแบบสอบถามเด็ดขาด (Zero Questionnaire Questions)**:\n"
+                "   - ให้ `questions: []` เสมอ ห้ามใส่คำถามหรือช้อยเลือกใดๆ ทั้งสิ้น เพราะผู้ใช้ต้องการคำตอบเปรียบเทียบทันที\n"
+                "4. **อุปกรณ์แนะนำในระบบ (Recommended Items)**:\n"
+                "   - หากอุปกรณ์ที่เปรียบเทียบมีอยู่ใน `รายการอุปกรณ์ที่พร้อมให้บริการในระบบ` ให้ใส่ ID ใน `recommended_item_ids`\n"
+                "   - หากไม่มีในรายการ ให้ใส่ `recommended_item_ids: []` โดยที่คำตอบ `answer` ยังคงเปรียบเทียบข้อมูลจริงอย่างครบถ้วนตามปกติ\n"
+                "5. **จัดเรียงลำดับคีย์ใน JSON ตามนี้เป๊ะๆ**:\n"
+                "   1) 'mode': 'comparison'\n"
+                "   2) 'recommended_item_ids': [ไอดีอุปกรณ์ในระบบที่เกี่ยวข้อง ถ้าไม่มีให้ใส่ []]\n"
+                "   3) 'questions': []\n"
+                "   4) 'answer': ข้อความ Markdown โครงสร้างเปรียบเทียบข้างต้น\n"
+                "   5) 'suggested_replies': ตัวเลือกคำถาม 2-3 ข้อ\n\n"
+                f"รายการอุปกรณ์ที่พร้อมให้บริการในระบบ:\n{json.dumps(compact_catalog, ensure_ascii=False, indent=2)}\n\n"
+                "ตัวอย่างรูปแบบ JSON ที่ต้องตอบ:\n"
+                "{\n"
+                '  "mode": "comparison",\n'
+                '  "recommended_item_ids": [],\n'
+                '  "questions": [],\n'
+                f'  "answer": "สำหรับความแตกต่างระหว่าง **{ent_a}** และ **{ent_b}** Yuemnoi สรุปเปรียบเทียบให้ดังนี้ค่ะ:\\n\\n### 📌 สรุปภาพรวม:\\n...\\n\\n### ⚖️ เปรียบเทียบจุดต่อจุด:\\n...\\n\\n### 🌟 ข้อดี - ข้อสังเกต:\\n- **{ent_a}**:\\n  - ข้อดี: ...\\n  - ข้อสังเกต: ...\\n- **{ent_b}**:\\n  - ข้อดี: ...\\n  - ข้อสังเกต: ...\\n\\n### 🎯 คำแนะนำการเลือกใช้งาน:\\n...\\n\\nหากสนใจเช่าอุปกรณ์ชิ้นใด สามารถสอบถามเพิ่มเติมได้เลยนะคะ 😊",\n'
+                f'  "suggested_replies": ["สนใจเช่า {ent_a}", "สนใจเช่า {ent_b}", "สอบถามขั้นตอนการเช่า"]\n'
+                "}"
+            )
         elif intent == "questionnaire":
             cat_list_str = ", ".join(f"'{c}'" for c in available_categories) if available_categories else ""
+
+            # For questionnaire, provide category names and examples WITHOUT item IDs
+            # so the model focuses entirely on generating discovery questions without premature product recommendations
+            sample_items_overview = []
+            if compact_catalog:
+                for item in compact_catalog[:8]:
+                    name = item.get("name")
+                    cat = item.get("category")
+                    if name:
+                        sample_items_overview.append(f"- {name} (หมวดหมู่: {cat or 'ทั่วไป'})")
+            sample_items_text = "\n".join(sample_items_overview) if sample_items_overview else "- กล้อง Mirrorless, โดรน, เลนส์, เต็นท์, โน้ตบุ๊ก, ลำโพงบลูทูธ"
+
+            domain_focus_str = ""
+            if domain_category:
+                domain_focus_str = (
+                    f"หมวดหมู่บริบทหลักที่ผู้ใช้กำลังสอบถาม: '{domain_category}'\n"
+                    f"(สำคัญมาก: คำถามและตัวเลือกทั้งหมดที่สร้างขึ้นต้องสอดคล้องกับบริบท '{domain_category}' 100% ห้ามถามข้ามหมวดหมู่อื่นเด็ดขาด)\n\n"
+                )
 
             base_prompt = (
                 "คุณคือ Yuemnoi AI ผู้ช่วยแนะนำอุปกรณ์เช่าอัจฉริยะ ประจำแพลตฟอร์ม 'Yuemnoi' (ยืมน้อย)\n"
                 "มีบุคลิกภาพสุภาพ อบอุ่น เป็นมิตร เชี่ยวชาญ (ลงท้าย ค่ะ/คะ)\n\n"
+                f"{domain_focus_str}"
+                f"หมวดหมู่สินค้าที่มีในระบบ: {cat_list_str}\n"
+                f"ตัวอย่างประเภทอุปกรณ์ที่มีให้บริการในระบบ (สำหรับอ้างอิงสร้างตัวเลือก):\n{sample_items_text}\n\n"
                 "ภารกิจในรอบนี้: วิเคราะห์ความต้องการเชิงลึก (Adaptive Needs Discovery Questionnaire)\n"
                 "ผู้ใช้สอบถามอุปกรณ์แบบกว้างหรือปลายเปิด คุณต้องสร้างชุดคำถามที่จำเป็นจำนวน **2 ถึง 4 ข้อ** ในคราวเดียว โดยประเมินจากระดับความชัดเจนของคำถามผู้ใช้:\n"
-                "- **กรณีคำถามกว้างปานกลาง (ระบุหมวดหมู่แล้ว เช่น 'อยากเช่าเต็นท์', 'อยากเช่าคอม', 'หาเช่ากล้อง')**: ให้สร้างชุดคำถาม **2 ข้อ**:\n"
+                "- **กรณีคำถามกว้างปานกลาง (ระบุหมวดหมู่แล้ว เช่น 'อยากเช่าเต็นท์', 'อยากเช่าคอม', 'หาเช่ากล้อง', 'ขอดูเครื่องมือช่างอื่น')**: ให้สร้างชุดคำถาม **2 ข้อ**:\n"
                 "  * ข้อ 1 (step: 1): วัตถุประสงค์หลัก / ลักษณะการใช้งาน พร้อมตัวเลือก 3-4 ข้อ + 'อื่นๆ (จะพิมพ์อธิบายเอง)'\n"
                 "  * ข้อ 2 (step: 2): ขนาดความจุ / จำนวนคน / สเปกสำคัญ / หรือระยะเวลาเช่า พร้อมตัวเลือก 3-4 ข้อ + 'อื่นๆ'\n"
-                "- **กรณีคำถามกว้างมาก / คลุมเครือ / ขาดรายละเอียดสำคัญ (เช่น 'จะไปเที่ยว', 'จัดงานปาร์ตี้', 'ทำคอนเทนต์', 'มีอะไรแนะนำบ้าง')**: ให้สร้างชุดคำถาม **3 ถึง 4 ข้อ** เพื่อรวบรวมข้อมูลให้รอบด้านก่อนแนะนำ:\n"
+                "- **กรณีคำถามกว้างมาก / คลุมเครือ / ขาดรายละเอียดสำคัญ (เช่น 'มีไรให้เช่าบ้าง', 'มีอะไรให้เช่า', 'จะไปเที่ยว', 'จัดงานปาร์ตี้', 'ทำคอนเทนต์', 'มีอะไรแนะนำบ้าง')**: ให้สร้างชุดคำถาม **2 ถึง 4 ข้อ** เพื่อรวบรวมข้อมูลให้รอบด้านก่อนแนะนำ:\n"
                 "  * ข้อ 1: กิจกรรมหลักหรือประเภทอุปกรณ์ที่สนใจ\n"
                 "  * ข้อ 2: สไตล์การใช้งานหรือสถานที่\n"
                 "  * ข้อ 3: ขนาด / จำนวนคน หรือระยะเวลาเช่า\n"
                 "  * ข้อ 4 (หากจำเป็น): อุปกรณ์เสริมหรืองบประมาณ\n\n"
                 "ตัวอย่างชุดคำถามตามระดับความคลุมเครือ:\n"
                 "- กรณี 2 ข้อ (เรื่องเต็นท์): [ข้อ 1: กิจกรรม (step: 1, total_steps: 2), ข้อ 2: ขนาดคนพัก (step: 2, total_steps: 2)]\n"
-                "- กรณี 3 ข้อ (เรื่องไปเที่ยว/ทำคอนเทนต์):\n"
+                "- กรณี 3 ข้อ (เรื่องไปเที่ยว/ทำคอนเทนต์/ถามภาพรวมว่ามีอะไรให้เช่า):\n"
                 "  * ข้อ 1: 'สนใจอุปกรณ์ประเภทไหนสำหรับทริปนี้?' ตัวเลือก: ['กล้องถ่ายภาพ/วิดีโอ', 'เต็นท์และอุปกรณ์แคมปิ้ง', 'ลำโพงฟังเพลงพกพา', 'อื่นๆ (จะพิมพ์อธิบายเอง)'] (step: 1, total_steps: 3)\n"
                 "  * ข้อ 2: 'สถานที่หรือสไตล์การท่องเที่ยวเป็นแบบไหน?' ตัวเลือก: ['ขึ้นเขา/เดินป่าธรรมชาติ', 'ริมทะเล/พักผ่อนรีสอร์ต', 'เที่ยวในเมือง/คาเฟ่', 'อื่นๆ'] (step: 2, total_steps: 3)\n"
                 "  * ข้อ 3: 'ระยะเวลาเช่าหรือรูปแบบการเดินทาง?' ตัวเลือก: ['ทริปสั้น 1-3 วัน', 'ทริปยาว 4-7 วัน', 'อื่นๆ'] (step: 3, total_steps: 3)\n\n"
                 "กฎเหล็กสำคัญที่สุดสำหรับการสร้างแบบสอบถาม (CRITICAL QUESTIONNAIRE RULES):\n"
                 "1. **ความยืดหยุ่นของจำนวนคำถาม (2 ถึง 4 ข้อ)**: ปรับจำนวนคำถามตามความจำเป็นของข้อมูล หากคำถามกว้างมากให้ถาม 3-4 ข้อ หากเจาะจงพอสมควรให้ถาม 2 ข้อ (ระบุ total_steps เท่ากับจำนวนข้อทั้งหมดที่สร้าง เช่น ถ้ามี 3 ข้อ ให้ total_steps: 3 ทุกข้อ และ step เป็น 1, 2, 3 ตามลำดับ)\n"
                 "2. **ห้ามล็อคคำตอบคำถาม (No Rigid Hardcoded Questions)**: ให้สร้างคำถามและช้อยตามสิ่งที่ผู้ใช้ถามเข้ามาจริงๆ ให้ตรงกับบริบท\n"
-                "3. **ความเข้าใจคำพิมพ์ผิด (Typo Tolerance)**: วิเคราะห์เจตนาที่แท้จริงของผู้ใช้เสมอ แม้จะสะกดผิด\n"
-                "4. ตอบ `answer` เป็นประโยคทักทายสั้นๆ เชิญชวน 1 ประโยค เช่น 'จะแนะนำให้ตรงจุดต้องรู้บริบทก่อน ให้เลือกตอบเร็วๆ ได้เลยนะคะ 😊'\n"
-                "5. ให้ `recommended_item_ids`: [] เสมอ (ห้ามแนะนำสินค้าก่อนผู้ใช้ตอบแบบสอบถาม)\n"
-                "6. จัดเรียงลำดับคีย์ใน JSON ตามนี้เป๊ะๆ:\n"
+                "3. **ห้ามตอบเป็น JSON ของสินค้าชิ้นเดียวเด็ดขาด!** ต้องตอบในรูปแบบ JSON โครงสร้างแบบสอบถามที่มี mode, recommended_item_ids, questions, answer, suggested_replies ครบถ้วนเสมอ!\n"
+                "4. **ห้ามปล่อยให้คีย์ answer เป็นค่าว่าง (\"\") เด็ดขาด!** ต้องเขียนประโยคทักทายอบอุ่น 1-2 ประโยคเสมอ เช่น 'เพื่อช่วยแนะนำอุปกรณ์ที่ตอบโจทย์และตรงใจคุณลูกค้ามากที่สุด รบกวนเลือกข้อมูลตามแบบสอบถามด้านล่างนี้ได้เลยนะคะ 😊'\n"
+                "5. **ความเข้าใจคำพิมพ์ผิด (Typo Tolerance)**: วิเคราะห์เจตนาที่แท้จริงของผู้ใช้เสมอ แม้จะสะกดผิด\n"
+                "6. **ห้ามแนะนำสินค้าในรอบนี้เด็ดขาด (No Premature Recommendation)**: ให้ `recommended_item_ids`: [] เสมอ (ห้ามแนะนำสินค้าก่อนผู้ใช้ตอบแบบสอบถาม และห้ามใส่ไอดีสินค้าใดๆ เด็ดขาด)\n"
+                "7. จัดเรียงลำดับคีย์ใน JSON ตามนี้เป๊ะๆ:\n"
                 "   1) 'mode': 'questionnaire'\n"
                 "   2) 'recommended_item_ids': []\n"
                 "   3) 'questions': [\n"
                 "        {'id': 'q1', 'step': 1, 'total_steps': N, 'title': '<คำถามข้อที่ 1>', 'options': ['<ตัวเลือก 1>', '<ตัวเลือก 2>', '<ตัวเลือก 3>', 'อื่นๆ (จะพิมพ์อธิบายเอง)']},\n"
                 "        ...\n"
                 "      ]\n"
-                "   4) 'answer': ข้อความทักทายสั้นๆ\n"
-                "   5) 'suggested_replies': ['พิมพ์ตอบเอง', 'ข้ามแบบสอบถาม']\n\n"
-                f"หมวดหมู่สินค้าที่มีในระบบ: {cat_list_str}\n"
-                f"รายการอุปกรณ์ที่พร้อมให้บริการในระบบ:\n{json.dumps(compact_catalog, ensure_ascii=False, indent=2)}\n"
+                "   4) 'answer': ข้อความทักทายเชิญชวนสั้นๆ\n"
+                "   5) 'suggested_replies': ['พิมพ์ตอบเอง', 'ข้ามแบบสอบถาม']\n"
+                "8. **ความสอดคล้องอย่างเคร่งครัดระหว่างคำถาม ตัวเลือก และสิ่งที่ผู้ใช้ถาม (CRITICAL CONTEXTUAL ALIGNMENT)**: คำถามและตัวเลือก (`questions` และ `options`) ต้องสอดคล้องและตรงกับหัวข้อ/ประเภทอุปกรณ์ที่ผู้ใช้ถาม 100% เสมอ!\n"
+                "   - ตัวอย่าง: หากผู้ใช้ถามเรื่องเครื่องดนตรี กีตาร์ (เช่น Martin, Fender, Yamaha): คำถามและตัวเลือกต้องเป็นเรื่องเกี่ยวกับเครื่องดนตรี สเปก ทรง หรือแนวเพลง ห้ามสร้างคำถามเรื่องโทรศัพท์ เครื่องมือช่าง หรือแคมปิ้งเด็ดขาด!\n"
+                "   - หากผู้ใช้ถามเรื่องกล้อง: คำถามต้องเกี่ยวกับเลนส์ วิดีโอ ภาพนิ่ง ห้ามถามเรื่องแอร์หรือเต็นท์!\n"
+                "   - หากผู้ใช้ถามกว้างมากว่ามีอะไรให้เช่า: ให้ถามหมวดหมู่ยอดนิยมโดยรวมอย่างสมดุล\n\n"
+                "ตัวอย่างรูปแบบ JSON ที่ต้องตอบ (ห้ามตอบแบบอื่นเด็ดขาด):\n"
+                "{\n"
+                '  "mode": "questionnaire",\n'
+                '  "recommended_item_ids": [],\n'
+                '  "questions": [\n'
+                '    {\n'
+                '      "id": "q1",\n'
+                '      "step": 1,\n'
+                '      "total_steps": 2,\n'
+                '      "title": "คุณต้องการเครื่องมือช่างประเภทใด?",\n'
+                '      "options": ["สว่านไร้สาย", "เครื่องฉีดน้ำแรงดันสูง", "อื่นๆ (จะพิมพ์อธิบายเอง)"]\n'
+                '    },\n'
+                '    {\n'
+                '      "id": "q2",\n'
+                '      "step": 2,\n'
+                '      "total_steps": 2,\n'
+                '      "title": "ต้องการนำไปใช้งานลักษณะใด?",\n'
+                '      "options": ["งานซ่อมแซมทั่วไป", "ล้างทำความสะอาดพื้นที่", "งานก่อสร้าง/ต่อเติม", "อื่นๆ"]\n'
+                '    }\n'
+                '  ],\n'
+                '  "answer": "เพื่อช่วยแนะนำเครื่องมือช่างที่เหมาะสมและคุ้มค่าที่สุด รบกวนเลือกข้อมูลการใช้งานด้านล่างนี้ได้เลยนะคะ 😊",\n'
+                '  "suggested_replies": ["พิมพ์ตอบเอง", "ข้ามแบบสอบถาม"]\n'
+                "}"
             )
         else:
             base_prompt = (
@@ -632,7 +1108,9 @@ class YuemnoiConsultantService:
                 "   - หากไม่มีอุปกรณ์ที่ตรงเป๊ะ ให้แจ้งตามตรงและแนะนำอุปกรณ์ใกล้เคียงที่มีในระบบ\n"
                 "   - ชวนคุยปิดท้าย 1 ประโยค (เช่น 'สนใจรับชิ้นนี้หรือสอบถามข้อมูลเพิ่มเติมได้เลยนะคะ 😊')\n"
                 "6. **หากมีขั้นตอนหรือรายการ** ต้องขึ้นบรรทัดใหม่เป็นข้อๆ เสมอ (1. ...\\n2. ...\\n3. ...)\n"
-                "7. จัดเรียงลำดับคีย์ใน JSON ตามนี้เป๊ะๆ:\n"
+                "7. **ห้ามตอบเป็น JSON ของสินค้าชิ้นเดียวเด็ดขาด!** ต้องตอบในโครงสร้าง JSON ครบทุกคีย์เสมอ\n"
+                "8. **ห้ามปล่อยให้คีย์ answer เป็นค่าว่าง (\"\") เด็ดขาด!** ต้องมีข้อความ Markdown ตามโครงสร้างข้างต้นเสมอ\n"
+                "9. จัดเรียงลำดับคีย์ใน JSON ตามนี้เป๊ะๆ:\n"
                 "   1) 'mode': 'recommendation'\n"
                 "   2) 'recommended_item_ids': [ไอดีอุปกรณ์ในระบบที่ตรงกับอุปกรณ์แนะนำ 1-3 ชิ้น ถ้าไม่มีที่ตรงเลยให้ใส่ []]\n"
                 "   3) 'questions': []\n"
@@ -685,6 +1163,7 @@ class YuemnoiConsultantService:
         self,
         query: str,
         catalog: Optional[List[Dict[str, Any]]] = None,
+        domain_category: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Dynamically derives 2 clarification questions tailored to the topic (Step 1 & Step 2).
@@ -826,6 +1305,90 @@ class YuemnoiConsultantService:
                     ],
                 },
             ]
+        elif any(w in norm for w in (
+            "ดนตรี", "เครื่องดนตรี", "กีตาร์", "กีต้าร์", "เปียโน", "คีย์บอร์ด", "เบส", "กลอง",
+            "martin", "fender", "gibson", "taylor", "yamaha", "roland", "casio", "korg"
+        )):
+            return [
+                {
+                    "id": "q1",
+                    "step": 1,
+                    "total_steps": 2,
+                    "title": "สนใจเครื่องดนตรีประเภทใดคะ?",
+                    "options": [
+                        "กีตาร์โปร่ง / กีตาร์คลาสสิก",
+                        "คีย์บอร์ด / เปียโนไฟฟ้า",
+                        "กีตาร์ไฟฟ้า / กีตาร์เบส",
+                        "อื่นๆ (จะพิมพ์อธิบายเอง)",
+                    ],
+                },
+                {
+                    "id": "q2",
+                    "step": 2,
+                    "total_steps": 2,
+                    "title": "ระดับทักษะหรือรูปแบบการนำไปใช้งานเป็นแบบไหนคะ?",
+                    "options": [
+                        "มือใหม่ / ฝึกซ้อมเริ่มต้น",
+                        "เล่นชิลล์ๆ / ร้องเพลงสังสรรค์",
+                        "ซ้อมวงดนตรี / แสดงสดในงาน",
+                        "อื่นๆ",
+                    ],
+                },
+            ]
+        elif any(w in norm for w in ("ลำโพง", "ไมค์", "ไมโครโฟน", "เครื่องเสียง", "มิกเซอร์")):
+            return [
+                {
+                    "id": "q1",
+                    "step": 1,
+                    "total_steps": 2,
+                    "title": "ต้องการเครื่องเสียงสำหรับกิจกรรมลักษณะใดคะ?",
+                    "options": [
+                        "เปิดเพลงฟังชิลๆ / ปาร์ตี้เล็กๆ (ลำโพงพกพา)",
+                        "จัดงานสัมมนา / บรรยาย / ปาร์ตี้กลางแจ้ง (ไมค์+ลำโพง)",
+                        "งานอีเวนต์ / งานแต่ง / ดนตรีสด",
+                        "อื่นๆ (จะพิมพ์อธิบายเอง)",
+                    ],
+                },
+                {
+                    "id": "q2",
+                    "step": 2,
+                    "total_steps": 2,
+                    "title": "ขนาดพื้นที่หรือจำนวนผู้ร่วมงานประมาณกี่คนคะ?",
+                    "options": [
+                        "กลุ่มเล็ก 5-15 คน (ในบ้าน/ห้องส่วนตัว)",
+                        "ขนาดกลาง 20-50 คน (ห้องสัมมนา/ลานกว้าง)",
+                        "กลุ่มใหญ่ 50+ คนขึ้นไป (กลางแจ้ง/ห้องโถง)",
+                        "อื่นๆ",
+                    ],
+                },
+            ]
+        elif any(w in norm for w in ("ช่าง", "เครื่องมือช่าง", "สว่าน", "ฉีดน้ำ", "ซ่อม")):
+            return [
+                {
+                    "id": "q1",
+                    "step": 1,
+                    "total_steps": 2,
+                    "title": "ต้องการเครื่องมือช่างประเภทใดคะ?",
+                    "options": [
+                        "สว่านไร้สาย / อุปกรณ์เจาะ-ขัน",
+                        "เครื่องฉีดน้ำแรงดันสูง / ทำความสะอาด",
+                        "เครื่องมือช่างงานก่อสร้าง / งานไม้",
+                        "อื่นๆ (จะพิมพ์อธิบายเอง)",
+                    ],
+                },
+                {
+                    "id": "q2",
+                    "step": 2,
+                    "total_steps": 2,
+                    "title": "ลักษณะงานหรือระยะเวลาที่ต้องการใช้งานประมาณไหนคะ?",
+                    "options": [
+                        "งานซ่อมแซมเล็กๆ ภายในบ้าน (1 วัน)",
+                        "งานล้างทำความสะอาด / บิ๊กคลีนนิ่ง (1-2 วัน)",
+                        "งานช่างโปรเจกต์ (รายสัปดาห์)",
+                        "อื่นๆ",
+                    ],
+                },
+            ]
         elif any(w in norm for w in ("เที่ยว", "เดินทาง", "ทริป", "ปาร์ตี้", "งานเลี้ยง", "อีเวนต์", "คอนเทนต์")):
             return [
                 {
@@ -866,17 +1429,220 @@ class YuemnoiConsultantService:
                 },
             ]
         else:
-            top_cat = ""
-            if catalog:
+            top_cat = (domain_category or "").strip()
+            if not top_cat and catalog:
                 ranked = self.db_tool.rank_relevant_items(query, catalog, limit=3)
                 if ranked and ranked[0].get("category"):
                     top_cat = ranked[0]["category"]
+
+            # If still no top_cat, check semantic overlap with catalog categories and themes
+            if not top_cat and catalog:
+                for item in catalog:
+                    cat = item.get("category", "")
+                    if cat:
+                        cat_tokens = self.db_tool.extract_tokens(cat)
+                        if any(tok.lower() in norm for tok in cat_tokens if len(tok) >= 3):
+                            top_cat = cat
+                            break
+
+            if not top_cat:
+                distinct_cats = [
+                    "กล้องและอุปกรณ์ถ่ายภาพ",
+                    "แคมปิ้งและกิจกรรมกลางแจ้ง",
+                    "คอมพิวเตอร์และโน้ตบุ๊ก",
+                    "ดนตรีและเครื่องเสียง",
+                ]
+                return [
+                    {
+                        "id": "q1",
+                        "step": 1,
+                        "total_steps": 2,
+                        "title": "สนใจเช่าอุปกรณ์หมวดหมู่ไหนเป็นพิเศษคะ?",
+                        "options": distinct_cats[:4],
+                    },
+                    {
+                        "id": "q2",
+                        "step": 2,
+                        "total_steps": 2,
+                        "title": "ระยะเวลาหรือวัตถุประสงค์ในการเช่าประมาณไหนคะ?",
+                        "options": [
+                            "เช่าท่องเที่ยว / ทริปสั้น (1-3 วัน)",
+                            "เช่าทำงาน / ถ่ายงานโปรเจกต์",
+                            "เช่าจัดงานอีเวนต์ / สังสรรค์",
+                            "เช่าระยะยาว (รายสัปดาห์/เดือน)",
+                        ],
+                    },
+                ]
+
+            if any(k in top_cat for k in ("ดนตรี", "เครื่องดนตรี")):
+                return [
+                    {
+                        "id": "q1",
+                        "step": 1,
+                        "total_steps": 2,
+                        "title": "สนใจเครื่องดนตรีประเภทใดคะ?",
+                        "options": [
+                            "กีตาร์โปร่ง / กีตาร์คลาสสิก",
+                            "คีย์บอร์ด / เปียโนไฟฟ้า",
+                            "กีตาร์ไฟฟ้า / กีตาร์เบส",
+                            "อื่นๆ (จะพิมพ์อธิบายเอง)",
+                        ],
+                    },
+                    {
+                        "id": "q2",
+                        "step": 2,
+                        "total_steps": 2,
+                        "title": "ระดับทักษะหรือรูปแบบการนำไปใช้งานเป็นแบบไหนคะ?",
+                        "options": [
+                            "มือใหม่ / ฝึกซ้อมเริ่มต้น",
+                            "เล่นชิลล์ๆ / ร้องเพลงสังสรรค์",
+                            "ซ้อมวงดนตรี / แสดงสดในงาน",
+                            "อื่นๆ",
+                        ],
+                    },
+                ]
+            elif any(k in top_cat for k in ("กล้อง", "ถ่ายภาพ")):
+                return [
+                    {
+                        "id": "q1",
+                        "step": 1,
+                        "total_steps": 2,
+                        "title": "ลักษณะการใช้งานกล้องหลักเป็นแบบไหนคะ?",
+                        "options": [
+                            "ถ่าย Vlog / ท่องเที่ยว",
+                            "ถ่ายภาพนิ่ง / พอร์ตเทรต / บุคคล",
+                            "ถ่ายงานอีเวนต์ / วิดีโอจริงจัง",
+                            "อื่นๆ (จะพิมพ์อธิบายเอง)",
+                        ],
+                    },
+                    {
+                        "id": "q2",
+                        "step": 2,
+                        "total_steps": 2,
+                        "title": "ต้องการเลนส์หรืออุปกรณ์เสริมประเภทไหนคะ?",
+                        "options": [
+                            "เฉพาะตัวกล้อง + เลนส์คิตทั่วไป",
+                            "เลนส์ละลายหลัง / เลนส์ซูมไกล",
+                            "ขาตั้งกล้องหรือไมค์ไวร์เลสด้วย",
+                            "อื่นๆ (จะพิมพ์อธิบายเอง)",
+                        ],
+                    },
+                ]
+            elif any(k in top_cat for k in ("ช่าง", "ก่อสร้าง")):
+                return [
+                    {
+                        "id": "q1",
+                        "step": 1,
+                        "total_steps": 2,
+                        "title": "ต้องการเครื่องมือช่างประเภทใดคะ?",
+                        "options": [
+                            "สว่านไร้สาย / อุปกรณ์เจาะ-ขัน",
+                            "เครื่องฉีดน้ำแรงดันสูง / ล้างทำความสะอาด",
+                            "เครื่องมือช่างงานก่อสร้าง / งานซ่อม",
+                            "อื่นๆ (จะพิมพ์อธิบายเอง)",
+                        ],
+                    },
+                    {
+                        "id": "q2",
+                        "step": 2,
+                        "total_steps": 2,
+                        "title": "ลักษณะงานหรือระยะเวลาที่ต้องการใช้งานประมาณไหนคะ?",
+                        "options": [
+                            "งานซ่อมแซมเล็กๆ ภายในบ้าน (1 วัน)",
+                            "งานล้างทำความสะอาด / บิ๊กคลีนนิ่ง (1-2 วัน)",
+                            "งานช่างโปรเจกต์ (รายสัปดาห์)",
+                            "อื่นๆ",
+                        ],
+                    },
+                ]
+            elif any(k in top_cat for k in ("เครื่องเสียง", "เสียง")):
+                return [
+                    {
+                        "id": "q1",
+                        "step": 1,
+                        "total_steps": 2,
+                        "title": "ต้องการเครื่องเสียงสำหรับงานลักษณะใดคะ?",
+                        "options": [
+                            "เปิดเพลงฟังชิลๆ / ปาร์ตี้เล็กๆ (ลำโพงพกพา)",
+                            "จัดงานสัมมนา / บรรยาย / ปาร์ตี้กลางแจ้ง (ไมค์+ลำโพง)",
+                            "งานอีเวนต์ / งานแต่ง / ดนตรีสด",
+                            "อื่นๆ (จะพิมพ์อธิบายเอง)",
+                        ],
+                    },
+                    {
+                        "id": "q2",
+                        "step": 2,
+                        "total_steps": 2,
+                        "title": "ขนาดพื้นที่หรือจำนวนผู้ร่วมงานประมาณกี่คนคะ?",
+                        "options": [
+                            "กลุ่มเล็ก 5-15 คน (ห้องส่วนตัว/ในบ้าน)",
+                            "ขนาดกลาง 20-50 คน (ห้องสัมมนา/ลานกว้าง)",
+                            "กลุ่มใหญ่ 50+ คนขึ้นไป (กลางแจ้ง/ห้องโถง)",
+                            "อื่นๆ",
+                        ],
+                    },
+                ]
+            elif any(k in top_cat for k in ("คอมพิวเตอร์", "ไอที")):
+                return [
+                    {
+                        "id": "q1",
+                        "step": 1,
+                        "total_steps": 2,
+                        "title": "ต้องการนำคอมพิวเตอร์ไปใช้งานแบบไหนคะ?",
+                        "options": [
+                            "ทำงาน/ออฟฟิศ (โน้ตบุ๊ก/PC)",
+                            "จัดอีเวนต์/บูธ (หลายเครื่อง)",
+                            "เล่นเกม/สเปกแรง",
+                            "ตัดต่อ/กราฟิก สเปกสูง",
+                        ],
+                    },
+                    {
+                        "id": "q2",
+                        "step": 2,
+                        "total_steps": 2,
+                        "title": "ระยะเวลาเช่าหรือรูปแบบเครื่องที่ต้องการ?",
+                        "options": [
+                            "เน้นพกพา (โน้ตบุ๊ก)",
+                            "ตั้งโต๊ะ (PC สเปกสูง)",
+                            "เช่าสั้น (1-3 วัน)",
+                            "เช่าระยะยาว (รายเดือน)",
+                        ],
+                    },
+                ]
+            elif any(k in top_cat for k in ("แคมปิ้ง", "กลางแจ้ง", "เต็นท์")):
+                return [
+                    {
+                        "id": "q1",
+                        "step": 1,
+                        "total_steps": 2,
+                        "title": "คุณต้องการเต็นท์สำหรับกิจกรรมอะไรคะ?",
+                        "options": [
+                            "เดินป่าและแคมปิ้ง",
+                            "จัดงานอีเวนต์/กิจกรรมกลางแจ้ง",
+                            "ปาร์ตี้/พักผ่อนทั่วไป",
+                            "อื่นๆ (จะพิมพ์อธิบายเอง)",
+                        ],
+                    },
+                    {
+                        "id": "q2",
+                        "step": 2,
+                        "total_steps": 2,
+                        "title": "ขนาดหรือจำนวนผู้พักประมาณกี่คนคะ?",
+                        "options": [
+                            "1-2 คน (น้ำหนักเบา/พกพาง่าย)",
+                            "3-4 คน (มาตรฐานครอบครัว)",
+                            "4-6 คนขึ้นไป (กลุ่มใหญ่/มีพื้นที่เก็บของ)",
+                            "อื่นๆ",
+                        ],
+                    },
+                ]
+
             return [
                 {
                     "id": "q1",
                     "step": 1,
                     "total_steps": 2,
-                    "title": f"สนใจอุปกรณ์ในหมวด {top_cat or 'ใด'} สำหรับรูปแบบการใช้งานใดคะ?",
+                    "title": f"สนใจอุปกรณ์ในหมวด {top_cat} สำหรับรูปแบบการใช้งานใดคะ?",
                     "options": [
                         "ใช้งานทั่วไป / ชั่วคราว",
                         "ใช้งานจริงจัง / กึ่งมืออาชีพ",
@@ -888,7 +1654,7 @@ class YuemnoiConsultantService:
                     "id": "q2",
                     "step": 2,
                     "total_steps": 2,
-                    "title": "ระยะเวลาเช่าที่ต้องการประมาณไหน?",
+                    "title": "ระยะเวลาเช่าที่ต้องการประมาณไหนคะ?",
                     "options": [
                         "1-3 วัน (รายวัน)",
                         "1-2 สัปดาห์",
@@ -902,10 +1668,26 @@ class YuemnoiConsultantService:
         self,
         query: str,
         catalog: Optional[List[Dict[str, Any]]] = None,
+        domain_category: Optional[str] = None,
     ) -> str:
         """
         Generates dynamic friendly greeting asking for context without rigid templates.
         """
+        if domain_category:
+            d = domain_category.lower()
+            if any(w in d for w in ("ดนตรี", "เครื่องดนตรี")):
+                return "ยินดีเลยค่ะ หากคุณลูกค้ากำลังมองหาเครื่องดนตรี เพื่อช่วยแนะนำรุ่นที่จับถนัดมือและเสียงตรงใจที่สุด ขอทราบข้อมูลเบื้องต้นสักนิดนะคะ 😊"
+            if any(w in d for w in ("กล้อง", "ถ่ายภาพ", "วิดีโอ")):
+                return "จะแนะนำกล้องและอุปกรณ์ถ่ายภาพให้ตรงความต้องการที่สุด ขอทราบรูปแบบการใช้งานสักนิดนะคะ 😊"
+            if any(w in d for w in ("แคมปิ้ง", "เต็นท์", "เดินป่า")):
+                return "จะแนะนำเต็นท์และอุปกรณ์แคมปิ้งให้ตรงใจ ขอทราบข้อมูลเบื้องต้นสักนิดนะคะ 😊"
+            if any(w in d for w in ("คอมพิวเตอร์", "ไอที", "โน้ตบุ๊ก", "laptop")):
+                return "จะแนะนำอุปกรณ์คอมพิวเตอร์ให้ตรงจุดต้องรู้บริบทก่อน ให้เลือกตอบเร็วๆ ได้เลยนะคะ 😊"
+            if any(w in d for w in ("ช่าง", "เครื่องมือ")):
+                return "เพื่อช่วยแนะนำเครื่องมือช่างที่เหมาะสมและคุ้มค่าที่สุด รบกวนเลือกข้อมูลการใช้งานด้านล่างนี้ได้เลยนะคะ 😊"
+            if any(w in d for w in ("เครื่องเสียง", "ลำโพง", "ปาร์ตี้")):
+                return "ยินดีค่ะ เพื่อช่วยเลือกชุดเครื่องเสียงและลำโพงที่กำลังขับและสเปกเหมาะกับงานของคุณลูกค้า ขอสอบถามรายละเอียดสักนิดนะคะ 😊"
+
         norm = query.strip().lower()
         if any(w in norm for w in ("มือถือ", "โทรศัพท์", "สมาร์ทโฟน")):
             return "อุปกรณ์เช่ามือถือมีได้หลายแบบ อยากให้ตรงจุดเลยขอถามนิดนึงว่าคุณหมายถึงอะไรคะ 😊"
@@ -915,6 +1697,16 @@ class YuemnoiConsultantService:
             return "จะแนะนำอุปกรณ์คอมพิวเตอร์ให้ตรงจุดต้องรู้บริบทก่อน ให้เลือกตอบเร็วๆ ได้เลยนะคะ 😊"
         elif any(w in norm for w in ("เต็นท์", "เต้น", "แคมปิ้ง", "เดินป่า")):
             return "จะแนะนำเต็นท์และอุปกรณ์แคมปิ้งให้ตรงใจ ขอทราบข้อมูลเบื้องต้นสักนิดนะคะ 😊"
+        elif any(w in norm for w in ("กล้อง", "ถ่ายรูป", "เลนส์", "ถ่ายวิดีโอ")):
+            return "จะแนะนำกล้องและอุปกรณ์ถ่ายภาพให้ตรงความต้องการที่สุด ขอทราบรูปแบบการใช้งานสักนิดนะคะ 😊"
+        elif any(w in norm for w in ("ดนตรี", "เครื่องดนตรี", "กีตาร์", "เปียโน", "คีย์บอร์ด", "martin", "fender", "gibson", "taylor", "yamaha")):
+            return "ยินดีเลยค่ะ หากคุณลูกค้ากำลังมองหาเครื่องดนตรี เพื่อช่วยแนะนำรุ่นที่จับถนัดมือและเสียงตรงใจที่สุด ขอทราบข้อมูลเบื้องต้นสักนิดนะคะ 😊"
+        elif any(w in norm for w in ("ช่าง", "เครื่องมือช่าง", "สว่าน", "ฉีดน้ำ")):
+            return "เพื่อช่วยแนะนำเครื่องมือช่างที่เหมาะสมและคุ้มค่าที่สุด รบกวนเลือกข้อมูลการใช้งานด้านล่างนี้ได้เลยนะคะ 😊"
+        elif any(w in norm for w in ("เครื่องเสียง", "ลำโพง", "ไมค์", "ปาร์ตี้")):
+            return "ยินดีค่ะ เพื่อช่วยเลือกชุดเครื่องเสียงและลำโพงที่กำลังขับและสเปกเหมาะกับงานของคุณลูกค้า ขอสอบถามรายละเอียดสักนิดนะคะ 😊"
+        elif any(w in norm for w in ("เช่า", "ยืม", "มีอะไร", "มีไร", "แนะนำ")):
+            return "Yuemnoi มีอุปกรณ์คุณภาพพร้อมให้เช่าหลากหลายหมวดหมู่เลยค่ะ เพื่อช่วยแนะนำอุปกรณ์ที่ตรงใจคุณลูกค้าที่สุด รบกวนเลือกข้อมูลตามนี้ได้เลยนะคะ 😊"
 
         return "จะแนะนำให้ตรงจุดต้องรู้บริบทก่อน ให้เลือกตอบเร็วๆ ได้เลยนะคะ 😊"
 
@@ -924,6 +1716,7 @@ class YuemnoiConsultantService:
         query: str,
         relevant_candidates: List[Dict[str, Any]],
         catalog: List[Dict[str, Any]],
+        domain_category: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Validates the clarification questions generated by LLM:
@@ -932,7 +1725,7 @@ class YuemnoiConsultantService:
         3. Falls back to complete 2-question fallback if output is empty or incomplete.
         """
         if not questions:
-            return self._get_fallback_questions(query, catalog=catalog)
+            return self._get_fallback_questions(query, catalog=catalog, domain_category=domain_category)
 
         cleaned_qs = []
         for i, q in enumerate(questions):
@@ -964,7 +1757,7 @@ class YuemnoiConsultantService:
                 item["total_steps"] = total_n
             return cleaned_qs
         elif len(cleaned_qs) == 1:
-            fallbacks = self._get_fallback_questions(query, catalog=catalog)
+            fallbacks = self._get_fallback_questions(query, catalog=catalog, domain_category=domain_category)
             if len(fallbacks) >= 2:
                 merged = [cleaned_qs[0]] + fallbacks[1:]
                 merged = merged[:4]
@@ -975,7 +1768,7 @@ class YuemnoiConsultantService:
                 return merged
             return cleaned_qs
 
-        return self._get_fallback_questions(query, catalog=catalog)
+        return self._get_fallback_questions(query, catalog=catalog, domain_category=domain_category)
 
     async def process_chat(
         self,
@@ -998,7 +1791,19 @@ class YuemnoiConsultantService:
                 ],
             }
 
-        intent = self.classify_query(cleaned_query, history)
+        # Step 1: Cognitive Analysis via Typhoon 2 (Claude-like Constitutional Pipeline)
+        cognitive = await self.cognitive_analyzer.analyze(cleaned_query, history)
+        logger.info(
+            "Cognitive analysis: intent=%s, clarity=%s, domain=%s, entities=%s, unsupported=%s",
+            cognitive.intent,
+            cognitive.clarity,
+            cognitive.domain_category,
+            cognitive.entities,
+            cognitive.unsupported_domain,
+        )
+
+        intent = cognitive.intent
+
         if intent == "general_chat":
             chat_type = self._detect_general_chat_type(cleaned_query.lower()) or "greeting"
             return self._get_general_chat_response(chat_type)
@@ -1013,43 +1818,90 @@ class YuemnoiConsultantService:
                 "suggested_replies": self.OUT_OF_SCOPE_SUGGESTED_REPLIES,
             }
 
+        # Check unsupported domain first (e.g. vehicles, real estate, pets)
+        unsupported_domain = cognitive.unsupported_domain or DatabaseTool.get_unsupported_category_name(cleaned_query)
+        if unsupported_domain:
+            return self._build_out_of_inventory_response(
+                query=cleaned_query,
+                unsupported_domain=unsupported_domain,
+                domain_category=cognitive.domain_category,
+            )
+
         catalog = []
         relevant_candidates = []
         compact_catalog = []
+        comparison_search_data = ""
+        compared_entities: Optional[Tuple[str, str]] = None
+        matched_comparison_items = []
 
-        if intent != "faq":
+        if intent == "comparison":
+            if len(cognitive.entities) >= 2:
+                compared_entities = (cognitive.entities[0], cognitive.entities[1])
+            elif len(cognitive.entities) == 1:
+                compared_entities = (cognitive.entities[0], "อุปกรณ์เปรียบเทียบ")
+            else:
+                compared_entities = self._extract_comparison_entities(cleaned_query, history)
+
+            ent_a, ent_b = compared_entities
+            if self.google_tool:
+                try:
+                    verified_text, verified_sources, search_status = await self.google_tool.search_comparison(
+                        ent_a, ent_b, cleaned_query
+                    )
+                    comparison_search_data = verified_text
+                    logger.info("Comparison web search status: %s (length=%d)", search_status, len(verified_text))
+                except Exception as err:
+                    logger.warning("Comparison search failed: %s", err)
+
+            try:
+                catalog = await self.db_tool.list_available_items()
+            except Exception as e:
+                logger.error("Failed to load catalog for comparison: %s", e)
+                catalog = []
+
+            matched_comparison_items = self._find_catalog_items_for_entities(
+                compared_entities, catalog, domain_category=cognitive.domain_category
+            )
+            relevant_candidates = matched_comparison_items
+            compact_catalog = [
+                {
+                    "id": item.get("id"),
+                    "name": item.get("item_name"),
+                    "category": item.get("category"),
+                    "price_per_day": item.get("price"),
+                    "description": str(item.get("description") or "")[:120],
+                }
+                for item in relevant_candidates
+            ]
+        elif intent != "faq":
             try:
                 catalog = await self.db_tool.list_available_items()
             except Exception as e:
                 logger.error("Failed to load catalog from Supabase: %s", e)
                 catalog = []
 
-            # Check unsupported domain first (e.g. vehicles/cars/vans, real estate, pets)
-            unsupported_domain = DatabaseTool.get_unsupported_category_name(cleaned_query)
-            search_query = cleaned_query
-            if not unsupported_domain:
-                prior_context = self._extract_activity_context(history)
-                if prior_context:
-                    has_category = any(cat in cleaned_query.lower() for cat in self.BROAD_CATEGORIES)
-                    if not has_category or prior_context.lower() in cleaned_query.lower():
-                        search_query = f"{prior_context} {cleaned_query}"
-                unsupported_domain = DatabaseTool.get_unsupported_category_name(search_query)
-
-            if unsupported_domain:
-                return self._build_out_of_inventory_response(
-                    query=search_query,
-                    unsupported_domain=unsupported_domain,
-                )
+            search_query = cognitive.search_query or cleaned_query
 
             relevant_candidates = self.db_tool.rank_relevant_items(
                 query=search_query,
                 items=catalog,
                 limit=settings.MAX_RECOMMENDED_ITEMS + 3,
+                domain_category=cognitive.domain_category,
+                entities=cognitive.entities,
             )
 
-            # If no items match in catalog and intent is recommendation, politely refuse immediately
-            if not relevant_candidates and intent == "recommendation":
-                return self._build_out_of_inventory_response(query=cleaned_query)
+            # Strict Inventory Grounding: If user asked for specific item/brand and catalog doesn't have it
+            if not relevant_candidates and (intent == "recommendation" or (cognitive.entities and cognitive.clarity == "clear")):
+                if cognitive.entities:
+                    target_entity = cognitive.entities[0]
+                    return self._build_out_of_inventory_response(
+                        query=cleaned_query,
+                        target_entity=target_entity,
+                        domain_category=cognitive.domain_category,
+                    )
+                else:
+                    # Broad / exploratory query with no items matched: switch to questionnaire discovery!
+                    intent = "questionnaire"
 
             compact_catalog = [
                 {
@@ -1080,6 +1932,9 @@ class YuemnoiConsultantService:
             compact_catalog=compact_catalog,
             learned_insights=learned_insights,
             available_categories=all_categories,
+            comparison_search_data=comparison_search_data,
+            compared_entities=compared_entities,
+            domain_category=cognitive.domain_category,
         )
 
         messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -1106,6 +1961,40 @@ class YuemnoiConsultantService:
             parsed = None
 
         if parsed and isinstance(parsed, dict) and "answer" in parsed:
+            if intent == "comparison":
+                mode = "comparison"
+                answer = self._clean_answer(str(parsed.get("answer", "")))
+                raw_ids = parsed.get("recommended_item_ids") or []
+                recommended_items = [self._format_card(it) for it in matched_comparison_items]
+                if not recommended_items and raw_ids:
+                    item_map = {item["id"]: item for item in catalog if "id" in item}
+                    for rid in raw_ids:
+                        try:
+                            int_rid = int(rid)
+                            if int_rid in item_map:
+                                recommended_items.append(self._format_card(item_map[int_rid]))
+                        except (ValueError, TypeError):
+                            pass
+                suggested_replies = [
+                    str(reply).strip()
+                    for reply in (parsed.get("suggested_replies") or [])
+                    if str(reply).strip()
+                ][:4]
+                if not suggested_replies and compared_entities:
+                    suggested_replies = [
+                        f"สนใจเช่า {compared_entities[0]}",
+                        f"สนใจเช่า {compared_entities[1]}",
+                        "สอบถามขั้นตอนการเช่า",
+                    ]
+                return {
+                    "status": "success",
+                    "mode": mode,
+                    "answer": answer,
+                    "questions": [],
+                    "recommended_items": recommended_items[:settings.MAX_RECOMMENDED_ITEMS],
+                    "suggested_replies": suggested_replies,
+                }
+
             mode = str(parsed.get("mode") or ("questionnaire" if parsed.get("questions") else "recommendation"))
             answer = self._clean_answer(str(parsed.get("answer", "")))
             raw_ids = parsed.get("recommended_item_ids") or []
@@ -1116,12 +2005,30 @@ class YuemnoiConsultantService:
             ][:4]
 
             questions = self._format_questions(parsed.get("questions"))
-            if questions and mode == "questionnaire":
+            if intent == "questionnaire":
+                mode = "questionnaire"
                 questions = self._validate_and_align_questionnaire(
                     questions=questions,
                     query=cleaned_query,
                     relevant_candidates=relevant_candidates,
                     catalog=catalog,
+                    domain_category=cognitive.domain_category,
+                )
+                if "### 🎒 อุปกรณ์ที่แนะนำ:" in answer:
+                    answer = re.split(r"###\s*🎒\s*อุปกรณ์ที่แนะนำ:", answer)[0].strip()
+                if not answer:
+                    answer = self._get_fallback_questionnaire_intro(
+                        cleaned_query,
+                        catalog=catalog,
+                        domain_category=cognitive.domain_category,
+                    )
+            elif questions and mode == "questionnaire":
+                questions = self._validate_and_align_questionnaire(
+                    questions=questions,
+                    query=cleaned_query,
+                    relevant_candidates=relevant_candidates,
+                    catalog=catalog,
+                    domain_category=cognitive.domain_category,
                 )
 
             recommended_items = self._resolve_recommended_items(
@@ -1131,16 +2038,41 @@ class YuemnoiConsultantService:
                 cleaned_query=cleaned_query,
                 mode=mode,
                 has_questions=bool(questions),
+                generated_answer=answer,
             )
 
-            # Post-generation Hallucination Guardrail:
+            if mode == "questionnaire":
+                recommended_items = []
+
+            # Post-generation Hallucination Guardrail (Claude Constitution Strict Grounding):
             # If in recommendation mode but zero items were matched/resolved from database
             if mode == "recommendation" and not recommended_items:
-                if "### 🎒 อุปกรณ์ที่แนะนำ:" in answer or any(w in answer.lower() for w in ("รถตู้", "toyota", "alphard")):
-                    out_resp = self._build_out_of_inventory_response(cleaned_query)
+                if cognitive.entities:
+                    target_entity = cognitive.entities[0]
+                    out_resp = self._build_out_of_inventory_response(
+                        query=cleaned_query,
+                        target_entity=target_entity,
+                        domain_category=cognitive.domain_category,
+                    )
                     answer = out_resp["answer"]
                     mode = "general_chat"
                     suggested_replies = out_resp["suggested_replies"]
+                else:
+                    # Broad request without specific items: Fallback to questionnaire discovery
+                    mode = "questionnaire"
+                    questions = self._validate_and_align_questionnaire(
+                        questions=[],
+                        query=cleaned_query,
+                        relevant_candidates=relevant_candidates,
+                        catalog=catalog,
+                        domain_category=cognitive.domain_category,
+                    )
+                    answer = self._get_fallback_questionnaire_intro(
+                        cleaned_query,
+                        catalog=catalog,
+                        domain_category=cognitive.domain_category,
+                    )
+                    suggested_replies = ["พิมพ์ตอบเอง", "ข้ามแบบสอบถาม"]
 
             return {
                 "status": "success",
@@ -1155,7 +2087,27 @@ class YuemnoiConsultantService:
             }
 
         # Safe fallback based on intent
-        if intent == "faq":
+        if intent == "comparison":
+            ent_a = compared_entities[0] if compared_entities else "อุปกรณ์แรก"
+            ent_b = compared_entities[1] if compared_entities else "อุปกรณ์ที่สอง"
+            fallback_answer = (
+                f"สำหรับความแตกต่างระหว่าง **{ent_a}** และ **{ent_b}** Yuemnoi สรุปเปรียบเทียบให้ดังนี้ค่ะ:\n\n"
+                f"### 📌 สรุปภาพรวม:\n"
+                f"อุปกรณ์ทั้งสองมีจุดเด่นและลักษณะการใช้งานที่แตกต่างกันอย่างชัดเจนตามสเปกจริงค่ะ โดยเน้นตอบโจทย์ผู้ใช้งานคนละรูปแบบ\n\n"
+                f"### 🎯 คำแนะนำการเลือกใช้งาน:\n"
+                f"- หากเน้นความสะดวกและลักษณะเฉพาะตัว แนะนำ **{ent_a}** ค่ะ\n"
+                f"- หากต้องการความคุ้มค่าและความยืดหยุ่น แนะนำ **{ent_b}** ค่ะ\n\n"
+                f"หากสนใจเช่าอุปกรณ์ชิ้นไหน สามารถสอบถามเพิ่มเติมได้เลยนะคะ 😊"
+            )
+            return {
+                "status": "success",
+                "mode": "comparison",
+                "answer": fallback_answer,
+                "questions": [],
+                "recommended_items": [self._format_card(it) for it in matched_comparison_items][:settings.MAX_RECOMMENDED_ITEMS],
+                "suggested_replies": [f"สนใจเช่า {ent_a}", f"สนใจเช่า {ent_b}", "สอบถามขั้นตอนการเช่า"],
+            }
+        elif intent == "faq":
             return {
                 "status": "success",
                 "mode": "general_chat",
@@ -1175,10 +2127,12 @@ class YuemnoiConsultantService:
             fallback_qs = self._get_fallback_questions(
                 cleaned_query,
                 catalog=catalog,
+                domain_category=cognitive.domain_category,
             )
             fallback_intro = self._get_fallback_questionnaire_intro(
                 cleaned_query,
                 catalog=catalog,
+                domain_category=cognitive.domain_category,
             )
             return {
                 "status": "success",
@@ -1221,28 +2175,66 @@ class YuemnoiConsultantService:
         }
 
     @staticmethod
-    def _extract_json(text: str) -> Optional[Dict[str, Any]]:
+    def _extract_json(text: Any) -> Optional[Dict[str, Any]]:
+        if isinstance(text, dict):
+            return text
+        if not isinstance(text, str):
+            text = str(text or "")
         text = text.strip()
+        parsed = None
         # Direct json load
         try:
-            return json.loads(text)
+            parsed = json.loads(text)
         except Exception:
             pass
 
         # Search for {...} markdown block
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(0))
-            except Exception:
-                pass
+        if not parsed:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if match:
+                try:
+                    parsed = json.loads(match.group(0))
+                except Exception:
+                    pass
 
         # Try auto-closing suffixes if truncated
-        for suffix in ['"}', '"]}', ']}', '}']:
-            try:
-                return json.loads(text + suffix)
-            except Exception:
-                pass
+        if not parsed:
+            for suffix in ['"}', '"]}', ']}', '}']:
+                try:
+                    parsed = json.loads(text + suffix)
+                    if parsed:
+                        break
+                except Exception:
+                    pass
+
+        # Single item dict recovery (e.g. LLM returned raw item `{ "id": 40, "name": ... }`)
+        if isinstance(parsed, dict) and "id" in parsed and "name" in parsed and "answer" not in parsed:
+            item_id = parsed["id"]
+            item_name = parsed["name"]
+            item_desc = str(parsed.get("description") or "").strip()
+            desc_part = f": {item_desc}" if item_desc else ""
+            return {
+                "mode": "recommendation",
+                "recommended_item_ids": [item_id],
+                "questions": [],
+                "answer": (
+                    f"Yuemnoi ขอแนะนำ **{item_name}** สำหรับการใช้งานของคุณลูกค้าค่ะ:\n\n"
+                    f"### 🎒 อุปกรณ์ที่แนะนำ:\n- **{item_name}**{desc_part}\n\n"
+                    f"หากสนใจรับ {item_name} หรือต้องการสอบถามข้อมูลเพิ่มเติม สามารถแจ้งได้เลยนะคะ 😊"
+                ),
+                "suggested_replies": ["ขอดูอุปกรณ์เสริมเพิ่ม", "สอบถามขั้นตอนการเช่า"],
+            }
+
+        if parsed and isinstance(parsed, dict):
+            # Ensure answer is not empty string
+            if not str(parsed.get("answer") or "").strip():
+                if parsed.get("questions"):
+                    parsed["answer"] = "เพื่อช่วยแนะนำอุปกรณ์ที่ตอบโจทย์และตรงใจคุณลูกค้ามากที่สุด รบกวนเลือกข้อมูลตามแบบสอบถามด้านล่างนี้ได้เลยนะคะ 😊"
+                elif parsed.get("recommended_item_ids"):
+                    parsed["answer"] = "Yuemnoi ขอแนะนำอุปกรณ์ที่เหมาะสมตามรายการที่คัดสรรมาให้ด้านล่างนี้ค่ะ หากสนใจหรือต้องการสอบถามเพิ่มเติม แจ้งได้เลยนะคะ 😊"
+                else:
+                    parsed["answer"] = "Yuemnoi AI ยินดีให้บริการค่ะ หากมีข้อสงสัยเกี่ยวกับอุปกรณ์เช่าหรือขั้นตอนการใช้งาน สามารถสอบถามได้เลยนะคะ 😊"
+            return parsed
 
         # Fallback regex extraction for answer if JSON was truncated mid-way
         answer_match = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)', text, re.DOTALL)
@@ -1272,6 +2264,7 @@ class YuemnoiConsultantService:
         cleaned_query: str,
         mode: str = "recommendation",
         has_questions: bool = False,
+        generated_answer: str = "",
     ) -> List[Dict[str, Any]]:
         # Strictly return empty list for general_chat or questionnaire
         if mode in ("general_chat", "questionnaire") or has_questions:
@@ -1294,6 +2287,19 @@ class YuemnoiConsultantService:
                         seen_ids.add(int_id)
                 except ValueError:
                     continue
+
+        # If LLM didn't return valid raw_ids or returned empty, but generated an answer mentioning candidates
+        if not recommended_items and generated_answer and relevant_candidates:
+            ans_lower = generated_answer.lower()
+            for cand in relevant_candidates:
+                cand_id = cand.get("id")
+                if not cand_id or cand_id in seen_ids:
+                    continue
+                cand_name = str(cand.get("item_name") or "").strip().lower()
+                cand_tokens = [t for t in cand_name.split() if len(t) >= 3 and t not in self.db_tool.STOP_WORDS]
+                if cand_name and (cand_name in ans_lower or (len(cand_tokens) >= 2 and all(tok in ans_lower for tok in cand_tokens))):
+                    recommended_items.append(self._format_card(cand))
+                    seen_ids.add(cand_id)
 
         return recommended_items
 
@@ -1339,7 +2345,20 @@ class YuemnoiConsultantService:
             }
             return
 
-        intent = self.classify_query(cleaned_query, history)
+        # Step 1: Progressive Status & Cognitive Analysis via Typhoon 2 (Constitutional Pipeline)
+        yield {"event": "status", "data": {"step": "analyzing", "message": "กำลังวิเคราะห์ความต้องการและบริบท..."}}
+        cognitive = await self.cognitive_analyzer.analyze(cleaned_query, history)
+        logger.info(
+            "Stream Cognitive analysis: intent=%s, clarity=%s, domain=%s, entities=%s, unsupported=%s",
+            cognitive.intent,
+            cognitive.clarity,
+            cognitive.domain_category,
+            cognitive.entities,
+            cognitive.unsupported_domain,
+        )
+
+        intent = cognitive.intent
+
         if intent == "general_chat":
             chat_type = self._detect_general_chat_type(cleaned_query.lower()) or "greeting"
             resp_data = self._get_general_chat_response(chat_type)
@@ -1370,11 +2389,75 @@ class YuemnoiConsultantService:
             }
             return
 
+        # Check unsupported domain first (e.g. vehicles, real estate, pets)
+        unsupported_domain = cognitive.unsupported_domain or DatabaseTool.get_unsupported_category_name(cleaned_query)
+        if unsupported_domain:
+            resp_data = self._build_out_of_inventory_response(
+                query=cleaned_query,
+                unsupported_domain=unsupported_domain,
+                domain_category=cognitive.domain_category,
+            )
+            yield {"event": "status", "data": {"step": "ready", "message": "พร้อมให้บริการค่ะ"}}
+            yield {"event": "metadata", "data": {"mode": "general_chat", "recommended_items": [], "questions": []}}
+            yield {"event": "delta", "data": {"text": resp_data["answer"]}}
+            yield {
+                "event": "done",
+                "data": {
+                    "suggested_replies": resp_data["suggested_replies"],
+                    "recommended_items": [],
+                    "questions": [],
+                },
+            }
+            return
+
         catalog = []
         relevant_candidates = []
         compact_catalog = []
+        comparison_search_data = ""
+        compared_entities: Optional[Tuple[str, str]] = None
+        matched_comparison_items = []
 
-        if intent == "faq":
+        if intent == "comparison":
+            yield {"event": "status", "data": {"step": "searching", "message": "กำลังค้นหาและตรวจสอบข้อมูลเปรียบเทียบจากอินเทอร์เน็ต..."}}
+            if len(cognitive.entities) >= 2:
+                compared_entities = (cognitive.entities[0], cognitive.entities[1])
+            elif len(cognitive.entities) == 1:
+                compared_entities = (cognitive.entities[0], "อุปกรณ์เปรียบเทียบ")
+            else:
+                compared_entities = self._extract_comparison_entities(cleaned_query, history)
+
+            ent_a, ent_b = compared_entities
+            if self.google_tool:
+                try:
+                    verified_text, verified_sources, search_status = await self.google_tool.search_comparison(
+                        ent_a, ent_b, cleaned_query
+                    )
+                    comparison_search_data = verified_text
+                    logger.info("Stream comparison web search status: %s (length=%d)", search_status, len(verified_text))
+                except Exception as err:
+                    logger.warning("Stream comparison search failed: %s", err)
+
+            try:
+                catalog = await self.db_tool.list_available_items()
+            except Exception as e:
+                logger.error("Failed to load catalog for stream comparison: %s", e)
+                catalog = []
+
+            matched_comparison_items = self._find_catalog_items_for_entities(
+                compared_entities, catalog, domain_category=cognitive.domain_category
+            )
+            relevant_candidates = matched_comparison_items
+            compact_catalog = [
+                {
+                    "id": item.get("id"),
+                    "name": item.get("item_name"),
+                    "category": item.get("category"),
+                    "price_per_day": item.get("price"),
+                    "description": str(item.get("description") or "")[:120],
+                }
+                for item in relevant_candidates
+            ]
+        elif intent == "faq":
             yield {"event": "status", "data": {"step": "searching", "message": "กำลังค้นหาข้อมูลนโยบายและบริการ..."}}
         else:
             yield {"event": "status", "data": {"step": "searching", "message": "กำลังค้นหาอุปกรณ์ในคลังสินค้า..."}}
@@ -1384,56 +2467,40 @@ class YuemnoiConsultantService:
                 logger.error("Failed to load catalog from Supabase: %s", e)
                 catalog = []
 
-            # Check unsupported domain first (e.g. vehicles/cars/vans, real estate, pets)
-            unsupported_domain = DatabaseTool.get_unsupported_category_name(cleaned_query)
-            search_query = cleaned_query
-            if not unsupported_domain:
-                prior_context = self._extract_activity_context(history)
-                if prior_context:
-                    has_category = any(cat in cleaned_query.lower() for cat in self.BROAD_CATEGORIES)
-                    if not has_category or prior_context.lower() in cleaned_query.lower():
-                        search_query = f"{prior_context} {cleaned_query}"
-                unsupported_domain = DatabaseTool.get_unsupported_category_name(search_query)
-
-            if unsupported_domain:
-                resp_data = self._build_out_of_inventory_response(
-                    query=search_query,
-                    unsupported_domain=unsupported_domain,
-                )
-                yield {"event": "status", "data": {"step": "ready", "message": "พร้อมให้บริการค่ะ"}}
-                yield {"event": "metadata", "data": {"mode": "general_chat", "recommended_items": [], "questions": []}}
-                yield {"event": "delta", "data": {"text": resp_data["answer"]}}
-                yield {
-                    "event": "done",
-                    "data": {
-                        "suggested_replies": resp_data["suggested_replies"],
-                        "recommended_items": [],
-                        "questions": [],
-                    },
-                }
-                return
+            search_query = cognitive.search_query or cleaned_query
 
             relevant_candidates = self.db_tool.rank_relevant_items(
                 query=search_query,
                 items=catalog,
                 limit=settings.MAX_RECOMMENDED_ITEMS + 3,
+                domain_category=cognitive.domain_category,
+                entities=cognitive.entities,
             )
 
-            # If no items match in catalog and intent is recommendation, politely refuse immediately
-            if not relevant_candidates and intent == "recommendation":
-                resp_data = self._build_out_of_inventory_response(query=cleaned_query)
-                yield {"event": "status", "data": {"step": "ready", "message": "พร้อมให้บริการค่ะ"}}
-                yield {"event": "metadata", "data": {"mode": "general_chat", "recommended_items": [], "questions": []}}
-                yield {"event": "delta", "data": {"text": resp_data["answer"]}}
-                yield {
-                    "event": "done",
-                    "data": {
-                        "suggested_replies": resp_data["suggested_replies"],
-                        "recommended_items": [],
-                        "questions": [],
-                    },
-                }
-                return
+            # Strict Inventory Grounding: If user asked for specific item/brand and catalog doesn't have it
+            if not relevant_candidates and (intent == "recommendation" or (cognitive.entities and cognitive.clarity == "clear")):
+                if cognitive.entities:
+                    target_entity = cognitive.entities[0]
+                    resp_data = self._build_out_of_inventory_response(
+                        query=cleaned_query,
+                        target_entity=target_entity,
+                        domain_category=cognitive.domain_category,
+                    )
+                    yield {"event": "status", "data": {"step": "ready", "message": "พร้อมให้บริการค่ะ"}}
+                    yield {"event": "metadata", "data": {"mode": "general_chat", "recommended_items": [], "questions": []}}
+                    yield {"event": "delta", "data": {"text": resp_data["answer"]}}
+                    yield {
+                        "event": "done",
+                        "data": {
+                            "suggested_replies": resp_data["suggested_replies"],
+                            "recommended_items": [],
+                            "questions": [],
+                        },
+                    }
+                    return
+                else:
+                    # Broad / exploratory query: Switch to questionnaire mode
+                    intent = "questionnaire"
 
             compact_catalog = [
                 {
@@ -1464,6 +2531,9 @@ class YuemnoiConsultantService:
             compact_catalog=compact_catalog,
             learned_insights=learned_insights,
             available_categories=all_categories,
+            comparison_search_data=comparison_search_data,
+            compared_entities=compared_entities,
+            domain_category=cognitive.domain_category,
         )
 
         messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -1475,16 +2545,22 @@ class YuemnoiConsultantService:
                     messages.append({"role": role, "content": content[:300]})
         messages.append({"role": "user", "content": cleaned_query})
 
-        yield {"event": "status", "data": {"step": "generating", "message": "กำลังจัดเตรียมคำแนะนำ..."}}
+        if intent == "comparison":
+            yield {"event": "status", "data": {"step": "generating", "message": "กำลังวิเคราะห์และเปรียบเทียบข้อมูล..."}}
+        else:
+            yield {"event": "status", "data": {"step": "generating", "message": "กำลังจัดเตรียมคำแนะนำ..."}}
 
         parser = StreamJsonParser()
-        stream_had_output = False
+        total_deltas_yielded = 0
+        metadata_yielded = False
         resolved_items: List[Dict[str, Any]] = []
         resolved_questions: List[Dict[str, Any]] = []
         if intent == "faq":
             resolved_mode = "general_chat"
         elif intent == "questionnaire":
             resolved_mode = "questionnaire"
+        elif intent == "comparison":
+            resolved_mode = "comparison"
         else:
             resolved_mode = "recommendation"
 
@@ -1499,27 +2575,45 @@ class YuemnoiConsultantService:
             ):
                 events = parser.feed(chunk)
                 for ev in events:
-                    stream_had_output = True
                     if ev["event"] == "metadata":
                         resolved_mode = ev["data"].get("mode", resolved_mode)
                         raw_ids = ev["data"].get("recommended_item_ids") or []
                         raw_qs = ev["data"].get("questions") or []
                         resolved_questions = self._format_questions(raw_qs)
-                        if resolved_questions and resolved_mode == "questionnaire":
+                        if intent == "comparison":
+                            resolved_mode = "comparison"
+                            resolved_questions = []
+                            resolved_items = [self._format_card(it) for it in matched_comparison_items]
+                        elif intent == "questionnaire":
+                            resolved_mode = "questionnaire"
                             resolved_questions = self._validate_and_align_questionnaire(
                                 questions=resolved_questions,
                                 query=cleaned_query,
                                 relevant_candidates=relevant_candidates,
                                 catalog=catalog,
+                                domain_category=cognitive.domain_category,
                             )
-                        resolved_items = self._resolve_recommended_items(
-                            raw_ids=raw_ids,
-                            catalog=catalog,
-                            relevant_candidates=relevant_candidates,
-                            cleaned_query=cleaned_query,
-                            mode=resolved_mode,
-                            has_questions=bool(resolved_questions),
-                        )
+                        elif resolved_questions and resolved_mode == "questionnaire":
+                            resolved_questions = self._validate_and_align_questionnaire(
+                                questions=resolved_questions,
+                                query=cleaned_query,
+                                relevant_candidates=relevant_candidates,
+                                catalog=catalog,
+                                domain_category=cognitive.domain_category,
+                            )
+
+                        if intent != "comparison":
+                            resolved_items = self._resolve_recommended_items(
+                                raw_ids=raw_ids,
+                                catalog=catalog,
+                                relevant_candidates=relevant_candidates,
+                                cleaned_query=cleaned_query,
+                                mode=resolved_mode,
+                                has_questions=bool(resolved_questions),
+                            )
+                        if resolved_mode == "questionnaire":
+                            resolved_items = []
+                        metadata_yielded = True
                         yield {
                             "event": "metadata",
                             "data": {
@@ -1532,33 +2626,52 @@ class YuemnoiConsultantService:
                         raw_delta = ev["data"].get("text", "")
                         clean_delta = self._clean_delta(raw_delta)
                         if clean_delta:
+                            total_deltas_yielded += len(clean_delta)
                             yield {"event": "delta", "data": {"text": clean_delta}}
                     else:
                         yield ev
 
             finish_events = parser.finish()
             for ev in finish_events:
-                stream_had_output = True
                 if ev["event"] == "metadata":
                     resolved_mode = ev["data"].get("mode", resolved_mode)
                     raw_ids = ev["data"].get("recommended_item_ids") or []
                     raw_qs = ev["data"].get("questions") or []
                     resolved_questions = self._format_questions(raw_qs)
-                    if resolved_questions and resolved_mode == "questionnaire":
+                    if intent == "comparison":
+                        resolved_mode = "comparison"
+                        resolved_questions = []
+                        resolved_items = [self._format_card(it) for it in matched_comparison_items]
+                    elif intent == "questionnaire":
+                        resolved_mode = "questionnaire"
                         resolved_questions = self._validate_and_align_questionnaire(
                             questions=resolved_questions,
                             query=cleaned_query,
                             relevant_candidates=relevant_candidates,
                             catalog=catalog,
+                            domain_category=cognitive.domain_category,
                         )
-                    resolved_items = self._resolve_recommended_items(
-                        raw_ids=raw_ids,
-                        catalog=catalog,
-                        relevant_candidates=relevant_candidates,
-                        cleaned_query=cleaned_query,
-                        mode=resolved_mode,
-                        has_questions=bool(resolved_questions),
-                    )
+                    elif resolved_questions and resolved_mode == "questionnaire":
+                        resolved_questions = self._validate_and_align_questionnaire(
+                            questions=resolved_questions,
+                            query=cleaned_query,
+                            relevant_candidates=relevant_candidates,
+                            catalog=catalog,
+                            domain_category=cognitive.domain_category,
+                        )
+
+                    if intent != "comparison":
+                        resolved_items = self._resolve_recommended_items(
+                            raw_ids=raw_ids,
+                            catalog=catalog,
+                            relevant_candidates=relevant_candidates,
+                            cleaned_query=cleaned_query,
+                            mode=resolved_mode,
+                            has_questions=bool(resolved_questions),
+                        )
+                    if resolved_mode == "questionnaire":
+                        resolved_items = []
+                    metadata_yielded = True
                     yield {
                         "event": "metadata",
                         "data": {
@@ -1567,30 +2680,125 @@ class YuemnoiConsultantService:
                             "questions": resolved_questions,
                         },
                     }
+                elif ev["event"] == "delta":
+                    raw_delta = ev["data"].get("text", "")
+                    clean_delta = self._clean_delta(raw_delta)
+                    if clean_delta:
+                        total_deltas_yielded += len(clean_delta)
+                        yield {"event": "delta", "data": {"text": clean_delta}}
                 elif ev["event"] == "done":
+                    if intent == "comparison":
+                        resolved_mode = "comparison"
+                        resolved_questions = []
+                        resolved_items = [self._format_card(it) for it in matched_comparison_items]
+                    elif intent == "questionnaire" or resolved_mode == "questionnaire":
+                        resolved_mode = "questionnaire"
+                        if not resolved_questions:
+                            resolved_questions = self._validate_and_align_questionnaire(
+                                questions=[],
+                                query=cleaned_query,
+                                relevant_candidates=relevant_candidates,
+                                catalog=catalog,
+                                domain_category=cognitive.domain_category,
+                            )
+                        resolved_items = []
+                    elif resolved_mode == "recommendation" and not resolved_items:
+                        if not cognitive.entities:
+                            resolved_mode = "questionnaire"
+                            if not resolved_questions:
+                                resolved_questions = self._validate_and_align_questionnaire(
+                                    questions=[],
+                                    query=cleaned_query,
+                                    relevant_candidates=relevant_candidates,
+                                    catalog=catalog,
+                                    domain_category=cognitive.domain_category,
+                                )
+                            resolved_items = []
+                    # Ensure metadata is emitted if it was never sent before done
+                    if not metadata_yielded:
+                        metadata_yielded = True
+                        yield {
+                            "event": "metadata",
+                            "data": {
+                                "mode": resolved_mode,
+                                "recommended_items": resolved_items[:settings.MAX_RECOMMENDED_ITEMS],
+                                "questions": resolved_questions,
+                            },
+                        }
+
+                    # Absolute guarantee: a response must NEVER have empty delta text
+                    if total_deltas_yielded == 0:
+                        if resolved_mode == "questionnaire":
+                            fallback_text = (
+                                "เพื่อช่วยแนะนำอุปกรณ์ที่ตอบโจทย์และตรงใจคุณลูกค้ามากที่สุด "
+                                "รบกวนเลือกข้อมูลตามแบบสอบถามด้านล่างนี้ได้เลยนะคะ 😊"
+                            )
+                        elif resolved_mode == "comparison":
+                            ent_a = compared_entities[0] if compared_entities else "อุปกรณ์แรก"
+                            ent_b = compared_entities[1] if compared_entities else "อุปกรณ์ที่สอง"
+                            fallback_text = (
+                                f"สำหรับความแตกต่างระหว่าง **{ent_a}** และ **{ent_b}** Yuemnoi สรุปเปรียบเทียบให้ดังนี้ค่ะ:\n\n"
+                                f"อุปกรณ์ทั้งสองมีจุดเด่นและลักษณะการใช้งานที่แตกต่างกันอย่างชัดเจนตามสเปกจริงค่ะ "
+                                f"หากต้องการทราบข้อมูลสเปกจุดไหนเพิ่มเติม สามารถพิมพ์ถามได้เลยนะคะ 😊"
+                            )
+                        elif resolved_items:
+                            first_names = ", ".join(item.get("item_name", "") for item in resolved_items[:2] if item.get("item_name"))
+                            fallback_text = f"Yuemnoi ขอแนะนำ {first_names} สำหรับการใช้งานของคุณลูกค้าค่ะ หากสนใจรับอุปกรณ์หรือสอบถามเพิ่มเติม แจ้งได้เลยนะคะ 😊"
+                        elif relevant_candidates:
+                            first_names = ", ".join(item.get("item_name", "") for item in relevant_candidates[:2] if item.get("item_name"))
+                            fallback_text = f"Yuemnoi มีอุปกรณ์ในระบบ เช่น {first_names} ที่พร้อมให้บริการเช่าค่ะ สามารถสอบถามข้อมูลเพิ่มเติมได้เลยนะคะ 😊"
+                        else:
+                            fallback_text = "Yuemnoi AI ยินดีให้บริการค่ะ หากมีข้อสงสัยเกี่ยวกับอุปกรณ์เช่าหรือขั้นตอนการใช้งาน สามารถสอบถามได้เลยนะคะ 😊"
+                        total_deltas_yielded += len(fallback_text)
+                        yield {"event": "delta", "data": {"text": fallback_text}}
+
                     final_data = dict(ev["data"])
                     final_data["recommended_items"] = resolved_items[:settings.MAX_RECOMMENDED_ITEMS]
                     final_data["questions"] = resolved_questions
                     if not final_data.get("suggested_replies"):
-                        if resolved_mode == "questionnaire":
+                        if resolved_mode == "comparison":
+                            ent_a = compared_entities[0] if compared_entities else "อุปกรณ์แรก"
+                            ent_b = compared_entities[1] if compared_entities else "อุปกรณ์ที่สอง"
+                            final_data["suggested_replies"] = [f"สนใจเช่า {ent_a}", f"สนใจเช่า {ent_b}", "สอบถามขั้นตอนการเช่า"]
+                        elif resolved_mode == "questionnaire":
                             final_data["suggested_replies"] = ["พิมพ์ตอบเอง", "ข้ามแบบสอบถาม"]
                         elif resolved_mode == "general_chat":
                             final_data["suggested_replies"] = ["สอบถามขั้นตอนการเช่า", "นโยบายเงินมัดจำ"]
                         else:
                             final_data["suggested_replies"] = ["ขอดูอุปกรณ์เสริมเพิ่ม", "สอบถามขั้นตอนการเช่า"]
                     yield {"event": "done", "data": final_data}
-                elif ev["event"] == "delta":
-                    raw_delta = ev["data"].get("text", "")
-                    clean_delta = self._clean_delta(raw_delta)
-                    if clean_delta:
-                        yield {"event": "delta", "data": {"text": clean_delta}}
                 else:
                     yield ev
 
         except Exception as exc:
             logger.error("Error during streaming LLM inference: %s", exc)
-            if not stream_had_output:
-                if intent == "faq":
+            if total_deltas_yielded == 0:
+                if intent == "comparison":
+                    ent_a = compared_entities[0] if compared_entities else "อุปกรณ์แรก"
+                    ent_b = compared_entities[1] if compared_entities else "อุปกรณ์ที่สอง"
+                    fallback_text = (
+                        f"สำหรับความแตกต่างระหว่าง **{ent_a}** และ **{ent_b}** Yuemnoi สรุปเปรียบเทียบให้ดังนี้ค่ะ:\n\n"
+                        f"อุปกรณ์ทั้งสองมีจุดเด่นและลักษณะการใช้งานที่แตกต่างกันอย่างชัดเจนตามสเปกจริงค่ะ "
+                        f"หากต้องการทราบข้อมูลสเปกจุดไหนเพิ่มเติม สามารถพิมพ์ถามได้เลยนะคะ 😊"
+                    )
+                    comparison_cards = [self._format_card(it) for it in matched_comparison_items]
+                    yield {
+                        "event": "metadata",
+                        "data": {"mode": "comparison", "recommended_items": comparison_cards, "questions": []},
+                    }
+                    yield {
+                        "event": "delta",
+                        "data": {"text": fallback_text},
+                    }
+                    yield {
+                        "event": "done",
+                        "data": {
+                            "suggested_replies": [f"สนใจเช่า {ent_a}", f"สนใจเช่า {ent_b}", "สอบถามขั้นตอนการเช่า"],
+                            "recommended_items": comparison_cards,
+                            "questions": [],
+                        },
+                    }
+                elif intent == "faq":
                     yield {
                         "event": "metadata",
                         "data": {"mode": "general_chat", "recommended_items": [], "questions": []},
@@ -1616,10 +2824,12 @@ class YuemnoiConsultantService:
                     fallback_qs = self._get_fallback_questions(
                         cleaned_query,
                         catalog=catalog,
+                        domain_category=cognitive.domain_category,
                     )
                     fallback_intro = self._get_fallback_questionnaire_intro(
                         cleaned_query,
                         catalog=catalog,
+                        domain_category=cognitive.domain_category,
                     )
                     yield {
                         "event": "metadata",

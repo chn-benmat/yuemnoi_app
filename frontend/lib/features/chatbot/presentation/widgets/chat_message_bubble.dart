@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:markdown/markdown.dart' as md;
 
 import '../../../../core/constants/colors.dart';
 import '../../domain/entities/chat_message.dart';
@@ -130,75 +129,119 @@ class _AnimatedAssistantContent extends StatefulWidget {
 }
 
 class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
-  Timer? _timer;
-  late List<int> _runes;
-  int _visibleRuneCount = 0;
+  Timer? _typewriterTimer;
+  Characters _targetCharacters = Characters('');
+  int _visibleCount = 0;
+  DateTime _lastProgressCall = DateTime.fromMillisecondsSinceEpoch(0);
 
   bool get _isComplete =>
-      !widget.message.isStreaming && _visibleRuneCount >= _runes.length;
+      !widget.message.isStreaming && _visibleCount >= _targetCharacters.length;
+
+  String _resolveContent() {
+    final text = widget.message.content.trim();
+    if (text.isNotEmpty || widget.message.isStreaming) {
+      return widget.message.content;
+    }
+    if (widget.message.questions.isNotEmpty) {
+      return 'เพื่อช่วยแนะนำอุปกรณ์ที่เหมาะสมและคุ้มค่าที่สุด รบกวนเลือกข้อมูลการใช้งานด้านล่างนี้ได้เลยนะคะ 😊';
+    }
+    if (widget.message.recommendedItems.isNotEmpty) {
+      return 'นี่คืออุปกรณ์ที่เราแนะนำสำหรับคุณค่ะ:';
+    }
+    return 'ขออภัยด้วยนะคะ ขณะนี้ระบบไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่อีกครั้งค่ะ';
+  }
 
   @override
   void initState() {
     super.initState();
-    _startAnimation();
+    final effectiveText = _resolveContent();
+    _targetCharacters = effectiveText.characters;
+
+    if (widget.message.isStreaming ||
+        widget.message.responseDuration != null ||
+        widget.message.questions.any((q) => q.selectedOption != null) ||
+        !widget.animate ||
+        _targetCharacters.isEmpty) {
+      _visibleCount = _targetCharacters.length;
+      return;
+    }
+
+    _visibleCount = 0;
+    widget.onAnimationStarted?.call();
+    _startTypewriter();
   }
 
   @override
   void didUpdateWidget(covariant _AnimatedAssistantContent oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final effectiveText = _resolveContent();
+    _targetCharacters = effectiveText.characters;
+
     if (widget.message.isStreaming || oldWidget.message.isStreaming) {
-      _timer?.cancel();
-      _runes = widget.message.content.runes.toList(growable: false);
-      _visibleRuneCount = _runes.length;
+      _typewriterTimer?.cancel();
+      _typewriterTimer = null;
+      _visibleCount = _targetCharacters.length;
       return;
     }
+
     if (widget.message.questions.any((q) => q.selectedOption != null)) {
-      _timer?.cancel();
-      _runes = widget.message.content.runes.toList(growable: false);
-      _visibleRuneCount = _runes.length;
+      _typewriterTimer?.cancel();
+      _typewriterTimer = null;
+      _visibleCount = _targetCharacters.length;
       return;
     }
+
     if (oldWidget.message.content != widget.message.content) {
-      _startAnimation();
+      if (widget.animate && widget.message.responseDuration == null) {
+        _visibleCount = 0;
+        widget.onAnimationStarted?.call();
+        _startTypewriter();
+      } else {
+        _visibleCount = _targetCharacters.length;
+      }
     }
   }
 
-  void _startAnimation() {
-    _timer?.cancel();
-    _runes = widget.message.content.runes.toList(growable: false);
-    if (widget.message.isStreaming ||
-        widget.message.responseDuration != null ||
-        widget.message.questions.any((q) => q.selectedOption != null) ||
-        !widget.animate ||
-        _runes.isEmpty) {
-      _visibleRuneCount = _runes.length;
-      return;
-    }
+  void _startTypewriter() {
+    _typewriterTimer?.cancel();
 
-    _visibleRuneCount = 0;
-    widget.onAnimationStarted?.call();
-
-    final runesPerTick = (_runes.length / 80).ceil();
-    _timer = Timer.periodic(const Duration(milliseconds: 28), (timer) {
+    _typewriterTimer = Timer.periodic(const Duration(milliseconds: 26), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
 
+      final targetLen = _targetCharacters.length;
+      if (_visibleCount >= targetLen) {
+        timer.cancel();
+        _typewriterTimer = null;
+        setState(() {
+          _visibleCount = targetLen;
+        });
+        return;
+      }
+
+      final step = (targetLen / 80).ceil().clamp(1, 4);
       setState(() {
-        final nextCount = _visibleRuneCount + runesPerTick;
-        _visibleRuneCount = nextCount > _runes.length
-            ? _runes.length
-            : nextCount;
+        final next = _visibleCount + step;
+        _visibleCount = next > targetLen ? targetLen : next;
       });
-      widget.onProgress?.call();
-      if (_isComplete) timer.cancel();
+
+      final now = DateTime.now();
+      if (now.difference(_lastProgressCall).inMilliseconds >= 60) {
+        _lastProgressCall = now;
+        widget.onProgress?.call();
+      }
+      if (_isComplete) {
+        timer.cancel();
+        _typewriterTimer = null;
+      }
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _typewriterTimer?.cancel();
     super.dispose();
   }
 
@@ -234,6 +277,9 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
       color: AppColors.primaryColor,
       height: 1.6,
     ),
+    h1Padding: const EdgeInsets.only(top: 14, bottom: 8),
+    h2Padding: const EdgeInsets.only(top: 14, bottom: 8),
+    h3Padding: const EdgeInsets.only(top: 14, bottom: 8),
     p: ChatMessageBubble._messageStyle(isUser: false),
     strong: const TextStyle(
       fontFamily: 'Prompt',
@@ -246,17 +292,62 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
     ),
   );
 
-  static final Map<String, MarkdownElementBuilder> _markdownBuilders = {
-    'h1': _HeadingHighlightBuilder(),
-    'h2': _HeadingHighlightBuilder(),
-    'h3': _HeadingHighlightBuilder(),
-  };
+  static final _headingWithoutLeadingNewlines = RegExp(r'(?<=\S)\s*(#{1,4})');
+  static final _headingMissingSpace = RegExp(r'(#{1,4})([^\s#])');
+  static final _numberedListParen = RegExp(r'(?:^|(?<=\S)\s+)(\d+)\)\s*');
+  static final _numberedListSpace = RegExp(r'(?<=\S)\s+(\d+\.\s+)');
+  static final _numberedListPattern = RegExp(r'(?:^|\n)\s*\d+\.\s');
+
+  static final _codeBlockRegex = RegExp(r'```');
+  static final _inlineCodeRegex = RegExp(r'(?<!`)`(?!`)');
+  static final _boldRegex = RegExp(r'\*\*');
+  static final _tripleUnderscoreRegex = RegExp(r'___');
+  static final _doubleUnderscoreRegex = RegExp(r'__');
+
+  static String _sanitizePartialMarkdown(String text) {
+    if (text.isEmpty) return text;
+    var sanitized = text;
+
+    final codeBlockMatches = _codeBlockRegex.allMatches(sanitized).length;
+    if (codeBlockMatches.isOdd) {
+      return '$sanitized\n```';
+    }
+
+    final inlineCodeMatches = _inlineCodeRegex.allMatches(sanitized).length;
+    if (inlineCodeMatches.isOdd) {
+      sanitized += '`';
+      return sanitized;
+    }
+
+    final boldMatches = _boldRegex.allMatches(sanitized).length;
+    if (boldMatches.isOdd) {
+      sanitized += '**';
+    }
+
+    final tripleUnderscoreMatches =
+        _tripleUnderscoreRegex.allMatches(sanitized).length;
+    if (tripleUnderscoreMatches.isOdd) {
+      sanitized += '___';
+    } else {
+      final doubleUnderscoreMatches =
+          _doubleUnderscoreRegex.allMatches(sanitized).length;
+      if (doubleUnderscoreMatches.isOdd) {
+        sanitized += '__';
+      }
+    }
+
+    return sanitized;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final visibleText = String.fromCharCodes(_runes.take(_visibleRuneCount));
-    final renderMarkdown =
-        _isComplete && _containsMarkdown(widget.message.content);
+    final effectiveText = _resolveContent();
+    if (_targetCharacters.isEmpty && effectiveText.isNotEmpty) {
+      _targetCharacters = effectiveText.characters;
+      _visibleCount = _targetCharacters.length;
+    }
+    final visibleText = _targetCharacters.take(_visibleCount).toString();
+    final renderMarkdown = _containsMarkdown(effectiveText);
     final responseKey = ValueKey(
       'chatbot-animated-response-${widget.message.id}',
     );
@@ -300,7 +391,7 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
           ),
         if (!renderMarkdown)
           Semantics(
-            label: widget.message.content,
+            label: effectiveText,
             child: ExcludeSemantics(
               child: Text(
                 visibleText,
@@ -312,15 +403,15 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
         else
           MarkdownBody(
             key: ValueKey('chatbot-markdown-response-${widget.message.id}'),
-            data: _formatMarkdownText(widget.message.content),
-            builders: _markdownBuilders,
+            data: _formatMarkdownText(_sanitizePartialMarkdown(visibleText)),
             styleSheet: _markdownStyleSheet,
           ),
         for (final question in widget.message.questions) ...[
           if (question.selectedOption != null)
             QuestionnaireRecapCard(question: question),
         ],
-        if (_isComplete) ...[
+        if (_isComplete &&
+            !widget.message.questions.any((q) => q.selectedOption == null)) ...[
           for (final item in widget.message.recommendedItems) ...[
             const SizedBox(height: 16),
             RecommendedItemCard(
@@ -328,7 +419,7 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
               onPressed: () => widget.onRentPressed(item),
             ),
           ],
-          if (widget.message.content.trim().isNotEmpty) ...[
+          if (effectiveText.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
             _AssistantActionBar(
               isLiked: widget.message.isLiked,
@@ -344,22 +435,28 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
 
   static String _formatMarkdownText(String text) {
     var formatted = text.replaceAllMapped(
-      RegExp(r'(?<=\S)\s*(#{1,4})'),
+      _headingWithoutLeadingNewlines,
       (match) => '\n\n${match.group(1)} ',
     );
     formatted = formatted.replaceAllMapped(
-      RegExp(r'(#{1,4})([^\s#])'),
+      _headingMissingSpace,
       (match) => '${match.group(1)} ${match.group(2)}',
     );
     // Ensure numbered lists (1. 2. 3. or 1) 2) 3)) start on a new line
     formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|(?<=\S)\s+)(\d+)\)\s*'),
+      _numberedListParen,
       (match) => '\n\n${match.group(1)}. ',
     );
     formatted = formatted.replaceAllMapped(
-      RegExp(r'(?<=\S)\s+(\d+\.\s+)'),
+      _numberedListSpace,
       (match) => '\n\n${match.group(1)}',
     );
+    if (formatted.contains('อุปกรณ์แนะนำที่ตอบโจทย์ที่สุด')) {
+      formatted = formatted.replaceAll(
+        'อุปกรณ์แนะนำที่ตอบโจทย์ที่สุด',
+        'อุปกรณ์ที่แนะนำ',
+      );
+    }
     return formatted.trim();
   }
 
@@ -369,39 +466,7 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
         text.contains('* ') ||
         text.contains('- ') ||
         text.contains('```') ||
-        RegExp(r'(?:^|\n)\s*\d+\.\s').hasMatch(text);
-  }
-}
-
-class _HeadingHighlightBuilder extends MarkdownElementBuilder {
-  @override
-  bool isBlockElement() => true;
-
-  @override
-  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
-    var text = element.textContent.trim();
-    if (text.isEmpty) return null;
-
-    if (text.contains('อุปกรณ์แนะนำที่ตอบโจทย์ที่สุด')) {
-      text = text.replaceAll(
-        'อุปกรณ์แนะนำที่ตอบโจทย์ที่สุด',
-        'อุปกรณ์ที่แนะนำ',
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 14, bottom: 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontFamily: 'Prompt',
-          fontSize: 15.5,
-          fontWeight: FontWeight.w700,
-          color: AppColors.primaryColor,
-          height: 1.45,
-        ),
-      ),
-    );
+        _numberedListPattern.hasMatch(text);
   }
 }
 

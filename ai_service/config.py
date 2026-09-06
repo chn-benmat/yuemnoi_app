@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     SERPER_API_KEY: str = ""
 
     # Ollama Local Model
-    MODEL_NAME: str = "qwen3:8b"
+    MODEL_NAME: str = "scb10x/llama3.1-typhoon2-8b-instruct:latest"
     OLLAMA_ENDPOINT: str = "http://localhost:11434"
     OLLAMA_CONTEXT_LENGTH: int = 8192
     OLLAMA_KEEP_ALIVE: int = -1

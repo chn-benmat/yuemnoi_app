@@ -9,7 +9,7 @@ logger = logging.getLogger("uvicorn.error")
 
 
 class OllamaClient:
-    """Fast, reliable client for local Ollama models (e.g. qwen3:8b)."""
+    """Fast, reliable client for local Ollama models (e.g. scb10x/llama3.1-typhoon2-8b-instruct:latest)."""
 
     def __init__(self, client: httpx.AsyncClient):
         self.client = client

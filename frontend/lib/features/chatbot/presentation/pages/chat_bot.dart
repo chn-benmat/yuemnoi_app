@@ -332,6 +332,8 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
         if (position.pixels != position.maxScrollExtent) {
           position.jumpTo(position.maxScrollExtent);
         }
+      } catch (_) {
+        // Safe against animation interruption during user gesture
       } finally {
         _isScrollToBottomScheduled = false;
       }

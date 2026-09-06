@@ -11,7 +11,7 @@
 <br/>
 
 > **Backend API** ที่เป็นตัวกลางเชื่อมต่อระหว่าง Flutter Frontend กับฐานข้อมูล Supabase  
-> และ AI Service ที่ประมวลผลด้วยโมเดลภาษา Qwen
+> และ AI Service ที่ประมวลผลด้วยโมเดลภาษา Typhoon 2
 
 </div>
 

@@ -10,7 +10,7 @@
 - ใช้แค็ตตาล็อก cache เพื่อจัดอันดับ candidate สูงสุด 8 รายการ อ่านสดก่อนกรองงบ/หน่วย/สถานะ และอ่านสินค้าที่เลือกซ้ำหลังสร้างคำตอบ ถ้าราคาเปลี่ยนใช้ราคาสด ถ้าผิดงบ/ไม่ว่าง/รายละเอียดเปลี่ยนให้หยุดแสดงการ์ด
 - ไม่ส่งราคาให้โมเดลสร้างข้อความราคาเอง ชื่อ ราคา หน่วย และการ์ดประกอบจากรายการสดเดียวกัน
 - ถ้าขาดหลักฐานความเหมาะสม ให้เสนอเป็นตัวเลือกพร้อมข้อจำกัด ไม่แปลว่าไม่มีสินค้า; no_match จำกัดข้อความไว้ที่รายการที่ตรวจสอบด้วยโค้ด
-- `config.py`: output budget ตีความ 384 / ตอบ 512 tokens คง qwen3:8b, think=False, shared client, keep-alive และ deadline รวม 45 วินาที ไม่มี retry หรือ streaming
+- `config.py`: output budget ตีความ 384 / ตอบ 512 tokens ใช้ scb10x/llama3.1-typhoon2-8b-instruct:latest (Typhoon 2 8B), think=False, shared client, keep-alive และ deadline รวม 45 วินาที ไม่มี retry หรือ streaming
 - `README.md`: อธิบายเส้นทางและข้อจำกัดปัจจุบัน
 
 API/UI เดิม ไม่มี dependency, migration หรือการแก้ env/lockfiles ส่วนไฟล์ cache, telemetry, main และ inventory_grounding ที่แก้ค้างมาจากรอบก่อนยังคงอยู่ ไม่ได้แก้ backend/frontend เพิ่มในรอบนี้
