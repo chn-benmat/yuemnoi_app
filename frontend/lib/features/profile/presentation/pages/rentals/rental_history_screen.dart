@@ -25,7 +25,8 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _getRentalHistoryUseCase = widget.getRentalHistoryUseCase ??
+    _getRentalHistoryUseCase =
+        widget.getRentalHistoryUseCase ??
         GetRentalHistoryUseCase(RentalManagementRepositoryImpl());
     _loadRentalHistory();
   }
