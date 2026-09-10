@@ -314,8 +314,10 @@ class RentalStatusCard extends StatelessWidget {
   const RentalStatusCard({super.key, required this.item});
 
   void _openTrackingMap(BuildContext context) {
+    final isOwner = item.partnerRole == 'ผู้เช่า';
     AppRoutes.openRentalTrackingMap(
       context,
+      isOwner: isOwner,
       trackingArgs: {
         'itemTitle': item.title,
         'itemImageUrl': item.imageUrl,
@@ -325,6 +327,8 @@ class RentalStatusCard extends StatelessWidget {
         'periodText': item.duration,
         'totalPrice': item.totalPrice?.toDouble(),
         'statusCode': item.statusCode,
+        'bookingId': item.bookingId,
+        'isOwner': isOwner,
       },
     );
   }
@@ -538,14 +542,14 @@ class RentalStatusCard extends StatelessWidget {
                     children: [
                       Icon(
                         item.statusCode.toLowerCase() == 'active'
-                            ? Icons.assignment_return_rounded
+                            ? Icons.inventory_2_outlined
                             : Icons.near_me_rounded,
                         size: 16,
                       ),
                       const SizedBox(width: 6),
                       Text(
                         item.statusCode.toLowerCase() == 'active'
-                            ? 'ส่งคืนอุปกรณ์ / ดูจุดนัดคืน'
+                            ? 'ดูรายละเอียดการเช่า'
                             : 'ดูเส้นทางนัดรับ & ตรวจรับของ',
                         style: const TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
@@ -798,8 +802,10 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                   ),
                   onPressed: () {
                     Navigator.pop(context);
+                    final isOwner = item.partnerRole == 'ผู้เช่า';
                     AppRoutes.openRentalTrackingMap(
                       context,
+                      isOwner: isOwner,
                       trackingArgs: {
                         'itemTitle': item.title,
                         'itemImageUrl': item.imageUrl,
@@ -808,18 +814,20 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                         'periodText': item.duration,
                         'totalPrice': item.totalPrice?.toDouble(),
                         'statusCode': item.statusCode,
+                        'bookingId': item.bookingId,
+                        'isOwner': isOwner,
                       },
                     );
                   },
                   icon: Icon(
                     item.statusCode.toLowerCase() == 'active'
-                        ? Icons.assignment_return_rounded
+                        ? Icons.inventory_2_outlined
                         : Icons.near_me_rounded,
                     size: 18,
                   ),
                   label: Text(
                     item.statusCode.toLowerCase() == 'active'
-                        ? 'ส่งคืนอุปกรณ์ / ดูจุดนัดคืน'
+                        ? 'ดูรายละเอียดการเช่า'
                         : 'ดูเส้นทางนัดรับ & ตรวจรับของ',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,

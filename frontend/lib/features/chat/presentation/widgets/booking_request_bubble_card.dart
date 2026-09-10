@@ -35,6 +35,7 @@ class BookingRequestBubbleCard extends StatefulWidget {
 
 class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   bool _isConfirmed = false;
+  int? _bookingId;
 
   @override
   void initState() {
@@ -59,13 +60,18 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     final isLocallyConfirmed = await BookingConfirmationTracker.isConfirmed(
       messageId: widget.message.id,
     );
+    final cachedBookingId = await BookingConfirmationTracker.getBookingId(
+      messageId: widget.message.id,
+    );
     if (isLocallyConfirmed) {
       if (mounted) {
         setState(() {
           _isConfirmed = true;
+          if (cachedBookingId != null && cachedBookingId > 0) {
+            _bookingId = cachedBookingId;
+          }
         });
       }
-      return;
     }
 
     // 2. ตรวจสอบสถานะจาก Supabase booking_tb
@@ -98,13 +104,18 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
 
       if (mounted) {
         if (res.isNotEmpty) {
+          final foundBookingId = (res.first['id'] as num?)?.toInt();
           setState(() {
             _isConfirmed = true;
+            if (foundBookingId != null && foundBookingId > 0) {
+              _bookingId = foundBookingId;
+            }
           });
           await BookingConfirmationTracker.markConfirmed(
             messageId: widget.message.id,
+            bookingId: foundBookingId,
           );
-        } else {
+        } else if (!isLocallyConfirmed) {
           setState(() {
             _isConfirmed = false;
           });
@@ -131,12 +142,16 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
           widget.bookingData.conversationId ?? widget.message.conversationId,
     );
 
-    // เมื่อกดยืนยันแล้ว (ทั้งฝั่งผู้เช่าและปล่อยเช่า) กด "รายละเอียด" จะเป็นการดูรายละเอียดที่นัดรับ
+    // เมื่อกดยืนยันแล้ว (ทั้งฝั่งผู้เช่าและปล่อยเช่า) กด "รายละเอียดนัดรับ" จะเป็นการเปิดดูเส้นทางนัดรับบนแผนที่โดยตรง
     if (_isConfirmed) {
-      AppRoutes.openBookingConfirmation(
+      AppRoutes.openRentalTrackingMap(
         context,
         bookingData: attachedData,
-        isDetailView: true,
+        isOwner: isOwner,
+        trackingArgs: {
+          'bookingId': _bookingId,
+          'conversationId': attachedData.conversationId,
+        },
       );
       return;
     }
