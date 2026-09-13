@@ -615,6 +615,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
         rentalType = BookingRentalType.daily;
       } else {
         rentalType = (_conversation.itemRentalType == 'hourly' ||
+                _conversation.itemRentalType == 'hour' ||
                 _conversation.itemRentalType == 'รายชั่วโมง')
             ? BookingRentalType.hourly
             : BookingRentalType.daily;
@@ -634,6 +635,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
           ? _conversation.itemImageUrl!
           : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop';
       rentalType = (_conversation.itemRentalType == 'hourly' ||
+              _conversation.itemRentalType == 'hour' ||
               _conversation.itemRentalType == 'รายชั่วโมง')
           ? BookingRentalType.hourly
           : BookingRentalType.daily;

@@ -32,19 +32,23 @@ func NewItemHandler(r domain.ItemRepository, tokenVerifier domain.TokenVerifier)
 	}
 }
 
-func (h *ItemHandler) authenticatedUserID(c *gin.Context) (string, bool) {
-	token, ok := extractToken(c)
-	if !ok {
-		return "", false
-	}
+type createItemRequest struct {
+	ItemName     string   `json:"item_name" form:"item_name" binding:"required,min=1,max=150"`
+	ItemImageURL []string `json:"item_image_url" form:"item_image_url" binding:"omitempty,dive,max=2048"`
+	Description  string   `json:"description" form:"description" binding:"required,min=1,max=2000"`
+	Category     string   `json:"category" form:"category" binding:"required,min=1,max=100"`
+	Price        int      `json:"price" form:"price" binding:"required,gt=0"`
+	Type         string   `json:"type" form:"type" binding:"required,oneof=รายวัน รายชั่วโมง day hour daily hourly"`
+}
 
-	userID, err := h.tokenVerifier.UserIDFromToken(c.Request.Context(), token)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Access Token ไม่ถูกต้องหรือหมดอายุ"})
-		return "", false
-	}
-
-	return userID, true
+type updateItemRequest struct {
+	ItemName     *string   `json:"item_name" binding:"omitempty,min=1,max=150"`
+	ItemImageURL *[]string `json:"item_image_url" binding:"omitempty,dive,max=2048"`
+	Description  *string   `json:"description" binding:"omitempty,min=1,max=2000"`
+	Category     *string   `json:"category" binding:"omitempty,max=100"`
+	Price        *int      `json:"price" binding:"omitempty,gt=0"`
+	Status       *string   `json:"status" binding:"omitempty,max=50"`
+	Type         *string   `json:"type" binding:"omitempty,max=100"`
 }
 
 func parseItemID(c *gin.Context) (int64, bool) {
@@ -98,12 +102,12 @@ func (h *ItemHandler) GetItemByID(c *gin.Context) {
 
 // [POST] /api/v1/items - เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
 func (h *ItemHandler) CreateItem(c *gin.Context) {
-	userID, ok := h.authenticatedUserID(c)
+	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
 		return
 	}
 
-	var req domain.CreateItemRequest
+	var req createItemRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลอุปกรณ์ไม่ถูกต้อง: " + err.Error()})
 		return
@@ -196,7 +200,7 @@ func readItemImage(header *multipart.FileHeader) (*domain.ItemImage, error) {
 
 // [PUT] /api/v1/items/:id - แก้ไขอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
 func (h *ItemHandler) UpdateItem(c *gin.Context) {
-	userID, ok := h.authenticatedUserID(c)
+	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
 		return
 	}
@@ -205,7 +209,7 @@ func (h *ItemHandler) UpdateItem(c *gin.Context) {
 		return
 	}
 
-	var req domain.UpdateItemRequest
+	var req updateItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลอุปกรณ์ไม่ถูกต้อง: " + err.Error()})
 		return
@@ -250,7 +254,7 @@ func (h *ItemHandler) UpdateItem(c *gin.Context) {
 
 // [DELETE] /api/v1/items/:id - ลบอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
 func (h *ItemHandler) DeleteItem(c *gin.Context) {
-	userID, ok := h.authenticatedUserID(c)
+	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
 		return
 	}

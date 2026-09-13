@@ -20,15 +20,5 @@ abstract interface class ChatbotRepository {
     required List<ChatMessage> history,
   });
 
-  Future<void> submitFeedback({
-    required String messageId,
-    required String userQuery,
-    required String aiResponse,
-    required int rating,
-    String? reasonCategory,
-    String? feedbackComment,
-    String? resolvedMode,
-  });
-
   void close();
 }

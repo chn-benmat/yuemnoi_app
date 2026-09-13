@@ -7,6 +7,7 @@ class InteractiveQuestionnaireCard extends StatefulWidget {
   const InteractiveQuestionnaireCard({
     required this.questions,
     required this.onCompleted,
+    this.onCompletedWithAnswers,
     required this.onDismiss,
     required this.onCustomInput,
     super.key,
@@ -14,6 +15,7 @@ class InteractiveQuestionnaireCard extends StatefulWidget {
 
   final List<ClarificationQuestion> questions;
   final ValueChanged<String> onCompleted;
+  final void Function(String, Map<String, String>)? onCompletedWithAnswers;
   final VoidCallback onDismiss;
   final VoidCallback onCustomInput;
 
@@ -24,6 +26,7 @@ class InteractiveQuestionnaireCard extends StatefulWidget {
 
 class _InteractiveQuestionnaireCardState
     extends State<InteractiveQuestionnaireCard> {
+  late List<ClarificationQuestion> _questions;
   int _currentIndex = 0;
   final Map<int, String> _selectedAnswers = {};
   String? _tapFeedbackOption;
@@ -31,21 +34,56 @@ class _InteractiveQuestionnaireCardState
   @override
   void initState() {
     super.initState();
-    final firstUnanswered =
-        widget.questions.indexWhere((q) => q.selectedOption == null);
-    if (firstUnanswered != -1) {
-      _currentIndex = firstUnanswered;
+    _initQuestions();
+  }
+
+  @override
+  void didUpdateWidget(covariant InteractiveQuestionnaireCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.questions != widget.questions) {
+      _initQuestions();
+    }
+  }
+
+  void _initQuestions() {
+    _questions = List<ClarificationQuestion>.from(widget.questions);
+    final firstUnanswered = _questions.indexWhere(
+      (q) => q.selectedOption == null,
+    );
+    _currentIndex = firstUnanswered != -1 ? firstUnanswered : 0;
+  }
+
+  void _complete(String summary) {
+    final answers = <String, String>{};
+    for (var i = 0; i < _questions.length; i++) {
+      final selected = _selectedAnswers[i] ?? _questions[i].selectedOption;
+      if (selected != null) {
+        answers[_questions[i].id] = selected;
+      }
+    }
+    final callback = widget.onCompletedWithAnswers;
+    if (callback != null) {
+      callback(summary, answers);
+    } else {
+      widget.onCompleted(summary);
     }
   }
 
   void _selectOption(String optionText) {
-    if (_tapFeedbackOption != null) return; // Prevent double taps during transition
+    if (_tapFeedbackOption != null) {
+      return; // ป้องกันการกดซ้ำระหว่างเปลี่ยนข้อ
+    }
     setState(() {
       _tapFeedbackOption = optionText;
+      final prevChoice = _selectedAnswers[_currentIndex];
       _selectedAnswers[_currentIndex] = optionText;
+      // If user changed their answer on a previous step, invalidate subsequent step answers
+      if (prevChoice != null && prevChoice != optionText) {
+        _selectedAnswers.removeWhere((step, _) => step > _currentIndex);
+      }
     });
 
-    if (_currentIndex < widget.questions.length - 1) {
+    if (_currentIndex < _questions.length - 1) {
       // Instant local progression to next question after tap feedback
       Future.delayed(const Duration(milliseconds: 160), () {
         if (!mounted) return;
@@ -59,14 +97,14 @@ class _InteractiveQuestionnaireCardState
       Future.delayed(const Duration(milliseconds: 180), () {
         if (!mounted) return;
         final answers = <String>[];
-        for (var i = 0; i < widget.questions.length; i++) {
-          final ans = _selectedAnswers[i] ?? widget.questions[i].selectedOption;
+        for (var i = 0; i < _questions.length; i++) {
+          final ans = _selectedAnswers[i] ?? _questions[i].selectedOption;
           if (ans != null && ans.isNotEmpty) {
             answers.add(ans);
           }
         }
         final summary = answers.isNotEmpty ? answers.join(', ') : optionText;
-        widget.onCompleted(summary);
+        _complete(summary);
       });
     }
   }
@@ -81,7 +119,7 @@ class _InteractiveQuestionnaireCardState
   }
 
   void _goToNext() {
-    if (_currentIndex < widget.questions.length - 1 &&
+    if (_currentIndex < _questions.length - 1 &&
         _selectedAnswers.containsKey(_currentIndex)) {
       setState(() {
         _currentIndex++;
@@ -91,32 +129,71 @@ class _InteractiveQuestionnaireCardState
   }
 
   void _skip() {
-    widget.onCompleted('ข้ามแบบสอบถาม');
+    if (_selectedAnswers.isNotEmpty) {
+      final answers = <String>[];
+      for (var i = 0; i < _questions.length; i++) {
+        final ans = _selectedAnswers[i] ?? _questions[i].selectedOption;
+        if (ans != null && ans.isNotEmpty) {
+          answers.add(ans);
+        }
+      }
+      if (answers.isNotEmpty) {
+        _complete(answers.join(', '));
+        return;
+      }
+    }
+    _complete('ข้ามแบบสอบถาม');
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.questions.isEmpty) return const SizedBox.shrink();
+    if (_questions.isEmpty) return const SizedBox.shrink();
 
-    // If all questions are already answered, show recap card for the last one
-    if (widget.questions.every((q) => q.selectedOption != null)) {
-      return QuestionnaireRecapCard(question: widget.questions.last);
+    // If all questions are already answered, show recap card for all of them
+    if (_questions.every((q) => q.selectedOption != null)) {
+      return QuestionnaireRecapCard(questions: _questions);
     }
 
-    final safeIndex = _currentIndex.clamp(0, widget.questions.length - 1);
-    final currentQuestion = widget.questions[safeIndex];
-    final totalSteps = widget.questions.length > 1
-        ? widget.questions.length
-        : currentQuestion.totalSteps;
-    final currentStep = widget.questions.length > 1
-        ? safeIndex + 1
-        : currentQuestion.step;
+    final safeIndex = _currentIndex.clamp(0, _questions.length - 1);
+    final currentQuestion = _questions[safeIndex];
+
+    var effectiveTitle = currentQuestion.title;
+    var effectiveOptions = currentQuestion.options;
+    // ใช้เฉพาะตัวเลือกที่โมเดลส่งมา และจับคู่รหัสตัวเลือกตรงตัว
+    if (safeIndex > 0) {
+      final previous = _selectedAnswers[safeIndex - 1];
+      if (previous != null) {
+        final prevTrim = previous.trim();
+        final branchTitle = currentQuestion.branchTitles?[previous] ??
+            currentQuestion.branchTitles?[prevTrim];
+        final branchOpt = currentQuestion.branchOptions?[previous] ??
+            currentQuestion.branchOptions?[prevTrim];
+
+        if (branchTitle != null && branchTitle.isNotEmpty) {
+          effectiveTitle = branchTitle;
+        }
+        if (branchOpt != null && branchOpt.isNotEmpty) {
+          effectiveOptions = branchOpt;
+        }
+      }
+    }
+
+    if (effectiveOptions.length > 4) {
+      effectiveOptions = effectiveOptions.take(4).toList();
+    }
+
+    final totalSteps = _questions.length;
+    final currentStep = safeIndex + 1;
     final stepText = '$currentStep of $totalSteps';
-    final canGoBack = safeIndex > 0;
-    final canGoForward = safeIndex < widget.questions.length - 1 &&
+    final hasMultipleSteps = totalSteps > 1;
+    final canGoBack = hasMultipleSteps && safeIndex > 0;
+    final canGoForward =
+        hasMultipleSteps &&
+        safeIndex < _questions.length - 1 &&
         _selectedAnswers.containsKey(safeIndex);
 
-    final selectedForCurrent = _tapFeedbackOption ??
+    final selectedForCurrent =
+        _tapFeedbackOption ??
         _selectedAnswers[safeIndex] ??
         currentQuestion.selectedOption;
 
@@ -146,7 +223,10 @@ class _InteractiveQuestionnaireCardState
             children: [
               // Claude-like Step Badge: < 1 of 2 > with clickable chevron navigation
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                padding: EdgeInsets.symmetric(
+                  horizontal: hasMultipleSteps ? 4 : 8,
+                  vertical: 2,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF3E8FF),
                   borderRadius: BorderRadius.circular(10),
@@ -158,21 +238,24 @@ class _InteractiveQuestionnaireCardState
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    InkWell(
-                      key: const Key('chatbot-questionnaire-prev'),
-                      onTap: canGoBack ? _goToPrevious : null,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.all(2),
-                        child: Icon(
-                          Icons.chevron_left_rounded,
-                          size: 15,
-                          color: canGoBack
-                              ? AppColors.primaryColor
-                              : const Color(0xFFC4B5FD).withValues(alpha: 0.6),
+                    if (hasMultipleSteps)
+                      InkWell(
+                        key: const Key('chatbot-questionnaire-prev'),
+                        onTap: canGoBack ? _goToPrevious : null,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(2),
+                          child: Icon(
+                            Icons.chevron_left_rounded,
+                            size: 15,
+                            color: canGoBack
+                                ? AppColors.primaryColor
+                                : const Color(
+                                    0xFFC4B5FD,
+                                  ).withValues(alpha: 0.6),
+                          ),
                         ),
                       ),
-                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Text(
@@ -185,28 +268,31 @@ class _InteractiveQuestionnaireCardState
                         ),
                       ),
                     ),
-                    InkWell(
-                      key: const Key('chatbot-questionnaire-next'),
-                      onTap: canGoForward ? _goToNext : null,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.all(2),
-                        child: Icon(
-                          Icons.chevron_right_rounded,
-                          size: 15,
-                          color: canGoForward
-                              ? AppColors.primaryColor
-                              : const Color(0xFFC4B5FD).withValues(alpha: 0.6),
+                    if (hasMultipleSteps)
+                      InkWell(
+                        key: const Key('chatbot-questionnaire-next'),
+                        onTap: canGoForward ? _goToNext : null,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(2),
+                          child: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 15,
+                            color: canGoForward
+                                ? AppColors.primaryColor
+                                : const Color(
+                                    0xFFC4B5FD,
+                                  ).withValues(alpha: 0.6),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  currentQuestion.title,
+                  effectiveTitle,
                   style: const TextStyle(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
@@ -232,12 +318,12 @@ class _InteractiveQuestionnaireCardState
           const SizedBox(height: 12),
 
           // Dynamic Option Items with Number Chips
-          for (var i = 0; i < currentQuestion.options.length; i++) ...[
+          for (var i = 0; i < effectiveOptions.length; i++) ...[
             _OptionTile(
               index: i,
-              optionText: currentQuestion.options[i],
-              isSelected: selectedForCurrent == currentQuestion.options[i],
-              onTap: () => _selectOption(currentQuestion.options[i]),
+              optionText: effectiveOptions[i],
+              isSelected: selectedForCurrent == effectiveOptions[i],
+              onTap: () => _selectOption(effectiveOptions[i]),
             ),
           ],
 
@@ -264,7 +350,10 @@ class _InteractiveQuestionnaireCardState
                   ),
                 ),
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -274,7 +363,10 @@ class _InteractiveQuestionnaireCardState
                 key: const Key('chatbot-questionnaire-skip'),
                 onPressed: _skip,
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -361,7 +453,9 @@ class _OptionTile extends StatelessWidget {
                     style: TextStyle(
                       fontFamily: 'Prompt',
                       fontSize: 13.5,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                       color: const Color(0xFF2A2A2E),
                     ),
                   ),
@@ -383,85 +477,89 @@ class _OptionTile extends StatelessWidget {
 
 /// Sleek recap card shown in chat history once user answers a clarification question.
 class QuestionnaireRecapCard extends StatelessWidget {
-  const QuestionnaireRecapCard({
-    required this.question,
-    super.key,
-  });
+  const QuestionnaireRecapCard({this.question, this.questions, super.key})
+    : assert(question != null || questions != null);
 
-  final ClarificationQuestion question;
+  final ClarificationQuestion? question;
+  final List<ClarificationQuestion>? questions;
 
   @override
   Widget build(BuildContext context) {
-    final selected = question.selectedOption ?? '';
-    final stepText = '${question.step} of ${question.totalSteps}';
+    final list =
+        questions ??
+        (question != null ? [question!] : const <ClarificationQuestion>[]);
+    final answered = list
+        .where(
+          (q) =>
+              q.selectedOption != null && q.selectedOption!.trim().isNotEmpty,
+        )
+        .toList();
+    if (answered.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      key: Key('chatbot-questionnaire-recap-${question.id}'),
-      margin: const EdgeInsets.only(top: 8, bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      key: const Key('chatbot-questionnaire-recap'),
+      margin: const EdgeInsets.only(top: 10, bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9F8FD),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEDE9FE), width: 1.2),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
+          const Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEDE9FE),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  stepText,
-                  style: const TextStyle(
-                    fontFamily: 'Prompt',
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primaryColor,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  question.title,
-                  style: const TextStyle(
-                    fontFamily: 'Prompt',
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF6B7280),
-                  ),
+              Icon(Icons.tune_rounded, size: 14, color: Color(0xFF64748B)),
+              SizedBox(width: 6),
+              Text(
+                'ความต้องการที่คุณเลือก',
+                style: TextStyle(
+                  fontFamily: 'Prompt',
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B),
                 ),
               ),
             ],
           ),
-          if (selected.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(
-                  Icons.check_circle_rounded,
-                  size: 15,
-                  color: AppColors.primaryColor,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    selected,
+          const SizedBox(height: 8),
+          for (var i = 0; i < answered.length; i++) ...[
+            if (i > 0)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 6),
+                child: Divider(color: Color(0xFFE2E8F0), height: 1),
+              ),
+            Container(
+              key: Key('chatbot-questionnaire-recap-${answered[i].id}'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    answered[i].title,
                     style: const TextStyle(
                       fontFamily: 'Prompt',
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E1B2E),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF64748B),
+                      height: 1.35,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 3),
+                  Text(
+                    answered[i].selectedOption ?? '',
+                    style: const TextStyle(
+                      fontFamily: 'Prompt',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A),
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -469,4 +567,3 @@ class QuestionnaireRecapCard extends StatelessWidget {
     );
   }
 }
-

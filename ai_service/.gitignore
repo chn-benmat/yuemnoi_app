@@ -1,7 +1,33 @@
+# Secrets
 .env
-.env.local
-__pycache__/
-.venv/
+.env.*
+!.env.example
 
-tests/
-.serena/
+# Python Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Large Model Weights (if downloaded locally)
+*.gguf
+*.safetensors
+*.bin
+models/
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db

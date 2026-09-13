@@ -8,6 +8,7 @@ These instructions apply to everything under `backend/`.
 
 - Keep the existing Hexagonal Architecture boundaries:
   - `cmd/server/` composes dependencies and starts the HTTP server.
+  - `internal/config/` manages centralized type-safe configuration (`caarlos0/env/v11`, `godotenv`).
   - `internal/domain/` contains business entities and ports; it must not depend on Gin, Supabase, or other infrastructure.
   - `internal/adapters/` implements domain ports for Supabase and external services.
   - `internal/ports/` owns Gin handlers, request/response mapping, middleware, and route registration.
@@ -19,26 +20,21 @@ These instructions apply to everything under `backend/`.
 
 - Never commit or print secrets, access tokens, authorization headers, or user data.
 - `SUPABASE_SERVICE_ROLE_KEY` is backend-only. Never expose it through an API response or copy it into frontend code.
-- The server reads configuration with `os.Getenv`; it does not load `.env` automatically. Set variables in the process environment before running it.
-- Required Supabase configuration is `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Defaults are port `8080` and `AI_SERVICE_URL=http://localhost:8000`.
+- Configuration must be defined in `internal/config/config.go` using `github.com/caarlos0/env/v11`. `.env` is loaded automatically if present. Do not use direct `os.Getenv` calls outside the config package.
+- Required Supabase configuration is `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Default port is `8080`.
 - Derive authenticated user identity from the verified bearer token, never from a user ID supplied in a request body.
 - Preserve context propagation and existing timeout behavior for database and external-service calls.
+- Use `log/slog` for structured logging, and ensure sensitive data (passwords, tokens, OTPs, PII) are redacted in audit logs.
 
 ## Go conventions
 
 - Make the smallest change that preserves the current package boundaries and constructor-based dependency injection.
 - Return errors with useful context while avoiding secret or internal-detail leakage in client responses.
 - Use standard-library facilities where practical and do not add dependencies unless the task requires them.
-- Add focused table-driven or `httptest` tests. Do not require live Supabase or AI services in unit tests.
+- Add focused table-driven or `httptest` tests using `github.com/stretchr/testify` (`assert`/`require`). Do not require live Supabase services in unit tests.
 - Do not edit `go.mod` or `go.sum` unless dependencies actually change.
 
 ## Development Rules
 
 - Write code comments in clear, easy-to-understand Thai.
 - Create all new test files inside the `tests/` directory.
-
-## Serena MCP Usage
-
-- When using Serena MCP tools (e.g., `activate_project`, symbol search, code navigation, editing), activate the project strictly inside the `backend/` directory (e.g., `activate_project` with path `backend`).
-- Do NOT activate Serena at the root workspace level (`yuemnoi_app`) or create `.serena` outside the `backend/` folder. All Serena project configurations, cache, and memories must remain contained in `backend/.serena/`.
-- Ensure the language server is set to Go (`go`).

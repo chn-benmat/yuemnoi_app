@@ -31,14 +31,8 @@ func NewChatContactHandler(
 
 // GetConversationContact คืนเบอร์ของคู่สนทนาเฉพาะผู้ที่อยู่ในห้องแชทเท่านั้น
 func (h *ChatContactHandler) GetConversationContact(c *gin.Context) {
-	token, ok := extractToken(c)
+	requesterID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
-		return
-	}
-
-	requesterID, err := h.tokenVerifier.UserIDFromToken(c.Request.Context(), token)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Access Token ไม่ถูกต้องหรือหมดอายุ"})
 		return
 	}
 

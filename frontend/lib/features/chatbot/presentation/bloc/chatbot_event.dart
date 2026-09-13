@@ -8,12 +8,18 @@ sealed class ChatbotEvent extends Equatable {
 }
 
 class ChatbotMessageSubmitted extends ChatbotEvent {
-  const ChatbotMessageSubmitted(this.query);
+  const ChatbotMessageSubmitted(
+    this.query, {
+    this.isVisibleInChat = true,
+    this.selectedOptions = const {},
+  });
 
   final String query;
+  final bool isVisibleInChat;
+  final Map<String, String> selectedOptions;
 
   @override
-  List<Object?> get props => [query];
+  List<Object?> get props => [query, isVisibleInChat, selectedOptions];
 }
 
 class ChatbotMessageEdited extends ChatbotEvent {
@@ -26,24 +32,6 @@ class ChatbotMessageEdited extends ChatbotEvent {
   List<Object?> get props => [index, content];
 }
 
-class ChatbotFeedbackSubmitted extends ChatbotEvent {
-  const ChatbotFeedbackSubmitted({
-    required this.messageIndex,
-    required this.isLiked,
-    this.reasonCategory,
-    this.feedbackComment,
-  });
-
-  final int messageIndex;
-  final bool isLiked;
-  final String? reasonCategory;
-  final String? feedbackComment;
-
-  @override
-  List<Object?> get props => [
-    messageIndex,
-    isLiked,
-    reasonCategory,
-    feedbackComment,
-  ];
+class ChatbotStreamStopped extends ChatbotEvent {
+  const ChatbotStreamStopped();
 }

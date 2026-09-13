@@ -1,48 +1,49 @@
 # Yuemnoi (ยืมหน่อย)
 
-Yuemnoi คือแอปพลิเคชันสำหรับค้นหาและจัดการการเช่าอุปกรณ์ โดยประกอบด้วยแอป Flutter, Backend API และ AI Service สำหรับช่วยค้นหาและแนะนำอุปกรณ์จากข้อมูลในระบบ
+Yuemnoi คือแพลตฟอร์ม C2C สำหรับค้นหา ให้เช่า และจัดการการเช่าอุปกรณ์และเครื่องมือ (Equipment Rental Platform) ครบวงจร โดยประกอบด้วย Mobile App (Flutter), REST API Server (Go + Gin ตามสถาปัตยกรรม Hexagonal) และ AI Chatbot Assistant Service (Python + FastAPI ตามสถาปัตยกรรม Clean Architecture) ที่ทำงานร่วมกับ Local LLM และระบบค้นหาข้อมูลภายนอกเพื่อช่วยแนะนำและตรวจสอบสเปกอุปกรณ์
 
-> สถานะปัจจุบัน: ฝั่ง Flutter รองรับขั้นตอน Authentication แล้ว ส่วนหน้าหลักและฟีเจอร์เช่าอุปกรณ์ยังอยู่ระหว่างพัฒนา ขณะที่ Backend มี API สำหรับผู้ใช้ อุปกรณ์ การเช่า และ AI Chat
+> **สถานะปัจจุบัน**: ระบบพัฒนาครบถ้วนตาม Hybrid Architecture ครอบคลุมทั้งระบบยืนยันตัวตน (Authentication & Guest Browsing), ฟีดแนะนำอุปกรณ์ (Discovery & Ranking Feed), ระบบจัดการรายการอุปกรณ์ (Item Management), วงจรการเช่าและส่งมอบคืน (Rental Lifecycle & Handover/Return), กระเป๋าเงินดิจิทัล (Wallet & Payment), แชทแบบเรียลไทม์ (Supabase Realtime Chat), ระบบแจ้งเตือน (FCM Push Notifications) และที่ปรึกษาการเช่าอัจฉริยะ (AI Rental Consultant with SSE Streaming & Fact Verification)
 
-## สถาปัตยกรรมระบบ
+---
 
-```mermaid
-flowchart LR
-    App["Flutter App"] -->|REST API| API["Go + Gin Backend"]
-    App -->|Auth session / OAuth| Supabase["Supabase"]
-    API -->|Data & Auth| Supabase
-    API -->|AI request| AI["Python + FastAPI"]
-    AI -->|Inventory search| Supabase
-    AI -->|Local LLM| Ollama["Ollama / Qwen 3"]
-    AI -->|Product information| Serper["Serper.dev"]
-```
+## 🏛️ สถาปัตยกรรมระบบ (System Architecture)
 
-## โครงสร้างโปรเจกต์
+ระบบใช้สถาปัตยกรรม **Hybrid Architecture** โดยแบ่งหน้าที่ระหว่าง Backend, AI Service และ Supabase ไคลเอนต์เพื่อความปลอดภัยและประสิทธิภาพสูงสุด
 
-| โฟลเดอร์ | รายละเอียด | เอกสาร |
-| --- | --- | --- |
-| `frontend/` | Mobile/Web client พัฒนาด้วย Flutter | [Frontend README](frontend/README.md) |
-| `backend/` | REST API พัฒนาด้วย Go และ Gin | [Backend README](backend/README.md) |
-| `ai_service/` | AI pipeline พัฒนาด้วย FastAPI และใช้ Qwen ผ่าน Ollama | [AI Service README](ai_service/README.md) |
+---
 
-## เทคโนโลยีหลัก
+## 📂 โครงสร้างโปรเจกต์ (Project Structure)
 
-- Flutter และ Dart สำหรับแอปพลิเคชันฝั่งผู้ใช้
-- Go และ Gin สำหรับ Backend API
-- Python และ FastAPI สำหรับ AI Service
-- Supabase สำหรับ Authentication, PostgreSQL และ Storage
-- Ollama + Qwen 3 สำหรับโมเดลภาษาที่รันภายในเครื่อง
-- Serper.dev สำหรับค้นหาข้อมูลผลิตภัณฑ์ภายนอก
+| โฟลเดอร์      | รายละเอียด                                         | สถาปัตยกรรม / เทคโนโลยี                          | เอกสารเพิ่มเติม                           |
+| :------------ | :------------------------------------------------- | :----------------------------------------------- | :---------------------------------------- |
+| `frontend/`   | แอปพลิเคชันมือถือสำหรับผู้เช่าและผู้ให้เช่า        | Flutter, Dart, BLoC/Cubit, Dio, Supabase SDK     | [Frontend README](frontend/README.md)     |
+| `backend/`    | เซิร์ฟเวอร์หลักจัดการข้อมูล ธุรกรรม และความปลอดภัย | Go 1.26+, Gin, Hexagonal Architecture, FCM v1    | [Backend README](backend/README.md)       |
+| `ai_service/` | บริการ AI ให้คำปรึกษาและเปรียบเทียบสเปกอุปกรณ์     | Python 3.12, FastAPI, Clean Architecture, Ollama | [AI Service README](ai_service/README.md) |
 
-## สิ่งที่ต้องติดตั้ง
+---
 
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) ที่รองรับ Dart `^3.11.5`
-- [Go](https://go.dev/dl/) `1.26.2` ขึ้นไป
-- [Python](https://www.python.org/downloads/) `3.10` ขึ้นไป
+## 🛠️ เทคโนโลยีหลัก (Tech Stack)
+
+- **Frontend**: Flutter, Dart, `flutter_bloc`, `dio`, `go_router`, `supabase_flutter`, `firebase_messaging`, `flutter_map`
+- **Core Backend**: Go, Gin, Hexagonal Architecture (Ports & Adapters), Supabase Go Client, Google FCM HTTP v1, `caarlos0/env/v11`, `log/slog`
+- **AI Microservice**: Python 3.12, FastAPI, Pydantic v2, Clean Architecture, HTTPX (Async), SSE Streaming
+- **Database & Auth**: Supabase (PostgreSQL, Row Level Security, Realtime WebSockets, Storage)
+- **Local AI / LLM**: Ollama พร้อมโมเดล `llama3.1-typhoon2-8b-instruct:latest` (รองรับ Structured Output JSON Mode)
+- **Search Provider**: Tavily Search API สำหรับ Fact-checking สเปกอุปกรณ์และราคาตลาด
+
+---
+
+## 📋 สิ่งที่ต้องติดตั้ง (Prerequisites)
+
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) (Dart `^3.6.0` ขึ้นไป)
+- [Go](https://go.dev/dl/) `1.26` ขึ้นไป
+- [Python](https://www.python.org/downloads/) `3.12`
 - [Ollama](https://ollama.com/download)
-- Supabase project และ Serper.dev API key
+- บัญชี [Supabase](https://supabase.com) (Database, Auth, Storage)
+- บัญชี [Firebase Console](https://console.firebase.google.com) (สำหรับ FCM Push Notifications)
+- [Tavily Search API Key](https://tavily.com) (สำหรับค้นหาสเปกและตรวจสอบข้อเท็จจริง)
 
-ตรวจสอบเครื่องมือเบื้องต้น:
+ตรวจสอบความพร้อมของเครื่องมือในเครื่อง:
 
 ```bash
 flutter doctor
@@ -51,141 +52,97 @@ python --version
 ollama --version
 ```
 
-## การตั้งค่า Environment Variables
+---
 
-ไฟล์ environment ทุกไฟล์ถูก ignore จาก Git ให้สร้างไฟล์ต่อไปนี้ในเครื่องของผู้พัฒนา
+## 🚀 วิธีการรันระบบเพื่อการพัฒนา (Getting Started)
 
-### 1. Frontend — `frontend/.env.local`
+เปิด Terminal แยก 4 หน้าต่างตามลำดับดังนี้:
 
-```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_PUBLISHABLE_KEY=your_publishable_key
-API_URL=http://localhost:8080
-```
-
-`API_URL` ต้องเป็น URL ที่อุปกรณ์เข้าถึง Backend ได้ ดูตัวอย่างสำหรับ Emulator และเครื่องจริงใน [Frontend README](frontend/README.md#การเชื่อมต่อ-backend-จากแต่ละอุปกรณ์)
-
-> ห้ามใส่ `SUPABASE_SERVICE_ROLE_KEY` หรือ secret ใด ๆ ใน `frontend/.env.local` เพราะไฟล์นี้ถูก bundle ไปกับแอป
-
-### 2. Backend — `backend/.env`
-
-```env
-GIN_MODE=debug
-PORT=8080
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-AI_SERVICE_URL=http://localhost:8000
-```
-
-Backend อ่านค่าจาก environment ของ process จึงต้อง export ค่าจากไฟล์ก่อนรัน ตัวอย่างสำหรับ PowerShell:
-
-```powershell
-cd backend
-Get-Content .env | ForEach-Object {
-  if ($_ -match '^\s*([^#][^=]*)=(.*)$') {
-    [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), 'Process')
-  }
-}
-go run ./cmd/server/main.go
-```
-
-### 3. AI Service — `ai_service/.env`
-
-```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_supabase_key
-SERPER_API_KEY=your_serper_api_key
-MODEL_NAME=qwen3:8b
-OLLAMA_ENDPOINT=http://localhost:11434
-OLLAMA_CONTEXT_LENGTH=4096
-OLLAMA_KEEP_ALIVE=-1
-```
-
-## วิธีรันระบบสำหรับพัฒนา
-
-เปิด Terminal แยกสำหรับแต่ละ service และรันตามลำดับต่อไปนี้
-
-### 1. เตรียมโมเดล Ollama
+### ขั้นตอนที่ 1: เตรียมโมเดล Local LLM (Ollama)
 
 ```bash
-ollama pull qwen3:8b
+ollama pull llama3.1-typhoon2-8b-instruct:latest
 ollama serve
 ```
 
-หาก Ollama ทำงานเป็น background service อยู่แล้ว ไม่ต้องรัน `ollama serve` ซ้ำ
+_(หาก Ollama เปิดเป็น background process ประจำเครื่องอยู่แล้ว ข้ามคำสั่ง `ollama serve` ได้)_
 
-### 2. รัน AI Service
+### ขั้นตอนที่ 2: รัน AI Service (FastAPI)
 
 ```bash
 cd ai_service
+
+# สร้างและเปิดใช้งาน Virtual Environment (Python 3.12)
 python -m venv .venv
-```
 
-Windows PowerShell:
+# บน Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
 
-```powershell
-.venv\Scripts\Activate.ps1
+# บน macOS/Linux:
+# source .venv/bin/activate
+
 pip install -r requirements.txt
 python main.py
 ```
 
-macOS/Linux:
+- ทดสอบสุขภาพของระบบ: `GET http://localhost:8000/health`
+- ดูเอกสาร API Interactive Docs: `http://localhost:8000/docs`
 
-```bash
-source .venv/bin/activate
-pip install -r requirements.txt
-python main.py
-```
-
-AI Service จะเปิดที่ `http://localhost:8000` และตรวจสอบได้ที่ `GET /health`
-
-### 3. รัน Backend
-
-โหลดค่า `backend/.env` เข้า process ตามตัวอย่างด้านบน แล้วรัน:
+### ขั้นตอนที่ 3: รัน Backend (Go)
 
 ```bash
 cd backend
-go mod download
+go mod tidy
+
+# รันแบบ Hot Reload ด้วย Air (แนะนำ):
+air
+
+# หรือรันตรงด้วย Go:
 go run ./cmd/server/main.go
 ```
 
-Backend จะเปิดที่ `http://localhost:8080` และตรวจสอบได้ที่ `GET /health`
+- ทดสอบสุขภาพของเซิร์ฟเวอร์: `GET http://localhost:8080/health`
 
-การส่งคำขอเช่าใช้ `POST /api/v1/rentals` โดย Backend และฐานข้อมูลเป็นผู้ตรวจสอบช่วงเวลาและคำนวณราคาจากข้อมูลอุปกรณ์ปัจจุบัน ใบจองใหม่จะอยู่ในสถานะ `pending` จนกว่าเจ้าของอุปกรณ์จะยืนยัน
-
-### 4. รัน Flutter App
+### ขั้นตอนที่ 4: รัน Flutter Application
 
 ```bash
 cd frontend
 flutter pub get
-flutter run
+
+# รันแอปพร้อม inject คอนฟิกจาก .env.local
+flutter run --dart-define-from-file=.env.local
 ```
 
-ดูรายละเอียดการตั้งค่า Supabase OAuth, การเลือกอุปกรณ์ และคำสั่งทดสอบได้ที่ [Frontend README](frontend/README.md)
+---
 
-## การทดสอบ
+## 🧪 การทดสอบระบบ (Testing)
 
 ```bash
-# Flutter
+# 1. ทดสอบ Frontend (Flutter Unit & Widget Tests)
 cd frontend
 flutter analyze
 flutter test
 
-# Go
+# 2. ทดสอบ Backend (Go Unit & Mock Tests)
 cd backend
-go test ./...
+go test ./tests/...
+
+# 3. ทดสอบ AI Service (Pytest)
+cd ai_service
+.\.venv\Scripts\pytest tests/ -v
 ```
 
-ตรวจสอบ service ขณะระบบทำงาน:
+---
 
-```bash
-curl http://localhost:8000/health
-curl http://localhost:8080/health
-```
+## 🛡️ แนวทางความปลอดภัยและสิทธิการเข้าถึง (Security & Privacy)
 
-## ข้อควรระวังด้านความปลอดภัย
-
-- อย่า commit ไฟล์ `.env`, `.env.local`, API key หรือ token ลง Git
-- ใช้ Supabase publishable key ใน Frontend เท่านั้น
-- เก็บ service role key และ JWT secret ไว้เฉพาะฝั่ง Backend/Server
-- ก่อน deploy ให้จำกัด CORS และตรวจสอบนโยบาย Supabase Row Level Security (RLS) ให้เหมาะสม
+1. **สถาปัตยกรรมแบบไฮบริด (Hybrid Security)**:
+   - การเปลี่ยนแปลงข้อมูลสำคัญ (Mutation) เช่น การสร้าง/แก้ไขรายการอุปกรณ์, การสร้างคำขอเช่า, การหักยอดเงิน, การสืบค้นเบอร์โทรศัพท์คู่สนทนา ต้องผ่าน Go Backend เสมอเพื่อตรวจสอบ JWT และสิทธิ์ของผู้ใช้
+   - อนุญาตให้ Flutter ไคลเอนต์ต่อตรงกับ Supabase เฉพาะงานที่ต้องการ Low-latency เท่านั้น เช่น Supabase Realtime WebSocket สำหรับการรับส่งข้อความในห้องแชท
+2. **การรักษาความลับของกุญแจ (Secret Isolation)**:
+   - `SUPABASE_SERVICE_ROLE_KEY` และ Google Service Account (`service-account.json`) จะต้องไม่ปรากฏในโค้ดฝั่ง Client
+   - มีการสื่อสารระหว่าง Backend และ AI Service ด้วย `INTERNAL_SERVICE_KEY` เพื่อป้องกันการเรียกใช้งานจากภายนอก
+3. **การป้องกันข้อมูลรั่วไหล (PII Redaction & Audit Logging)**:
+   - Backend มี `response_logging_middleware` ที่คอยกรองและ Redact ข้อมูลส่วนบุคคล (รหัสผ่าน, เบอร์โทรศัพท์, Token) ก่อนบันทึกลง Structured Log เสมอ
+4. **ความเที่ยงธรรมและไร้อคติของ AI (Strict Neutrality)**:
+   - ระบบ AI ทำงานตาม **Zero-Regex, Zero-Keyword, Zero-Hardcode** และ **Zero-Bias Policy** โดยแนะนำสินค้าตามความต้องการของผู้ใช้และความจริงจากฐานข้อมูล ไม่มีการเอนเอียงตามผลประโยชน์ทางการค้าหรือตราสินค้า

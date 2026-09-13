@@ -269,5 +269,21 @@ func (r *supabaseItemRepository) Delete(ctx context.Context, id int64, userID st
 		return fmt.Errorf("supabase delete failed: %w", err)
 	}
 
+	// ลบไฟล์รูปภาพใน Storage (item_bk) หลังจากลบข้อมูลในฐานข้อมูลสำเร็จ
+	if len(ownedItems[0].ItemImageURL) > 0 {
+		var pathsToDelete []string
+		for _, rawURL := range ownedItems[0].ItemImageURL {
+			if idx := strings.Index(rawURL, "/item_bk/"); idx != -1 {
+				pathsToDelete = append(pathsToDelete, rawURL[idx+len("/item_bk/"):])
+			}
+		}
+		if len(pathsToDelete) > 0 {
+			func() {
+				defer func() { _ = recover() }()
+				r.client.Storage.From(itemBucket).Remove(pathsToDelete)
+			}()
+		}
+	}
+
 	return nil
 }
