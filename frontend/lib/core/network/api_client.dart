@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import '../config/app_config.dart';
 
 enum ApiClientErrorType { timeout, connection, invalidResponse }
 
@@ -93,8 +94,7 @@ class DioApiClient implements ApiClient {
                validateStatus: (status) => status != null && status < 600,
              ),
            ) {
-    final configuredSecret = (appSecret ?? dotenv.env['APP_SECRET_KEY'] ?? '')
-        .trim();
+    final configuredSecret = (appSecret ?? AppConfig.appSecretKey).trim();
     if (configuredSecret.isNotEmpty) {
       _dio.interceptors.add(
         InterceptorsWrapper(
@@ -147,7 +147,7 @@ class DioApiClient implements ApiClient {
         options: Options(
           responseType: ResponseType.stream,
           headers: {
-            if (headers != null) ...headers,
+            ...?headers,
             'Accept': 'text/event-stream',
           },
         ),
@@ -304,7 +304,7 @@ class DioApiClient implements ApiClient {
   }
 
   static String _resolveBaseUrl(String? baseUrl) {
-    var configuredUrl = (baseUrl ?? dotenv.env['API_URL'] ?? '').trim();
+    var configuredUrl = (baseUrl ?? AppConfig.apiUrl).trim();
     if ((configuredUrl.startsWith('"') && configuredUrl.endsWith('"')) ||
         (configuredUrl.startsWith("'") && configuredUrl.endsWith("'"))) {
       configuredUrl = configuredUrl
@@ -315,7 +315,7 @@ class DioApiClient implements ApiClient {
       configuredUrl = configuredUrl.substring(0, configuredUrl.length - 1);
     }
     if (configuredUrl.isEmpty) {
-      throw StateError('API_URL is not configured in .env.local.');
+      throw StateError('API_URL is not configured.');
     }
 
     if (kIsWeb && configuredUrl.contains('10.0.2.2')) {

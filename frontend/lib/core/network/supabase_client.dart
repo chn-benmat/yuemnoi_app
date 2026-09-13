@@ -1,4 +1,4 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../config/app_config.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 abstract final class SupabaseConfig {
@@ -6,10 +6,9 @@ abstract final class SupabaseConfig {
 
   static bool _isInitialized = false;
 
-  static String get projectUrl => dotenv.env['SUPABASE_URL']?.trim() ?? '';
+  static String get projectUrl => AppConfig.supabaseUrl;
 
-  static String get clientKey =>
-      dotenv.env['SUPABASE_PUBLISHABLE_KEY']?.trim() ?? '';
+  static String get clientKey => AppConfig.supabasePublishableKey;
 
   static bool get isConfigured => projectUrl.isNotEmpty && clientKey.isNotEmpty;
 

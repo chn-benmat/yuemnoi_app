@@ -23,7 +23,11 @@ class ChatItemHeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final unitLabel = itemRentalType == 'รายชั่วโมง' ? 'ชั่วโมง' : 'วัน';
+    final unitLabel = (itemRentalType == 'รายชั่วโมง' ||
+            itemRentalType == 'hourly' ||
+            itemRentalType == 'hour')
+        ? 'ชั่วโมง'
+        : 'วัน';
     final priceStr = itemPrice != null
         ? '${NumberFormat.decimalPattern().format(itemPrice)} ฿ / $unitLabel'
         : '';

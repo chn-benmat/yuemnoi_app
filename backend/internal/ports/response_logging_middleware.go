@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -57,21 +58,29 @@ func (w *responseLogWriter) WriteString(data string) (int, error) {
 	return n, err
 }
 
-func responseLoggingMiddleware() gin.HandlerFunc {
+// ResponseLoggingMiddleware บันทึก Structured Log ของ API Response โดยปกปิดข้อมูลที่มีความอ่อนไหว (PII / Secrets) อัตโนมัติ
+func ResponseLoggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		start := time.Now()
 		writer := &responseLogWriter{ResponseWriter: c.Writer}
 		c.Writer = writer
 
 		c.Next()
 
-		log.Printf(
-			"api_response method=%s path=%s status=%d body=%s",
-			c.Request.Method,
-			c.Request.URL.Path,
-			c.Writer.Status(),
-			safeBodyForLog(writer.body.Bytes()),
+		slog.InfoContext(
+			c.Request.Context(),
+			"api_response",
+			slog.String("method", c.Request.Method),
+			slog.String("path", c.Request.URL.Path),
+			slog.Int("status", c.Writer.Status()),
+			slog.Int64("latency_ms", time.Since(start).Milliseconds()),
+			slog.String("body", safeBodyForLog(writer.body.Bytes())),
 		)
 	}
+}
+
+func responseLoggingMiddleware() gin.HandlerFunc {
+	return ResponseLoggingMiddleware()
 }
 
 func safeBodyForLog(body []byte) string {

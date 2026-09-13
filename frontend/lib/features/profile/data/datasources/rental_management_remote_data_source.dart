@@ -1,9 +1,16 @@
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../domain/entities/rental_income.dart';
 import '../models/rental_booking_model.dart';
 
-// คำอธิบาย: Data Source จัดการการดึงและอัปเดตข้อมูลการเช่า/ปล่อยเช่า, ส่งมอบ, คืนของ และรายได้จาก Supabase
+// คำอธิบาย: Data Source จัดการการดึงและอัปเดตข้อมูลการเช่า/ปล่อยเช่า, ส่งมอบ, คืนของ และรายได้
 class RentalManagementRemoteDataSource {
+  RentalManagementRemoteDataSource({ApiClient? apiClient})
+      : _apiClient = apiClient;
+
+  ApiClient? _apiClient;
+  ApiClient get _backendClient => _apiClient ??= DioApiClient();
   Future<List<RentalBookingModel>> getRentingBookings(String userId) async {
     if (!SupabaseConfig.isInitialized || userId.isEmpty) return [];
 
@@ -138,11 +145,24 @@ class RentalManagementRemoteDataSource {
     required int bookingId,
     required String status,
   }) async {
-    if (!SupabaseConfig.isInitialized) return;
-    await SupabaseConfig.client
-        .from('booking_tb')
-        .update({'status': status})
-        .eq('id', bookingId);
+    final token = AuthSession.accessToken;
+    if (token == null || token.isEmpty) {
+      throw StateError('กรุณาเข้าสู่ระบบก่อนดำเนินการ');
+    }
+
+    final String endpoint;
+    if (status == 'active') {
+      endpoint = '/api/v1/rentals/$bookingId/handover';
+    } else if (status == 'completed') {
+      endpoint = '/api/v1/rentals/$bookingId/return';
+    } else {
+      endpoint = '/api/v1/rentals/$bookingId/status';
+    }
+
+    await _backendClient.post(
+      endpoint,
+      headers: {'Authorization': 'Bearer $token'},
+    );
   }
 
   Future<RentalIncomeSummary> getRentalIncome(String userId) async {
@@ -223,20 +243,16 @@ class RentalManagementRemoteDataSource {
     final Map<String, String> userPhones = {};
     try {
       final profilesResp = await SupabaseConfig.client
-          .from('profile_tb')
-          .select('user_id, email, phone')
+          .from('public_profile_v')
+          .select('user_id, display_name')
           .inFilter('user_id', userIds.toList());
 
       for (final p in (profilesResp as List)) {
         if (p is Map) {
           final uid = p['user_id']?.toString();
-          final email = p['email']?.toString() ?? '';
-          final phone = p['phone']?.toString().trim();
+          final displayName = p['display_name']?.toString() ?? 'ผู้ใช้งาน';
           if (uid != null) {
-            userNames[uid] = email.isNotEmpty ? email.split('@').first : 'ผู้ใช้งาน';
-            if (phone != null && phone.isNotEmpty) {
-              userPhones[uid] = phone;
-            }
+            userNames[uid] = displayName;
           }
         }
       }

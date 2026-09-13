@@ -33,7 +33,7 @@ abstract final class ItemDetailModel {
       category: _fallbackString(item['category'], 'อุปกรณ์'),
       price: _optionalInt(item['price']) ?? 0,
       status: _string(item['status']),
-      rentalType: _fallbackString(item['type'], 'รายวัน'),
+      rentalType: _normalizeRentalType(item['type']),
       reviews: mappedReviews,
       isOwner: currentUserId != null && currentUserId == ownerId,
     );
@@ -62,7 +62,7 @@ abstract final class ItemDetailModel {
       category: _fallbackString(item['category'], 'อุปกรณ์'),
       price: _optionalInt(item['price']) ?? 0,
       status: _string(item['status']),
-      rentalType: _fallbackString(item['type'], 'รายวัน'),
+      rentalType: _normalizeRentalType(item['type']),
       reviews: const [],
       isOwner: currentUserId != null && currentUserId == ownerId,
     );
@@ -103,6 +103,14 @@ abstract final class ItemDetailModel {
   static String _fallbackString(Object? value, String fallback) {
     final parsed = _string(value);
     return parsed.isEmpty ? fallback : parsed;
+  }
+
+  static String _normalizeRentalType(Object? value) {
+    final str = _string(value).toLowerCase();
+    if (str == 'hour' || str == 'hourly' || str == 'รายชั่วโมง') {
+      return 'รายชั่วโมง';
+    }
+    return 'รายวัน';
   }
 
   static String _string(Object? value) =>

@@ -23,33 +23,15 @@ class ChatbotRepositoryImpl implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
-  }) async* {
-    try {
-      yield* remoteDataSource.sendMessageStream(query: query, history: history);
-    } on ChatbotRemoteException catch (error) {
-      throw ChatbotException(error.message);
-    }
-  }
-
-  @override
-  Future<void> submitFeedback({
-    required String messageId,
-    required String userQuery,
-    required String aiResponse,
-    required int rating,
-    String? reasonCategory,
-    String? feedbackComment,
-    String? resolvedMode,
-  }) async {
-    await remoteDataSource.sendFeedback(
-      messageId: messageId,
-      userQuery: userQuery,
-      aiResponse: aiResponse,
-      rating: rating,
-      reasonCategory: reasonCategory,
-      feedbackComment: feedbackComment,
-      resolvedMode: resolvedMode,
-    );
+  }) {
+    return remoteDataSource
+        .sendMessageStream(query: query, history: history)
+        .handleError((error) {
+          if (error is ChatbotRemoteException) {
+            throw ChatbotException(error.message);
+          }
+          throw error;
+        });
   }
 
   @override

@@ -21,9 +21,13 @@ abstract final class ChatConversationModel {
         ? ChatParticipantRole.owner
         : ChatParticipantRole.renter;
 
+    final rawDisplayName =
+        otherProfile?['display_name']?.toString().trim() ?? '';
     final email = otherProfile?['email']?.toString().trim() ?? '';
     final emailName = email.contains('@') ? email.split('@').first : email;
-    final displayName = emailName.isEmpty ? 'ผู้ใช้งาน Yuemnoi' : emailName;
+    final displayName = rawDisplayName.isNotEmpty
+        ? rawDisplayName
+        : (emailName.isNotEmpty ? emailName : 'ผู้ใช้งาน Yuemnoi');
     final avatarUrl = otherProfile?['user_image_url']?.toString().trim() ?? '';
 
     final rawLastMessage = conversation['last_message']?.toString().trim() ?? '';

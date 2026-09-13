@@ -6,6 +6,9 @@ class ChatResponseModel {
     required this.recommendedItems,
     this.suggestedReplies = const [],
     this.questions = const [],
+    this.thought,
+    this.searchSources = const [],
+    this.searchQuery,
   });
 
   factory ChatResponseModel.fromJson(Map<String, dynamic> json) {
@@ -47,11 +50,38 @@ class ChatResponseModel {
               .toList(growable: false)
         : const <ClarificationQuestionModel>[];
 
+    final rawThought = json['thought'];
+    final thought =
+        rawThought is String && rawThought.trim().isNotEmpty
+            ? rawThought.trim()
+            : null;
+
+    final rawSearchQuery = json['search_query'];
+    final searchQuery =
+        rawSearchQuery is String && rawSearchQuery.trim().isNotEmpty
+            ? rawSearchQuery.trim()
+            : null;
+
+    final rawSources = json['search_sources'];
+    final searchSources = rawSources is List
+        ? rawSources
+              .whereType<Map>()
+              .map(
+                (s) => SearchSourceModel.fromJson(
+                  s.map((k, v) => MapEntry(k.toString(), v)),
+                ),
+              )
+              .toList(growable: false)
+        : const <SearchSourceModel>[];
+
     return ChatResponseModel(
       answer: answer.trim(),
       recommendedItems: items,
       suggestedReplies: replies,
       questions: questions,
+      thought: thought,
+      searchSources: searchSources,
+      searchQuery: searchQuery,
     );
   }
 
@@ -59,6 +89,9 @@ class ChatResponseModel {
   final List<RecommendedItemModel> recommendedItems;
   final List<String> suggestedReplies;
   final List<ClarificationQuestionModel> questions;
+  final String? thought;
+  final List<SearchSourceModel> searchSources;
+  final String? searchQuery;
 
   ChatResponse toEntity() {
     return ChatResponse(
@@ -70,6 +103,43 @@ class ChatResponseModel {
       questions: questions
           .map((question) => question.toEntity())
           .toList(growable: false),
+      thought: thought,
+      searchSources: searchSources
+          .map((source) => source.toEntity())
+          .toList(growable: false),
+      searchQuery: searchQuery,
+    );
+  }
+}
+
+class SearchSourceModel {
+  const SearchSourceModel({
+    required this.title,
+    required this.url,
+    required this.domain,
+    this.snippet,
+  });
+
+  factory SearchSourceModel.fromJson(Map<String, dynamic> json) {
+    return SearchSourceModel(
+      title: json['title']?.toString() ?? '',
+      url: json['url']?.toString() ?? '',
+      domain: json['domain']?.toString() ?? '',
+      snippet: json['snippet']?.toString(),
+    );
+  }
+
+  final String title;
+  final String url;
+  final String domain;
+  final String? snippet;
+
+  SearchSource toEntity() {
+    return SearchSource(
+      title: title,
+      url: url,
+      domain: domain,
+      snippet: snippet,
     );
   }
 }
@@ -82,6 +152,8 @@ class ClarificationQuestionModel {
     this.step = 1,
     this.totalSteps = 2,
     this.selectedOption,
+    this.branchOptions,
+    this.branchTitles,
   });
 
   factory ClarificationQuestionModel.fromJson(Map<String, dynamic> json) {
@@ -100,6 +172,24 @@ class ClarificationQuestionModel {
     final rawTotal = json['total_steps'];
     final totalSteps = rawTotal is num ? rawTotal.toInt() : (int.tryParse('$rawTotal') ?? 2);
 
+    Map<String, List<String>>? branchOptions;
+    if (json['branch_options'] is Map) {
+      branchOptions = {};
+      (json['branch_options'] as Map).forEach((k, v) {
+        if (v is List) {
+          branchOptions![k.toString()] = v.map((e) => e.toString()).toList();
+        }
+      });
+    }
+
+    Map<String, String>? branchTitles;
+    if (json['branch_titles'] is Map) {
+      branchTitles = {};
+      (json['branch_titles'] as Map).forEach((k, v) {
+        branchTitles![k.toString()] = v.toString();
+      });
+    }
+
     return ClarificationQuestionModel(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
@@ -107,6 +197,8 @@ class ClarificationQuestionModel {
       step: step,
       totalSteps: totalSteps,
       selectedOption: json['selected_option']?.toString(),
+      branchOptions: branchOptions,
+      branchTitles: branchTitles,
     );
   }
 
@@ -116,6 +208,8 @@ class ClarificationQuestionModel {
   final int step;
   final int totalSteps;
   final String? selectedOption;
+  final Map<String, List<String>>? branchOptions;
+  final Map<String, String>? branchTitles;
 
   ClarificationQuestion toEntity() {
     return ClarificationQuestion(
@@ -125,6 +219,8 @@ class ClarificationQuestionModel {
       step: step,
       totalSteps: totalSteps,
       selectedOption: selectedOption,
+      branchOptions: branchOptions,
+      branchTitles: branchTitles,
     );
   }
 }

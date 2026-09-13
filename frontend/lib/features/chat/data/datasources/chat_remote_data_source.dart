@@ -100,10 +100,10 @@ class ChatRemoteDataSource {
             .single();
       }
 
-      // 3. ดึงข้อมูลโปรไฟล์ของคู่สนทนา (เจ้าของอุปกรณ์ / ผู้ใช้ที่สนทนาด้วย)
+      // 3. ดึงข้อมูลโปรไฟล์ของคู่สนทนา (เจ้าของอุปกรณ์ / ผู้ใช้ที่สนทนาด้วย) ผ่าน secure view
       final otherProfile = await client
-          .from('profile_tb')
-          .select('user_id,user_image_url,email,is_online,last_seen_at')
+          .from('public_profile_v')
+          .select('user_id,user_image_url,is_online,last_seen_at,display_name')
           .eq('user_id', ownerId)
           .maybeSingle();
 
@@ -162,8 +162,8 @@ class ChatRemoteDataSource {
       Map<String, dynamic>? otherProfile;
       if (otherId.isNotEmpty) {
         otherProfile = await client
-            .from('profile_tb')
-            .select('user_id,user_image_url,email,is_online,last_seen_at')
+            .from('public_profile_v')
+            .select('user_id,user_image_url,is_online,last_seen_at,display_name')
             .eq('user_id', otherId)
             .maybeSingle();
       }
@@ -250,8 +250,8 @@ class ChatRemoteDataSource {
       if (otherUserIds.isNotEmpty) {
         try {
           final profiles = await client
-              .from('profile_tb')
-              .select('user_id,user_image_url,email,is_online,last_seen_at')
+              .from('public_profile_v')
+              .select('user_id,user_image_url,is_online,last_seen_at,display_name')
               .inFilter('user_id', otherUserIds.toList(growable: false));
           for (final p in (profiles as List).cast<Map<String, dynamic>>()) {
             final uid = p['user_id']?.toString();
@@ -570,7 +570,8 @@ class ChatRemoteDataSource {
             imageBytes,
             fileOptions: FileOptions(contentType: _contentType(extension)),
           );
-      return client.storage.from(_chatBucket).getPublicUrl(path);
+      // สร้าง Signed URL สำหรับ bucket ส่วนตัว (chat_bk) มีอายุ 60 นาที (3600 วินาที)
+      return await client.storage.from(_chatBucket).createSignedUrl(path, 3600);
     } on StorageException catch (e) {
       throw ChatRemoteException('อัปโหลดรูปภาพไม่สำเร็จ: ${e.message}');
     } catch (_) {
@@ -817,6 +818,9 @@ class ChatRemoteDataSource {
     required String message,
     String? messageId,
   }) async {
+    final token = AuthSession.accessToken;
+    if (token == null || token.isEmpty) return;
+
     try {
       final client = _supabaseClient;
       final currentUserId = _currentUserId;
@@ -834,30 +838,16 @@ class ChatRemoteDataSource {
 
       if (receiverId.isEmpty) return;
 
-      // ดึงข้อมูลผู้ส่ง
-      final senderProfile = await client
-          .from('profile_tb')
-          .select('email, user_image_url')
-          .eq('user_id', currentUserId)
-          .maybeSingle();
-
-      final senderEmail = senderProfile?['email']?.toString() ?? '';
-      final senderAvatar = senderProfile?['user_image_url']?.toString() ?? '';
-      final senderName = senderEmail.contains('@')
-          ? senderEmail.split('@').first
-          : 'ผู้ใช้งาน Yuemnoi';
-
       // สกัดเอาเฉพาะข้อความตอบกลับตัวจริง โดยตัดคำนำหน้า '↩ ตอบกลับ:...' ออก ไม่ให้ขึ้นคำว่าตอบกลับใน Push Notification
       final cleanMessageForPush = _extractCleanPushMessage(message);
 
       await _backendClient.post(
         '/api/v1/push/chat',
+        headers: {'Authorization': 'Bearer $token'},
         data: {
           'receiver_id': receiverId,
           'message': cleanMessageForPush,
           'message_id': messageId ?? '',
-          'sender_name': senderName,
-          'sender_avatar': senderAvatar,
           'conversation_id': conversationId,
         },
       );
@@ -923,8 +913,8 @@ class ChatRemoteDataSource {
               final otherId = currentUserId == renterId ? ownerId : renterId;
 
               final profile = await client
-                  .from('profile_tb')
-                  .select('user_id,user_image_url,email,is_online,last_seen_at')
+                  .from('public_profile_v')
+                  .select('user_id,user_image_url,is_online,last_seen_at,display_name')
                   .eq('user_id', otherId)
                   .maybeSingle();
 

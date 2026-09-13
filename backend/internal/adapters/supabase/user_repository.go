@@ -563,3 +563,42 @@ func (r *supabaseUserRepository) UpdateFCMToken(ctx context.Context, userID stri
 
 	return nil
 }
+
+// GetFCMToken ดึง fcm_token ของผู้ใช้จาก profile_tb
+func (r *supabaseUserRepository) GetFCMToken(ctx context.Context, userID string) (string, error) {
+	var rows []struct {
+		FCMToken string `json:"fcm_token"`
+	}
+
+	err := r.client.DB.From("profile_tb").
+		Select("fcm_token").
+		Eq("user_id", userID).
+		ExecuteWithContext(ctx, &rows)
+	if err != nil {
+		return "", fmt.Errorf("load fcm token failed: %w", err)
+	}
+	if len(rows) == 0 {
+		return "", nil
+	}
+
+	return strings.TrimSpace(rows[0].FCMToken), nil
+}
+
+// DeleteFCMToken ล้าง fcm_token ที่ไม่สามารถใช้งานได้ออกจาก profile_tb
+func (r *supabaseUserRepository) DeleteFCMToken(ctx context.Context, userID string) error {
+	fields := map[string]interface{}{
+		"fcm_token": nil,
+	}
+
+	var updated []map[string]interface{}
+	err := r.client.DB.From("profile_tb").
+		Update(fields).
+		Eq("user_id", userID).
+		ExecuteWithContext(ctx, &updated)
+	if err != nil {
+		return fmt.Errorf("delete fcm token failed: %w", err)
+	}
+
+	return nil
+}
+

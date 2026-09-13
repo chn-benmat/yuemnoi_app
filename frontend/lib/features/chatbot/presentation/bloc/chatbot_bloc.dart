@@ -16,10 +16,22 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
       super(ChatbotState.initial()) {
     on<ChatbotMessageSubmitted>(_onMessageSubmitted);
     on<ChatbotMessageEdited>(_onMessageEdited);
-    on<ChatbotFeedbackSubmitted>(_onFeedbackSubmitted);
+    on<ChatbotStreamStopped>(_onStreamStopped);
   }
 
   final SendChatMessageUseCase _sendMessage;
+  void Function()? _activeStreamCanceller;
+  bool _isStoppedByUser = false;
+
+  void _onStreamStopped(
+    ChatbotStreamStopped event,
+    Emitter<ChatbotState> emit,
+  ) {
+    if (!state.isSending) return;
+    _isStoppedByUser = true;
+    _activeStreamCanceller?.call();
+    _activeStreamCanceller = null;
+  }
 
   Stream<ChatStreamEvent> _bufferChatDeltas(Stream<ChatStreamEvent> source) {
     late final StreamController<ChatStreamEvent> controller;
@@ -40,8 +52,20 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
       flushTimer = null;
     }
 
+    void cancelActiveStream() {
+      if (sourceFinished) return;
+      sourceFinished = true;
+      stopTimer();
+      flushDeltas();
+      subscription?.cancel();
+      if (!controller.isClosed) {
+        controller.close();
+      }
+    }
+
     controller = StreamController<ChatStreamEvent>(
       onListen: () {
+        _activeStreamCanceller = cancelActiveStream;
         flushTimer = Timer.periodic(
           _streamUpdateInterval,
           (_) => flushDeltas(),
@@ -60,6 +84,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
             sourceFinished = true;
             stopTimer();
             flushDeltas();
+            _activeStreamCanceller = null;
             controller.addError(error, stackTrace);
             controller.close();
           },
@@ -67,6 +92,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
             sourceFinished = true;
             stopTimer();
             flushDeltas();
+            _activeStreamCanceller = null;
             controller.close();
           },
           cancelOnError: true,
@@ -74,6 +100,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
       },
       onCancel: () async {
         stopTimer();
+        _activeStreamCanceller = null;
         if (!sourceFinished) {
           await subscription?.cancel();
         }
@@ -89,14 +116,20 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
     required List<ChatMessage> messagesWithUser,
     required Emitter<ChatbotState> emit,
   }) async {
+    _activeStreamCanceller = null;
+    _isStoppedByUser = false;
+
+    final startTime = DateTime.now();
     final messageId =
-        'msg_${DateTime.now().millisecondsSinceEpoch}_${query.hashCode.abs()}';
+        'msg_${startTime.millisecondsSinceEpoch}_${query.hashCode.abs()}';
     final placeholder = ChatMessage(
       id: messageId,
       role: ChatMessageRole.assistant,
       content: '',
       userQuery: query,
       isStreaming: true,
+      createdAt: startTime,
+      statusMessage: 'กำลังวิเคราะห์คำถาม...',
     );
 
     emit(
@@ -104,6 +137,8 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
         messages: [...messagesWithUser, placeholder],
         isSending: true,
         clearError: true,
+        requestStartTime: startTime,
+        currentStatusMessage: 'กำลังวิเคราะห์คำถาม...',
       ),
     );
 
@@ -121,130 +156,252 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
           if (last.role != ChatMessageRole.assistant) return state;
 
           switch (event) {
-            case ChatStatusEvent():
-              return state;
+            case ChatStatusEvent(:final message):
+              final updatedActivities = List<String>.from(last.activities);
+              if (!updatedActivities.contains(message)) {
+                updatedActivities.add(message);
+              }
+              currentMessages[lastIndex] = last.copyWith(
+                statusMessage: message,
+                activities: updatedActivities,
+              );
+              return state.copyWith(
+                messages: currentMessages,
+                currentStatusMessage: message,
+              );
             case ChatMetadataEvent(:final recommendedItems, :final questions):
-              final effectiveQuestions =
-                  questions.isNotEmpty ? questions : last.questions;
+              final effectiveQuestions = questions.isNotEmpty
+                  ? questions
+                  : last.questions;
               final effectiveRecommended = effectiveQuestions.isNotEmpty
                   ? const <RecommendedItem>[]
                   : (recommendedItems.isNotEmpty
-                      ? recommendedItems
-                      : last.recommendedItems);
+                        ? recommendedItems
+                        : last.recommendedItems);
               currentMessages[lastIndex] = last.copyWith(
                 recommendedItems: effectiveRecommended,
                 questions: effectiveQuestions,
               );
               return state.copyWith(messages: currentMessages);
             case ChatDeltaEvent(:final text):
+              final isFirstDelta = last.content.isEmpty && text.isNotEmpty;
+              final updatedDuration = isFirstDelta
+                  ? (last.responseDuration ??
+                        (stopwatch.elapsed.inMilliseconds > 0
+                            ? stopwatch.elapsed
+                            : const Duration(seconds: 1)))
+                  : last.responseDuration;
               currentMessages[lastIndex] = last.copyWith(
                 content: last.content + text,
+                responseDuration: updatedDuration,
+                statusMessage: isFirstDelta
+                    ? 'สรุปคำแนะนำ'
+                    : last.statusMessage,
               );
               return state.copyWith(messages: currentMessages);
             case ChatDoneEvent(
+              :final answer,
               :final suggestedReplies,
               :final recommendedItems,
               :final questions,
+              :final searchSources,
+              :final searchQuery,
+              :final activities,
             ):
               stopwatch.stop();
-              final effectiveQuestions =
-                  questions.isNotEmpty ? questions : last.questions;
+              final effectiveQuestions = questions.isNotEmpty
+                  ? questions
+                  : last.questions;
               final effectiveRecommended = effectiveQuestions.isNotEmpty
                   ? const <RecommendedItem>[]
                   : (recommendedItems.isNotEmpty
-                      ? recommendedItems
-                      : last.recommendedItems);
-              var effectiveContent = last.content;
-              if (effectiveContent.trim().isEmpty) {
-                if (effectiveQuestions.isNotEmpty) {
-                  effectiveContent =
-                      'เพื่อช่วยแนะนำอุปกรณ์ที่เหมาะสมและคุ้มค่าที่สุด รบกวนเลือกข้อมูลการใช้งานด้านล่างนี้ได้เลยนะคะ 😊';
-                } else if (effectiveRecommended.isNotEmpty) {
-                  effectiveContent = 'นี่คืออุปกรณ์ที่เราแนะนำสำหรับคุณค่ะ:';
-                } else {
-                  effectiveContent =
-                      'ขออภัยด้วยนะคะ ขณะนี้ระบบไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่อีกครั้งค่ะ';
-                }
-              }
+                        ? recommendedItems
+                        : last.recommendedItems);
+              final effectiveContent = answer?.trim().isNotEmpty == true
+                  ? answer!.trim()
+                  : last.content;
+              final effectiveActivities = activities.isNotEmpty
+                  ? activities
+                  : last.activities;
+              final effectiveDuration =
+                  last.responseDuration ??
+                  (stopwatch.elapsed.inMilliseconds > 0
+                      ? stopwatch.elapsed
+                      : const Duration(seconds: 1));
               currentMessages[lastIndex] = last.copyWith(
-                content: effectiveContent,
-                suggestedReplies: suggestedReplies.isNotEmpty
-                    ? suggestedReplies
-                    : last.suggestedReplies,
+                content: effectiveContent.isEmpty
+                    ? 'การตอบกลับไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง'
+                    : effectiveContent,
                 recommendedItems: effectiveRecommended,
                 questions: effectiveQuestions,
-                responseDuration: stopwatch.elapsed,
+                suggestedReplies: suggestedReplies,
+                searchSources: searchSources,
+                searchQuery: searchQuery,
+                activities: effectiveActivities,
                 isStreaming: false,
+                responseDuration: effectiveDuration,
+                statusMessage: 'สรุปคำแนะนำ',
               );
               return state.copyWith(
                 messages: currentMessages,
                 isSending: false,
                 clearError: true,
+                clearStatus: true,
+                clearStartTime: true,
               );
           }
         },
-        onError: (error, _) {
+        onError: (Object error, StackTrace stackTrace) {
           stopwatch.stop();
-          final currentMessages = List<ChatMessage>.from(state.messages);
-          if (currentMessages.isNotEmpty &&
-              currentMessages.last.role == ChatMessageRole.assistant &&
-              currentMessages.last.content.isEmpty &&
-              currentMessages.last.recommendedItems.isEmpty &&
-              currentMessages.last.questions.isEmpty) {
-            currentMessages.removeLast();
-          } else if (currentMessages.isNotEmpty &&
-              currentMessages.last.role == ChatMessageRole.assistant) {
-            currentMessages[currentMessages.length - 1] = currentMessages.last
-                .copyWith(isStreaming: false);
+          if (_isStoppedByUser) {
+            final currentMessages = List<ChatMessage>.from(state.messages);
+            if (currentMessages.isNotEmpty &&
+                currentMessages.last.role == ChatMessageRole.assistant) {
+              final last = currentMessages.last;
+              final duration =
+                  last.responseDuration ??
+                  (stopwatch.elapsed.inMilliseconds > 0
+                      ? stopwatch.elapsed
+                      : const Duration(seconds: 1));
+              currentMessages[currentMessages.length - 1] = last.copyWith(
+                content: last.content.isEmpty
+                    ? 'หยุดการตอบกลับแล้ว'
+                    : last.content,
+                isStreaming: false,
+                responseDuration: duration,
+                statusMessage: 'สรุปคำแนะนำ',
+              );
+            }
+            return state.copyWith(
+              messages: currentMessages,
+              isSending: false,
+              clearError: true,
+              clearStatus: true,
+              clearStartTime: true,
+            );
           }
           final errorMessage = error is ChatbotException
               ? error.message
               : 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
+          final currentMessages = List<ChatMessage>.from(state.messages);
+          if (currentMessages.isNotEmpty &&
+              currentMessages.last.role == ChatMessageRole.assistant) {
+            currentMessages[currentMessages.length - 1] = currentMessages.last
+                .copyWith(
+                  content: errorMessage,
+                  isStreaming: false,
+                  responseDuration: stopwatch.elapsed,
+                );
+          }
           return state.copyWith(
             messages: currentMessages,
             isSending: false,
             errorMessage: errorMessage,
+            clearStatus: true,
+            clearStartTime: true,
           );
         },
       );
-
-      if (state.isSending) {
+      if (_isStoppedByUser) {
         stopwatch.stop();
         final currentMessages = List<ChatMessage>.from(state.messages);
         if (currentMessages.isNotEmpty &&
             currentMessages.last.role == ChatMessageRole.assistant) {
           final last = currentMessages.last;
-          final effectiveRecommended = last.questions.isNotEmpty
-              ? const <RecommendedItem>[]
-              : last.recommendedItems;
-          var effectiveContent = last.content;
-          if (effectiveContent.trim().isEmpty) {
-            if (last.questions.isNotEmpty) {
-              effectiveContent =
-                  'เพื่อช่วยแนะนำอุปกรณ์ที่เหมาะสมและคุ้มค่าที่สุด รบกวนเลือกข้อมูลการใช้งานด้านล่างนี้ได้เลยนะคะ 😊';
-            } else if (effectiveRecommended.isNotEmpty) {
-              effectiveContent = 'นี่คืออุปกรณ์ที่เราแนะนำสำหรับคุณค่ะ:';
-            } else {
-              effectiveContent =
-                  'ขออภัยด้วยนะคะ ขณะนี้ระบบไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่อีกครั้งค่ะ';
-            }
-          }
+          final duration =
+              last.responseDuration ??
+              (stopwatch.elapsed.inMilliseconds > 0
+                  ? stopwatch.elapsed
+                  : const Duration(seconds: 1));
           currentMessages[currentMessages.length - 1] = last.copyWith(
-            content: effectiveContent,
-            recommendedItems: effectiveRecommended,
+            content: last.content.isEmpty ? 'หยุดการตอบกลับแล้ว' : last.content,
             isStreaming: false,
-            responseDuration:
-                last.responseDuration ?? stopwatch.elapsed,
+            responseDuration: duration,
+            statusMessage: 'สรุปคำแนะนำ',
           );
         }
-        emit(state.copyWith(messages: currentMessages, isSending: false));
+        emit(
+          state.copyWith(
+            messages: currentMessages,
+            isSending: false,
+            clearError: true,
+            clearStatus: true,
+            clearStartTime: true,
+          ),
+        );
+        return;
+      }
+      if (state.isSending) {
+        stopwatch.stop();
+        final currentMessages = List<ChatMessage>.from(state.messages);
+        const errorMessage = 'การตอบกลับไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง';
+        if (currentMessages.isNotEmpty &&
+            currentMessages.last.role == ChatMessageRole.assistant) {
+          currentMessages[currentMessages.length - 1] = currentMessages.last
+              .copyWith(
+                content: errorMessage,
+                isStreaming: false,
+                responseDuration: stopwatch.elapsed,
+              );
+        }
+        emit(
+          state.copyWith(
+            messages: currentMessages,
+            isSending: false,
+            errorMessage: errorMessage,
+            clearStatus: true,
+            clearStartTime: true,
+          ),
+        );
       }
     } catch (_) {
       stopwatch.stop();
+      if (_isStoppedByUser) {
+        final currentMessages = List<ChatMessage>.from(state.messages);
+        if (currentMessages.isNotEmpty &&
+            currentMessages.last.role == ChatMessageRole.assistant) {
+          final last = currentMessages.last;
+          final duration =
+              last.responseDuration ??
+              (stopwatch.elapsed.inMilliseconds > 0
+                  ? stopwatch.elapsed
+                  : const Duration(seconds: 1));
+          currentMessages[currentMessages.length - 1] = last.copyWith(
+            content: last.content.isEmpty ? 'หยุดการตอบกลับแล้ว' : last.content,
+            isStreaming: false,
+            responseDuration: duration,
+            statusMessage: 'สรุปคำแนะนำ',
+          );
+        }
+        emit(
+          state.copyWith(
+            messages: currentMessages,
+            isSending: false,
+            clearError: true,
+            clearStatus: true,
+            clearStartTime: true,
+          ),
+        );
+        return;
+      }
+      final currentMessages = List<ChatMessage>.from(state.messages);
+      const errorMessage = 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
+      if (currentMessages.isNotEmpty &&
+          currentMessages.last.role == ChatMessageRole.assistant) {
+        currentMessages[currentMessages.length - 1] = currentMessages.last
+            .copyWith(
+              content: errorMessage,
+              isStreaming: false,
+              responseDuration: stopwatch.elapsed,
+            );
+      }
       emit(
         state.copyWith(
+          messages: currentMessages,
           isSending: false,
-          errorMessage: 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง',
+          errorMessage: errorMessage,
+          clearStatus: true,
+          clearStartTime: true,
         ),
       );
     }
@@ -289,18 +446,12 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
         history.last.role == ChatMessageRole.assistant &&
         history.last.questions.isNotEmpty) {
       final lastAssistant = history.last;
-      final parts = query.split(',').map((s) => s.trim()).toList();
-      final updatedQuestions = <ClarificationQuestion>[];
-      for (var i = 0; i < lastAssistant.questions.length; i++) {
-        final q = lastAssistant.questions[i];
-        if (q.selectedOption != null) {
-          updatedQuestions.add(q);
-        } else if (i < parts.length && parts[i].isNotEmpty) {
-          updatedQuestions.add(q.copyWith(selectedOption: parts[i]));
-        } else {
-          updatedQuestions.add(q.copyWith(selectedOption: query));
-        }
-      }
+      final updatedQuestions = lastAssistant.questions
+          .map((q) {
+            final selected = event.selectedOptions[q.id];
+            return selected == null ? q : q.copyWith(selectedOption: selected);
+          })
+          .toList(growable: false);
       history[history.length - 1] = lastAssistant.copyWith(
         questions: updatedQuestions,
       );
@@ -308,7 +459,11 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
 
     final messagesWithQuestion = [
       ...history,
-      ChatMessage(role: ChatMessageRole.user, content: query),
+      ChatMessage(
+        role: ChatMessageRole.user,
+        content: query,
+        isVisibleInChat: event.isVisibleInChat,
+      ),
     ];
 
     await _handleMessageStream(
@@ -319,49 +474,10 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
     );
   }
 
-  Future<void> _onFeedbackSubmitted(
-    ChatbotFeedbackSubmitted event,
-    Emitter<ChatbotState> emit,
-  ) async {
-    final idx = event.messageIndex;
-    if (idx < 0 || idx >= state.messages.length) return;
-    final msg = state.messages[idx];
-    if (msg.role != ChatMessageRole.assistant) return;
-
-    final newIsLiked = msg.isLiked == event.isLiked ? null : event.isLiked;
-    final updated = msg.copyWith(
-      isLiked: newIsLiked,
-      feedbackReason: event.reasonCategory,
-      feedbackComment: event.feedbackComment,
-    );
-
-    final currentMessages = List<ChatMessage>.from(state.messages);
-    currentMessages[idx] = updated;
-    emit(state.copyWith(messages: currentMessages));
-
-    if (newIsLiked != null) {
-      final userQuery =
-          updated.userQuery ??
-          (idx > 0 && state.messages[idx - 1].role == ChatMessageRole.user
-              ? state.messages[idx - 1].content
-              : '');
-      _sendMessage
-          .submitFeedback(
-            messageId: updated.id.isNotEmpty
-                ? updated.id
-                : 'msg_${idx}_${DateTime.now().millisecondsSinceEpoch}',
-            userQuery: userQuery,
-            aiResponse: updated.content,
-            rating: newIsLiked ? 1 : -1,
-            reasonCategory: event.reasonCategory,
-            feedbackComment: event.feedbackComment,
-          )
-          .ignore();
-    }
-  }
-
   @override
   Future<void> close() {
+    _activeStreamCanceller?.call();
+    _activeStreamCanceller = null;
     _sendMessage.close();
     return super.close();
   }

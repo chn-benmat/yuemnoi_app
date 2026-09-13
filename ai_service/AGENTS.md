@@ -1,51 +1,181 @@
-# AI Service Agent Guide
+# AGENTS.md - AI Coding Assistant & Architecture Guidelines
 
-## Scope
+This document provides definitive instructions, architectural principles, and operational guidelines for any AI agent or developer working on the `ai_service` repository.
 
-These instructions apply to everything under `ai_service/`.
+---
 
-## Architecture
+## 1. Project Overview & Role
 
-- Keep `main.py` limited to FastAPI lifecycle, schemas, middleware, and endpoint wiring.
-- Keep environment parsing and defaults in `config.py` through Pydantic Settings.
-- `app/agent/executor.py` orchestrates routing, tool execution, grounding, and response assembly.
-- `app/llm/` owns Ollama communication; `app/tools/` owns Supabase inventory and external specification lookups.
-- Reuse the shared `httpx.AsyncClient` lifecycle. Close clients during FastAPI shutdown and avoid blocking work on the event loop.
-- Preserve the `POST /api/ai/chat` contract with the Go backend. Coordinate changes to request fields, response fields, status values, or timeouts with the backend adapter and documentation.
+- **Repository**: `ai_service` (Backend for Mobile Rental Chatbot)
+- **Role**: AI Assistant & Rental Consultant Service
+- **Runtime**: Python 3.12 (Virtual Environment: `.venv`)
+- **Local Model**: `llama3.1-typhoon2-8b-instruct:latest` hosted via local **Ollama** (`http://localhost:11434`)
+- **Primary Hardware**: NVIDIA GeForce RTX 4060 (8 GB VRAM) — model runs in VRAM (~4.9 GB)
+- **Database**: **Supabase** table `item_tb` (33 active rental inventory items)
+- **Search Provider**: **Tavily Search API** (1,000 monthly free credits, basic depth)
 
-## Agent and data rules
+---
 
-- Treat current inventory, rental price, and availability as Supabase-backed facts. The model must use the inventory tool before making those claims.
-- Use the web specification tool only for external product specifications or capabilities, not for Yuemnoi inventory or rental pricing.
-- Keep tool inputs typed and validated with Pydantic. Never execute model-generated SQL or accept arbitrary query fragments.
-- Preserve bounded input, history, search results, tool calls, and reference context to control latency and model context size.
-- Preserve the response envelope: `status`, `search_status`, `items_found`, `answer`, and `recommended_items`, unless all consumers are updated together.
-- Do not expose prompts, internal tool names, raw provider errors, chain-of-thought, or credentials in user-facing responses.
-- When changing prompts or routing, test Thai and English requests covering direct conversation, inventory search, no inventory results, specification lookup, and upstream failure.
+## 2. STRICT CONSTRAINTS & CODING POLICIES
 
-## Security and configuration
+### 🚫 ZERO-REGEX, ZERO-KEYWORD, ZERO-HARDCODE POLICY
 
-- Never commit, print, or embed values from `.env`.
-- Treat `SUPABASE_KEY` and `SERPER_API_KEY` as secrets. Do not include them in logs, exceptions, fixtures, or example output.
-- Configuration is loaded by `config.py` from process environment and `ai_service/.env`. Do not add fallback secrets.
-- Do not make tests depend on live Supabase, Serper, or Ollama; mock HTTP boundaries instead.
+Any modification or addition to this codebase **MUST strictly adhere** to the following rules:
 
-## Python conventions
+1. **NO Keyword Matching**:
+   - ❌ Never use `if "compare" in text:` or `if "กล้อง" in query:` to route user intent, match categories, or select items.
+   - ✅ All semantic routing and entity extraction must be performed via **AI-Native Structured Reasoning** (`generate_structured` with Pydantic schemas).
 
-- Follow the existing async FastAPI, HTTPX, Pydantic, and type-hinting style.
-- Catch errors at external-service boundaries and return stable application-level statuses.
-- Keep dependencies pinned in `requirements.txt`; change it only when a dependency is necessary.
-- Add focused tests for changed routing, validation, response shaping, or tool behavior. If introducing a test runner, do so only when the task explicitly requires it.
+2. **NO Regular Expressions**:
+   - ❌ Never use `re.search()`, `re.findall()`, or regex patterns for intent routing, slot extraction, or ambiguity detection.
+   - ✅ Extract entities (`target_items`, `categories`, `budget_max`, `intended_use`, `missing_slots`) through guided LLM decoding.
 
-## Development Rules
+3. **NO Hardcoded Values & Logic (Strictly Zero-Hardcode Policy)**:
+   - ❌ **No Hardcoded Configurations / Secrets**: Never hardcode API keys, URLs, endpoints, IP addresses, ports, database credentials, timeouts, retry counts, or model names in the source code.
+     - ✅ Must always inject configuration via `Settings` (`app/core/config.py`) loaded from `.env` through `pydantic-settings`.
+   - ❌ **No Hardcoded Catalog / Inventory Data**: Never hardcode item catalogs, item IDs, category lists, technical specifications, or rental prices into code or static prompt strings.
+     - ✅ Item inventory and category lists must be retrieved dynamically from Supabase (`item_tb`) or `MemoryCacheService`.
+   - ❌ **No Hardcoded Dialogues / Canned Responses / Fallbacks**: Never hardcode canned assistant responses, static greetings, clarification questions, or interactive button options/chips.
+     - ✅ All user-facing dialogues, clarification questions, and interactive choices must be synthesized dynamically by the LLM using Structured Output grounded on real database context.
+   - ❌ **No Hardcoded Decision Trees / Business Rules**: Never use static `if/else` or dictionary lookups to simulate business logic (e.g., `if category == "Camera": ...` or hardcoded intent-to-action routing).
+     - ✅ Rely on LLM Semantic Reasoning and Clean Architecture Use Cases / Domain Entities for semantic decisions.
+   - ❌ **No Mock / Dummy Data in Production Flow**: Never inject mock data, dummy items, or hardcoded fallback returns into the Application or Infrastructure layers to bypass external dependencies.
+     - ✅ If an external system or service fails, rely on structured exception handling and domain-level error handling following Clean Architecture.
 
-- Write code comments in clear, easy-to-understand Thai.
-- Create all new test files inside the `tests/` directory.
+### ⚖️ STRICT NEUTRALITY & ZERO-BIAS POLICY
 
-## Serena MCP Usage
+Any algorithm, prompt design, ranking logic, recommendation engine, or response synthesis in this service **MUST strictly adhere** to the following anti-bias rules:
 
-- When using Serena MCP tools (e.g., `activate_project`, symbol search, code navigation, editing), activate the project strictly inside the `ai_service/` directory (e.g., `activate_project` with path `ai_service`).
-- Do NOT activate Serena at the root workspace level (`yuemnoi_app`) or create `.serena` outside the `ai_service/` folder. All Serena project configurations, cache, and memories must remain contained in `ai_service/.serena/`.
-- Ensure the language server is set to Python (`python`).
+1. **NO Brand & Merchant Favoritism**:
+   - ❌ **No Brand Bias**: Never favor, boost, or denigrate any brand (e.g., Apple vs Samsung, Sony vs Canon) based on subjective preference or brand prestige.
+   - ❌ **No Commercial / Margin Favoritism**: Never prioritize items based on higher rental prices, profitability, merchant identity, or commercial incentives.
+   - ✅ **Objective Match**: Recommend items solely based on semantic alignment with user needs, stated budget, verified specifications, and actual availability in `item_tb`.
 
-No formatter, linter, or test runner is currently declared in the repository. Do not invent commands or add tooling just for verification. Report checks that could not run.
+2. **NO Exaggerated Claims & Marketing Fluff**:
+   - ❌ Never use exaggerated marketing buzzwords or unsubstantiated claims ("best in the world", "flawlessly superior to all brands", "terrible model, do not rent").
+   - ❌ Never conceal or downplay hardware limitations, trade-offs, or downsides of recommended equipment.
+   - ✅ Present fair, balanced, and objective pros and cons grounded in verified technical specifications.
+
+3. **Unbiased Catalog & External Comparisons**:
+   - ❌ Never denigrate or unfairly diminish out-of-catalog or competitor models simply to push items that are currently in stock.
+   - ✅ If an out-of-catalog device is objectively better suited for the user's specific workflow, acknowledge its strengths honestly and impartially, while politely stating the shop's inventory status without forceful cross-selling.
+
+4. **Algorithmic Fairness & Code-Level Objectivity**:
+   - ❌ Never hardcode heuristic ranking boosts, tie-breaker favoritism, or algorithmic weights biased toward specific brands, price tiers, or item owners.
+   - ✅ All scoring, sorting, and filtering in use cases (`QueryItemsUseCase`, `CompareItemsUseCase`, etc.) must be explainable, transparent, and purely driven by user constraints (`budget_max`, `intended_use`, `categories`, and semantic similarity).
+
+---
+
+## 3. Clean Architecture Structure
+
+The codebase strictly follows Clean Architecture principles. Dependencies point **inwards only**:
+
+```
+Domain (Pure Python)
+  ▲
+  │
+Application (Use Cases, DTOs, Services)
+  ▲
+  │
+Infrastructure (Adapters: DB, LLM, Search, Cache) & Interface (FastAPI Controllers)
+```
+
+### Layer Responsibilities:
+
+- **`app/domain/` (Core Enterprise Business Rules)**:
+  - Contains domain models and pure entities: `Item`, `ChatMessage`, `IntentDecision`, `ComparisonMatrix`, `ClarificationQuestion`.
+  - Defines abstraction ports (Protocols / Abstract Base Classes): `ItemRepositoryInterface`, `LLMServiceInterface`, `SearchServiceInterface`, `CacheServiceInterface`.
+  - ⚠️ **Strict Rule**: Zero dependencies on frameworks (No FastAPI, No HTTP libraries, No DB drivers).
+
+- **`app/application/` (Application Business Rules)**:
+  - Use cases implemented with Single Responsibility Principle (SRP):
+    - `RouteIntentUseCase`: Classifies user semantic intent and calculates ambiguity without keywords.
+    - `QueryItemsUseCase`: Performs semantic catalog matching and ranking against Supabase items.
+    - `CompareItemsUseCase`: Coordinates internal catalog data, Tavily web search, fact verification, and grounded comparison synthesis.
+    - `GenerateClarificationUseCase`: Builds clarifying questions and interactive choices for vague inputs.
+    - `ProcessChatMessageUseCase`: Master orchestrator coordinating intent routing and execution.
+  - Domain services:
+    - `FactVerificationService`: Filters out search spam, advertisements, and clickbaits; verifies consistency of technical specs.
+  - Data Transfer Objects (DTOs): `chat_dto.py`, `item_dto.py`, `comparison_dto.py`, `clarification_dto.py`.
+
+- **`app/infrastructure/` (Frameworks & Drivers)**:
+  - `SupabaseRepository`: Interacts asynchronously with Supabase PostgREST endpoint for `item_tb`.
+  - `OllamaClient`: Manages interaction with `typhoon2.5-qwen3-4b:latest` supporting structured JSON schema generation and Server-Sent Events (SSE) streaming.
+  - `TavilyClient`: Asynchronous client for Tavily Search API.
+  - `MemoryCacheService`: In-memory TTL cache for the 33-item catalog to minimize DB roundtrips.
+  - `prompt_templates.py`: Structured system instructions in Thai for the model.
+
+- **`app/interface/` (Presentation & Delivery)**:
+  - `app/interface/api/v1/endpoints/`:
+    - `chat.py`: `POST /api/v1/chat` (Full JSON response) and `POST /api/v1/chat/stream` (SSE tokens).
+    - `items.py`: `GET /api/v1/items` (Catalog list).
+    - `health.py`: `GET /health` (Ollama, Supabase, and Tavily health checks).
+  - `app/interface/schemas/`: Pydantic request and response schemas for web APIs.
+
+- **`app/core/` (Cross-Cutting Concerns)**:
+  - `config.py`: Type-safe settings via Pydantic BaseSettings.
+  - `container.py`: Dependency injection container wiring ports to adapters.
+  - `logging.py`: Structured console logging.
+  - `exceptions.py`: Custom domain exceptions.
+
+---
+
+## 4. Key Workflows & Operational Logic
+
+### 4.1 Fact-Checking & Comparison Flow
+
+When users ask to compare rental items:
+
+1. **Catalog Retrieval**: Use semantic entity matching (`QueryItemsUseCase`) to retrieve matching items from `item_tb`.
+2. **Search Query Generation**: Formulate a targeted technical search query.
+3. **Web Search**: Query Tavily Search API for verified web search results.
+4. **Fact Verification Engine (`FactVerificationService`)**:
+   - The LLM parses raw snippets and filters out promotional fluff, spam, and irrelevant models.
+   - Cross-checks technical specifications (sensor, resolution, ports, battery, weight).
+   - Generates a verified `ComparisonMatrix` with credible sources and verified specs.
+5. **Grounded Synthesis**: Produces a balanced Thai response highlighting actual shop rental prices, item availability in `item_tb`, and situational recommendations.
+
+### 4.2 Interactive Clarification Flow
+
+When the user query is underspecified or ambiguous (e.g., _"อยากได้คอมทำงาน"_, _"ขอยืมกล้องหน่อย"_):
+
+1. `RouteIntentUseCase` evaluates `ambiguity_level >= 0.5` and identifies `missing_slots`.
+2. `GenerateClarificationUseCase` reads available shop categories from cache.
+3. The LLM generates:
+   - A polite, concise Thai clarifying question.
+   - 3 to 4 actionable choices (`ChoiceOption` with `id`, `label`, `description`, `action_value`).
+4. The client (Flutter Mobile App) renders these options as interactive chips or buttons.
+
+---
+
+## 5. Coding Standards & Conventions
+
+1. **Python Version**: Always write Python 3.12 compliant code.
+2. **Async-First**: All network operations (Supabase, Tavily, Ollama) must be asynchronous using `httpx.AsyncClient` or native async primitives. Never block the event loop with synchronous I/O.
+3. **Typing**: Use standard Python type annotations (`typing.List`, `typing.Optional`, `typing.Dict`, `typing.Tuple`).
+4. **Pydantic v2**: Use `model_validate_json()`, `model_dump()`, and `model_json_schema()`. Avoid deprecated Pydantic v1 methods.
+5. **Virtual Environment**:
+   - Location: `e:\Projects\Mobiles\Flutter\ai_service\.venv`
+   - Python executable: `.venv\Scripts\python.exe`
+6. **Strictly Zero-Hardcode Policy**:
+   - Never write static system constants (API keys, URLs, credentials), item/catalog data, canned dialogue responses, or static business rules into the codebase. All behavior must be configuration-driven (`.env`), dynamically retrieved from Supabase (`item_tb`), and evaluated via AI-Native Semantic Reasoning.
+7. **Strict Neutrality & Zero-Bias**:
+   - Maintain 100% technical objectivity across all prompts, use cases, and ranking logic. Never steer users based on commercial incentives, brand loyalty, or subjective bias.
+
+---
+
+## 6. Execution & Testing Commands
+
+- **Run Server**:
+  ```powershell
+  python main.py
+  # or
+  .\.venv\Scripts\python.exe main.py
+  ```
+- **API Documentation**:
+  Access Swagger UI at `http://localhost:8000/docs`
+
+- **Run Test Suites**:
+  ```powershell
+  .\.venv\Scripts\python.exe -m pytest tests/ -v
+  ```

@@ -33,40 +33,50 @@ func NewUserHandler(gateway domain.AuthGateway) *UserHandler {
 	}
 }
 
-func (h *UserHandler) authenticatedUserID(c *gin.Context) (string, bool) {
-	token, ok := extractToken(c)
-	if !ok {
-		return "", false
-	}
-
-	userID, err := h.verifier.UserIDFromToken(c.Request.Context(), token)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Access Token ไม่ถูกต้องหรือหมดอายุ"})
-		return "", false
-	}
-
-	return userID, true
+// Request DTOs สำหรับ HTTP Transport Layer
+type userLoginRequest struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6"`
 }
 
-// สำหรับสกัดเอาเฉพาะ JWT Token ล้วนๆ
-func extractToken(c *gin.Context) (string, bool) {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาแนบ Access Token ใน Header"})
-		return "", false
-	}
+type userRegisterRequest struct {
+	DisplayName     string `json:"display_name" form:"display_name" binding:"required,max=150"`
+	Email           string `json:"email" form:"email" binding:"required,email"`
+	Phone           string `json:"phone" form:"phone" binding:"required"`
+	Password        string `json:"password" form:"password" binding:"required,min=6"`
+	ConfirmPassword string `json:"confirm_password" form:"confirm_password" binding:"omitempty,min=6"`
+}
 
-	tokenParts := strings.Split(authHeader, " ")
-	if len(tokenParts) != 2 || strings.ToLower(tokenParts[0]) != "bearer" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "รูปแบบ Authorization Header ไม่ถูกต้อง (ต้องเป็น Bearer <token>)"})
-		return "", false
-	}
-	return tokenParts[1], true
+type userChangePasswordRequest struct {
+	NewPassword string `json:"new_password" binding:"required,min=6"`
+}
+
+type userSendOTPRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type userVerifyOTPResetRequest struct {
+	Email   string `json:"email" binding:"required,email"`
+	OTPCode string `json:"otp_code" binding:"required,len=6,numeric"`
+}
+
+type updateProfileRequest struct {
+	DisplayName *string `json:"display_name" form:"display_name" binding:"omitempty,max=150"`
+	Username    *string `json:"username" form:"username" binding:"omitempty,max=100"`
+	Bio         *string `json:"bio" form:"bio" binding:"omitempty,max=500"`
+}
+
+type updateContactRequest struct {
+	Phone string `json:"phone" binding:"required"`
+}
+
+type updateFCMTokenRequest struct {
+	FCMToken string `json:"fcm_token" binding:"required"`
 }
 
 // [POST] /api/v1/auth/login - เข้าสู่ระบบและรับ Access Token
 func (h *UserHandler) Login(c *gin.Context) {
-	var req domain.UserLoginRequest
+	var req userLoginRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง หรือรูปแบบอีเมลไม่สอดคล้อง"})
@@ -87,8 +97,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 	})
 }
 
-// [POST] /api/v1/auth/register - สมัครสมาชิกผู้ใช้ใหม่
-// SyncGoogleProfileImage saves the signed-in Google user's avatar URL.
+// [POST] /api/v1/auth/google-profile - บันทึกรูปโปรไฟล์จาก Google Avatar
 func (h *UserHandler) SyncGoogleProfileImage(c *gin.Context) {
 	userToken, ok := extractToken(c)
 	if !ok {
@@ -117,8 +126,9 @@ func (h *UserHandler) SyncGoogleProfileImage(c *gin.Context) {
 	})
 }
 
+// [POST] /api/v1/auth/register - สมัครสมาชิกผู้ใช้ใหม่
 func (h *UserHandler) Register(c *gin.Context) {
-	var req domain.UserRegisterRequest
+	var req userRegisterRequest
 
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง หรือรูปแบบอีเมลไม่สอดคล้อง"})
@@ -157,7 +167,6 @@ func (h *UserHandler) Register(c *gin.Context) {
 		ProfileImage: profileImage,
 	})
 	if err != nil {
-		// ตรวจจับอีเมลซ้ำ
 		if strings.Contains(err.Error(), "email already registered") {
 			c.JSON(http.StatusConflict, gin.H{"error": "อีเมลนี้ถูกใช้งานในระบบแล้ว โปรดใช้อีเมลอื่น"})
 			return
@@ -246,14 +255,13 @@ func readProfileImage(header *multipart.FileHeader) (*domain.ProfileImage, error
 
 // [POST] /api/v1/auth/change-password - เปลี่ยนรหัสผ่าน (ต้องมี Access Token)
 func (h *UserHandler) ChangePassword(c *gin.Context) {
-	var req domain.UserChangePasswordRequest
+	var req userChangePasswordRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง"})
 		return
 	}
 
-	// เรียกใช้ตัวสกัด Token คลีนๆ ของเรา
 	userToken, ok := extractToken(c)
 	if !ok {
 		return
@@ -273,7 +281,7 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 
 // [POST] /api/v1/auth/send-otp - ส่งรหัส OTP เพื่อรีเซ็ตรหัสผ่าน (กรณีลืมรหัสผ่าน)
 func (h *UserHandler) SendOTP(c *gin.Context) {
-	var req domain.UserSendOTP
+	var req userSendOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบอีเมลไม่ถูกต้อง"})
 		return
@@ -285,7 +293,6 @@ func (h *UserHandler) SendOTP(c *gin.Context) {
 		return
 	}
 
-	// ถ้าไม่เจออีเมลนี้ในระบบ ให้ดีดกลับด้วย 404 Not Found ทันที ไม่ต้องส่ง OTP
 	if !exists {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "ไม่พบอีเมลนี้ในระบบสมัครสมาชิก โปรดตรวจสอบความถูกต้อง",
@@ -293,7 +300,6 @@ func (h *UserHandler) SendOTP(c *gin.Context) {
 		return
 	}
 
-	// ตรวจสอบแล้วส่ง OTP จริง
 	err = h.repo.SendOTP(c.Request.Context(), req.Email)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ขอรหัส OTP ไม่สำเร็จ: " + err.Error()})
@@ -308,14 +314,13 @@ func (h *UserHandler) SendOTP(c *gin.Context) {
 
 // [POST] /api/v1/auth/verify-otp - ตรวจสอบรหัส OTP
 func (h *UserHandler) VerifyResetOTP(c *gin.Context) {
-	var req domain.UserVerifyOTPResetRequest
+	var req userVerifyOTPResetRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง รหัส OTP ต้องเป็นตัวเลข 6 หลัก"})
 		return
 	}
 
-	// เรียกใช้เมธอดที่เราพิชิตตัวแปรอินเทอร์เฟซสำเร็จในรอบที่แล้ว
 	tokens, err := h.repo.VerifyOTP(c.Request.Context(), req.Email, req.OTPCode)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "การยืนยันรหัส OTP ล้มเหลว หรือรหัสหมดอายุ"})
@@ -332,7 +337,6 @@ func (h *UserHandler) VerifyResetOTP(c *gin.Context) {
 
 // [POST] /api/v1/auth/logout - ออกจากระบบ
 func (h *UserHandler) Logout(c *gin.Context) {
-	// เอา Token ออกไปล็อกเอาต์เหมือนกัน
 	userToken, ok := extractToken(c)
 	if !ok {
 		return
@@ -352,7 +356,7 @@ func (h *UserHandler) Logout(c *gin.Context) {
 
 // [GET] /api/v1/user/profile - ดึงข้อมูลโปรไฟล์ของผู้ใช้ที่ล็อกอินอยู่
 func (h *UserHandler) GetProfile(c *gin.Context) {
-	userID, ok := h.authenticatedUserID(c)
+	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
 		return
 	}
@@ -368,12 +372,12 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 
 // [PUT] /api/v1/user/profile - อัปเดตข้อมูลโปรไฟล์ (ชื่อ, ไบโอ, รูปภาพ)
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
-	userID, ok := h.authenticatedUserID(c)
+	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
 		return
 	}
 
-	var req domain.UpdateProfileRequest
+	var req updateProfileRequest
 	if strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
 		if err := c.ShouldBind(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลโปรไฟล์ไม่ถูกต้อง: " + err.Error()})
@@ -392,7 +396,13 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	profile, err := h.repo.UpdateProfile(c.Request.Context(), userID, req, profileImage)
+	domainReq := domain.UpdateProfileRequest{
+		DisplayName: req.DisplayName,
+		Username:    req.Username,
+		Bio:         req.Bio,
+	}
+
+	profile, err := h.repo.UpdateProfile(c.Request.Context(), userID, domainReq, profileImage)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถแก้ไขโปรไฟล์ได้: " + err.Error()})
 		return
@@ -407,12 +417,12 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 
 // [PUT] /api/v1/user/contact - อัปเดตเบอร์โทรศัพท์ติดต่อ
 func (h *UserHandler) UpdateContact(c *gin.Context) {
-	userID, ok := h.authenticatedUserID(c)
+	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
 		return
 	}
 
-	var req domain.UpdateContactRequest
+	var req updateContactRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเบอร์โทรศัพท์"})
 		return
@@ -438,12 +448,12 @@ func (h *UserHandler) UpdateContact(c *gin.Context) {
 
 // [POST] /api/v1/user/fcm-token - อัปเดต FCM Push Token
 func (h *UserHandler) UpdateFCMToken(c *gin.Context) {
-	userID, ok := h.authenticatedUserID(c)
+	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
 		return
 	}
 
-	var req domain.UpdateFCMTokenRequest
+	var req updateFCMTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุ fcm_token"})
 		return

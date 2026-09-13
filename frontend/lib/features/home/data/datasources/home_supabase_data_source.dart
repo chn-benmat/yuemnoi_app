@@ -209,8 +209,8 @@ class HomeSupabaseDataSource {
       final price = (item['price'] is num)
           ? (item['price'] as num).toInt()
           : int.tryParse(item['price']?.toString() ?? '0') ?? 0;
-      final type = item['type']?.toString();
-      final priceUnit = (type == 'รายชั่วโมง') ? '/ ชม.' : '/ วัน';
+      final type = item['type']?.toString().toLowerCase().trim();
+      final priceUnit = (type == 'รายชั่วโมง' || type == 'hourly' || type == 'hour') ? '/ ชม.' : '/ วัน';
 
       String imageUrl = '';
       if (item['item_image_url'] is List &&

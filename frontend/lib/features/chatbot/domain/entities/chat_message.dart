@@ -51,6 +51,8 @@ class ClarificationQuestion extends Equatable {
     this.step = 1,
     this.totalSteps = 2,
     this.selectedOption,
+    this.branchOptions,
+    this.branchTitles,
   });
 
   final String id;
@@ -59,6 +61,8 @@ class ClarificationQuestion extends Equatable {
   final int step;
   final int totalSteps;
   final String? selectedOption;
+  final Map<String, List<String>>? branchOptions;
+  final Map<String, String>? branchTitles;
 
   ClarificationQuestion copyWith({
     String? id,
@@ -67,6 +71,8 @@ class ClarificationQuestion extends Equatable {
     int? step,
     int? totalSteps,
     String? selectedOption,
+    Map<String, List<String>>? branchOptions,
+    Map<String, String>? branchTitles,
   }) {
     return ClarificationQuestion(
       id: id ?? this.id,
@@ -75,11 +81,39 @@ class ClarificationQuestion extends Equatable {
       step: step ?? this.step,
       totalSteps: totalSteps ?? this.totalSteps,
       selectedOption: selectedOption ?? this.selectedOption,
+      branchOptions: branchOptions ?? this.branchOptions,
+      branchTitles: branchTitles ?? this.branchTitles,
     );
   }
 
   @override
-  List<Object?> get props => [id, title, options, step, totalSteps, selectedOption];
+  List<Object?> get props => [
+    id,
+    title,
+    options,
+    step,
+    totalSteps,
+    selectedOption,
+    branchOptions,
+    branchTitles,
+  ];
+}
+
+class SearchSource extends Equatable {
+  const SearchSource({
+    required this.title,
+    required this.url,
+    required this.domain,
+    this.snippet,
+  });
+
+  final String title;
+  final String url;
+  final String domain;
+  final String? snippet;
+
+  @override
+  List<Object?> get props => [title, url, domain, snippet];
 }
 
 class ChatMessage extends Equatable {
@@ -93,9 +127,13 @@ class ChatMessage extends Equatable {
     this.questions = const [],
     this.responseDuration,
     this.isStreaming = false,
-    this.isLiked,
-    this.feedbackReason,
-    this.feedbackComment,
+    this.isVisibleInChat = true,
+    this.thought,
+    this.searchSources = const [],
+    this.searchQuery,
+    this.statusMessage,
+    this.activities = const [],
+    this.createdAt,
   });
 
   final String id;
@@ -107,9 +145,13 @@ class ChatMessage extends Equatable {
   final List<ClarificationQuestion> questions;
   final Duration? responseDuration;
   final bool isStreaming;
-  final bool? isLiked;
-  final String? feedbackReason;
-  final String? feedbackComment;
+  final bool isVisibleInChat;
+  final String? thought;
+  final List<SearchSource> searchSources;
+  final String? searchQuery;
+  final String? statusMessage;
+  final List<String> activities;
+  final DateTime? createdAt;
 
   ChatMessage copyWith({
     String? id,
@@ -121,9 +163,13 @@ class ChatMessage extends Equatable {
     List<ClarificationQuestion>? questions,
     Duration? responseDuration,
     bool? isStreaming,
-    bool? isLiked,
-    String? feedbackReason,
-    String? feedbackComment,
+    bool? isVisibleInChat,
+    String? thought,
+    List<SearchSource>? searchSources,
+    String? searchQuery,
+    String? statusMessage,
+    List<String>? activities,
+    DateTime? createdAt,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -135,9 +181,13 @@ class ChatMessage extends Equatable {
       questions: questions ?? this.questions,
       responseDuration: responseDuration ?? this.responseDuration,
       isStreaming: isStreaming ?? this.isStreaming,
-      isLiked: isLiked ?? this.isLiked,
-      feedbackReason: feedbackReason ?? this.feedbackReason,
-      feedbackComment: feedbackComment ?? this.feedbackComment,
+      isVisibleInChat: isVisibleInChat ?? this.isVisibleInChat,
+      thought: thought ?? this.thought,
+      searchSources: searchSources ?? this.searchSources,
+      searchQuery: searchQuery ?? this.searchQuery,
+      statusMessage: statusMessage ?? this.statusMessage,
+      activities: activities ?? this.activities,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
@@ -152,9 +202,13 @@ class ChatMessage extends Equatable {
     questions,
     responseDuration,
     isStreaming,
-    isLiked,
-    feedbackReason,
-    feedbackComment,
+    isVisibleInChat,
+    thought,
+    searchSources,
+    searchQuery,
+    statusMessage,
+    activities,
+    createdAt,
   ];
 }
 
@@ -198,17 +252,36 @@ class ChatDeltaEvent extends ChatStreamEvent {
 
 class ChatDoneEvent extends ChatStreamEvent {
   const ChatDoneEvent({
+    this.answer,
     this.suggestedReplies = const [],
     this.recommendedItems = const [],
     this.questions = const [],
+    this.thought,
+    this.searchSources = const [],
+    this.searchQuery,
+    this.activities = const [],
   });
 
+  final String? answer;
   final List<String> suggestedReplies;
   final List<RecommendedItem> recommendedItems;
   final List<ClarificationQuestion> questions;
+  final String? thought;
+  final List<SearchSource> searchSources;
+  final String? searchQuery;
+  final List<String> activities;
 
   @override
-  List<Object?> get props => [suggestedReplies, recommendedItems, questions];
+  List<Object?> get props => [
+    answer,
+    suggestedReplies,
+    recommendedItems,
+    questions,
+    thought,
+    searchSources,
+    searchQuery,
+    activities,
+  ];
 }
 
 class ChatResponse extends Equatable {
@@ -217,12 +290,18 @@ class ChatResponse extends Equatable {
     this.recommendedItems = const [],
     this.suggestedReplies = const [],
     this.questions = const [],
+    this.thought,
+    this.searchSources = const [],
+    this.searchQuery,
   });
 
   final String answer;
   final List<RecommendedItem> recommendedItems;
   final List<String> suggestedReplies;
   final List<ClarificationQuestion> questions;
+  final String? thought;
+  final List<SearchSource> searchSources;
+  final String? searchQuery;
 
   @override
   List<Object?> get props => [
@@ -230,5 +309,8 @@ class ChatResponse extends Equatable {
     recommendedItems,
     suggestedReplies,
     questions,
+    thought,
+    searchSources,
+    searchQuery,
   ];
 }

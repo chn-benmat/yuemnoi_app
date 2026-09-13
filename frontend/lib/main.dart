@@ -8,6 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
+import 'core/config/app_config.dart';
 import 'core/navigation/app_routes.dart';
 import 'core/network/auth_session.dart';
 import 'core/network/supabase_client.dart';
@@ -27,12 +28,14 @@ Future<void> main() async {
     await initializeDateFormatting('th', null);
   } catch (_) {}
 
-  await dotenv.load(fileName: '.env.local');
+  try {
+    await dotenv.load(fileName: '.env.local');
+  } catch (_) {}
 
   try {
     final prefs = await SharedPreferences.getInstance();
-    var apiUrl = dotenv.env['API_URL'];
-    if (apiUrl != null && apiUrl.isNotEmpty) {
+    var apiUrl = AppConfig.apiUrl;
+    if (apiUrl.isNotEmpty) {
       if (kIsWeb && apiUrl.contains('10.0.2.2')) {
         apiUrl = apiUrl.replaceAll('10.0.2.2', 'localhost');
       }
