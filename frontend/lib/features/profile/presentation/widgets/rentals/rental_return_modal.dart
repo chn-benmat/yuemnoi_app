@@ -170,34 +170,15 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                 ),
               ),
 
-              // หัวแถว + ปุ่มสลับบทบาท
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'ส่งคืนอุปกรณ์ & จบการเช่า',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 17.5,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E2022),
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.all(3),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildRoleChip(label: 'ผู้เช่า', isSelected: !_isOwner, onTap: () => setState(() => _isOwner = false)),
-                        _buildRoleChip(label: 'ผู้ปล่อยเช่า', isSelected: _isOwner, onTap: () => setState(() => _isOwner = true)),
-                      ],
-                    ),
-                  ),
-                ],
+              // หัวแถว
+              const Text(
+                'ส่งคืนอุปกรณ์ & จบการเช่า',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 17.5,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E2022),
+                ),
               ),
               const SizedBox(height: 10),
 
@@ -257,27 +238,6 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
     );
   }
 
-  Widget _buildRoleChip({required String label, required bool isSelected, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : const Color(0xFF64748B),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildStepIndicator({required int stepIndex, required String label}) {
     final isPassed = _currentStep > stepIndex;

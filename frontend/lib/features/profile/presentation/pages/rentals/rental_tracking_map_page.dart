@@ -13,9 +13,7 @@ import '../../../../../core/services/phone_call_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../booking/domain/entities/booking_request_model.dart';
 import '../../widgets/rentals/rental_handover_modal.dart';
-import '../../widgets/rentals/rental_return_modal.dart';
 
-/// หน้าจอแผนที่ติดตามสถานะและเส้นทางนัดรับอุปกรณ์ (สไตล์ Bolt / Grab / LINE MAN)
 class RentalTrackingMapPage extends StatefulWidget {
   final BookingRequestData? bookingData;
   final String? itemTitle;
@@ -30,6 +28,8 @@ class RentalTrackingMapPage extends StatefulWidget {
   final double? totalPrice;
   final String? conversationId;
   final String? statusCode;
+  final int? bookingId;
+  final bool? isOwner;
 
   const RentalTrackingMapPage({
     super.key,
@@ -46,6 +46,8 @@ class RentalTrackingMapPage extends StatefulWidget {
     this.totalPrice,
     this.conversationId,
     this.statusCode,
+    this.bookingId,
+    this.isOwner,
   });
 
   @override
@@ -62,9 +64,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   late LatLng _destinationLocation;
   DrivingRouteResult? _routeResult;
 
-  bool _isLoadingGps = true;
   bool _isLoadingRoute = true;
-  String? _routeErrorMessage;
   bool _isSimulatedLocation = false;
   LatLng? _rawDeviceGps;
   bool _forceUseRawDeviceGps = false;
@@ -81,6 +81,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   late String _resolvedPeriod;
   late double _resolvedPrice;
   late String _currentStatusCode;
+  late bool _isOwner;
 
   DateTime? get _startDate {
     return widget.bookingData?.startDate;
@@ -109,14 +110,16 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
             children: [
-              Icon(Icons.calendar_today_rounded, color: Color(0xFF2563EB)),
-              SizedBox(width: 8),
+              const Icon(Icons.calendar_today_rounded, color: Color(0xFF2563EB)),
+              const SizedBox(width: 8),
               Text(
-                'ยังไม่ถึงวันนัดเช่า',
-                style: TextStyle(
+                _isOwner ? 'ยังไม่ถึงวันนัดส่งมอบ' : 'ยังไม่ถึงวันนัดเช่า',
+                style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontWeight: FontWeight.bold,
                   fontSize: 17,
@@ -125,7 +128,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
             ],
           ),
           content: Text(
-            'วันนัดรับอุปกรณ์คือ ${_startDate != null ? DateFormat('d MMMM yyyy', 'th').format(_startDate!) : 'ตามที่ตกลง'}\n\nระบบจะเปิดให้ตรวจรับสินค้าและชำระเงินในวันนัดรับของจริง เพื่อความปลอดภัยของผู้เช่าและผู้ปล่อยเช่า',
+            'วันนัดรับอุปกรณ์คือ ${_startDate != null ? DateFormat('d MMMM yyyy', 'th').format(_startDate!) : 'ตามที่ตกลง'}\n\n${_isOwner ? 'ระบบจะเปิดให้ส่งมอบอุปกรณ์และตรวจสอบการชำระเงินในวันนัดรับของจริง เพื่อความปลอดภัยของผู้เช่าและผู้ปล่อยเช่า' : 'ระบบจะเปิดให้ตรวจรับสินค้าและชำระเงินในวันนัดรับของจริง เพื่อความปลอดภัยของผู้เช่าและผู้ปล่อยเช่า'}',
             style: const TextStyle(
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 13.5,
@@ -175,14 +178,17 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   void _showHandoverModal() {
     RentalHandoverModal.show(
       context,
-      bookingId: null,
+      bookingId: widget.bookingId,
+      conversationId:
+          widget.conversationId ?? widget.bookingData?.conversationId,
+      itemId: widget.bookingData?.item.id,
       itemTitle: _resolvedTitle,
       itemImageUrl: _resolvedImageUrl,
       ownerName: _resolvedOwnerName,
       renterName: 'ผู้เช่า',
       totalPrice: _resolvedPrice,
       paymentMethod: widget.bookingData?.paymentMethod ?? 'promptpay',
-      initialIsOwner: false,
+      initialIsOwner: _isOwner,
       onHandoverSuccess: (newStatus) {
         setState(() {
           _currentStatusCode = newStatus;
@@ -191,23 +197,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     );
   }
 
-  void _openReturnModal() {
-    RentalReturnModal.show(
-      context,
-      bookingId: null,
-      itemTitle: _resolvedTitle,
-      itemImageUrl: _resolvedImageUrl,
-      ownerName: _resolvedOwnerName,
-      renterName: 'ผู้เช่า',
-      depositAmount: 0.0,
-      initialIsOwner: false,
-      onReturnSuccess: (newStatus) {
-        setState(() {
-          _currentStatusCode = newStatus;
-        });
-      },
-    );
-  }
 
   @override
   void initState() {
@@ -240,18 +229,23 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     _resolvedImageUrl = b?.item.imageUrl ?? widget.itemImageUrl;
     _resolvedLocation = b?.location ?? widget.pickupLocation ?? 'สยามพารากอน';
     _resolvedLocationNote = b?.locationNote ?? widget.pickupNote;
-    _resolvedOwnerName = b?.item.ownerName ?? widget.ownerName ?? 'ผู้ปล่อยเช่า';
+    _resolvedOwnerName =
+        b?.item.ownerName ?? widget.ownerName ?? 'ผู้ปล่อยเช่า';
     _resolvedPeriod = b != null
         ? b.formattedPeriodSummary
         : (widget.periodText ?? '1 วัน');
     _resolvedPrice = b?.totalPrice ?? widget.totalPrice ?? 0.0;
     _currentStatusCode = widget.statusCode ?? 'confirmed';
+    _isOwner = widget.isOwner ?? false;
 
     // Resolve Destination Coordinates
     final destLat = b?.latitude ?? widget.destinationLat;
     final destLng = b?.longitude ?? widget.destinationLng;
 
-    if (destLat != null && destLng != null && destLat != 0.0 && destLng != 0.0) {
+    if (destLat != null &&
+        destLng != null &&
+        destLat != 0.0 &&
+        destLng != 0.0) {
       _destinationLocation = LatLng(destLat, destLng);
     } else {
       final fallback = LocationService.resolveCoordinates(
@@ -263,9 +257,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
 
   Future<void> _initLocationsAndRoute() async {
     setState(() {
-      _isLoadingGps = true;
       _isLoadingRoute = true;
-      _routeErrorMessage = null;
     });
 
     // 1. ดึงตำแหน่ง GPS ของตัวเรา
@@ -315,7 +307,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     setState(() {
       _userLocation = userPos;
       _isSimulatedLocation = isSimulated;
-      _isLoadingGps = false;
     });
 
     // 2. ดึงเส้นทางขับรถจาก OSRM
@@ -339,7 +330,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       if (!mounted) return;
       setState(() {
         _isLoadingRoute = false;
-        _routeErrorMessage = 'ไม่สามารถคำนวณเส้นทางได้ในขณะนี้';
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _fitBoundsToRoute();
@@ -414,7 +404,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
 
     // คำนวณเส้นทางใหม่เมื่อขยับเกิน 20 เมตร หรือเพิ่งเปลี่ยนจากจำลองมาเป็นพิกัดจริง
     final now = DateTime.now();
-    final shouldFetchRoute = movedMeters > 20.0 ||
+    final shouldFetchRoute =
+        movedMeters > 20.0 ||
         wasSimulated ||
         _lastRouteFetchTime == null ||
         now.difference(_lastRouteFetchTime!).inSeconds > 12;
@@ -436,13 +427,9 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       setState(() {
         _routeResult = route;
         _isLoadingRoute = false;
-        _routeErrorMessage = null;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _routeErrorMessage = 'ไม่สามารถคำนวณเส้นทางได้ในขณะนี้';
-      });
     }
   }
 
@@ -690,7 +677,10 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
               left: 16,
               right: 16,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B).withValues(alpha: 0.94),
                   borderRadius: BorderRadius.circular(16),
@@ -756,13 +746,18 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
               ),
             ),
 
-          if (_forceUseRawDeviceGps && !_isSimulatedLocation && _rawDeviceGps != null)
+          if (_forceUseRawDeviceGps &&
+              !_isSimulatedLocation &&
+              _rawDeviceGps != null)
             Positioned(
               top: MediaQuery.of(context).padding.top + 64,
               left: 16,
               right: 16,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFB45309).withValues(alpha: 0.94),
                   borderRadius: BorderRadius.circular(16),
@@ -916,7 +911,10 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: const Color(0xFF3B82F6).withValues(alpha: 0.25),
-                  border: Border.all(color: const Color(0xFF2563EB), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFF2563EB),
+                    width: 1.5,
+                  ),
                 ),
                 child: Center(
                   child: Container(
@@ -1160,7 +1158,10 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
               if (_isBeforeMeetupDate) ...[
                 Container(
                   margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(14),
@@ -1196,7 +1197,10 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+                  border: Border.all(
+                    color: const Color(0xFFE2E8F0),
+                    width: 0.8,
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -1209,12 +1213,13 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                             width: 52,
                             height: 52,
                             color: const Color(0xFFF1F5F9),
-                            child: _resolvedImageUrl != null &&
+                            child:
+                                _resolvedImageUrl != null &&
                                     _resolvedImageUrl!.isNotEmpty
                                 ? CachedNetworkImage(
                                     imageUrl: _resolvedImageUrl!,
                                     fit: BoxFit.cover,
-                                    errorWidget: (_, __, ___) => const Icon(
+                                    errorWidget: (_, _, _) => const Icon(
                                       Icons.camera_alt_outlined,
                                       color: Colors.grey,
                                       size: 24,
@@ -1352,9 +1357,9 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                       ),
                       onPressed: _callOwner,
                       icon: const Icon(Icons.phone_outlined, size: 18),
-                      label: const Text(
-                        'โทรหาเจ้าของ',
-                        style: TextStyle(
+                      label: Text(
+                        _isOwner ? 'โทรหาผู้เช่า' : 'โทรหาเจ้าของ',
+                        style: const TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -1363,38 +1368,58 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // ปุ่มชำระเงิน หรือ ส่งคืนอุปกรณ์
+                  // ปุ่มชำระเงิน หรือ ส่งมอบอุปกรณ์ หรือ สถานะกำลังเช่า
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _currentStatusCode == 'active'
                             ? const Color(0xFF10B981)
-                            : AppColors.primaryColor,
+                            : (_currentStatusCode == 'cancelled'
+                                  ? const Color(0xFF94A3B8)
+                                  : AppColors.primaryColor),
                         foregroundColor: Colors.white,
-                        elevation: 2,
-                        shadowColor: (_currentStatusCode == 'active'
-                                ? const Color(0xFF10B981)
-                                : AppColors.primaryColor)
-                            .withValues(alpha: 0.3),
+                        elevation: _currentStatusCode == 'active' ? 0 : 2,
+                        shadowColor:
+                            (_currentStatusCode == 'active'
+                                    ? Colors.transparent
+                                    : (_currentStatusCode == 'cancelled'
+                                          ? Colors.transparent
+                                          : AppColors.primaryColor))
+                                .withValues(alpha: 0.3),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       onPressed: _currentStatusCode == 'active'
-                          ? _openReturnModal
-                          : _openPaymentOrHandover,
+                          ? () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('กำลังอยู่ระหว่างการเช่าอุปกรณ์'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          : (_currentStatusCode == 'cancelled'
+                                ? null
+                                : _openPaymentOrHandover),
                       icon: Icon(
                         _currentStatusCode == 'active'
-                            ? Icons.assignment_return_rounded
-                            : Icons.payments_rounded,
+                            ? Icons.check_circle_rounded
+                            : (_currentStatusCode == 'cancelled'
+                                  ? Icons.cancel_outlined
+                                  : (_isOwner
+                                        ? Icons.inventory_2_rounded
+                                        : Icons.payments_rounded)),
                         size: 18,
                         color: Colors.white,
                       ),
                       label: Text(
                         _currentStatusCode == 'active'
-                            ? 'ส่งคืนอุปกรณ์'
-                            : 'ชำระเงิน',
+                            ? (_isOwner ? 'กำลังปล่อยเช่า' : 'กำลังเช่าอุปกรณ์')
+                            : (_currentStatusCode == 'cancelled'
+                                  ? 'ยกเลิกการเช่าแล้ว'
+                                  : (_isOwner ? 'ส่งมอบอุปกรณ์' : 'ชำระเงิน')),
                         style: const TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 13,

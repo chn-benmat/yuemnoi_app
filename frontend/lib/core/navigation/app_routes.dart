@@ -53,11 +53,13 @@ import '../../features/profile/presentation/pages/rentals/rental_history_screen.
 import '../../features/profile/presentation/pages/rentals/rental_income_screen.dart';
 import '../../features/profile/presentation/pages/rentals/rental_status_screen.dart';
 import '../../features/profile/presentation/pages/rentals/rental_tracking_map_page.dart';
+import '../../features/profile/presentation/pages/rentals/rental_payment_success_screen.dart';
 import '../../features/profile/presentation/pages/support/contact_screen.dart';
 import '../../features/profile/presentation/pages/support/faq_screen.dart';
 import '../../features/wallet/presentation/pages/wallet.dart';
 import '../../features/wallet/presentation/pages/wallet_payment_screen.dart';
 import '../../features/wallet/presentation/pages/wallet_success_screen.dart';
+import '../../features/review/presentation/pages/rental_review_screen.dart';
 
 abstract final class AppRoutes {
   static final GlobalKey<NavigatorState> navigatorKey =
@@ -96,6 +98,8 @@ abstract final class AppRoutes {
   static const wallet = '/wallet';
   static const walletPayment = '/wallet/payment';
   static const walletSuccess = '/wallet/success';
+  static const rentalPaymentSuccess = '/rentals/payment-success';
+  static const review = '/review';
 
   static GoRouter? _currentRouter;
   static GoRouter? get router => _currentRouter;
@@ -229,6 +233,7 @@ abstract final class AppRoutes {
                   totalPrice: (extra['totalPrice'] as num?)?.toDouble(),
                   conversationId: extra['conversationId'] as String?,
                   statusCode: extra['statusCode'] as String?,
+                  bookingId: (extra['bookingId'] as num?)?.toInt(),
                 ),
               );
             }
@@ -481,6 +486,18 @@ abstract final class AppRoutes {
             );
           },
         ),
+        GoRoute(
+          path: rentalPaymentSuccess,
+          pageBuilder: (context, state) => const MaterialPage<void>(
+            child: RentalPaymentSuccessScreen(),
+          ),
+        ),
+        GoRoute(
+          path: review,
+          pageBuilder: (context, state) => const MaterialPage<void>(
+            child: RentalReviewScreen(),
+          ),
+        ),
       ],
     );
   }
@@ -521,6 +538,10 @@ abstract final class AppRoutes {
 
   static Future<void> openChatbot(BuildContext context) {
     return context.push<void>(chatbot);
+  }
+
+  static Future<void> openReview(BuildContext context) {
+    return context.push<void>(review);
   }
 
   static Future<void> openChatDetail(
@@ -632,6 +653,7 @@ abstract final class AppRoutes {
     BuildContext context, {
     BookingRequestData? bookingData,
     Map<String, dynamic>? trackingArgs,
+    bool? isOwner,
   }) {
     final page = RentalTrackingMapPage(
       bookingData: bookingData ??
@@ -648,6 +670,8 @@ abstract final class AppRoutes {
       totalPrice: (trackingArgs?['totalPrice'] as num?)?.toDouble(),
       conversationId: trackingArgs?['conversationId'] as String?,
       statusCode: trackingArgs?['statusCode'] as String?,
+      bookingId: (trackingArgs?['bookingId'] as num?)?.toInt(),
+      isOwner: isOwner ?? (trackingArgs?['isOwner'] as bool?),
     );
 
     return Navigator.of(context).push<void>(
@@ -757,6 +781,15 @@ abstract final class AppRoutes {
     double amount = 0,
   }) {
     return context.push<void>(walletSuccess, extra: amount);
+  }
+
+  static Future<void> openRentalPaymentSuccess(BuildContext context) {
+    return Navigator.of(context, rootNavigator: true).push<void>(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: rentalPaymentSuccess),
+        builder: (_) => const RentalPaymentSuccessScreen(),
+      ),
+    );
   }
 
   static void pop<T extends Object?>(BuildContext context, [T? result]) {
