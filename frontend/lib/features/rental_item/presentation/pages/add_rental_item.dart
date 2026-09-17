@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/utils/auth_guard.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/utils/app_image_compressor.dart';
@@ -25,6 +27,23 @@ class AddRentalItemScreen extends StatefulWidget {
 }
 
 class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!AuthSession.isAuthenticated && mounted) {
+        AuthGuard.requireAuth(
+          context,
+          title: 'เข้าสู่ระบบเพื่อปล่อยเช่าอุปกรณ์',
+          message: 'กรุณาเข้าสู่ระบบก่อนลงประกาศปล่อยเช่าอุปกรณ์ของคุณ',
+        ).then((authed) {
+          if (!authed && mounted) {
+            AppRoutes.pop(context);
+          }
+        });
+      }
+    });
+  }
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -46,8 +65,9 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
     final remaining = RentalItemBloc.maxImages - currentCount;
     if (remaining <= 0) return;
 
-    final hasPermission =
-        await AppPermissionService.requestGalleryPermission(context);
+    final hasPermission = await AppPermissionService.requestGalleryPermission(
+      context,
+    );
     if (!hasPermission || !mounted) return;
 
     try {
@@ -155,77 +175,89 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
         },
         builder: (context, state) => Form(
           key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
+          child: Column(
             children: [
-              RentalItemImagePicker(
-                images: state.images,
-                maxImages: RentalItemBloc.maxImages,
-                errorText: _showImageValidationError
-                    ? _validateImages(state.images)
-                    : null,
-                onAdd: () => _pickImages(state.images.length),
-                onRemove: (index) => context.read<RentalItemBloc>().add(
-                  RentalItemImageRemoved(index),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
+                  children: [
+                    RentalItemImagePicker(
+                      images: state.images,
+                      maxImages: RentalItemBloc.maxImages,
+                      errorText: _showImageValidationError
+                          ? _validateImages(state.images)
+                          : null,
+                      onAdd: () => _pickImages(state.images.length),
+                      onRemove: (index) => context.read<RentalItemBloc>().add(
+                        RentalItemImageRemoved(index),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    AppTextFormField(
+                      fieldKey: const Key('rental-item-name'),
+                      label: 'ชื่ออุปกรณ์',
+                      hintText: "กรุณาระบุชื่ออุปกรณ์",
+                      controller: _nameController,
+                      validator: (value) =>
+                          _validateRequired(value, 'ชื่ออุปกรณ์'),
+                    ),
+                    const SizedBox(height: 12),
+                    RentalCategoryDropdownField(
+                      value: _category,
+                      onChanged: (value) => setState(() => _category = value),
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextFormField(
+                      fieldKey: const Key('rental-item-description'),
+                      label: 'คำอธิบาย',
+                      hintText: "กรุณาระบุคำอธิบาย",
+                      controller: _descriptionController,
+                      maxLines: 4,
+                      minLines: 4,
+                      validator: (value) =>
+                          _validateRequired(value, 'คำอธิบาย'),
+                    ),
+                    const SizedBox(height: 12),
+                    RentalTypeDropdownField(
+                      value: _rentalType,
+                      onChanged: (value) => setState(() => _rentalType = value),
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextFormField(
+                      fieldKey: const Key('rental-item-price'),
+                      label: 'ราคา',
+                      hintText: '0',
+                      controller: _priceController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      prefix: const Text(
+                        '฿',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.labelColor,
+                        ),
+                      ),
+                      validator: (value) {
+                        final price = int.tryParse(value?.trim() ?? '');
+                        return price == null || price <= 0
+                            ? 'กรุณาระบุราคาที่มากกว่า 0'
+                            : null;
+                      },
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 22),
-              AppTextFormField(
-                fieldKey: const Key('rental-item-name'),
-                label: 'ชื่ออุปกรณ์',
-                hintText: "กรุณาระบุชื่ออุปกรณ์",
-                controller: _nameController,
-                validator: (value) => _validateRequired(value, 'ชื่ออุปกรณ์'),
-              ),
-              const SizedBox(height: 12),
-              RentalCategoryDropdownField(
-                value: _category,
-                onChanged: (value) => setState(() => _category = value),
-              ),
-              const SizedBox(height: 12),
-              AppTextFormField(
-                fieldKey: const Key('rental-item-description'),
-                label: 'คำอธิบาย',
-                hintText: "กรุณาระบุคำอธิบาย",
-                controller: _descriptionController,
-                maxLines: 4,
-                minLines: 4,
-                validator: (value) => _validateRequired(value, 'คำอธิบาย'),
-              ),
-              const SizedBox(height: 12),
-              RentalTypeDropdownField(
-                value: _rentalType,
-                onChanged: (value) => setState(() => _rentalType = value),
-              ),
-              const SizedBox(height: 12),
-              AppTextFormField(
-                fieldKey: const Key('rental-item-price'),
-                label: 'ราคา',
-                hintText: '0',
-                controller: _priceController,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                prefix: const Text(
-                  '฿',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.labelColor,
-                  ),
+              SafeArea(
+                top: false,
+                minimum: const EdgeInsets.fromLTRB(28, 12, 28, 16),
+                child: AppPrimaryButton(
+                  key: const Key('add-rental-submit'),
+                  text: 'เพิ่ม',
+                  isLoading:
+                      state.status == RentalItemSubmissionStatus.submitting,
+                  onPressed: () => _submit(state),
                 ),
-                validator: (value) {
-                  final price = int.tryParse(value?.trim() ?? '');
-                  return price == null || price <= 0
-                      ? 'กรุณาระบุราคาที่มากกว่า 0'
-                      : null;
-                },
-              ),
-              const SizedBox(height: 48),
-              AppPrimaryButton(
-                text: 'เพิ่ม',
-                isLoading:
-                    state.status == RentalItemSubmissionStatus.submitting,
-                onPressed: () => _submit(state),
               ),
             ],
           ),

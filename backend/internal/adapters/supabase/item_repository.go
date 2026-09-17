@@ -113,12 +113,30 @@ func (r *supabaseItemRepository) rollbackCreatedItem(item *domain.Item, paths []
 	_ = r.Delete(context.Background(), item.ID, item.UserID)
 }
 
-// FindAll ดึงข้อมูลอุปกรณ์เช่าทั้งหมดจากตาราง item_tb พร้อมข้อมูลเจ้าของ
-func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.Item, error) {
-	var items []domain.Item
+// FindAll ดึงฟีดอุปกรณ์ที่จัดอันดับแล้ว พร้อมข้อมูลเจ้าของ
+func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedItem, error) {
+	var items []domain.RankedItem
 
-	// ดึงข้อมูล ระบุตาราง "item_tb"
-	err := r.client.DB.From("item_tb").Select("*").ExecuteWithContext(ctx, &items)
+	// อ่านจาก view ที่คำนวณคะแนนฟีดและลำดับไว้แล้ว โดยไม่ส่งคะแนนภายในออก API
+	err := r.client.DB.From("home_feed_ranked_v").
+		Select(
+			"id",
+			"user_id",
+			"item_name",
+			"item_image_url",
+			"description",
+			"category",
+			"price",
+			"status",
+			"type",
+			"created_at",
+			"updated_at",
+			"rating",
+			"review_count",
+			"paid_booking_count",
+		).
+		OrderBy("rank_position", "asc").
+		ExecuteWithContext(ctx, &items)
 	if err != nil {
 		return nil, fmt.Errorf("supabase find all failed: %w", err)
 	}
@@ -249,6 +267,22 @@ func (r *supabaseItemRepository) Delete(ctx context.Context, id int64, userID st
 			return domain.ErrItemInUse
 		}
 		return fmt.Errorf("supabase delete failed: %w", err)
+	}
+
+	// ลบไฟล์รูปภาพใน Storage (item_bk) หลังจากลบข้อมูลในฐานข้อมูลสำเร็จ
+	if len(ownedItems[0].ItemImageURL) > 0 {
+		var pathsToDelete []string
+		for _, rawURL := range ownedItems[0].ItemImageURL {
+			if idx := strings.Index(rawURL, "/item_bk/"); idx != -1 {
+				pathsToDelete = append(pathsToDelete, rawURL[idx+len("/item_bk/"):])
+			}
+		}
+		if len(pathsToDelete) > 0 {
+			func() {
+				defer func() { _ = recover() }()
+				r.client.Storage.From(itemBucket).Remove(pathsToDelete)
+			}()
+		}
 	}
 
 	return nil

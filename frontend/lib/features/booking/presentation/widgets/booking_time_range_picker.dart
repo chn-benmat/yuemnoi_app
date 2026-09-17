@@ -18,6 +18,7 @@ class BookingTimeRangePicker extends StatelessWidget {
     this.onTimesChanged,
     this.isEditable = true,
     this.sectionTitle,
+    this.showDateError = false,
   });
 
   final BookingRentalType rentalType;
@@ -29,6 +30,7 @@ class BookingTimeRangePicker extends StatelessWidget {
   final void Function(TimeOfDay start, TimeOfDay end)? onTimesChanged;
   final bool isEditable;
   final String? sectionTitle;
+  final bool showDateError;
 
   Future<void> _pickStartDate(BuildContext context) async {
     if (!isEditable || onDatesChanged == null) return;
@@ -110,6 +112,41 @@ class BookingTimeRangePicker extends StatelessWidget {
     }
   }
 
+  Future<void> _pickHourlyDate(BuildContext context) async {
+    if (!isEditable || onDatesChanged == null) return;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initial = startDate.isBefore(today) ? today : startDate;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
+      helpText: 'เลือกวันนัดรับของ',
+      cancelText: 'ยกเลิก',
+      confirmText: 'ตกลง',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primaryColor,
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF1E2022),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final pickedDate = DateTime(picked.year, picked.month, picked.day);
+      onDatesChanged!(pickedDate, pickedDate);
+    }
+  }
+
   Future<TimeOfDay?> _showWheelTimePicker({
     required BuildContext context,
     required TimeOfDay initialTime,
@@ -178,7 +215,9 @@ class BookingTimeRangePicker extends StatelessWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.primaryColor.withValues(alpha: 0.1),
+                              color: AppColors.primaryColor.withValues(
+                                alpha: 0.1,
+                              ),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Text(
@@ -293,7 +332,8 @@ class BookingTimeRangePicker extends StatelessWidget {
   Future<void> _pickEndTime(BuildContext context) async {
     if (!isEditable || onTimesChanged == null) return;
 
-    final initialTime = (endTime.hour * 60 + endTime.minute <=
+    final initialTime =
+        (endTime.hour * 60 + endTime.minute <=
             startTime.hour * 60 + startTime.minute)
         ? TimeOfDay(
             hour: (startTime.hour + 2) <= 23 ? startTime.hour + 2 : 23,
@@ -357,16 +397,41 @@ class BookingTimeRangePicker extends StatelessWidget {
           ),
           const SizedBox(height: 8),
         ],
+        if (isHourly) ...[
+          // วันนัดรับของ สำหรับการเช่าต่อชั่วโมง
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'วันนัดรับของ',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF595C5D),
+                ),
+              ),
+              const SizedBox(height: 6),
+              _PillButton(
+                icon: Icons.calendar_month_rounded,
+                label: _formatDate(startDate),
+                onTap: isEditable ? () => _pickHourlyDate(context) : null,
+                showError: showDateError,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
         Row(
           children: [
-            // ฝั่งเริ่ม
+            // ฝั่งเริ่มเช่า
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'เริ่ม',
-                    style: TextStyle(
+                  Text(
+                    isHourly ? 'เวลาเริ่มเช่า' : 'วันที่เริ่มเช่า',
+                    style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -378,12 +443,15 @@ class BookingTimeRangePicker extends StatelessWidget {
                     icon: isHourly
                         ? Icons.access_time_filled_rounded
                         : Icons.calendar_month_rounded,
-                    label: isHourly ? _formatTime(startTime) : _formatDate(startDate),
+                    label: isHourly
+                        ? _formatTime(startTime)
+                        : _formatDate(startDate),
                     onTap: isEditable
                         ? () => isHourly
-                            ? _pickStartTime(context)
-                            : _pickStartDate(context)
+                              ? _pickStartTime(context)
+                              : _pickStartDate(context)
                         : null,
+                    showError: !isHourly && showDateError,
                   ),
                 ],
               ),
@@ -400,14 +468,14 @@ class BookingTimeRangePicker extends StatelessWidget {
                 ),
               ),
             ),
-            // ฝั่งสิ้นสุด
+            // ฝั่งคืนของ
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'สิ้นสุด',
-                    style: TextStyle(
+                  Text(
+                    isHourly ? 'เวลาคืนของ' : 'วันที่คืนของ',
+                    style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -419,18 +487,34 @@ class BookingTimeRangePicker extends StatelessWidget {
                     icon: isHourly
                         ? Icons.access_time_filled_rounded
                         : Icons.calendar_month_rounded,
-                    label: isHourly ? _formatTime(endTime) : _formatDate(endDate),
+                    label: isHourly
+                        ? _formatTime(endTime)
+                        : _formatDate(endDate),
                     onTap: isEditable
                         ? () => isHourly
-                            ? _pickEndTime(context)
-                            : _pickEndDate(context)
+                              ? _pickEndTime(context)
+                              : _pickEndDate(context)
                         : null,
+                    showError: !isHourly && showDateError,
                   ),
                 ],
               ),
             ),
           ],
         ),
+        if (showDateError) ...[
+          const SizedBox(height: 6),
+          Text(
+            isHourly
+                ? 'กรุณาเลือกวันที่เช่า'
+                : 'กรุณาเลือกวันเริ่มและวันที่คืนของ',
+            style: const TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 12,
+              color: Color(0xFFDC2626),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -441,11 +525,13 @@ class _PillButton extends StatelessWidget {
     required this.icon,
     required this.label,
     this.onTap,
+    this.showError = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
+  final bool showError;
 
   @override
   Widget build(BuildContext context) {
@@ -460,6 +546,10 @@ class _PillButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: showError ? const Color(0xFFDC2626) : Colors.transparent,
+              width: 1.5,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.03),
@@ -471,11 +561,7 @@ class _PillButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                color: AppColors.primaryColor,
-                size: 22,
-              ),
+              Icon(icon, color: AppColors.primaryColor, size: 22),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(

@@ -13,6 +13,13 @@ class SendChatMessageUseCase {
     return repository.sendMessage(query: query, history: history);
   }
 
+  Stream<ChatStreamEvent> executeStream({
+    required String query,
+    required List<ChatMessage> history,
+  }) {
+    return repository.sendMessageStream(query: query, history: history);
+  }
+
   void close() {
     repository.close();
   }

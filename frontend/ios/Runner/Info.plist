@@ -43,6 +43,8 @@
 	<string>ใช้สำหรับเลือกรูปภาพเพื่อส่งในห้องแชท โปรไฟล์ หรือลงประกาศสินค้า</string>
 	<key>NSCameraUsageDescription</key>
 	<string>ใช้สำหรับถ่ายรูปภาพเพื่อส่งในห้องแชท หรือลงประกาศสินค้า</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>ใช้สำหรับระบุและปักหมุดจุดนัดพบในการรับอุปกรณ์เช่า</string>
 
 	<key>UIApplicationSceneManifest</key>
 	<dict>

@@ -15,5 +15,10 @@ abstract interface class ChatbotRepository {
     required List<ChatMessage> history,
   });
 
+  Stream<ChatStreamEvent> sendMessageStream({
+    required String query,
+    required List<ChatMessage> history,
+  });
+
   void close();
 }

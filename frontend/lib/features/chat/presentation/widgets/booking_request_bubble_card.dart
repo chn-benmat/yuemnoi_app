@@ -4,12 +4,15 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/network/supabase_client.dart';
+import '../../../../core/services/booking_confirmation_tracker.dart';
+import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../../item_detail/presentation/widgets/full_screen_image_viewer.dart';
 import '../../domain/entities/chat_message.dart';
 
-class BookingRequestBubbleCard extends StatelessWidget {
+class BookingRequestBubbleCard extends StatefulWidget {
   const BookingRequestBubbleCard({
     super.key,
     required this.message,
@@ -25,16 +28,133 @@ class BookingRequestBubbleCard extends StatelessWidget {
   final bool? isOwner;
   final VoidCallback? onTap;
 
-  bool _checkIsOwner() {
-    if (isOwner != null) return isOwner!;
-    return message.isMine;
+  @override
+  State<BookingRequestBubbleCard> createState() =>
+      _BookingRequestBubbleCardState();
+}
+
+class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
+  bool _isConfirmed = false;
+  int? _bookingId;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkConfirmedStatus();
   }
 
-  void _handleAction(BuildContext context, bool isOwner) {
-    final attachedData = bookingData.copyWith(
-      originalMessageId: message.id,
-      conversationId: bookingData.conversationId ?? message.conversationId,
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _checkConfirmedStatus();
+  }
+
+  @override
+  void didUpdateWidget(covariant BookingRequestBubbleCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _checkConfirmedStatus();
+  }
+
+  Future<void> _checkConfirmedStatus() async {
+    // 1. ตรวจสอบสถานะการยืนยันจาก Local Tracker ทันที (เฉพาะ messageId)
+    final isLocallyConfirmed = await BookingConfirmationTracker.isConfirmed(
+      messageId: widget.message.id,
     );
+    final cachedBookingId = await BookingConfirmationTracker.getBookingId(
+      messageId: widget.message.id,
+    );
+    if (isLocallyConfirmed) {
+      if (mounted) {
+        setState(() {
+          _isConfirmed = true;
+          if (cachedBookingId != null && cachedBookingId > 0) {
+            _bookingId = cachedBookingId;
+          }
+        });
+      }
+    }
+
+    // 2. ตรวจสอบสถานะจาก Supabase booking_tb
+    try {
+      if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized) return;
+      final client = SupabaseConfig.client;
+      final currentUserId = client.auth.currentUser?.id;
+      if (currentUserId == null) return;
+
+      final itemId = widget.bookingData.item.id;
+      final msgCreatedAt = widget.message.createdAt;
+      final minCreatedAt = msgCreatedAt
+          .subtract(const Duration(minutes: 10))
+          .toUtc()
+          .toIso8601String();
+
+      final isOwner = _checkIsOwner();
+      var query = client
+          .from('booking_tb')
+          .select('id, status, created_at')
+          .eq('item_id', itemId)
+          .gte('created_at', minCreatedAt)
+          .inFilter('status', ['pending', 'confirmed', 'active', 'completed']);
+
+      if (!isOwner) {
+        query = query.eq('user_id', currentUserId);
+      }
+
+      final res = await query.limit(1);
+
+      if (mounted) {
+        if (res.isNotEmpty) {
+          final foundBookingId = (res.first['id'] as num?)?.toInt();
+          setState(() {
+            _isConfirmed = true;
+            if (foundBookingId != null && foundBookingId > 0) {
+              _bookingId = foundBookingId;
+            }
+          });
+          await BookingConfirmationTracker.markConfirmed(
+            messageId: widget.message.id,
+            bookingId: foundBookingId,
+          );
+        } else if (!isLocallyConfirmed) {
+          setState(() {
+            _isConfirmed = false;
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted && !isLocallyConfirmed) {
+        setState(() {
+          _isConfirmed = false;
+        });
+      }
+    }
+  }
+
+  bool _checkIsOwner() {
+    if (widget.isOwner != null) return widget.isOwner!;
+    return widget.message.isMine;
+  }
+
+  Future<void> _handleAction(BuildContext context, bool isOwner) async {
+    final attachedData = widget.bookingData.copyWith(
+      originalMessageId: widget.message.id,
+      conversationId:
+          widget.bookingData.conversationId ?? widget.message.conversationId,
+    );
+
+    // เมื่อกดยืนยันแล้ว (ทั้งฝั่งผู้เช่าและปล่อยเช่า) กด "รายละเอียดนัดรับ" จะเป็นการเปิดดูเส้นทางนัดรับบนแผนที่โดยตรง
+    if (_isConfirmed) {
+      AppRoutes.openRentalTrackingMap(
+        context,
+        bookingData: attachedData,
+        isOwner: isOwner,
+        trackingArgs: {
+          'bookingId': _bookingId,
+          'conversationId': attachedData.conversationId,
+        },
+      );
+      return;
+    }
 
     if (isOwner) {
       AppRoutes.openBooking(
@@ -42,11 +162,24 @@ class BookingRequestBubbleCard extends StatelessWidget {
         initialData: attachedData,
         isEditMode: true,
       );
+      return;
+    }
+
+    final confirmed = await AppRoutes.openBookingConfirmation(
+      context,
+      bookingData: attachedData,
+    );
+    if (confirmed == true ||
+        await BookingConfirmationTracker.isConfirmed(
+          messageId: widget.message.id,
+        )) {
+      if (mounted) {
+        setState(() {
+          _isConfirmed = true;
+        });
+      }
     } else {
-      AppRoutes.openBookingConfirmation(
-        context,
-        bookingData: attachedData,
-      );
+      _checkConfirmedStatus();
     }
   }
 
@@ -57,16 +190,17 @@ class BookingRequestBubbleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMine = message.isMine;
-    final item = bookingData.item;
+    final isMine = widget.message.isMine;
+    final item = widget.bookingData.item;
     final displayImageUrl =
-        (message.imageUrl != null && message.imageUrl!.isNotEmpty)
-            ? message.imageUrl!
-            : item.imageUrl;
+        (widget.message.imageUrl != null && widget.message.imageUrl!.isNotEmpty)
+        ? widget.message.imageUrl!
+        : item.imageUrl;
     final isOwnerUser = _checkIsOwner();
 
-    final senderText = (senderName != null && senderName!.isNotEmpty)
-        ? senderName!
+    final senderText =
+        (widget.senderName != null && widget.senderName!.isNotEmpty)
+        ? widget.senderName!
         : (item.ownerName.isNotEmpty ? item.ownerName : 'ผู้เช่า');
 
     return Container(
@@ -75,10 +209,7 @@ class BookingRequestBubbleCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -199,7 +330,9 @@ class BookingRequestBubbleCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isMine ? 'คุณส่งรายละเอียด' : '$senderTextส่งรายละเอียด',
+                    isMine
+                        ? 'คุณส่งรายละเอียด'
+                        : '$senderTextส่งรายละเอียด',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13.5,
@@ -231,10 +364,7 @@ class BookingRequestBubbleCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFE2E8F0),
-                  width: 0.8,
-                ),
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
               ),
               child: Column(
                 children: [
@@ -243,7 +373,7 @@ class BookingRequestBubbleCard extends StatelessWidget {
                     icon: Icons.access_time_filled_rounded,
                     iconColor: const Color(0xFF8B5CF6),
                     label: 'เวลาเช่า',
-                    value: bookingData.formattedPeriodSummary,
+                    value: widget.bookingData.formattedPeriodSummary,
                   ),
                   const SizedBox(height: 6),
 
@@ -252,7 +382,18 @@ class BookingRequestBubbleCard extends StatelessWidget {
                     icon: Icons.location_on_rounded,
                     iconColor: const Color(0xFFEF4444),
                     label: 'จุดนัดพบ',
-                    value: bookingData.location,
+                    value: widget.bookingData.location,
+                    onTap: () {
+                      final coordinates = LocationService.resolveCoordinates(
+                        locationName: widget.bookingData.location,
+                        latitude: widget.bookingData.latitude,
+                        longitude: widget.bookingData.longitude,
+                      );
+                      LocationService.openInExternalMaps(
+                        coordinates.latitude,
+                        coordinates.longitude,
+                      );
+                    },
                   ),
                   const SizedBox(height: 6),
 
@@ -261,8 +402,21 @@ class BookingRequestBubbleCard extends StatelessWidget {
                     icon: Icons.payments_rounded,
                     iconColor: const Color(0xFF10B981),
                     label: 'ยอดรวม',
-                    value: _formatPrice(bookingData.totalPrice),
+                    value: _formatPrice(widget.bookingData.totalPrice),
                     isPrice: true,
+                  ),
+                  const SizedBox(height: 6),
+
+                  // แถววิธีชำระเงิน
+                  _buildMiniInfoRow(
+                    icon: widget.bookingData.paymentMethod == 'promptpay'
+                        ? Icons.qr_code_2_rounded
+                        : Icons.account_balance_wallet_outlined,
+                    iconColor: const Color(0xFF3B82F6),
+                    label: 'การชำระเงิน',
+                    value: widget.bookingData.paymentMethod == 'promptpay'
+                        ? 'พร้อมเพย์ (ชำระเมื่อรับของ)'
+                        : 'เงินสด (ชำระเมื่อรับของ)',
                   ),
                 ],
               ),
@@ -270,34 +424,108 @@ class BookingRequestBubbleCard extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // 4. ปุ่ม Action Minimal (แก้ไขรายละเอียดการเช่า / ตรวจสอบ)
-            SizedBox(
-              width: double.infinity,
-              height: 40,
-              child: ElevatedButton(
-                key: const ValueKey('chat-booking-action-button'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE5E7EB),
-                  foregroundColor: const Color(0xFF1E2022),
-                  elevation: 0,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+            // 4. ปุ่ม Action (เมื่อกดยืนยันแล้ว แสดงปุ่ม "รายละเอียดนัดรับ" ทั้งฝั่งผู้เช่าและปล่อยเช่า)
+            if (_isConfirmed)
+              SizedBox(
+                width: double.infinity,
+                height: 40,
+                child: ElevatedButton.icon(
+                  key: const ValueKey('chat-booking-action-button'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    shadowColor:
+                        AppColors.primaryColor.withValues(alpha: 0.3),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  onPressed: () => _handleAction(context, isOwnerUser),
+                  icon: const Icon(
+                    Icons.event_available_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                  label: const Text(
+                    'รายละเอียดนัดรับ',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
-                onPressed: () => _handleAction(context, isOwnerUser),
-                child: Text(
-                  isOwnerUser ? 'แก้ไขรายละเอียดการเช่า' : 'ตรวจสอบ',
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1E2022),
+              )
+            else if (isOwnerUser)
+              SizedBox(
+                width: double.infinity,
+                height: 36,
+                child: OutlinedButton(
+                  key: const ValueKey('chat-booking-action-button'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primaryColor,
+                    side: const BorderSide(
+                      color: Color(0xFFD8B4FE),
+                      width: 1,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  onPressed: () => _handleAction(context, true),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.edit_outlined,
+                        size: 16,
+                        color: AppColors.primaryColor,
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        'แก้ไข',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                height: 40,
+                child: ElevatedButton(
+                  key: const ValueKey('chat-booking-action-button'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE5E7EB),
+                    foregroundColor: const Color(0xFF1E2022),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  onPressed: () => _handleAction(context, false),
+                  child: const Text(
+                    'ตรวจสอบ',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E2022),
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -310,8 +538,9 @@ class BookingRequestBubbleCard extends StatelessWidget {
     required String label,
     required String value,
     bool isPrice = false,
+    VoidCallback? onTap,
   }) {
-    return Row(
+    final row = Row(
       children: [
         Icon(icon, size: 14, color: iconColor),
         const SizedBox(width: 5),
@@ -339,7 +568,28 @@ class BookingRequestBubbleCard extends StatelessWidget {
             ),
           ),
         ),
+        if (onTap != null) ...[
+          const SizedBox(width: 4),
+          const Icon(
+            Icons.open_in_new_rounded,
+            size: 11,
+            color: AppColors.primaryColor,
+          ),
+        ],
       ],
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 1),
+          child: row,
+        ),
+      );
+    }
+
+    return row;
   }
 }

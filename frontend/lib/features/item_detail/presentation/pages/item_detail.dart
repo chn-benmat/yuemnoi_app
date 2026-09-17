@@ -6,16 +6,19 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/colors.dart';
-import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/utils/auth_guard.dart';
 import '../../../../core/navigation/item_deep_link.dart';
 import '../../../../core/widgets/app_primary_button.dart';
+import '../../../../core/widgets/skeleton_shimmer.dart';
+import '../../../chat/data/datasources/chat_remote_data_source.dart';
+import '../../../chat/data/repositories/chat_repository_impl.dart';
+import '../../../chat/domain/entities/item_inquiry_data.dart';
 import '../../../../core/utils/phone_formatter.dart';
 import '../../../../core/services/favorite_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../chat/data/repositories/chat_repository_impl.dart';
-import '../../../profile/presentation/pages/user_profile_view_screen.dart';
+import '../../../profile/presentation/pages/profile/user_profile_view_screen.dart';
 import '../../domain/entities/item_detail.dart';
 import '../bloc/item_detail_bloc.dart';
 import '../bloc/item_detail_event.dart';
@@ -110,39 +113,12 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _openChat(ItemDetail item) async {
-    if (!AuthSession.isAuthenticated) {
-      final shouldLogin = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'เข้าสู่ระบบเพื่อใช้งานแชท',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          content: const Text(
-            'กรุณาเข้าสู่ระบบก่อนเริ่มการสนทนากับผู้ปล่อยเช่าอุปกรณ์',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-              ),
-              child: const Text('เข้าสู่ระบบ'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldLogin == true && mounted) {
-        AppRoutes.goToLogin(context);
-      }
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อใช้งานแชท',
+      message: 'กรุณาเข้าสู่ระบบก่อนเริ่มการสนทนากับผู้ปล่อยเช่าอุปกรณ์',
+    );
+    if (!authed || !mounted) {
       return;
     }
 
@@ -160,6 +136,27 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         itemId: item.id,
         ownerId: item.owner.userId,
       );
+
+      final firstImageUrl = item.imageUrls.isNotEmpty
+          ? item.imageUrls.first
+          : '';
+      final inquiryData = ItemInquiryData(
+        itemId: item.id,
+        itemName: item.name,
+        price: item.price.toDouble(),
+        unitLabel: item.unitLabel,
+        imageUrl: firstImageUrl,
+      );
+
+      // ส่งข้อความแสดงความสนใจเช่าอุปกรณ์เข้าแชทโดยอัตโนมัติเมื่อกดแชทจากหน้ารายละเอียดอุปกรณ์
+      final chatDataSource = ChatRemoteDataSource();
+      try {
+        await chatDataSource.sendMessage(
+          conversationId: conversation.id,
+          message: inquiryData.toChatMessagePayload(),
+          imageUrl: firstImageUrl.isNotEmpty ? firstImageUrl : null,
+        );
+      } catch (_) {}
 
       if (mounted) {
         setState(() => _isChatLoading = false);
@@ -395,9 +392,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     if (item == null &&
         (state.status == ItemDetailStatus.loading ||
             state.status == ItemDetailStatus.initial)) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryColor),
-      );
+      return const _ItemDetailLoadingView();
     }
     if (item == null) {
       return _LoadError(
@@ -426,6 +421,108 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   offset: const Offset(0, -32),
                   child: _DetailContent(item: item),
                 ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemDetailLoadingView extends StatelessWidget {
+  const _ItemDetailLoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    final galleryHeight = MediaQuery.sizeOf(context).width.clamp(360.0, 420.0);
+
+    return SkeletonShimmer(
+      key: const ValueKey('item-detail-skeleton'),
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          children: [
+            SkeletonBox(height: galleryHeight, borderRadius: 0),
+            Transform.translate(
+              offset: const Offset(0, -32),
+              child: Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(minHeight: 600),
+                padding: const EdgeInsets.fromLTRB(24, 38, 24, 32),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkeletonBox(width: 240, height: 24, borderRadius: 12),
+                    SizedBox(height: 12),
+                    SkeletonBox(width: 150, height: 16, borderRadius: 8),
+                    SizedBox(height: 22),
+                    SkeletonBox(width: 130, height: 30, borderRadius: 15),
+                    SizedBox(height: 42),
+                    _OwnerCardSkeleton(),
+                    SizedBox(height: 40),
+                    SkeletonBox(width: 86, height: 15, borderRadius: 8),
+                    SizedBox(height: 16),
+                    SkeletonBox(
+                      width: double.infinity,
+                      height: 14,
+                      borderRadius: 7,
+                    ),
+                    SizedBox(height: 10),
+                    SkeletonBox(
+                      width: double.infinity,
+                      height: 14,
+                      borderRadius: 7,
+                    ),
+                    SizedBox(height: 10),
+                    SkeletonBox(width: 210, height: 14, borderRadius: 7),
+                    SizedBox(height: 40),
+                    SkeletonBox(width: 92, height: 15, borderRadius: 8),
+                    SizedBox(height: 18),
+                    SkeletonBox(
+                      width: double.infinity,
+                      height: 104,
+                      borderRadius: 28,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OwnerCardSkeleton extends StatelessWidget {
+  const _OwnerCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 96,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE3E5E8),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: const Row(
+        children: [
+          SkeletonBox(height: 64, width: 64, shape: BoxShape.circle),
+          SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SkeletonBox(width: 150, height: 16, borderRadius: 8),
+                SizedBox(height: 9),
+                SkeletonBox(width: 82, height: 12, borderRadius: 6),
               ],
             ),
           ),
@@ -595,10 +692,8 @@ class _ImageGalleryState extends State<_ImageGallery> {
                       child: CachedNetworkImage(
                         imageUrl: urls[index],
                         fit: BoxFit.contain,
-                        placeholder: (context, url) => const Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.primaryColor,
-                          ),
+                        placeholder: (context, url) => const SkeletonShimmer(
+                          child: ColoredBox(color: Color(0xFFE3E5E8)),
                         ),
                         errorWidget: (context, url, error) => const Center(
                           child: Icon(
@@ -778,7 +873,7 @@ class _OwnerCard extends StatelessWidget {
             userId: owner.userId,
             displayName: owner.displayName,
             avatarUrl: owner.imageUrl,
-            rating: item.averageRating > 0 ? item.averageRating : 4.9,
+            rating: item.averageRating,
             isVerified: true,
             bio: 'สนใจกล้องตัวไหนโปรดติดต่อฉัน',
           ),

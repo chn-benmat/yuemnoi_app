@@ -1,22 +1,39 @@
+# Secrets & Credentials (CRITICAL)
 .env
-.env.local
+.env.*
+!.env.example
+service-account.json
+firebase-adminsdk*.json
+credentials.json
 *.pem
 *.key
+*.crt
+scripts/*
 
+# Compiled Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main
+server
+bin/
+dist/
+
+# Air Live Reload & Logs
 tmp/
+*.log
 build-errors.log
 
-*.exe
-bin/
-main
+# Go Testing & Coverage
+coverage.out
+coverage.html
+*.prof
+*.test
 
+# IDE & OS
+.idea/
+.vscode/
 .DS_Store
 Thumbs.db
-
-tests/
-!tests/
-tests/*
-!tests/payment_handler_test.go
-test/
-.serena/
-service-account.json

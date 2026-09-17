@@ -5,6 +5,7 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../chat/data/datasources/chat_remote_data_source.dart';
 import '../../domain/entities/booking_request_model.dart';
+import 'location_picker_map_page.dart';
 import '../widgets/booking_location_card.dart';
 import '../widgets/booking_price_summary_card.dart';
 import '../widgets/booking_product_card.dart';
@@ -29,6 +30,12 @@ class BookingRequestPage extends StatefulWidget {
 
 class _BookingRequestPageState extends State<BookingRequestPage> {
   late BookingRequestData _bookingData;
+  BookingRentalType? _selectedRentalType;
+  bool _showRentalTypeError = false;
+  bool _showRentalDatesError = false;
+  bool _hasSelectedLocation = false;
+  bool _showLocationError = false;
+  String? _locationAddress;
   bool _isSubmitting = false;
 
   @override
@@ -37,7 +44,8 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    _bookingData = widget.initialData ??
+    _bookingData =
+        widget.initialData ??
         BookingRequestData(
           item: BookingItemInfo.defaultMockItem,
           rentalType: BookingRentalType.daily,
@@ -47,11 +55,39 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
           endTime: const TimeOfDay(hour: 17, minute: 0),
           location: 'ซีคอน บางแค',
           locationNote: 'เลือกโดยผู้ปล่อยเช่า',
+          latitude: 13.7115884,
+          longitude: 100.4341077,
         );
+    _selectedRentalType = _bookingData.rentalType;
+    _hasSelectedLocation = widget.isEditMode;
+  }
+
+  bool get _isRentalPeriodValid {
+    if (_bookingData.rentalType == BookingRentalType.daily) {
+      final start = DateTime(
+        _bookingData.startDate.year,
+        _bookingData.startDate.month,
+        _bookingData.startDate.day,
+      );
+      final end = DateTime(
+        _bookingData.endDate.year,
+        _bookingData.endDate.month,
+        _bookingData.endDate.day,
+      );
+      return end.isAfter(start);
+    }
+
+    final startMinutes =
+        _bookingData.startTime.hour * 60 + _bookingData.startTime.minute;
+    final endMinutes =
+        _bookingData.endTime.hour * 60 + _bookingData.endTime.minute;
+    return endMinutes > startMinutes;
   }
 
   void _onRentalTypeChanged(BookingRentalType type) {
     setState(() {
+      _selectedRentalType = type;
+      _showRentalTypeError = false;
       DateTime newEnd = _bookingData.endDate;
       if (type == BookingRentalType.daily) {
         final start = DateTime(
@@ -68,36 +104,46 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
           newEnd = start.add(const Duration(days: 1));
         }
       }
-      _bookingData = _bookingData.copyWith(
-        rentalType: type,
-        endDate: newEnd,
-      );
+      _bookingData = _bookingData.copyWith(rentalType: type, endDate: newEnd);
     });
   }
 
   void _onDatesChanged(DateTime start, DateTime end) {
     setState(() {
-      _bookingData = _bookingData.copyWith(
-        startDate: start,
-        endDate: end,
-      );
+      _showRentalDatesError = false;
+      _bookingData = _bookingData.copyWith(startDate: start, endDate: end);
     });
   }
 
   void _onTimesChanged(TimeOfDay start, TimeOfDay end) {
     setState(() {
-      _bookingData = _bookingData.copyWith(
-        startTime: start,
-        endTime: end,
-      );
+      _showRentalDatesError = false;
+      _bookingData = _bookingData.copyWith(startTime: start, endTime: end);
     });
   }
 
   void _onLocationChanged(String newLocation) {
     setState(() {
+      _hasSelectedLocation = true;
+      _showLocationError = false;
+      _locationAddress = null;
       _bookingData = _bookingData.copyWith(
         location: newLocation,
         locationNote: 'ระบุโดยคุณ',
+      );
+    });
+  }
+
+  void _onLocationResultChanged(LocationPickerResult result) {
+    setState(() {
+      _hasSelectedLocation = true;
+      _showLocationError = false;
+      _locationAddress = result.fullAddress;
+      _bookingData = _bookingData.copyWith(
+        location: result.locationName,
+        locationNote: result.locationNote,
+        latitude: result.latitude,
+        longitude: result.longitude,
       );
     });
   }
@@ -189,6 +235,20 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
   }
 
   void _handleSendBookingRequest() {
+    final hasValidationError =
+        _selectedRentalType == null ||
+        !_isRentalPeriodValid ||
+        !_hasSelectedLocation;
+
+    if (hasValidationError) {
+      setState(() {
+        _showRentalTypeError = _selectedRentalType == null;
+        _showRentalDatesError = !_isRentalPeriodValid;
+        _showLocationError = !_hasSelectedLocation;
+      });
+      return;
+    }
+
     // แสดง Bottom Sheet สรุปตรวจสอบรายละเอียดก่อนส่งคำขอไปยังแชท
     showModalBottomSheet<void>(
       context: context,
@@ -368,7 +428,8 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                         icon: Icons.payments_rounded,
                         iconColor: const Color(0xFF10B981),
                         label: 'ยอดรวม:',
-                        value: '${_bookingData.totalPrice.toStringAsFixed(0)} ฿',
+                        value:
+                            '${_bookingData.totalPrice.toStringAsFixed(0)} ฿',
                         isHighlight: true,
                       ),
                     ],
@@ -379,7 +440,10 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
 
                 // ข้อความเตือนความปลอดภัย "ให้ตรวจสอบรายละเอียดอย่างถี่ถ้วน"
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFFBEB),
                     borderRadius: BorderRadius.circular(12),
@@ -520,7 +584,9 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 12.5,
               fontWeight: isHighlight ? FontWeight.bold : FontWeight.w600,
-              color: isHighlight ? AppColors.primaryColor : const Color(0xFF1E2022),
+              color: isHighlight
+                  ? AppColors.primaryColor
+                  : const Color(0xFF1E2022),
             ),
           ),
         ),
@@ -554,25 +620,28 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
       body: SafeArea(
         child: Column(
           children: [
+            // การ์ดสินค้าอยู่คงที่ด้านบน ไม่เลื่อนตามรายละเอียดคำขอ
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: BookingProductCard(item: _bookingData.item),
+            ),
+            const SizedBox(height: 18),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // 1. การ์ดสินค้า (Product Card)
-                    BookingProductCard(item: _bookingData.item),
-                    const SizedBox(height: 18),
-
-                    // 2. ตัวเลือกรูปแบบการเช่า (Dropdown: ต่อชั่วโมง / ต่อวัน)
+                    // 1. ตัวเลือกรูปแบบการเช่า (Dropdown: ต่อชั่วโมง / ต่อวัน)
                     BookingTypeDropdown(
-                      selectedType: _bookingData.rentalType,
+                      selectedType: _selectedRentalType,
                       onChanged: _onRentalTypeChanged,
+                      showError: _showRentalTypeError,
                     ),
                     const SizedBox(height: 18),
 
-                    // 3. ตัวเลือกช่วงเวลา / วันที่เช่า
+                    // 2. ตัวเลือกช่วงเวลา / วันที่เช่า
                     BookingTimeRangePicker(
                       rentalType: _bookingData.rentalType,
                       startDate: _bookingData.startDate,
@@ -581,18 +650,24 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                       endTime: _bookingData.endTime,
                       onDatesChanged: _onDatesChanged,
                       onTimesChanged: _onTimesChanged,
+                      showDateError: _showRentalDatesError,
                     ),
                     const SizedBox(height: 18),
 
-                    // 4. สถานที่นัดพบ (Meeting Location)
+                    // 3. สถานที่นัดพบ (Meeting Location)
                     BookingLocationCard(
                       location: _bookingData.location,
                       locationNote: _bookingData.locationNote,
+                      locationAddress: _locationAddress,
+                      latitude: _bookingData.latitude,
+                      longitude: _bookingData.longitude,
+                      onLocationResultChanged: _onLocationResultChanged,
                       onLocationChanged: _onLocationChanged,
+                      showError: _showLocationError,
                     ),
                     const SizedBox(height: 18),
 
-                    // 5. สรุปราคา (Price Summary)
+                    // 4. สรุปราคา (Price Summary)
                     BookingPriceSummaryCard(bookingData: _bookingData),
                     const SizedBox(height: 24),
                   ],
@@ -600,7 +675,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
               ),
             ),
 
-            // 6. ปุ่มด้านล่าง: "แก้ไข" (ฝั่งผู้ปล่อยเช่า) หรือ "ส่งคำขอการเช่า"
+            // 5. ปุ่มด้านล่าง: "แก้ไข" (ฝั่งผู้ปล่อยเช่า) หรือ "ส่งคำขอการเช่า"
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
               child: SizedBox(

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../../core/services/chat_notification_service.dart';
 import '../../../../core/services/fcm_service.dart';
 import '../../../../core/services/user_presence_service.dart';
 import '../../data/datasources/auth_remote_data_source.dart'; // สำหรับ AuthApiException
@@ -207,6 +208,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final isGoogle = _signedInWithGoogle(event.session.user.appMetadata);
 
     UserPresenceService.instance.initialize();
+    unawaited(ChatNotificationService.instance.initialize());
     final userId = event.session.user.id;
     if (userId.isNotEmpty) {
       unawaited(FcmService.instance.syncUserToken(userId));

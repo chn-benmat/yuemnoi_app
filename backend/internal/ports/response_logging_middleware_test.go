@@ -2,34 +2,29 @@ package ports
 
 import (
 	"bytes"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestResponseLoggingMiddlewareLogsRedactedJSONResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	previousWriter := log.Writer()
-	previousFlags := log.Flags()
-	previousPrefix := log.Prefix()
+	var output bytes.Buffer
+	testLogger := slog.New(slog.NewTextHandler(&output, nil))
+	previousLogger := slog.Default()
+	slog.SetDefault(testLogger)
 	t.Cleanup(func() {
-		log.SetOutput(previousWriter)
-		log.SetFlags(previousFlags)
-		log.SetPrefix(previousPrefix)
+		slog.SetDefault(previousLogger)
 	})
 
-	var output bytes.Buffer
-	log.SetOutput(&output)
-	log.SetFlags(0)
-	log.SetPrefix("")
-
 	router := gin.New()
-	router.Use(responseLoggingMiddleware())
+	router.Use(ResponseLoggingMiddleware())
 	router.GET("/result", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"answer":       "พบอุปกรณ์ 2 รายการ",
@@ -49,18 +44,15 @@ func TestResponseLoggingMiddlewareLogsRedactedJSONResponse(t *testing.T) {
 		"method=GET",
 		"path=/result",
 		"status=200",
-		`"answer":"พบอุปกรณ์ 2 รายการ"`,
-		`"access_token":"[REDACTED]"`,
-		`"email":"[REDACTED]"`,
+		"latency_ms=",
+		`\"answer\":\"พบอุปกรณ์ 2 รายการ\"`,
+		`\"access_token\":\"[REDACTED]\"`,
+		`\"email\":\"[REDACTED]\"`,
 	} {
-		if !strings.Contains(logged, expected) {
-			t.Errorf("log output %q does not contain %q", logged, expected)
-		}
+		assert.True(t, strings.Contains(logged, expected), "log output %q should contain %q", logged, expected)
 	}
 
 	for _, secret := range []string{"secret-access-token", "customer@example.com"} {
-		if strings.Contains(logged, secret) {
-			t.Errorf("log output contains sensitive value %q", secret)
-		}
+		assert.False(t, strings.Contains(logged, secret), "log output should not contain sensitive value %q", secret)
 	}
 }

@@ -26,35 +26,9 @@ type RegisterResult struct {
 	UserImageURL string `json:"user_image_url,omitempty"`
 }
 
-type UserLoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
-}
-
 type AuthTokens struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
-}
-
-type UserRegisterRequest struct {
-	DisplayName     string `json:"display_name" form:"display_name" binding:"required,max=150"`
-	Email           string `json:"email" form:"email" binding:"required,email"`
-	Phone           string `json:"phone" form:"phone" binding:"required"`
-	Password        string `json:"password" form:"password" binding:"required,min=6"`
-	ConfirmPassword string `json:"confirm_password" form:"confirm_password" binding:"omitempty,min=6"`
-}
-
-type UserChangePasswordRequest struct {
-	NewPassword string `json:"new_password" binding:"required,min=6"`
-}
-
-type UserSendOTP struct {
-	Email string `json:"email" binding:"required,email"`
-}
-
-type UserVerifyOTPResetRequest struct {
-	Email   string `json:"email" binding:"required,email"`
-	OTPCode string `json:"otp_code" binding:"required,len=6,numeric"`
 }
 
 type UserProfile struct {
@@ -68,17 +42,9 @@ type UserProfile struct {
 }
 
 type UpdateProfileRequest struct {
-	DisplayName *string `json:"display_name" form:"display_name" binding:"omitempty,max=150"`
-	Username    *string `json:"username" form:"username" binding:"omitempty,max=100"`
-	Bio         *string `json:"bio" form:"bio" binding:"omitempty,max=500"`
-}
-
-type UpdateContactRequest struct {
-	Phone string `json:"phone" binding:"required"`
-}
-
-type UpdateFCMTokenRequest struct {
-	FCMToken string `json:"fcm_token" binding:"required"`
+	DisplayName *string `json:"display_name"`
+	Username    *string `json:"username"`
+	Bio         *string `json:"bio"`
 }
 
 type AuthRepository interface {
@@ -94,6 +60,8 @@ type AuthRepository interface {
 	UpdateProfile(ctx context.Context, userID string, req UpdateProfileRequest, img *ProfileImage) (*UserProfile, error)
 	UpdateContact(ctx context.Context, userID string, phone string) error
 	UpdateFCMToken(ctx context.Context, userID string, fcmToken string) error
+	GetFCMToken(ctx context.Context, userID string) (string, error)
+	DeleteFCMToken(ctx context.Context, userID string) error
 }
 
 type TokenVerifier interface {

@@ -1,205 +1,68 @@
-import json
-import logging
-import uvicorn
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import Any, List, Optional
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from app.core.config import get_settings
+from app.core.logging import logger
+from app.core.container import get_container
+from app.interface.api.v1.router import api_v1_router
 
-from app.agent.executor import AgentExecutor
-
-
-agent_executor = AgentExecutor()
-logger = logging.getLogger("uvicorn.error")
-
-MAX_LOGGED_BODY_CHARS = 16 * 1024
-SENSITIVE_LOG_KEY_FRAGMENTS = (
-    "authorization",
-    "password",
-    "token",
-    "otp",
-    "secret",
-    "api_key",
-    "apikey",
-    "email",
-    "phone",
-    "full_name",
-    "fullname",
-    "display_name",
-    "displayname",
-    "user_id",
-    "userid",
-    "user_image",
-    "profile_image",
-    "owner_id",
-    "ownerid",
-    "latitude",
-    "longitude",
-    "address",
-    "service_role",
-    "supabase_key",
-    "serper_api",
-)
-
-
-def _is_sensitive_log_key(key: str) -> bool:
-    normalized_key = key.lower()
-    return any(
-        fragment in normalized_key for fragment in SENSITIVE_LOG_KEY_FRAGMENTS
-    )
-
-
-def _redact_sensitive_log_values(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: (
-                "[REDACTED]"
-                if _is_sensitive_log_key(str(key))
-                else _redact_sensitive_log_values(child)
-            )
-            for key, child in value.items()
-        }
-    if isinstance(value, list):
-        return [_redact_sensitive_log_values(child) for child in value]
-    return value
-
-
-def _safe_body_for_log(body: bytes, content_type: str) -> str:
-    if not body:
-        return "<empty>"
-    if "json" not in content_type.lower():
-        return f"<non-JSON body omitted: {len(body)} bytes>"
-
-    try:
-        payload = json.loads(body)
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return f"<invalid JSON body omitted: {len(body)} bytes>"
-
-    serialized = json.dumps(
-        _redact_sensitive_log_values(payload),
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-    if len(serialized) > MAX_LOGGED_BODY_CHARS:
-        return serialized[:MAX_LOGGED_BODY_CHARS] + "...<truncated>"
-    return serialized
-
-
-class RequestResponseLoggingMiddleware:
-    def __init__(self, app: ASGIApp):
-        self.app = app
-
-    async def __call__(
-        self,
-        scope: Scope,
-        receive: Receive,
-        send: Send,
-    ) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        request_body = bytearray()
-        response_body = bytearray()
-        response_status: int | str = "unhandled_exception"
-        response_content_type = ""
-
-        async def receive_with_logging() -> Message:
-            message = await receive()
-            if message["type"] == "http.request":
-                request_body.extend(message.get("body", b""))
-            return message
-
-        async def send_with_logging(message: Message) -> None:
-            nonlocal response_status, response_content_type
-            if message["type"] == "http.response.start":
-                response_status = message["status"]
-                headers = {
-                    key.decode("latin-1").lower(): value.decode("latin-1")
-                    for key, value in message.get("headers", [])
-                }
-                response_content_type = headers.get("content-type", "")
-            elif message["type"] == "http.response.body":
-                response_body.extend(message.get("body", b""))
-            await send(message)
-
-        try:
-            await self.app(scope, receive_with_logging, send_with_logging)
-        finally:
-            request_headers = {
-                key.decode("latin-1").lower(): value.decode("latin-1")
-                for key, value in scope.get("headers", [])
-            }
-            logger.info(
-                "ai_http method=%s path=%s status=%s request_body=%s response_body=%s",
-                scope.get("method", ""),
-                scope.get("path", ""),
-                response_status,
-                _safe_body_for_log(
-                    bytes(request_body),
-                    request_headers.get("content-type", ""),
-                ),
-                _safe_body_for_log(bytes(response_body), response_content_type),
-            )
-
+settings = get_settings()
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
-    await agent_executor.warmup_model()
-    yield
-    await agent_executor.aclose()
+async def lifespan(app: FastAPI):
+    logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode...")
+    logger.info(f"Using LLM model: {settings.OLLAMA_MODEL} at {settings.OLLAMA_BASE_URL}")
+    container = get_container()
 
+    # Initial catalog cache warm-up
+    try:
+        items = await container.catalog_warmup_service.trigger_warmup()
+        logger.info(f"Successfully loaded and cached {len(items)} items from Supabase 'item_tb'.")
+    except Exception as e:
+        logger.warning(f"Initial catalog cache warm-up failed: {e}")
+
+    # Start background periodic warm-up task (Every CATALOG_WARMUP_INTERVAL seconds)
+    warmup_task = None
+    if settings.ENABLE_BACKGROUND_WARMUP:
+        warmup_task = asyncio.create_task(container.catalog_warmup_service.start_periodic_warmup())
+        logger.info(f"Started background catalog warm-up worker (Interval: {settings.CATALOG_WARMUP_INTERVAL}s).")
+
+    try:
+        yield
+    finally:
+        if warmup_task and not warmup_task.done():
+            logger.info("Stopping background catalog warm-up worker...")
+            warmup_task.cancel()
+            try:
+                await warmup_task
+            except asyncio.CancelledError:
+                pass
+        logger.info(f"Shutting down {settings.APP_NAME}...")
 
 app = FastAPI(
-    title="yuemnoi AI Core Service",
-    version="1.1.0",
-    lifespan=lifespan,
+    title=settings.APP_NAME,
+    version="1.0.0",
+    description="Clean Architecture Thai Chatbot AI for Rental Services powered by Ollama (Typhoon 2.5 Qwen3), Supabase, and Tavily.",
+    lifespan=lifespan
 )
 
-# เปิดสิทธิ์ CORS
+# Enable CORS specifically for local backend/internal consumers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:8080", "http://127.0.0.1:8080", "http://localhost:3000"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
-app.add_middleware(RequestResponseLoggingMiddleware)
 
+from app.interface.api.v1.endpoints.health import router as health_router
 
-@app.get("/health")
-async def health_check():
-    return {"status": "ok"}
-
-
-class ChatMessage(BaseModel):
-    role: str = Field(..., description="บทบาทผู้ส่ง: 'user' หรือ 'assistant'")
-    content: str = Field(..., description="ข้อความแชท")
-
-
-class ChatRequest(BaseModel):
-    query: str = Field(
-        ..., min_length=1, max_length=200, description="คำถามล่าสุดจากลูกค้า"
-    )
-    history: Optional[List[ChatMessage]] = Field(
-        default_factory=list, description="ประวัติการสนทนาก่อนหน้านี้ทั้งหมด"
-    )
-
-
-@app.post("/api/ai/chat")
-async def stream_ai_response(payload: ChatRequest):
-    user_query = payload.query
-    chat_history_list = [msg.model_dump() for msg in payload.history]
-
-    # ส่งค่าทั้งคำถามใหม่และข้อความประวัติแชทเก่าเข้าไป Pipeline
-    res = await agent_executor.run_pipeline_non_stream(
-        user_query, history=chat_history_list
-    )
-    return res
-
+# Include API Routers
+app.include_router(api_v1_router, prefix=settings.API_PREFIX)
+# Expose /health at root for container/load-balancer checks
+app.include_router(health_router)
 
 if __name__ == "__main__":
-    # สั่งรันเซิร์ฟเวอร์ AI ที่พอร์ต 8000 เป็นค่าตั้งต้น
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

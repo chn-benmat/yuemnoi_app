@@ -12,17 +12,6 @@ enum BookingRentalType {
   final String unit;
 }
 
-/// วิธีการชำระเงิน
-enum BookingPaymentMethod {
-  bankTransfer('บัตรเครดิต/เดบิต', 'ชำระด้วยบัตรธนาคารผ่าน Stripe'),
-  wallet('เงินในบัญชี', 'กระเป๋าเงิน Yuemnoi Pay'),
-  promptPay('PromptPay', 'พร้อมเพย์ QR Code');
-
-  const BookingPaymentMethod(this.title, this.subtitle);
-  final String title;
-  final String subtitle;
-}
-
 /// ข้อมูลอุปกรณ์สำหรับการจอง
 class BookingItemInfo {
   final int id;
@@ -34,6 +23,8 @@ class BookingItemInfo {
   final double dailyRate;
   final String defaultLocation;
   final String ownerName;
+  final double? latitude;
+  final double? longitude;
 
   const BookingItemInfo({
     required this.id,
@@ -45,6 +36,8 @@ class BookingItemInfo {
     required this.dailyRate,
     required this.defaultLocation,
     this.ownerName = 'ผู้ปล่อยเช่า',
+    this.latitude,
+    this.longitude,
   });
 
   /// Mock เริ่มต้นตามดีไซน์ UI (Sony Alpha a7 IV)
@@ -53,37 +46,71 @@ class BookingItemInfo {
     title: 'Sony Alpha a7 IV',
     imageUrl:
         'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop',
-    rating: 4.9,
-    reviewCount: 124,
+    rating: 0.0,
+    reviewCount: 0,
     hourlyRate: 100.0,
     dailyRate: 500.0,
     defaultLocation: 'ซีคอน บางแค',
     ownerName: 'ผู้ปล่อยเช่า',
+    latitude: 13.7115884,
+    longitude: 100.4341077,
   );
 
+  BookingItemInfo copyWith({
+    int? id,
+    String? title,
+    String? imageUrl,
+    double? rating,
+    int? reviewCount,
+    double? hourlyRate,
+    double? dailyRate,
+    String? defaultLocation,
+    String? ownerName,
+    double? latitude,
+    double? longitude,
+  }) {
+    return BookingItemInfo(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      imageUrl: imageUrl ?? this.imageUrl,
+      rating: rating ?? this.rating,
+      reviewCount: reviewCount ?? this.reviewCount,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
+      dailyRate: dailyRate ?? this.dailyRate,
+      defaultLocation: defaultLocation ?? this.defaultLocation,
+      ownerName: ownerName ?? this.ownerName,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'imageUrl': imageUrl,
-        'rating': rating,
-        'reviewCount': reviewCount,
-        'hourlyRate': hourlyRate,
-        'dailyRate': dailyRate,
-        'defaultLocation': defaultLocation,
-        'ownerName': ownerName,
-      };
+    'id': id,
+    'title': title,
+    'imageUrl': imageUrl,
+    'rating': rating,
+    'reviewCount': reviewCount,
+    'hourlyRate': hourlyRate,
+    'dailyRate': dailyRate,
+    'defaultLocation': defaultLocation,
+    'ownerName': ownerName,
+    'latitude': latitude,
+    'longitude': longitude,
+  };
 
   factory BookingItemInfo.fromJson(Map<String, dynamic> json) {
     return BookingItemInfo(
       id: (json['id'] as num?)?.toInt() ?? 1,
       title: json['title'] as String? ?? 'อุปกรณ์เช่า',
       imageUrl: json['imageUrl'] as String? ?? '',
-      rating: (json['rating'] as num?)?.toDouble() ?? 4.9,
-      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 10,
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
       hourlyRate: (json['hourlyRate'] as num?)?.toDouble() ?? 100.0,
       dailyRate: (json['dailyRate'] as num?)?.toDouble() ?? 500.0,
       defaultLocation: json['defaultLocation'] as String? ?? 'นัดรับตามตกลง',
       ownerName: json['ownerName'] as String? ?? 'ผู้ปล่อยเช่า',
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
     );
   }
 }
@@ -98,10 +125,12 @@ class BookingRequestData {
   final TimeOfDay endTime;
   final String location;
   final String locationNote;
-  final BookingPaymentMethod paymentMethod;
+  final double? latitude;
+  final double? longitude;
   final String? conversationId;
   final String? ownerId;
   final String? originalMessageId;
+  final String paymentMethod;
 
   static const String bookingPayloadPrefix = '📋 คำขอเช่าอุปกรณ์';
   static const String metaStartTag = '[BOOKING_DATA:';
@@ -116,16 +145,22 @@ class BookingRequestData {
     required this.endTime,
     required this.location,
     this.locationNote = 'เลือกโดยผู้ปล่อยเช่า',
-    this.paymentMethod = BookingPaymentMethod.bankTransfer,
+    this.latitude,
+    this.longitude,
     this.conversationId,
     this.ownerId,
     this.originalMessageId,
+    this.paymentMethod = 'cash',
   });
 
   /// ตรวจสอบว่าข้อความเป็นข้อความคำขอเช่าหรือไม่
   static bool isBookingRequest(String text) {
     return text.startsWith(bookingPayloadPrefix) || text.contains(metaStartTag);
   }
+
+  /// ข้อมูลวิธีชำระเงิน
+  bool get isPromptPay => paymentMethod == 'promptpay';
+  String get paymentMethodLabel => isPromptPay ? 'PromptPay' : 'เงินสด';
 
   /// แปลงข้อมูลคำขอเช่าเป็น Payload ข้อความสำหรับส่งในแชท
   String toChatMessagePayload() {
@@ -152,8 +187,10 @@ class BookingRequestData {
       'endMinute': endTime.minute,
       'location': location,
       'locationNote': locationNote,
-      'paymentMethod': paymentMethod.name,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
       'totalPrice': totalPrice,
+      'paymentMethod': paymentMethod,
       'conversationId': conversationId,
       'ownerId': ownerId,
       if (originalMessageId != null) 'originalMessageId': originalMessageId,
@@ -165,6 +202,7 @@ class BookingRequestData {
 อุปกรณ์: ${item.title}
 ช่วงเวลา: $periodText
 สถานที่นัดพบ: $location
+วิธีชำระเงิน: $paymentMethodLabel
 ยอดรวม: ${totalPrice.toStringAsFixed(0)} ฿
 $metaStartTag$jsonString$metaEndTag''';
   }
@@ -189,13 +227,15 @@ $metaStartTag$jsonString$metaEndTag''';
             imageUrl: (imageUrl != null && imageUrl.isNotEmpty)
                 ? imageUrl
                 : (map['imageUrl'] as String? ?? ''),
-            rating: (map['rating'] as num?)?.toDouble() ?? 4.9,
-            reviewCount: (map['reviewCount'] as num?)?.toInt() ?? 10,
+            rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
+            reviewCount: (map['reviewCount'] as num?)?.toInt() ?? 0,
             hourlyRate: (map['hourlyRate'] as num?)?.toDouble() ?? 100.0,
             dailyRate: (map['dailyRate'] as num?)?.toDouble() ?? 500.0,
             defaultLocation:
                 map['defaultLocation'] as String? ?? 'นัดรับตามตกลง',
             ownerName: map['ownerName'] as String? ?? 'ผู้ปล่อยเช่า',
+            latitude: (map['latitude'] as num?)?.toDouble(),
+            longitude: (map['longitude'] as num?)?.toDouble(),
           );
 
           final rentalType = map['rentalType'] == 'hourly'
@@ -208,7 +248,7 @@ $metaStartTag$jsonString$metaEndTag''';
 
           final endDate = map['endDate'] != null
               ? DateTime.tryParse(map['endDate'] as String) ??
-                  startDate.add(const Duration(days: 1))
+                    startDate.add(const Duration(days: 1))
               : startDate.add(const Duration(days: 1));
 
           final startTime = TimeOfDay(
@@ -221,13 +261,15 @@ $metaStartTag$jsonString$metaEndTag''';
             minute: (map['endMinute'] as num?)?.toInt() ?? 0,
           );
 
-          final paymentMethod = BookingPaymentMethod.values.firstWhere(
-            (p) => p.name == map['paymentMethod'],
-            orElse: () => BookingPaymentMethod.bankTransfer,
-          );
-
           final resolvedOriginalMessageId =
               (map['originalMessageId'] as String?) ?? messageId;
+
+          final double? lat =
+              (map['latitude'] as num?)?.toDouble() ??
+              ((map['location'] == 'ซีคอน บางแค') ? 13.7115884 : null);
+          final double? lng =
+              (map['longitude'] as num?)?.toDouble() ??
+              ((map['location'] == 'ซีคอน บางแค') ? 100.4341077 : null);
 
           return BookingRequestData(
             item: item,
@@ -237,11 +279,14 @@ $metaStartTag$jsonString$metaEndTag''';
             startTime: startTime,
             endTime: endTime,
             location: map['location'] as String? ?? 'นัดรับตามตกลง',
-            locationNote: map['locationNote'] as String? ?? 'เลือกโดยผู้ปล่อยเช่า',
-            paymentMethod: paymentMethod,
+            locationNote:
+                map['locationNote'] as String? ?? 'เลือกโดยผู้ปล่อยเช่า',
+            latitude: lat,
+            longitude: lng,
             conversationId: map['conversationId'] as String?,
             ownerId: map['ownerId'] as String?,
             originalMessageId: resolvedOriginalMessageId,
+            paymentMethod: map['paymentMethod'] as String? ?? 'cash',
           );
         }
       }
@@ -252,27 +297,56 @@ $metaStartTag$jsonString$metaEndTag''';
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       return BookingRequestData(
-        item: BookingItemInfo(
+        item: const BookingItemInfo(
           id: 1,
           title: 'อุปกรณ์เช่า',
-          imageUrl: imageUrl ?? '',
-          rating: 4.9,
-          reviewCount: 10,
+          imageUrl: '',
+          rating: 0.0,
+          reviewCount: 0,
           hourlyRate: 100.0,
           dailyRate: 500.0,
           defaultLocation: 'นัดรับตามตกลง',
+          latitude: 13.7115884,
+          longitude: 100.4341077,
         ),
         startDate: today,
         endDate: today.add(const Duration(days: 1)),
         startTime: const TimeOfDay(hour: 9, minute: 0),
         endTime: const TimeOfDay(hour: 17, minute: 0),
         location: 'นัดรับตามตกลง',
+        latitude: 13.7115884,
+        longitude: 100.4341077,
         originalMessageId: messageId,
       );
     }
 
     return null;
   }
+
+  /// เวลาเริ่มต้นและสิ้นสุดแบบ DateTime เต็มรูปแบบ
+  DateTime get startDateTime => DateTime(
+    startDate.year,
+    startDate.month,
+    startDate.day,
+    startTime.hour,
+    startTime.minute,
+  );
+
+  DateTime get endDateTime => rentalType == BookingRentalType.daily
+      ? DateTime(
+          endDate.year,
+          endDate.month,
+          endDate.day,
+          startTime.hour,
+          startTime.minute,
+        )
+      : DateTime(
+          startDate.year,
+          startDate.month,
+          startDate.day,
+          endTime.hour,
+          endTime.minute,
+        );
 
   /// ราคาต่อหน่วยตามประเภทการเช่า
   double get unitRate =>
@@ -309,12 +383,10 @@ $metaStartTag$jsonString$metaEndTag''';
   }
 
   /// วันที่เริ่มต้นฟอร์แมต dd/MM/yyyy
-  String get formattedStartDate =>
-      DateFormat('dd/MM/yyyy').format(startDate);
+  String get formattedStartDate => DateFormat('dd/MM/yyyy').format(startDate);
 
   /// วันที่สิ้นสุดฟอร์แมต dd/MM/yyyy
-  String get formattedEndDate =>
-      DateFormat('dd/MM/yyyy').format(endDate);
+  String get formattedEndDate => DateFormat('dd/MM/yyyy').format(endDate);
 
   /// วันที่และช่วงเวลาแบบสรุปสวยงาม
   String get formattedPeriodSummary {
@@ -344,10 +416,12 @@ $metaStartTag$jsonString$metaEndTag''';
     TimeOfDay? endTime,
     String? location,
     String? locationNote,
-    BookingPaymentMethod? paymentMethod,
+    double? latitude,
+    double? longitude,
     String? conversationId,
     String? ownerId,
     String? originalMessageId,
+    String? paymentMethod,
   }) {
     return BookingRequestData(
       item: item ?? this.item,
@@ -358,10 +432,12 @@ $metaStartTag$jsonString$metaEndTag''';
       endTime: endTime ?? this.endTime,
       location: location ?? this.location,
       locationNote: locationNote ?? this.locationNote,
-      paymentMethod: paymentMethod ?? this.paymentMethod,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
       conversationId: conversationId ?? this.conversationId,
       ownerId: ownerId ?? this.ownerId,
       originalMessageId: originalMessageId ?? this.originalMessageId,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
     );
   }
 }

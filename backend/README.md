@@ -10,8 +10,7 @@
 
 <br/>
 
-> **Backend API** ที่เป็นตัวกลางเชื่อมต่อระหว่าง Flutter Frontend กับฐานข้อมูล Supabase  
-> และ AI Service ที่ประมวลผลด้วยโมเดลภาษา Qwen
+> **Backend API** ที่เป็นตัวกลางเชื่อมต่อระหว่าง Flutter Frontend กับฐานข้อมูล Supabase
 
 </div>
 
@@ -23,130 +22,84 @@ Backend ของ Yuemnoi ถูกพัฒนาด้วยภาษา **Go*
 
 ---
 
-## 📂 โครงสร้างโปรเจ็ค
-
-```
-backend/
-├── 📄 .air.toml                          # ตั้งค่า Air (Hot Reload ขณะพัฒนา)
-├── 📄 .env                               # ตัวแปรสภาพแวดล้อม (Environment Variables)
-├── 📄 go.mod                             # Go Module Dependencies
-├── 📄 go.sum                             # Checksum ของ Dependencies
-│
-├── 📁 cmd/
-│   └── 📁 server/
-│       └── 📄 main.go                    # 🚀 จุดเริ่มต้นของแอปพลิเคชัน (Entry Point)
-│
-├── 📁 internal/
-│   ├── 📁 domain/                        # 💎 Business Entities & Repository Interfaces
-│   │   ├── 📄 item.go                    #    โครงสร้างข้อมูลอุปกรณ์เช่า (Item, Review)
-│   │   ├── 📄 transaction.go            #    โครงสร้างข้อมูลกระเป๋าเงิน & ธุรกรรม (Wallet, Transaction)
-│   │   └── 📄 user.go                    #    โครงสร้างข้อมูลผู้ใช้ & การยืนยันตัวตน (Profile, Verification)
-│   │
-│   ├── 📁 adapters/                      # 🔌 การเชื่อมต่อกับระบบภายนอก (Infrastructure Layer)
-│   │   ├── 📁 supabase/
-│   │   │   ├── 📄 client.go              #    สร้างและตรวจสอบ Supabase Client
-│   │   │   └── 📄 item_repository.go    #    อ่าน/เขียนข้อมูลตาราง item_tb บน Supabase
-│   │   └── 📁 service/
-│   │       └── 📄 ai_service.go          #    Adapter สื่อสารกับ AI Service (Python FastAPI)
-│   │
-│   └── 📁 ports/                         # 🌐 HTTP Handlers & Router (Application Layer)
-│       ├── 📄 router.go                  #    จัดเส้นทาง API ทั้งหมด + CORS Middleware
-│       ├── 📄 item_handler.go            #    Handler จัดการข้อมูลอุปกรณ์เช่า
-│       ├── 📄 rental_handler.go          #    Handler จัดการการจอง/เช่าอุปกรณ์
-│       └── 📄 ai_handler.go              #    Handler รับข้อความแชทและส่งต่อไปยัง AI Service
-```
-
----
-
 ## 🧩 รายละเอียดแต่ละส่วน
 
-### 🚀 `cmd/server/main.go` — จุดเริ่มต้น
+### 🚀 `cmd/server/main.go` — จุดเริ่มต้น (Composition Root)
 
 ไฟล์นี้ทำหน้าที่:
 
-- อ่านค่า **Environment Variables** (`PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AI_SERVICE_URL`)
-- สร้าง **Supabase Client** และ **AI Service Adapter**
-- ตั้งค่า **HTTP Server** พร้อม Timeout ที่ปรับให้รองรับ LLM Pipeline (Write Timeout 90 วินาที)
+- อ่านค่า **Environment Variables** (`PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FIREBASE_SERVICE_ACCOUNT_PATH`, `APP_SECRET_KEY`)
+- สร้าง **Supabase Client** และ **Adapters** ทั้งหมด (`ItemRepo`, `AuthGateway`, `ContactRepo`, `RentalRepo`, `FCMSender`)
+- ฉีด Dependencies ทั้งหมดเข้า `ports.SetupRouter` (Dependency Injection)
+- ตั้งค่า **HTTP Server** พร้อม Read/Write Timeout
 - รัน Server แบบ **Non-blocking** ด้วย Goroutine
 - รองรับ **Graceful Shutdown** (รอ Request ที่ค้างอยู่จบก่อนปิดเซิร์ฟเวอร์)
 
 ---
 
-### 💎 `internal/domain/` — Business Entities
+### 💎 `internal/domain/` — Business Entities & Ports
 
-ชั้น Domain เป็นหัวใจหลักของระบบ ไม่พึ่งพา Framework หรือ Database ใดๆ
+ชั้น Domain เป็นหัวใจหลักของระบบ เป็น Pure Go ไม่พึ่งพา Framework หรือ Database ใดๆ
 
-| ไฟล์             | Struct หลัก               | คำอธิบาย                                                                    |
-| :--------------- | :------------------------ | :-------------------------------------------------------------------------- |
-| `item.go`        | `Item`, `Review`          | โครงสร้างข้อมูลอุปกรณ์เช่า (ชื่อ, รูปภาพ, หมวดหมู่, สถานะ, ประเภท) และรีวิว |
-| `transaction.go` | `Wallet`, `Transaction`   | กระเป๋าเงินของผู้ใช้และธุรกรรมการชำระเงิน (ฝาก/ถอน/จ่ายค่าเช่า)             |
-| `user.go`        | `Profile`, `Verification` | โปรไฟล์ผู้ใช้ (พิกัด GPS) และข้อมูลการยืนยันตัวตน KYC (NDID/ThaiD)          |
-
-แต่ละไฟล์ประกาศ **Repository Interface** ไว้ด้วย เพื่อให้ชั้น Adapter ไปเขียน Implementation จริง:
-
-```go
-// ตัวอย่างจาก item.go
-type ItemRepository interface {
-    Insert(ctx context.Context, item *Item) error
-    FindAll(ctx context.Context) ([]Item, error)
-}
-```
+| ไฟล์              | Struct & Interface หลัก                                  | คำอธิบาย                                                       |
+| :---------------- | :------------------------------------------------------- | :------------------------------------------------------------- |
+| `contact.go`      | `ConversationContactRepository`                          | สัญญาสิทธิ์การเข้าถึงข้อมูลติดต่อของผู้เข้าร่วมห้องสนทนา       |
+| `item.go`         | `Item`, `RankedItem`, `ItemImage`, `ItemRepository`      | ข้อมูลอุปกรณ์เช่า, รูปภาพ, สถิติการจัดอันดับ และฟังก์ชันจัดการ |
+| `notification.go` | `ChatPushNotification`, `PushNotificationSender`         | สัญญาการส่ง Push Notification สำหรับข้อความแชท                 |
+| `rental.go`       | `RentalOrder`, `CreateRentalRequest`, `RentalRepository` | ข้อมูลคำขอและรายการเช่าอุปกรณ์                                 |
+| `user.go`         | `UserProfile`, `AuthRepository`, `TokenVerifier`         | ข้อมูลโปรไฟล์, การเข้าสู่ระบบ และการตรวจสอบ Token              |
 
 ---
 
 ### 🔌 `internal/adapters/` — Infrastructure Layer
 
-#### `supabase/client.go`
+#### `fcm/fcm_sender.go`
 
-สร้างและตรวจสอบ **Supabase Client** ถ้า URL หรือ Key ว่างจะ **Fatal** ทันทีเพื่อป้องกันไม่ให้ระบบรันโดยไม่มีฐานข้อมูล
+Implement `domain.PushNotificationSender` ผ่าน FCM HTTP v1:
 
-#### `supabase/item_repository.go`
+- จัดการ Service Account และแลกเปลี่ยน Google OAuth2 Access Token ด้วยการเซ็น JWT (RSA SHA256)
+- ส่ง Chat Push Notification แบบมีเสียงและ Payload รองรับทั้ง iOS (APNs) และ Android
+- แคช Token อัตโนมัติและล้าง Token ที่หมดอายุ (`UNREGISTERED`) ออกจากระบบ
 
-Implement `domain.ItemRepository` โดยใช้ Supabase Go SDK:
+#### `supabase/`
 
-- **`Insert()`** — เพิ่มข้อมูลอุปกรณ์ใหม่ลงตาราง `item_tb`
-- **`FindAll()`** — ดึงข้อมูลอุปกรณ์เช่าทั้งหมด
-- **`FindByID()`** — ดึงข้อมูลอุปกรณ์ตาม ID
-- **`Update()`** — แก้ไขข้อมูลโดยตรวจทั้ง ID และเจ้าของรายการ
-- **`Delete()`** — ลบข้อมูลโดยตรวจทั้ง ID และเจ้าของรายการ
-
-#### `service/ai_service.go`
-
-Adapter สำหรับติดต่อกับ **AI Service** (Python FastAPI):
-
-- ส่ง HTTP POST ไปยัง `/api/ai/chat` พร้อม Query และ Chat History
-- ตั้งค่า Connection Pool (MaxIdleConns: 100, Timeout: 60 วินาที)
-- Decode JSON Response และส่งกลับให้ Handler
+- **`client.go`** — สร้างและตรวจสอบ Supabase Client
+- **`item_repository.go`** — จัดการ CRUD อุปกรณ์และดึงฟีดจาก `home_feed_ranked_v`
+- **`user_repository.go`** — จัดการ Supabase Auth, Storage รูปโปรไฟล์, และข้อมูลใน `profile_tb`
+- **`rental_repository.go`** — เรียก Database Function ตรวจสอบช่วงเวลาและคำนวณราคาเช่า
+- **`contact_repository.go`** — ตรวจสอบสิทธิ์ผู้สนทนาและดึงเบอร์ติดต่อ
 
 ---
 
-### 🌐 `internal/ports/` — HTTP Handlers
+### 🌐 `internal/ports/` — Inbound HTTP Layer (Gin)
 
-#### `router.go`
-
-จัดเส้นทาง API ทั้งหมดภายใต้ prefix `/api/v1`:
-
-- ตั้งค่า **CORS** ให้ Flutter เรียกใช้งานได้
-- ใช้ **Logger** และ **Recovery** Middleware
+- **`auth_helper.go`** — รวมศูนย์ฟังก์ชันถอด Bearer Token และตรวจสอบความถูกต้องของสิทธิ์ผู้ใช้
+- **`response_logging_middleware.go`** — ตรวจสอบและปิดบังข้อมูลส่วนบุคคล (PII/Tokens/Passwords) ใน Log ของ Response อัตโนมัติ
+- **`router.go`** — จัดเส้นทาง API ทั้งหมดภายใต้ prefix `/api/v1` และเปิดใช้งาน CORS, Security Scanner Blocker, Response Redaction Logger
 
 #### API Endpoints
 
-| Method   | Endpoint            | Handler                           | คำอธิบาย                            |
-| :------- | :------------------ | :-------------------------------- | :---------------------------------- |
-| `GET`    | `/api/v1/items`     | `ItemHandler.GetAllItems`         | ดึงรายการอุปกรณ์เช่าทั้งหมด         |
-| `GET`    | `/api/v1/items/:id` | `ItemHandler.GetItemByID`         | ดึงข้อมูลอุปกรณ์ตาม ID              |
-| `POST`   | `/api/v1/items`     | `ItemHandler.CreateItem`          | เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ |
-| `PUT`    | `/api/v1/items/:id` | `ItemHandler.UpdateItem`          | แก้ไขอุปกรณ์ของเจ้าของรายการ        |
-| `DELETE` | `/api/v1/items/:id` | `ItemHandler.DeleteItem`          | ลบอุปกรณ์ของเจ้าของรายการ           |
-| `POST`   | `/api/v1/rentals`   | `RentalHandler.CreateRentalOrder` | สร้างใบจองเช่าอุปกรณ์               |
-| `POST`   | `/api/v1/chat-ai`   | `AIHandler.HandleChat`            | ส่งข้อความแชทไปยัง AI และรับคำตอบ   |
-| `POST`   | `/api/v1/chat/contact` | `ChatContactHandler.GetConversationContact` | ดึงเบอร์คู่สนทนาสำหรับสมาชิกในห้อง |
+| Method   | Endpoint                 | Handler                                     | คำอธิบาย                               |
+| :------- | :----------------------- | :------------------------------------------ | :------------------------------------- |
+| `GET`    | `/api/v1/items`          | `ItemHandler.GetAllItems`                   | ดึงฟีดอุปกรณ์พร้อมเช่าที่จัดอันดับแล้ว |
+| `GET`    | `/api/v1/items/:id`      | `ItemHandler.GetItemByID`                   | ดึงข้อมูลอุปกรณ์ตาม ID                 |
+| `POST`   | `/api/v1/items`          | `ItemHandler.CreateItem`                    | เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ    |
+| `PUT`    | `/api/v1/items/:id`      | `ItemHandler.UpdateItem`                    | แก้ไขอุปกรณ์ของเจ้าของรายการ           |
+| `DELETE` | `/api/v1/items/:id`      | `ItemHandler.DeleteItem`                    | ลบอุปกรณ์ของเจ้าของรายการ              |
+| `POST`   | `/api/v1/rentals`        | `RentalHandler.CreateRentalOrder`           | สร้างใบจองเช่าอุปกรณ์                  |
+| `POST`   | `/api/v1/chat/contact`   | `ChatContactHandler.GetConversationContact` | ดึงเบอร์คู่สนทนาสำหรับสมาชิกในห้อง     |
+| `POST`   | `/api/v1/chat-ai`        | `ChatbotHandler.SendMessage`                | สนทนากับ AI Chatbot แบบ Non-Streaming  |
+| `POST`   | `/api/v1/chat-ai/stream` | `ChatbotHandler.SendMessageStream`          | สนทนากับ AI Chatbot แบบ SSE Streaming  |
 
 คำสั่ง `POST`, `PUT` และ `DELETE` ของ Items ต้องส่ง Supabase access token:
 
 ```http
 Authorization: Bearer <SUPABASE_ACCESS_TOKEN>
 ```
+
+`GET /api/v1/items` เรียงฟีดจากยอดเช่าที่ชำระแล้ว คะแนนรีวิว ความใหม่
+และความหลากหลายของหมวดหมู่/เจ้าของ โดยคืน `rating`, `review_count` และ
+`paid_booking_count` เพิ่มเติม แต่ไม่เปิดเผยคะแนนจัดอันดับภายใน
 
 `POST /api/v1/chat/contact` ต้องส่ง access token เช่นกัน และจะคืนข้อมูลติดต่อ
 เฉพาะเมื่อผู้ใช้เป็นผู้เช่าหรือเจ้าของในห้องสนทนาที่ระบุเท่านั้น
@@ -187,11 +140,13 @@ Backend จะสร้างรายการด้วยสถานะ `pend
 สร้างไฟล์ `.env` ในโฟลเดอร์ `backend/` :
 
 ```env
-GIN_MODE=debug                          # โหมด Gin (debug / release)
-PORT=8080                               # พอร์ตที่เซิร์ฟเวอร์จะรัน
-SUPABASE_URL=https://xxxxx.supabase.co  # URL ของ Supabase Project
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi... # Service Role Key (ใช้เฉพาะ Backend ห้ามใส่ใน Flutter)
-AI_SERVICE_URL=http://localhost:8000     # URL ของ AI Service (Python)
+GIN_MODE=debug
+PORT=.......
+SUPABASE_URL=......
+SUPABASE_SERVICE_ROLE_KEY=.......
+FIREBASE_SERVICE_ACCOUNT_PATH=......
+APP_SECRET_KEY=......
+INTERNAL_SERVICE_KEY=......
 ```
 
 ---
@@ -243,15 +198,15 @@ go build -o ./tmp/main ./cmd/server/main.go
 
 ## 📚 เทคโนโลยีที่ใช้
 
-| เทคโนโลยี       | เวอร์ชัน | วัตถุประสงค์                                 |
-| :-------------- | :------- | :------------------------------------------- |
-| **Go**          | 1.26     | ภาษาหลักในการพัฒนา                           |
-| **Gin**         | 1.12     | HTTP Web Framework                           |
-| **Supabase Go** | 0.5.0    | SDK เชื่อมต่อฐานข้อมูล Supabase (PostgreSQL) |
-| **godotenv**    | 1.5.1    | โหลดตัวแปรสภาพแวดล้อมจากไฟล์ `.env`          |
-| **Air**         | —        | Hot Reload สำหรับ Development                |
-| **JWT v5**      | 5.3.1    | จัดการ JSON Web Token                        |
-| **Zap**         | 1.28.0   | Structured Logging                           |
-| **gRPC**        | 1.81.1   | รองรับการสื่อสารแบบ gRPC (สำรอง)             |
+| เทคโนโลยี        | เวอร์ชัน | วัตถุประสงค์                                        |
+| :--------------- | :------- | :-------------------------------------------------- |
+| **Go**           | 1.26     | ภาษาหลักในการพัฒนา                                  |
+| **Gin**          | 1.12     | HTTP Web Framework                                  |
+| **Supabase Go**  | 0.5.0    | SDK เชื่อมต่อฐานข้อมูล Supabase (PostgreSQL)        |
+| **caarlos0/env** | 11.4     | อ่านและ Parse Environment Variables เป็น Go Struct  |
+| **godotenv**     | 1.5.1    | โหลดตัวแปรสภาพแวดล้อมจากไฟล์ `.env`                 |
+| **log/slog**     | Go std   | Structured Logging พร้อมฟังก์ชัน Redact ข้อมูลสำคัญ |
+| **testify**      | 1.12     | Unit Test Assertions & Test Suites                  |
+| **Air**          | —        | Hot Reload สำหรับ Development                       |
 
 ---

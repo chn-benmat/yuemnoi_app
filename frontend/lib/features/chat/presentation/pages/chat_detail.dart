@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/services/item_review_service.dart';
 import '../../../../core/services/phone_call_service.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/active_conversation_tracker.dart';
@@ -18,6 +19,7 @@ import '../../data/datasources/chat_remote_data_source.dart';
 import '../../data/repositories/chat_repository_impl.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/item_inquiry_data.dart';
 import '../../domain/usecases/fetch_messages_usecase.dart';
 import '../../domain/usecases/get_conversation_contact_phone_usecase.dart';
 import '../../domain/usecases/mark_messages_as_read_usecase.dart';
@@ -570,7 +572,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   bool get _isCurrentUserOwner =>
       _conversation.role == ChatParticipantRole.renter;
 
-  void _openBookingRequest() {
+  Future<void> _openBookingRequest([ItemInquiryData? activeInquiry]) async {
     if (!_isCurrentUserOwner) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -579,27 +581,79 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       );
       return;
     }
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final rentalType =
-        (_conversation.itemRentalType == 'hourly' ||
-            _conversation.itemRentalType == 'รายชั่วโมง')
-        ? BookingRentalType.hourly
-        : BookingRentalType.daily;
-    final price = (_conversation.itemPrice ?? 100).toDouble();
 
-    final itemInfo = BookingItemInfo(
-      id: _conversation.itemId ?? 1,
-      title: _conversation.itemName?.isNotEmpty == true
+    final latestInquiry = activeInquiry ??
+        _getLatestItemInquiry(
+          context.read<ChatDetailBloc>().state.messages,
+        );
+
+    final int itemId;
+    final String title;
+    final String imageUrl;
+    final double price;
+    final BookingRentalType rentalType;
+
+    if (latestInquiry != null) {
+      itemId = latestInquiry.itemId ?? _conversation.itemId ?? 1;
+      title = latestInquiry.itemName.isNotEmpty
+          ? latestInquiry.itemName
+          : (_conversation.itemName?.isNotEmpty == true
+              ? _conversation.itemName!
+              : (_conversation.name.isNotEmpty
+                  ? 'อุปกรณ์จาก ${_conversation.name}'
+                  : 'อุปกรณ์เช่า'));
+      imageUrl = (latestInquiry.imageUrl?.isNotEmpty == true)
+          ? latestInquiry.imageUrl!
+          : (_conversation.itemImageUrl?.isNotEmpty == true
+              ? _conversation.itemImageUrl!
+              : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop');
+
+      final unit = (latestInquiry.unitLabel ?? '').toLowerCase();
+      if (unit.contains('ชั่วโมง') || unit.contains('hour')) {
+        rentalType = BookingRentalType.hourly;
+      } else if (unit.contains('วัน') || unit.contains('day')) {
+        rentalType = BookingRentalType.daily;
+      } else {
+        rentalType = (_conversation.itemRentalType == 'hourly' ||
+                _conversation.itemRentalType == 'hour' ||
+                _conversation.itemRentalType == 'รายชั่วโมง')
+            ? BookingRentalType.hourly
+            : BookingRentalType.daily;
+      }
+
+      price = (latestInquiry.price != null && latestInquiry.price! > 0)
+          ? latestInquiry.price!
+          : (_conversation.itemPrice ?? 100).toDouble();
+    } else {
+      itemId = _conversation.itemId ?? 1;
+      title = _conversation.itemName?.isNotEmpty == true
           ? _conversation.itemName!
           : (_conversation.name.isNotEmpty
-                ? 'อุปกรณ์จาก ${_conversation.name}'
-                : 'อุปกรณ์เช่า'),
-      imageUrl: _conversation.itemImageUrl?.isNotEmpty == true
+              ? 'อุปกรณ์จาก ${_conversation.name}'
+              : 'อุปกรณ์เช่า');
+      imageUrl = _conversation.itemImageUrl?.isNotEmpty == true
           ? _conversation.itemImageUrl!
-          : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop',
-      rating: 4.9,
-      reviewCount: 10,
+          : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop';
+      rentalType = (_conversation.itemRentalType == 'hourly' ||
+              _conversation.itemRentalType == 'hour' ||
+              _conversation.itemRentalType == 'รายชั่วโมง')
+          ? BookingRentalType.hourly
+          : BookingRentalType.daily;
+      price = (_conversation.itemPrice ?? 100).toDouble();
+    }
+
+    final reviewStats = await ItemReviewService.fetchStats(itemId);
+    if (!mounted) return;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final itemInfo = BookingItemInfo(
+      id: itemId,
+      title: title,
+      imageUrl: imageUrl,
+      rating: reviewStats.rating,
+      reviewCount: reviewStats.reviewCount,
       hourlyRate: rentalType == BookingRentalType.hourly
           ? price
           : (price / 8).roundToDouble(),
@@ -628,60 +682,126 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     AppRoutes.openBooking(context, initialData: bookingData);
   }
 
+  ItemInquiryData? _getLatestItemInquiry(List<ChatMessage> messages) {
+    for (int i = messages.length - 1; i >= 0; i--) {
+      final msg = messages[i];
+      if (ItemInquiryData.isInquiry(msg.message)) {
+        final inquiry = ItemInquiryData.fromChatMessage(
+          msg.message,
+          imageUrl: msg.imageUrl,
+        );
+        if (inquiry != null) {
+          return inquiry;
+        }
+      }
+    }
+    return null;
+  }
+
   Widget _buildFloatingRentalRequestButton() {
     if (!_isCurrentUserOwner) return const SizedBox.shrink();
 
-    return Positioned(
-      bottom: 12,
-      right: 14,
-      child: Material(
-        color: Colors.transparent,
-        elevation: 3,
-        shadowColor: AppColors.primaryColor.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          key: const ValueKey('chat-floating-rental-request-button'),
-          onTap: _openBookingRequest,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+    return BlocBuilder<ChatDetailBloc, ChatDetailState>(
+      buildWhen: (previous, current) => previous.messages != current.messages,
+      builder: (context, state) {
+        final messages = state.messages;
+        int lastInquiryIndex = -1;
+        ItemInquiryData? latestInquiry;
+        int lastBookingIndex = -1;
+
+        for (int i = messages.length - 1; i >= 0; i--) {
+          final msg = messages[i];
+          if (lastInquiryIndex == -1 && ItemInquiryData.isInquiry(msg.message)) {
+            lastInquiryIndex = i;
+            latestInquiry = ItemInquiryData.fromChatMessage(
+              msg.message,
+              imageUrl: msg.imageUrl,
+            );
+          }
+          if (lastBookingIndex == -1 &&
+              BookingRequestData.isBookingRequest(msg.message)) {
+            lastBookingIndex = i;
+          }
+          if (lastInquiryIndex != -1 && lastBookingIndex != -1) {
+            break;
+          }
+        }
+
+        final bool shouldShowButton;
+        if (lastInquiryIndex != -1) {
+          shouldShowButton =
+              (lastBookingIndex == -1 || lastInquiryIndex > lastBookingIndex);
+        } else {
+          final hasConversationItem = (_conversation.itemId != null) ||
+              (_conversation.itemName?.isNotEmpty == true);
+          shouldShowButton = hasConversationItem && (lastBookingIndex == -1);
+        }
+
+        if (!shouldShowButton) {
+          return const SizedBox.shrink();
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: Center(
+            child: Material(
+              color: Colors.transparent,
+              elevation: 3,
+              shadowColor: AppColors.primaryColor.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
-                width: 0.8,
-              ),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.receipt_long_rounded, color: Colors.white, size: 15),
-                SizedBox(width: 5),
-                Text(
-                  'ส่งคำขอการเช่า',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
+              child: InkWell(
+                key: const ValueKey('chat-floating-rental-request-button'),
+                onTap: () => _openBookingRequest(latestInquiry),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.receipt_long_rounded,
+                        color: Colors.white,
+                        size: 15,
+                      ),
+                      SizedBox(width: 5),
+                      Text(
+                        'ส่งคำขอการเช่า',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      SizedBox(width: 2),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white70,
+                        size: 16,
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(width: 2),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: Colors.white70,
-                  size: 16,
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -820,6 +940,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                 isFailed: state.failedMessageIds.contains(
                                   item.message.id,
                                 ),
+                                isOwner: _conversation.role ==
+                                    ChatParticipantRole.renter,
                                 onRetry: () {
                                   context.read<ChatDetailBloc>().add(
                                     ChatRetryMessageSent(
@@ -858,7 +980,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                 ),
                 Positioned(
                   right: 16,
-                  bottom: _isCurrentUserOwner ? 58 : 12,
+                  bottom: 12,
                   child: AnimatedScale(
                     scale: _showScrollToBottom ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 200),
@@ -900,10 +1022,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                     ),
                   ),
                 ),
-                _buildFloatingRentalRequestButton(),
               ],
             ),
           ),
+          _buildFloatingRentalRequestButton(),
           BlocBuilder<ChatDetailBloc, ChatDetailState>(
             buildWhen: (prev, curr) =>
                 prev.isOtherUserTyping != curr.isOtherUserTyping,

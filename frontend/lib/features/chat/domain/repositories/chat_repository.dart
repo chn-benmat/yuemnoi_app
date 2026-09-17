@@ -5,7 +5,7 @@ import '../entities/chat_message.dart';
 
 abstract class ChatRepository {
   Future<ChatConversation> getOrCreateConversation({
-    required int itemId,
+    int? itemId,
     required String ownerId,
   });
 

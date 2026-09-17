@@ -2,28 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/services/media_download_service.dart';
+import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/item_inquiry_data.dart';
 import 'chat_toast.dart';
 
 String _extractActualTextMessage(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.startsWith('↩ ตอบกลับ:') ||
-      trimmed.startsWith('💬 ตอบกลับ') ||
-      trimmed.startsWith('↪ ตอบกลับ')) {
-    final newlineIdx = trimmed.indexOf('\n');
+  var text = raw.trim();
+  if (text.contains(ItemInquiryData.metaStartTag)) {
+    final idx = text.indexOf(ItemInquiryData.metaStartTag);
+    text = text.substring(0, idx).trim();
+  }
+  if (text.contains(BookingRequestData.metaStartTag)) {
+    final idx = text.indexOf(BookingRequestData.metaStartTag);
+    text = text.substring(0, idx).trim();
+  }
+  if (text.startsWith('↩ ตอบกลับ:') ||
+      text.startsWith('💬 ตอบกลับ') ||
+      text.startsWith('↪ ตอบกลับ')) {
+    final newlineIdx = text.indexOf('\n');
     if (newlineIdx != -1) {
-      return trimmed.substring(newlineIdx + 1).trim();
+      return text.substring(newlineIdx + 1).trim();
     }
-    final parts = trimmed.split('|');
+    final parts = text.split('|');
     if (parts.length >= 2) {
       return parts.last.trim();
     }
-    final colonIdx = trimmed.indexOf(':');
+    final colonIdx = text.indexOf(':');
     if (colonIdx != -1) {
-      return trimmed.substring(colonIdx + 1).trim();
+      return text.substring(colonIdx + 1).trim();
     }
   }
-  return trimmed;
+  return text;
 }
 
 /// เมนูกดค้างที่ข้อความ (Message Action Sheet) ตามสไตล์ Messenger
@@ -162,7 +172,10 @@ class ChatMessageActionSheet extends StatelessWidget {
         actualText != '📷 ส่งรูปภาพ' &&
         actualText != '[รูปภาพ]';
 
-    final canEdit = message.isMine && isTextMessage && onEdit != null;
+    final isSpecialCard = ItemInquiryData.isInquiry(message.message) ||
+        BookingRequestData.isBookingRequest(message.message);
+    final canEdit =
+        message.isMine && isTextMessage && !isSpecialCard && onEdit != null;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),

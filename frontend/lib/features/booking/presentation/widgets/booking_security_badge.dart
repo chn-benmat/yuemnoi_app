@@ -22,7 +22,7 @@ class BookingSecurityBadge extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: Text(
-            'การชำระเงินของคุณได้รับการคุ้มครองโดยนโยบายการรับประกันการเช่าของเรา จนกว่าคุณจะตรวจสอบคุณภาพอุปกรณ์เมื่อรับสินค้า',
+            'ระบบจะส่งรายละเอียดคำขอให้เจ้าของอุปกรณ์ตรวจสอบ โดยยังไม่มีการเรียกเก็บเงินในขั้นตอนนี้',
             style: TextStyle(
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 11.5,

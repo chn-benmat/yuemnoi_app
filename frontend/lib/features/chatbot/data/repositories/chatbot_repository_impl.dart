@@ -20,6 +20,21 @@ class ChatbotRepositoryImpl implements ChatbotRepository {
   }
 
   @override
+  Stream<ChatStreamEvent> sendMessageStream({
+    required String query,
+    required List<ChatMessage> history,
+  }) {
+    return remoteDataSource
+        .sendMessageStream(query: query, history: history)
+        .handleError((error) {
+          if (error is ChatbotRemoteException) {
+            throw ChatbotException(error.message);
+          }
+          throw error;
+        });
+  }
+
+  @override
   void close() {
     remoteDataSource.close();
   }

@@ -44,5 +44,10 @@ class HomeRepositoryImpl implements HomeRepository {
   Future<bool> toggleFavorite(String itemId) async {
     return _dataSource.toggleFavorite(itemId);
   }
+
+  @override
+  void clearCache() {
+    _dataSource.clearMemoryCache();
+  }
 }
 

@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import '../config/app_config.dart';
 
 enum ApiClientErrorType { timeout, connection, invalidResponse }
 
@@ -44,6 +45,12 @@ abstract interface class ApiClient {
     Map<String, String>? headers,
   });
 
+  Future<Stream<String>> postStream(
+    String path, {
+    Map<String, dynamic>? data,
+    Map<String, String>? headers,
+  });
+
   Future<ApiResponse> postMultipart(
     String path, {
     required Map<String, String> fields,
@@ -73,6 +80,7 @@ class DioApiClient implements ApiClient {
   DioApiClient({
     Dio? dio,
     String? baseUrl,
+    String? appSecret,
     Duration requestTimeout = _defaultRequestTimeout,
   }) : _dio =
            dio ??
@@ -85,7 +93,19 @@ class DioApiClient implements ApiClient {
                headers: const {'Accept': 'application/json'},
                validateStatus: (status) => status != null && status < 600,
              ),
-           );
+           ) {
+    final configuredSecret = (appSecret ?? AppConfig.appSecretKey).trim();
+    if (configuredSecret.isNotEmpty) {
+      _dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            options.headers['X-App-Secret'] = configuredSecret;
+            handler.next(options);
+          },
+        ),
+      );
+    }
+  }
 
   static const Duration _defaultRequestTimeout = Duration(seconds: 20);
 
@@ -112,6 +132,39 @@ class DioApiClient implements ApiClient {
     Map<String, String>? headers,
   }) {
     return _send(path, method: 'POST', data: data, headers: headers);
+  }
+
+  @override
+  Future<Stream<String>> postStream(
+    String path, {
+    Map<String, dynamic>? data,
+    Map<String, String>? headers,
+  }) async {
+    try {
+      final response = await _dio.post<ResponseBody>(
+        path,
+        data: data,
+        options: Options(
+          responseType: ResponseType.stream,
+          headers: {
+            ...?headers,
+            'Accept': 'text/event-stream',
+          },
+        ),
+      );
+
+      final responseBody = response.data;
+      if (responseBody == null) {
+        throw const ApiClientException(ApiClientErrorType.invalidResponse);
+      }
+
+      return responseBody.stream
+          .cast<List<int>>()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter());
+    } on DioException catch (error) {
+      throw ApiClientException(_errorType(error));
+    }
   }
 
   @override
@@ -169,23 +222,53 @@ class DioApiClient implements ApiClient {
     Object? data,
     Map<String, dynamic>? queryParameters,
     Map<String, String>? headers,
+    int maxRetries = 2,
   }) async {
-    try {
-      final response = await _dio.request<Object?>(
-        path,
-        data: data,
-        queryParameters: queryParameters,
-        options: Options(method: method, headers: headers),
-      );
+    var attempt = 0;
+    while (true) {
+      attempt++;
+      try {
+        final response = await _dio.request<Object?>(
+          path,
+          data: data,
+          queryParameters: queryParameters,
+          options: Options(method: method, headers: headers),
+        );
 
-      return ApiResponse(
-        statusCode: response.statusCode ?? 0,
-        data: _decodeResponse(response.data),
-      );
-    } on DioException catch (error) {
-      throw ApiClientException(_errorType(error));
-    } on FormatException {
-      throw const ApiClientException(ApiClientErrorType.invalidResponse);
+        return ApiResponse(
+          statusCode: response.statusCode ?? 0,
+          data: _decodeResponse(response.data),
+        );
+      } on DioException catch (error) {
+        final isRetryable = _isRetryable(error);
+        if (attempt <= maxRetries &&
+            isRetryable &&
+            (method == 'GET' || method == 'HEAD')) {
+          await Future<void>.delayed(Duration(milliseconds: 500 * attempt));
+          continue;
+        }
+        throw ApiClientException(_errorType(error));
+      } on FormatException {
+        throw const ApiClientException(ApiClientErrorType.invalidResponse);
+      }
+    }
+  }
+
+  bool _isRetryable(DioException error) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+      case DioExceptionType.badCertificate:
+      case DioExceptionType.unknown:
+        return true;
+      case DioExceptionType.badResponse:
+        final status = error.response?.statusCode ?? 0;
+        return status == 502 || status == 503 || status == 504 || status == 429;
+      case DioExceptionType.cancel:
+      case DioExceptionType.transformTimeout:
+        return false;
     }
   }
 
@@ -221,12 +304,18 @@ class DioApiClient implements ApiClient {
   }
 
   static String _resolveBaseUrl(String? baseUrl) {
-    var configuredUrl = (baseUrl ?? dotenv.env['API_URL'] ?? '').trim();
+    var configuredUrl = (baseUrl ?? AppConfig.apiUrl).trim();
+    if ((configuredUrl.startsWith('"') && configuredUrl.endsWith('"')) ||
+        (configuredUrl.startsWith("'") && configuredUrl.endsWith("'"))) {
+      configuredUrl = configuredUrl
+          .substring(1, configuredUrl.length - 1)
+          .trim();
+    }
     while (configuredUrl.endsWith('/')) {
       configuredUrl = configuredUrl.substring(0, configuredUrl.length - 1);
     }
     if (configuredUrl.isEmpty) {
-      throw StateError('API_URL is not configured in .env.local.');
+      throw StateError('API_URL is not configured.');
     }
 
     if (kIsWeb && configuredUrl.contains('10.0.2.2')) {

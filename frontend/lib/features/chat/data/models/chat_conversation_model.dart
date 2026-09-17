@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 
 import '../../domain/entities/chat_conversation.dart';
+import '../../domain/entities/item_inquiry_data.dart';
 
 abstract final class ChatConversationModel {
   static ChatConversation fromRecords({
@@ -20,15 +21,26 @@ abstract final class ChatConversationModel {
         ? ChatParticipantRole.owner
         : ChatParticipantRole.renter;
 
+    final rawDisplayName =
+        otherProfile?['display_name']?.toString().trim() ?? '';
     final email = otherProfile?['email']?.toString().trim() ?? '';
     final emailName = email.contains('@') ? email.split('@').first : email;
-    final displayName = emailName.isEmpty ? 'ผู้ใช้งาน Yuemnoi' : emailName;
+    final displayName = rawDisplayName.isNotEmpty
+        ? rawDisplayName
+        : (emailName.isNotEmpty ? emailName : 'ผู้ใช้งาน Yuemnoi');
     final avatarUrl = otherProfile?['user_image_url']?.toString().trim() ?? '';
 
     final rawLastMessage = conversation['last_message']?.toString().trim() ?? '';
     final String cleanPreview;
     if (rawLastMessage.isEmpty) {
       cleanPreview = 'เริ่มการสนทนา';
+    } else if (rawLastMessage.contains('[BOOKING_DATA:')) {
+      cleanPreview = '📋 คำขอเช่าอุปกรณ์';
+    } else if (ItemInquiryData.isInquiry(rawLastMessage)) {
+      final inquiry = ItemInquiryData.fromChatMessage(rawLastMessage);
+      cleanPreview = inquiry != null && inquiry.itemName.isNotEmpty
+          ? '💬 สนใจเช่า: ${inquiry.itemName}'
+          : '💬 สนใจเช่าอุปกรณ์';
     } else if (rawLastMessage.startsWith('↩ ตอบกลับ:') ||
         rawLastMessage.startsWith('💬 ตอบกลับ') ||
         rawLastMessage.startsWith('↪ ตอบกลับ')) {

@@ -1,67 +1,43 @@
-test/
-!test/
-test/*
-!test/core/
-test/core/*
-!test/core/navigation/
-test/core/navigation/*
-!test/core/navigation/payment_deep_link_test.dart
-!test/features/
-test/features/*
-!test/features/payment/
-test/features/payment/*
-!test/features/payment/payment_cubit_test.dart
-.qa/
-design-qa.md
-.serena/
-design-qa
-google-services.json
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
-
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# Flutter / Dart Build & Tools
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
-/coverage/
+build/
+coverage/
 
-# Local client configuration. Never store server-side secrets here.
-.env.local
+# Android Specific
+android/local.properties
+android/app/debug
+android/app/profile
+android/app/release
+android/**/build/
+.gradle/
+*.keystore
+*.jks
+key.properties
 
-# Symbolication related
+# iOS Specific
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+**/ios/Flutter/.last_build_id
+
+# Secrets & Environment Variables
+.env
+.env.*
+!.env.example
+google-services.json
+GoogleService-Info.plist
+
+# Obfuscation & Symbols
 app.*.symbols
-
-# Obfuscation related
 app.*.map.json
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-
+# IDE & OS Files
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
