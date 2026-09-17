@@ -39,24 +39,26 @@ import '../../features/rental_item/data/repositories/rental_item_repository_impl
 import '../../features/rental_item/domain/usecases/create_rental_item_usecase.dart';
 import '../../features/rental_item/presentation/bloc/rental_item_bloc.dart';
 import '../../features/rental_item/presentation/pages/add_rental_item.dart';
-import '../../features/profile/presentation/pages/contact_screen.dart';
-import '../../features/profile/presentation/pages/faq_screen.dart';
-import '../../features/profile/presentation/pages/my_items_screen.dart';
-import '../../features/profile/presentation/pages/rental_status_screen.dart';
+import '../../features/profile/presentation/pages/support/contact_screen.dart';
+import '../../features/profile/presentation/pages/support/faq_screen.dart';
+import '../../features/profile/presentation/pages/rental/my_items_screen.dart';
+import '../../features/profile/presentation/pages/rental/rental_status_screen.dart';
 import '../../features/profile/presentation/pages/user_profile_view_screen.dart';
 import '../../features/profile/presentation/pages/favorite_screen.dart';
-import '../../features/profile/presentation/pages/rental_income_screen.dart';
-import '../../features/profile/presentation/pages/rental_history_screen.dart';
-import '../../features/profile/presentation/pages/terms_of_service_screen.dart';
-import '../../features/profile/presentation/pages/privacy_policy_screen.dart';
-import '../../features/profile/presentation/pages/setting_account_screen.dart';
-import '../../features/profile/presentation/pages/edit_profile_screen.dart';
-import '../../features/profile/presentation/pages/edit_contact_screen.dart';
-import '../../features/profile/presentation/pages/change_account_screen.dart';
-import '../../features/profile/presentation/pages/change_password_screen.dart';
+import '../../features/profile/presentation/pages/rental/rental_income_screen.dart';
+import '../../features/profile/presentation/pages/rental/rental_history_screen.dart';
+import '../../features/profile/presentation/pages/support/terms_of_service_screen.dart';
+import '../../features/profile/presentation/pages/support/privacy_policy_screen.dart';
+import '../../features/profile/presentation/pages/account/setting_account_screen.dart';
+import '../../features/profile/presentation/pages/account/edit_profile_screen.dart';
+import '../../features/profile/presentation/pages/account/edit_contact_screen.dart';
+import '../../features/profile/presentation/pages/account/change_account_screen.dart';
+import '../../features/profile/presentation/pages/account/change_password_screen.dart';
 import '../../features/wallet/presentation/pages/wallet.dart';
 import '../../features/wallet/presentation/pages/wallet_payment_screen.dart';
 import '../../features/wallet/presentation/pages/wallet_success_screen.dart';
+import '../../features/rental_return/presentation/pages/rental_return_page.dart';
+
 abstract final class AppRoutes {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
@@ -94,6 +96,8 @@ abstract final class AppRoutes {
   static const walletPayment = '/wallet/payment';
   static const walletSuccess = '/wallet/success';
   static const paymentReturn = '/payments/:rentalId';
+  static const rentalReturn = '/rental/return/:rentalId';
+  static const rentalReturnDemo = '/rental/return';
 
   static GoRouter? _currentRouter;
   static GoRouter? get router => _currentRouter;
@@ -201,6 +205,24 @@ abstract final class AppRoutes {
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
             child: const RentalStatusScreen(),
+          ),
+        ),
+        GoRoute(
+          path: rentalReturn,
+          pageBuilder: (context, state) {
+            final idStr = state.pathParameters['rentalId'];
+            final rentalId = idStr != null ? int.tryParse(idStr) : null;
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: RentalReturnPage(rentalId: rentalId),
+            );
+          },
+        ),
+        GoRoute(
+          path: rentalReturnDemo,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: const RentalReturnPage(),
           ),
         ),
         GoRoute(
@@ -659,6 +681,14 @@ abstract final class AppRoutes {
     double amount = 0,
   }) {
     return context.push<void>(walletSuccess, extra: amount);
+  }
+
+  static Future<void> openRentalReturn(
+    BuildContext context, {
+    int? rentalId,
+  }) {
+    final route = rentalId != null ? '/rental/return/$rentalId' : rentalReturnDemo;
+    return context.push<void>(route);
   }
 
   static void pop<T extends Object?>(BuildContext context, [T? result]) {

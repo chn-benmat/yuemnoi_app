@@ -206,8 +206,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _ProfileSection(
                       icon: Icons.security_outlined,
                       title: 'หมวดหมู่ความปลอดภัย',
-                      items: const [
+                      items: [
                         _MenuItemData(
+                          icon: Icons.assignment_return_outlined,
+                          title: 'การคืนอุปกรณ์ (ระบบป้องกันการโกง)',
+                          onTap: () => AppRoutes.openRentalReturn(context),
+                        ),
+                        const _MenuItemData(
                           icon: Icons.verified_user_outlined,
                           title: 'การยืนยันตัวตน',
                           showDivider: false,

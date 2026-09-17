@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/network/api_client.dart';
-import '../../../../core/network/supabase_client.dart';
-import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/utils/phone_formatter.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/network/api_client.dart';
+import '../../../../../core/network/supabase_client.dart';
+import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/utils/phone_formatter.dart';
 
 class EditContactScreen extends StatefulWidget {
   const EditContactScreen({super.key});

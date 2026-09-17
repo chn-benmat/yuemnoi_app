@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/network/supabase_client.dart';
-import '../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/navigation/app_routes.dart';
+import '../../../../../core/network/supabase_client.dart';
+import '../../../../../core/theme/app_text_styles.dart';
 
 class RentalHistoryScreen extends StatefulWidget {
   const RentalHistoryScreen({super.key});

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/network/supabase_client.dart';
-import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/utils/phone_formatter.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/navigation/app_routes.dart';
+import '../../../../../core/network/supabase_client.dart';
+import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/utils/phone_formatter.dart';
 
 class SettingAccountScreen extends StatelessWidget {
   const SettingAccountScreen({super.key});

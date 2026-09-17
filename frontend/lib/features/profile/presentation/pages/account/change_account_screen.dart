@@ -2,9 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/navigation/app_routes.dart';
+import '../../../../../core/theme/app_text_styles.dart';
 
 class ChangeAccountScreen extends StatefulWidget {
   const ChangeAccountScreen({super.key});

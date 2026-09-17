@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../../core/constants/colors.dart';
-import '../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/constants/colors.dart';
+import '../../../../../core/theme/app_text_styles.dart';
 
 class ContactScreen extends StatefulWidget {
   const ContactScreen({super.key});
