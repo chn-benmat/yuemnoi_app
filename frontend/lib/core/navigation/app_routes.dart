@@ -60,6 +60,7 @@ import '../../features/wallet/presentation/pages/wallet.dart';
 import '../../features/wallet/presentation/pages/wallet_payment_screen.dart';
 import '../../features/wallet/presentation/pages/wallet_success_screen.dart';
 import '../../features/review/presentation/pages/rental_review_screen.dart';
+import '../../features/rental_return/presentation/pages/rental_return_page.dart';
 
 abstract final class AppRoutes {
   static final GlobalKey<NavigatorState> navigatorKey =
@@ -98,6 +99,9 @@ abstract final class AppRoutes {
   static const wallet = '/wallet';
   static const walletPayment = '/wallet/payment';
   static const walletSuccess = '/wallet/success';
+  static const paymentReturn = '/payments/:rentalId';
+  static const rentalReturn = '/rental/return/:rentalId';
+  static const rentalReturnDemo = '/rental/return';
   static const rentalPaymentSuccess = '/rentals/payment-success';
   static const review = '/review';
 
@@ -242,6 +246,24 @@ abstract final class AppRoutes {
               child: const RentalTrackingMapPage(),
             );
           },
+        ),
+        GoRoute(
+          path: rentalReturn,
+          pageBuilder: (context, state) {
+            final idStr = state.pathParameters['rentalId'];
+            final rentalId = idStr != null ? int.tryParse(idStr) : null;
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: RentalReturnPage(rentalId: rentalId),
+            );
+          },
+        ),
+        GoRoute(
+          path: rentalReturnDemo,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: const RentalReturnPage(),
+          ),
         ),
         GoRoute(
           path: favorite,
@@ -781,6 +803,14 @@ abstract final class AppRoutes {
     double amount = 0,
   }) {
     return context.push<void>(walletSuccess, extra: amount);
+  }
+
+  static Future<void> openRentalReturn(
+    BuildContext context, {
+    int? rentalId,
+  }) {
+    final route = rentalId != null ? '/rental/return/$rentalId' : rentalReturnDemo;
+    return context.push<void>(route);
   }
 
   static Future<void> openRentalPaymentSuccess(BuildContext context) {
