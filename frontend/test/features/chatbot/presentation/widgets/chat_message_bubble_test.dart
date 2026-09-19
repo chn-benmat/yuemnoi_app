@@ -553,6 +553,416 @@ void main() {
         expect(find.textContaining('กำลังค้นหาอุปกรณ์ในระบบ...'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'periodically ticks and updates elapsed seconds in status header while response duration is null',
+      (tester) async {
+        final startTime = DateTime.now();
+        final inProgressMessage = ChatMessage(
+          id: 'assistant-timer-test',
+          role: ChatMessageRole.assistant,
+          content: 'กำลังพิมพ์คำตอบ...',
+          userQuery: 'หาคอมพิวเตอร์',
+          isStreaming: true,
+          statusMessage: 'กำลังสรุปคำแนะนำ...',
+          createdAt: startTime,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(fontFamily: 'Prompt'),
+            home: Scaffold(
+              body: ChatMessageBubble(
+                message: inProgressMessage,
+                onRentPressed: (_) {},
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.textContaining('กำลังสรุปคำแนะนำ...'), findsOneWidget);
+        expect(find.textContaining('(0 วิ)..'), findsOneWidget);
+
+        // Advance 1 second
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.textContaining('(1 วิ)..'), findsOneWidget);
+
+        // Advance 1 more second
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.textContaining('(2 วิ)..'), findsOneWidget);
+
+        // Advance 1 more second
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.textContaining('(3 วิ)..'), findsOneWidget);
+
+        // Now simulate completion by providing responseDuration
+        final completedMessage = inProgressMessage.copyWith(
+          isStreaming: false,
+          statusMessage: 'สรุปคำแนะนำ',
+          responseDuration: const Duration(seconds: 3),
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(fontFamily: 'Prompt'),
+            home: Scaffold(
+              body: ChatMessageBubble(
+                message: completedMessage,
+                onRentPressed: (_) {},
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('สรุปคำแนะนำ (3 วิ)'), findsOneWidget);
+
+        // Advance 2 more seconds - duration must remain frozen and timer stopped
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.text('สรุปคำแนะนำ (3 วิ)'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'filters out recommended item cards that are NOT mentioned in the AI response text',
+      (tester) async {
+        const responseContent =
+            'สำหรับหมวดหมู่แคมป์ปิงและกิจกรรมกลางแจ้ง น้องยืมหน่อยมีอุปกรณ์พร้อมแนะนำดังนี้นะคะ:\n\n'
+            '• **เต็นท์ Coleman Instant Cabin 4 คน** - กางและพับเก็บใน 1 นาที (ค่าเช่า 450.0 บาท/วัน)\n'
+            '• **ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว** - น้ำหนักเบาพกพาสะดวก (ค่าเช่า 250.0 บาท/วัน)\n\n'
+            'คุณลูกค้าสามารถแตะดูรายละเอียดเพิ่มเติมจากการ์ดอุปกรณ์ด้านล่างนี้ได้เลยนะคะ';
+
+        const message = ChatMessage(
+          id: 'assistant-filter-unmentioned-card-test',
+          role: ChatMessageRole.assistant,
+          content: responseContent,
+          recommendedItems: [
+            RecommendedItem(
+              id: 19,
+              name: 'เต็นท์ Coleman Instant Cabin 4 คน',
+              price: 450,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+              description: 'เต็นท์กันฝน',
+            ),
+            RecommendedItem(
+              id: 20,
+              name: 'ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว',
+              price: 250,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+              description: 'โต๊ะสนาม',
+            ),
+            RecommendedItem(
+              id: 21,
+              name: 'ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED',
+              price: 180,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+              description: 'เตาแก๊ส',
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(fontFamily: 'Prompt'),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: ChatMessageBubble(
+                  message: message,
+                  onRentPressed: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Items 1 and 2 were mentioned by AI -> must have cards rendered
+        expect(find.text('เต็นท์ Coleman Instant Cabin 4 คน'), findsWidgets);
+        expect(find.text('ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว'), findsWidgets);
+
+        // Item 3 was NOT mentioned by AI -> card MUST NOT be rendered
+        expect(find.text('ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'renders structured device recommendation blocks cleanly and matches cards without prefix',
+      (tester) async {
+        const responseContent =
+            'ยินดีจัดหาอุปกรณ์แคมป์ปิ้งพร้อมใช้งานให้ค่ะ ขอแนะนำรายการที่มีในระบบนะคะ:\n\n'
+            '**ชื่ออุปกรณ์:** เต็นท์ Coleman Instant Cabin 4 คน\n'
+            '- **รายละเอียด:** เต็นท์กันฝนและลมแรง กางและพับเก็บเสร็จใน 1 นาที\n'
+            '- **ราคาเช่า:** 450.0 บาท/วัน\n\n'
+            '**ชื่ออุปกรณ์: ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว**\n'
+            '- **รายละเอียด:** โต๊ะพับอลูมิเนียมพร้อมเก้าอี้ 4 ตัว น้ำหนักเบาพกพาสะดวก\n'
+            '- **ราคาเช่า:** 250.0 บาท/วัน\n\n'
+            'เชิญแตะดูรายละเอียดเพิ่มเติมจากการ์ดอุปกรณ์ด้านล่างนี้ได้เลยนะคะ';
+
+        const message = ChatMessage(
+          id: 'assistant-structured-device-format-test',
+          role: ChatMessageRole.assistant,
+          content: responseContent,
+          recommendedItems: [
+            RecommendedItem(
+              id: 19,
+              name: 'เต็นท์ Coleman Instant Cabin 4 คน',
+              price: 450,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+              description: 'เต็นท์กันฝน',
+            ),
+            RecommendedItem(
+              id: 20,
+              name: 'ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว',
+              price: 250,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+              description: 'โต๊ะสนาม',
+            ),
+            RecommendedItem(
+              id: 21,
+              name: 'ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED',
+              price: 180,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+              description: 'เตาแก๊ส',
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(fontFamily: 'Prompt'),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: ChatMessageBubble(
+                  message: message,
+                  onRentPressed: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Cards must render with clean item names (without "ชื่ออุปกรณ์: " on the card)
+        expect(find.text('เต็นท์ Coleman Instant Cabin 4 คน'), findsWidgets);
+        expect(find.text('ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว'), findsWidgets);
+        expect(find.text('ชื่ออุปกรณ์: เต็นท์ Coleman Instant Cabin 4 คน'), findsNothing);
+
+        // Unmentioned item 3 must not render
+        expect(find.text('ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'renders bold device titles directly without ชื่ออุปกรณ์, formats รายละเอียด/ราคาเช่า bold, and converts units/prices to Thai integer format',
+      (tester) async {
+        const responseContent =
+            'น้องยืมหน่อยขอแนะนำมือถือและอุปกรณ์สื่อสารพร้อมใช้งานในระบบนะคะ:\n\n'
+            '**iPhone 15 Pro 128GB**\n'
+            '- **รายละเอียด:** สมาร์ตโฟนชิป A17 Pro กล้องระดับโปร 48MP\n'
+            '- **ราคาเช่า:** 800 บาท ต่อ วัน\n\n'
+            '**Samsung Galaxy S24 Ultra**\n'
+            '- **รายละเอียด:** สมาร์ตโฟนแฟลกชิปพร้อมปากกา S-Pen\n'
+            '- **ราคาเช่า:** 850 บาท ต่อ วัน\n\n'
+            'คุณพี่สามารถแตะดูการ์ดอุปกรณ์ด้านล่างเพื่อทำรายการต่อได้เลยนะคะ';
+
+        const message = ChatMessage(
+          id: 'assistant-clean-bold-title-test',
+          role: ChatMessageRole.assistant,
+          content: responseContent,
+          recommendedItems: [
+            RecommendedItem(
+              id: 10,
+              name: 'iPhone 15 Pro 128GB',
+              price: 800,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'โทรศัพท์และอุปกรณ์สื่อสาร',
+              description: 'สมาร์ตโฟนชิป A17 Pro',
+            ),
+            RecommendedItem(
+              id: 11,
+              name: 'Samsung Galaxy S24 Ultra',
+              price: 850,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'โทรศัพท์และอุปกรณ์สื่อสาร',
+              description: 'สมาร์ตโฟนแฟลกชิป',
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(fontFamily: 'Prompt'),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: ChatMessageBubble(
+                  message: message,
+                  onRentPressed: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Must NOT find "ชื่ออุปกรณ์" anywhere in the text
+        expect(find.textContaining('ชื่ออุปกรณ์'), findsNothing);
+
+        // Bold titles and details are rendered
+        expect(find.textContaining('800 บาท ต่อ วัน'), findsWidgets);
+        expect(find.textContaining('850 บาท ต่อ วัน'), findsWidgets);
+        expect(find.textContaining('daily'), findsNothing);
+        expect(find.textContaining('800.0'), findsNothing);
+        expect(find.textContaining('850.0'), findsNothing);
+
+        // Recommended cards for both items are rendered
+        expect(find.text('iPhone 15 Pro 128GB'), findsWidgets);
+        expect(find.text('Samsung Galaxy S24 Ultra'), findsWidgets);
+      },
+    );
+
+    testWidgets(
+      'does not render cards when response is negative even if message contains recommendedItems',
+      (tester) async {
+        const negativeText =
+            'ขณะนี้ทางยืมหน่อยยังไม่มีบริการให้เช่าเสื้อผ้าหรือสูทสากลสำหรับออกงานค่ะ';
+        const message = ChatMessage(
+          id: 'negative-test-1',
+          role: ChatMessageRole.assistant,
+          content: negativeText,
+          recommendedItems: [
+            RecommendedItem(
+              id: 1,
+              name: 'Dyson V12 Detect Slim',
+              price: 450,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'เครื่องใช้ไฟฟ้าและอุปกรณ์ภายในบ้าน',
+              description: 'เครื่องดูดฝุ่นไร้สาย',
+            ),
+            RecommendedItem(
+              id: 2,
+              name: 'Wanbo T2 Max New',
+              price: 350,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'เครื่องใช้ไฟฟ้าและอุปกรณ์ภายในบ้าน',
+              description: 'โปรเจกเตอร์',
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(fontFamily: 'Prompt'),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: ChatMessageBubble(
+                  message: message,
+                  onRentPressed: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // The negative message is rendered
+        expect(find.textContaining('ยังไม่มีบริการให้เช่าเสื้อผ้าหรือสูทสากล'), findsOneWidget);
+
+        // ZERO cards must be rendered
+        expect(find.byType(RecommendedItemCard), findsNothing);
+        expect(find.text('Dyson V12 Detect Slim'), findsNothing);
+        expect(find.text('Wanbo T2 Max New'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'renders recommended item cards when AI offers alternative recommendations even if response notes exact item is not available',
+      (tester) async {
+        const responseText =
+            'ขณะนี้ระบบของเรายังไม่มีคอมพิวเตอร์สำหรับเล่นเกมโดยเฉพาะค่ะ แต่เรามีเครื่องเล่นเกมพกพาและคอนโซลที่ตอบโจทย์ความบันเทิงแทนได้นะคะ ขอแนะนำเป็นทางเลือกเสริมดังนี้ค่ะ:\n\n'
+            '**PlayStation 5 พร้อมจอย 2 ตัวและเกม 3 แผ่น**\n'
+            '• รายละเอียด: เครื่องเล่นเกม PS5 พร้อมจอย DualSense และเกมยอดนิยม\n'
+            '• ราคาเช่า: 700 บาท ต่อ วัน\n\n'
+            '**Nintendo Switch OLED พร้อมจอย 4 ตัว**\n'
+            '• รายละเอียด: เครื่องเล่นเกมพกพาหน้าจอ OLED 7 นิ้ว พร้อมจอยคอนและเกมปาร์ตี้\n'
+            '• ราคาเช่า: 400 บาท ต่อ วัน\n\n'
+            'คุณผู้ใช้งานสามารถแตะดูรายละเอียดเพิ่มเติมที่การ์ดด้านล่างนี้ได้เลยนะคะ';
+
+        const message = ChatMessage(
+          id: 'alternative-recommendation-test',
+          role: ChatMessageRole.assistant,
+          content: responseText,
+          recommendedItems: [
+            RecommendedItem(
+              id: 1,
+              name: 'PlayStation 5 พร้อมจอย 2 ตัวและเกม 3 แผ่น',
+              price: 700,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'เกมและอุปกรณ์เล่นเกม',
+              description: 'เครื่องเกมคอนโซล',
+            ),
+            RecommendedItem(
+              id: 2,
+              name: 'Nintendo Switch OLED พร้อมจอย 4 ตัว',
+              price: 400,
+              unit: 'วัน',
+              imageUrl: '',
+              status: 'available',
+              category: 'เกมและอุปกรณ์เล่นเกม',
+              description: 'เครื่องเล่นเกมพกพา',
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(fontFamily: 'Prompt'),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: ChatMessageBubble(
+                  message: message,
+                  onRentPressed: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Cards must be rendered for both recommended alternative items
+        expect(find.byType(RecommendedItemCard), findsNWidgets(2));
+        expect(find.text('PlayStation 5 พร้อมจอย 2 ตัวและเกม 3 แผ่น'), findsWidgets);
+        expect(find.text('Nintendo Switch OLED พร้อมจอย 4 ตัว'), findsWidgets);
+      },
+    );
   });
 }
 

@@ -1,47 +1,38 @@
-from abc import ABC, abstractmethod
-from typing import List, Optional, Type, TypeVar, AsyncIterator, Any
-from app.domain.entities.chat import ChatMessage
+from typing import AsyncGenerator, Optional, Protocol, Type, TypeVar
+from pydantic import BaseModel
 
-T = TypeVar("T")
+T = TypeVar("T", bound=BaseModel)
 
-class LLMServiceInterface(ABC):
-    @abstractmethod
+
+class LLMServiceInterface(Protocol):
+    """Abstract port for interacting with LLM providers with automatic fallback."""
+
     async def generate_text(
         self,
         prompt: str,
         system_instruction: Optional[str] = None,
-        temperature: float = 0.7
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
     ) -> str:
-        """Generate plain text from a prompt."""
-        pass
+        """Generate unstructured text completion."""
+        ...
 
-    @abstractmethod
     async def generate_structured(
         self,
         prompt: str,
-        response_model: Type[T],
+        schema: Type[T],
         system_instruction: Optional[str] = None,
-        temperature: float = 0.2
+        temperature: float = 0.2,
     ) -> T:
-        """Generate a guaranteed structured output adhering to a Pydantic model schema."""
-        pass
+        """Generate typed structured output conforming to a Pydantic schema."""
+        ...
 
-    @abstractmethod
-    async def generate_chat(
+    async def generate_stream(
         self,
-        messages: List[ChatMessage],
+        prompt: str,
         system_instruction: Optional[str] = None,
-        temperature: float = 0.7
-    ) -> str:
-        """Generate a chat response from a list of ChatMessage objects."""
-        pass
-
-    @abstractmethod
-    async def generate_chat_stream(
-        self,
-        messages: List[ChatMessage],
-        system_instruction: Optional[str] = None,
-        temperature: float = 0.7
-    ) -> AsyncIterator[str]:
-        """Stream chat completion tokens."""
-        pass
+        max_tokens: int = 1500,
+        temperature: float = 0.7,
+    ) -> AsyncGenerator[str, None]:
+        """Stream generated text chunks asynchronously."""
+        ...

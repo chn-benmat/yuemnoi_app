@@ -277,7 +277,7 @@ class AISummaryBottomSheet extends StatelessWidget {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Google Search (Serper.dev)',
+                                        'Web Search Grounding (Tavily AI)',
                                         style: TextStyle(
                                           fontFamily: 'Prompt',
                                           fontSize: 12,

@@ -335,25 +335,6 @@ func (h *UserHandler) VerifyResetOTP(c *gin.Context) {
 	})
 }
 
-// [POST] /api/v1/auth/logout - ออกจากระบบ
-func (h *UserHandler) Logout(c *gin.Context) {
-	userToken, ok := extractToken(c)
-	if !ok {
-		return
-	}
-
-	err := h.repo.Logout(c.Request.Context(), userToken)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ออกจากระบบไม่สำเร็จ: " + err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status":  http.StatusOK,
-		"message": "ออกจากระบบสำเร็จ",
-	})
-}
-
 // [GET] /api/v1/user/profile - ดึงข้อมูลโปรไฟล์ของผู้ใช้ที่ล็อกอินอยู่
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	userID, ok := authenticatedUserID(c, h.verifier)

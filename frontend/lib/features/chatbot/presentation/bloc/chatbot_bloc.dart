@@ -191,11 +191,18 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
                             ? stopwatch.elapsed
                             : const Duration(seconds: 1)))
                   : last.responseDuration;
+              final dynamicStatus = last.questions.isNotEmpty
+                  ? 'สอบถามข้อมูลเพิ่มเติม'
+                  : (last.recommendedItems.isNotEmpty
+                      ? 'สรุปคำแนะนำ'
+                      : (last.searchQuery != null
+                          ? 'ผลการเปรียบเทียบ'
+                          : last.statusMessage));
               currentMessages[lastIndex] = last.copyWith(
                 content: last.content + text,
                 responseDuration: updatedDuration,
                 statusMessage: isFirstDelta
-                    ? 'สรุปคำแนะนำ'
+                    ? (dynamicStatus ?? 'สรุปคำแนะนำ')
                     : last.statusMessage,
               );
               return state.copyWith(messages: currentMessages);
@@ -214,9 +221,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
                   : last.questions;
               final effectiveRecommended = effectiveQuestions.isNotEmpty
                   ? const <RecommendedItem>[]
-                  : (recommendedItems.isNotEmpty
-                        ? recommendedItems
-                        : last.recommendedItems);
+                  : recommendedItems;
               final effectiveContent = answer?.trim().isNotEmpty == true
                   ? answer!.trim()
                   : last.content;
@@ -228,6 +233,19 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
                   (stopwatch.elapsed.inMilliseconds > 0
                       ? stopwatch.elapsed
                       : const Duration(seconds: 1));
+              final String finalStatus;
+              if (effectiveQuestions.isNotEmpty) {
+                finalStatus = 'สอบถามข้อมูลเพิ่มเติม';
+              } else if (searchQuery != null || searchSources.isNotEmpty) {
+                finalStatus = 'ผลการเปรียบเทียบ';
+              } else if (effectiveRecommended.isNotEmpty) {
+                finalStatus = 'สรุปคำแนะนำ';
+              } else if (last.statusMessage != null &&
+                  !last.statusMessage!.startsWith('กำลัง')) {
+                finalStatus = last.statusMessage!;
+              } else {
+                finalStatus = 'สรุปคำแนะนำ';
+              }
               currentMessages[lastIndex] = last.copyWith(
                 content: effectiveContent.isEmpty
                     ? 'การตอบกลับไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง'
@@ -240,7 +258,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
                 activities: effectiveActivities,
                 isStreaming: false,
                 responseDuration: effectiveDuration,
-                statusMessage: 'สรุปคำแนะนำ',
+                statusMessage: finalStatus,
               );
               return state.copyWith(
                 messages: currentMessages,

@@ -1,29 +1,29 @@
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import Dict, List, Optional
+from pydantic import BaseModel, Field
 
-@dataclass
-class ChoiceOption:
+
+class ChoiceOption(BaseModel):
+    """Domain model representing a clickable choice chip."""
     id: str
     label: str
-    description: Optional[str] = None
+    description: str = ""
     action_value: str = ""
 
-@dataclass
-class QuestionStep:
+
+class QuestionStep(BaseModel):
+    """Domain model representing an adaptive multi-step question."""
     id: str
     title: str
-    options: List[str] = field(default_factory=list)
+    options: List[str] = Field(default_factory=list)
     step: int = 1
     total_steps: int = 1
-    branch_titles: Optional[Dict[str, str]] = None
-    branch_options: Optional[Dict[str, List[str]]] = None
+    branch_titles: Dict[str, str] = Field(default_factory=dict)
+    branch_options: Dict[str, List[str]] = Field(default_factory=dict)
 
-@dataclass
-class ClarificationQuestion:
+
+class ClarificationQuestion(BaseModel):
+    """Domain model representing clarification details for underspecified requests."""
     question: str
-    options: List[ChoiceOption] = field(default_factory=list)
     missing_dimension: str = ""
-    original_query: str = ""
-    suggested_intent: Optional[str] = None
-    steps: List[QuestionStep] = field(default_factory=list)
-
+    options: List[ChoiceOption] = Field(default_factory=list)
+    questions: List[QuestionStep] = Field(default_factory=list)
