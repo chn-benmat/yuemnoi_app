@@ -21,8 +21,10 @@ class ChatBotScreen extends StatefulWidget {
 
 class _ChatBotScreenState extends State<ChatBotScreen> {
   static const double _scrollButtonThreshold = 120;
-  static const double _autoScrollThreshold = 180;
+  static const double _autoScrollThreshold = 320;
 
+  final GlobalKey<InteractiveQuestionnaireCardState> _questionnaireKey =
+      GlobalKey<InteractiveQuestionnaireCardState>();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _messageFocusNode = FocusNode();
@@ -34,6 +36,8 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
   bool _dismissedQuestionnaire = false;
   bool _isScrollToBottomScheduled = false;
   bool _isScrollScheduled = false;
+  bool _hasPendingScroll = false;
+  bool _pendingScrollForce = false;
 
   @override
   void initState() {
@@ -67,6 +71,22 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
         _dismissedQuestionnaire = false;
       });
     } else {
+      final hasActiveQuestionnaire =
+          !_dismissedQuestionnaire &&
+          state.messages.isNotEmpty &&
+          state.messages.last.role == ChatMessageRole.assistant &&
+          state.messages.last.questions.isNotEmpty &&
+          state.messages.last.questions.any(
+            (q) => q.selectedOption == null,
+          );
+
+      if (hasActiveQuestionnaire && _questionnaireKey.currentState != null) {
+        _questionnaireKey.currentState!.submitCustomAnswer(query);
+        _messageController.clear();
+        _messageFocusNode.requestFocus();
+        return;
+      }
+
       context.read<ChatbotBloc>().add(ChatbotMessageSubmitted(query));
       setState(() {
         _dismissedQuestionnaire = false;
@@ -240,7 +260,11 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
   }
 
   void _scrollToBottom({bool force = false}) {
-    if (_isScrollToBottomScheduled) return;
+    if (_isScrollToBottomScheduled) {
+      _hasPendingScroll = true;
+      if (force) _pendingScrollForce = true;
+      return;
+    }
     _isScrollToBottomScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
@@ -249,7 +273,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
         await _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 280),
+          duration: const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
         );
         if (!mounted || !_scrollController.hasClients) return;
@@ -262,6 +286,12 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
         // Safe against animation interruption during user gesture
       } finally {
         _isScrollToBottomScheduled = false;
+        if (_hasPendingScroll && mounted) {
+          final shouldForce = _pendingScrollForce;
+          _hasPendingScroll = false;
+          _pendingScrollForce = false;
+          _scrollToBottom(force: shouldForce);
+        }
       }
     });
   }
@@ -403,7 +433,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                               MediaQuery.sizeOf(context).width < 340 ? 16 : 28,
                               24,
                               MediaQuery.sizeOf(context).width < 340 ? 16 : 28,
-                              18,
+                              80,
                             ),
                             itemCount:
                                 visibleMessagesCount +
@@ -436,6 +466,8 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                                       originalIndex,
                                     ),
                                 onTextProgress: _keepLatestMessageVisible,
+                                onCardRevealed: () =>
+                                    _scrollToBottom(force: true),
                                 onEdit:
                                     state.messages[originalIndex].role ==
                                             ChatMessageRole.user &&
@@ -455,6 +487,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                     ),
                     if (hasActiveQuestionnaire)
                       InteractiveQuestionnaireCard(
+                        key: _questionnaireKey,
                         questions: state.messages.last.questions,
                         onCompleted: (summary) =>
                             _sendQuestionnaireAnswer(summary, state),
@@ -468,6 +501,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                             setState(() => _dismissedQuestionnaire = true),
                         onCustomInput: () {
                           _messageFocusNode.requestFocus();
+                          _scrollToBottom(force: true);
                         },
                       )
                     else if (!state.isSending &&

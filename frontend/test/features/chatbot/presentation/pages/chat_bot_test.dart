@@ -10,6 +10,7 @@ import 'package:frontend/features/chatbot/domain/usecases/send_chat_message_usec
 import 'package:frontend/features/chatbot/presentation/bloc/chatbot_bloc.dart';
 import 'package:frontend/features/chatbot/presentation/bloc/chatbot_event.dart';
 import 'package:frontend/features/chatbot/presentation/pages/chat_bot.dart';
+import 'package:frontend/features/chatbot/presentation/widgets/chat_message_bubble.dart';
 
 class FakeChatbotRepository implements ChatbotRepository {
   int callCount = 0;
@@ -374,7 +375,8 @@ void main() {
     expect(find.text('แนะนำ Canon EOS R5 สำหรับงานนี้ค่ะ'), findsOneWidget);
     expect(find.text('Canon EOS R5'), findsOneWidget);
     expect(find.textContaining('500 ฿'), findsOneWidget);
-    expect(find.text('รายละเอียด'), findsOneWidget);
+    expect(find.byType(RecommendedItemCard), findsOneWidget);
+    expect(find.text('รายละเอียด'), findsNothing);
     expect(find.text('ปล่อยเช่า'), findsNothing);
   });
 
@@ -455,8 +457,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('ทำงาน/ออฟฟิศ (โน้ตบุ๊ก/PC)'), findsWidgets);
-      expect(find.text('ตอบเอง'), findsOneWidget);
+      expect(find.text('ตอบเอง'), findsNothing);
       expect(find.text('Skip'), findsOneWidget);
+      expect(find.byKey(const Key('chatbot-composer')), findsOneWidget);
+      expect(find.byKey(const Key('chatbot-message-field')), findsOneWidget);
       expect(repository.callCount, 1);
 
       // 3. User taps option 1 ("ทำงาน/ออฟฟิศ (โน้ตบุ๊ก/PC)") on Question 1
@@ -509,6 +513,70 @@ void main() {
       expect(
         find.byKey(const Key('chatbot-questionnaire-recap-q2')),
         findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'allows typing custom answer into composer during active questionnaire and submits to advance step',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(400, 850);
+      addTearDown(() {
+        tester.view.resetDevicePixelRatio();
+        tester.view.resetPhysicalSize();
+      });
+
+      final repository = FakeDynamicQuestionnaireRepository();
+      final sendMessage = SendChatMessageUseCase(repository);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BlocProvider(
+            create: (_) => ChatbotBloc(sendMessage: sendMessage),
+            child: const ChatBotScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Submit "เช่าคอม"
+      await tester.enterText(
+        find.byKey(const Key('chatbot-message-field')),
+        'เช่าคอม',
+      );
+      await tester.tap(find.byKey(const Key('chatbot-send-button')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byKey(const Key('chatbot-questionnaire-card')), findsOneWidget);
+      expect(find.text('1 of 2'), findsOneWidget);
+
+      // Type custom answer in normal composer
+      await tester.enterText(
+        find.byKey(const Key('chatbot-message-field')),
+        'ตัดต่อวิดีโอ 4K',
+      );
+      await tester.tap(find.byKey(const Key('chatbot-send-button')));
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pumpAndSettle();
+
+      // Advances to Step 2 locally!
+      expect(find.text('2 of 2'), findsOneWidget);
+
+      // Select option on Step 2
+      final option2 = find.byKey(
+        const Key('chatbot-questionnaire-option-เน้นพกพา (โน้ตบุ๊ก)'),
+      );
+      await tester.tap(option2);
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pumpAndSettle();
+
+      expect(repository.callCount, 2);
+      expect(
+        repository.latestQuery,
+        'ตัดต่อวิดีโอ 4K, เน้นพกพา (โน้ตบุ๊ก)',
       );
     },
   );
@@ -793,6 +861,38 @@ void main() {
       expect(finalHeader, equals(capturedHeader));
     },
   );
+
+  testWidgets(
+    'does not render cards when backend delivers empty recommendedItems on done even if metadata had candidate items',
+    (tester) async {
+      final repository = FakeUnavailableItemRepository();
+      final sendMessage = SendChatMessageUseCase(repository);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BlocProvider(
+            create: (_) => ChatbotBloc(sendMessage: sendMessage),
+            child: const ChatBotScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('chatbot-message-field')),
+        'มีเสื้อผ้าหรือสูทสากลให้เช่าไหม',
+      );
+      await tester.tap(find.byKey(const Key('chatbot-send-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ'),
+        findsOneWidget,
+      );
+      expect(find.text('Dyson V12 Detect Slim'), findsNothing);
+    },
+  );
 }
 
 class FakeDynamicQuestionnaireRepository implements ChatbotRepository {
@@ -913,6 +1013,50 @@ class FakeDynamicQuestionnaireRepository implements ChatbotRepository {
         ],
       );
     }
+  }
+
+  @override
+  void close() {}
+}
+
+class FakeUnavailableItemRepository implements ChatbotRepository {
+  @override
+  Future<ChatResponse> sendMessage({
+    required String query,
+    required List<ChatMessage> history,
+  }) async {
+    return const ChatResponse(
+      answer: 'ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ',
+      recommendedItems: [],
+    );
+  }
+
+  @override
+  Stream<ChatStreamEvent> sendMessageStream({
+    required String query,
+    required List<ChatMessage> history,
+  }) async* {
+    yield const ChatMetadataEvent(
+      mode: 'recommendation',
+      recommendedItems: [
+        RecommendedItem(
+          id: 99,
+          name: 'Dyson V12 Detect Slim',
+          price: 450,
+          unit: 'วัน',
+          imageUrl: '',
+          status: 'available',
+          category: 'เครื่องใช้ไฟฟ้าและอุปกรณ์ภายในบ้าน',
+          description: 'เครื่องดูดฝุ่นไร้สาย',
+        ),
+      ],
+    );
+    yield const ChatDeltaEvent(
+      text: 'ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ',
+    );
+    yield const ChatDoneEvent(
+      recommendedItems: [],
+    );
   }
 
   @override

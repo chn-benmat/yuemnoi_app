@@ -62,8 +62,8 @@ void main() {
       expect(find.text('สรุปการทำงานของ AI'), findsOneWidget);
       expect(find.textContaining('7 วินาที'), findsOneWidget);
 
-      // ตรวจสอบ Google Search Query Card
-      expect(find.text('Google Search (Serper.dev)'), findsOneWidget);
+      // ตรวจสอบ Web Search Query Card
+      expect(find.text('Web Search Grounding (Tavily AI)'), findsOneWidget);
       expect(
         find.text('“Sony A7 IV vs Sony FX3 specs comparison”'),
         findsOneWidget,

@@ -1,28 +1,25 @@
-from fastapi import APIRouter, Depends
 from typing import List
-from app.interface.schemas.item_response import ItemListResponse
-from app.application.dtos.item_dto import ItemDTO
-from app.core.container import Container, get_container
+from fastapi import APIRouter, HTTPException, status
 
-router = APIRouter(prefix="/items", tags=["Items"])
+from app.application.dtos.chat_dto import ItemDTO
+from app.core.container import container
+from app.core.logging import logger
 
-@router.get("", response_model=ItemListResponse)
-async def list_items(
-    container: Container = Depends(get_container)
-) -> ItemListResponse:
-    """Retrieve all rental items cached from Supabase item_tb."""
-    items = await container.query_items_use_case.get_all_cached_items()
-    item_dtos = [
-        ItemDTO(
-            id=it.id,
-            name=it.item_name,
-            category=it.category,
-            price=it.price,
-            type=it.type,
-            status=it.status,
-            image_urls=it.item_image_url,
-            description=it.description
+router = APIRouter()
+
+
+@router.get(
+    "/items",
+    response_model=List[ItemDTO],
+    summary="Get cached list of rental inventory items",
+)
+async def get_items_endpoint() -> List[ItemDTO]:
+    try:
+        items = await container.item_repository.get_all_items()
+        return [ItemDTO.from_entity(i) for i in items]
+    except Exception as exc:
+        logger.error(f"Failed to fetch catalog items: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve inventory items",
         )
-        for it in items
-    ]
-    return ItemListResponse(total=len(item_dtos), items=item_dtos)

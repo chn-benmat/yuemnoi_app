@@ -242,8 +242,8 @@ class ChatbotRemoteDataSource {
 
   // ส่งบริบทคำถามจริงให้โมเดลเข้าใจคำตอบช้อย โดยไม่เดาจากข้อความ
   String _historyContent(ChatMessage message) {
-    final content = message.content.length > 600
-        ? message.content.substring(0, 600)
+    final content = message.content.length > 1500
+        ? message.content.substring(0, 1500)
         : message.content;
     if (message.questions.isEmpty && message.recommendedItems.isEmpty) {
       return content;

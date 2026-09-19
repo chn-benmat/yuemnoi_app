@@ -91,7 +91,7 @@ void main() {
     expect(find.text('4'), findsOneWidget);
 
     // Footer actions
-    expect(find.text('ตอบเอง'), findsOneWidget);
+    expect(find.text('ตอบเอง'), findsNothing);
     expect(find.text('Skip'), findsOneWidget);
 
     // Tap option 1
@@ -177,11 +177,10 @@ void main() {
     expect(completedSummary, 'ทำงาน/ออฟฟิศ (โน้ตบุ๊ก/PC), เน้นพกพา (โน้ตบุ๊ก)');
   });
 
-  testWidgets('supports custom input, skip, and dismiss actions', (
+  testWidgets('supports skip and dismiss actions and does not render custom input button', (
     tester,
   ) async {
     var dismissed = false;
-    var customInputTriggered = false;
     String? completedSummary;
 
     await tester.pumpWidget(
@@ -192,15 +191,14 @@ void main() {
             questions: const [step1Question],
             onCompleted: (summary) => completedSummary = summary,
             onDismiss: () => dismissed = true,
-            onCustomInput: () => customInputTriggered = true,
           ),
         ),
       ),
     );
 
-    // Tap custom input
-    await tester.tap(find.byKey(const Key('chatbot-questionnaire-custom')));
-    expect(customInputTriggered, isTrue);
+    // Custom input button is removed
+    expect(find.byKey(const Key('chatbot-questionnaire-custom')), findsNothing);
+    expect(find.text('ตอบเอง'), findsNothing);
 
     // Tap close button
     await tester.tap(find.byKey(const Key('chatbot-questionnaire-close')));
@@ -370,5 +368,34 @@ void main() {
 
     expect(completedSummary, 'แคมป์ปิ้งและกิจกรรมกลางแจ้ง, กางเต็นท์พักผ่อน');
   });
+
+  testWidgets('allows submitting custom answer via submitCustomAnswer', (
+    tester,
+  ) async {
+    String? completedSummary;
+    final cardKey = GlobalKey<InteractiveQuestionnaireCardState>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(fontFamily: 'Prompt'),
+        home: Scaffold(
+          body: InteractiveQuestionnaireCard(
+            key: cardKey,
+            questions: const [singleStepQuestion],
+            onCompleted: (summary) => completedSummary = summary,
+            onDismiss: () {},
+            onCustomInput: () {},
+          ),
+        ),
+      ),
+    );
+
+    // Call submitCustomAnswer
+    cardKey.currentState!.submitCustomAnswer('สตรีมมิงเกม 4K');
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(completedSummary, 'สตรีมมิงเกม 4K');
+  });
 }
+
 
