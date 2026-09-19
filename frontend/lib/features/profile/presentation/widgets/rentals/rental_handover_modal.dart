@@ -965,24 +965,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
               ),
             ),
           ),
-          const SizedBox(height: 6),
-          // ปุ่มลัดสำหรับผู้เช่ากรณีที่ผู้ปล่อยเช่ายืนยันแล้ว
-          Center(
-            child: TextButton.icon(
-              onPressed: _onHandoverCompleted,
-              icon: const Icon(Icons.check_circle_outline_rounded, size: 15, color: Color(0xFF10B981)),
-              label: const Text(
-                'ผู้ปล่อยเช่ายืนยันแล้ว (ไปยังหน้าสำเร็จทันที)',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 12,
-                  color: Color(0xFF10B981),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
         ] else ...[
           // ── ฝั่งผู้ปล่อยเช่า: สแกน QR Code หรือกรอกรหัส PIN จากผู้เช่า ────────
           SizedBox(
