@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -15,6 +16,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.animateAssistantResponse = false,
     this.onAnimationStarted,
     this.onTextProgress,
+    this.onCardRevealed,
     this.onEdit,
     this.onOptionSelected,
     super.key,
@@ -25,6 +27,7 @@ class ChatMessageBubble extends StatelessWidget {
   final bool animateAssistantResponse;
   final VoidCallback? onAnimationStarted;
   final VoidCallback? onTextProgress;
+  final VoidCallback? onCardRevealed;
   final VoidCallback? onEdit;
   final ValueChanged<String>? onOptionSelected;
 
@@ -60,6 +63,7 @@ class ChatMessageBubble extends StatelessWidget {
               animate: animateAssistantResponse,
               onAnimationStarted: onAnimationStarted,
               onProgress: onTextProgress,
+              onCardRevealed: onCardRevealed,
               onOptionSelected: onOptionSelected,
             ),
     );
@@ -104,6 +108,7 @@ class _AnimatedAssistantContent extends StatefulWidget {
     required this.animate,
     this.onAnimationStarted,
     this.onProgress,
+    this.onCardRevealed,
     this.onOptionSelected,
   });
 
@@ -112,6 +117,7 @@ class _AnimatedAssistantContent extends StatefulWidget {
   final bool animate;
   final VoidCallback? onAnimationStarted;
   final VoidCallback? onProgress;
+  final VoidCallback? onCardRevealed;
   final ValueChanged<String>? onOptionSelected;
 
   @override
@@ -122,6 +128,9 @@ class _AnimatedAssistantContent extends StatefulWidget {
 class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
   Timer? _typewriterTimer;
   Timer? _cardStaggerTimer;
+  Timer? _statusHeaderTimer;
+  DateTime? _fallbackStartTime;
+  int _secondsElapsed = 0;
   Characters _targetCharacters = Characters('');
   int _visibleCount = 0;
   int _revealedCardsCount = 0;
@@ -129,6 +138,41 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
 
   bool get _isComplete =>
       !widget.message.isStreaming && _visibleCount >= _targetCharacters.length;
+
+  void _updateElapsed() {
+    final start = widget.message.createdAt ?? _fallbackStartTime;
+    if (start != null) {
+      final diff = DateTime.now().difference(start).inSeconds;
+      _secondsElapsed = diff > _secondsElapsed ? diff : _secondsElapsed + 1;
+    } else {
+      _secondsElapsed += 1;
+    }
+  }
+
+  void _startStatusHeaderTimerIfNeeded() {
+    if (_shouldShowStatusHeader && widget.message.responseDuration == null) {
+      if (_statusHeaderTimer == null) {
+        _statusHeaderTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (!mounted) {
+            timer.cancel();
+            _statusHeaderTimer = null;
+            return;
+          }
+          if (widget.message.responseDuration != null || !_shouldShowStatusHeader) {
+            timer.cancel();
+            _statusHeaderTimer = null;
+            return;
+          }
+          setState(() {
+            _updateElapsed();
+          });
+        });
+      }
+    } else {
+      _statusHeaderTimer?.cancel();
+      _statusHeaderTimer = null;
+    }
+  }
 
   String _resolveContent() {
     final text = widget.message.content.trim();
@@ -139,60 +183,99 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
     return 'การตอบกลับไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง';
   }
 
+  bool _isTypewriting = false;
+
   @override
   void initState() {
     super.initState();
+    _fallbackStartTime = widget.message.createdAt ?? DateTime.now();
+    final start = widget.message.createdAt ?? _fallbackStartTime;
+    _secondsElapsed = start != null
+        ? math.max(0, DateTime.now().difference(start).inSeconds)
+        : 0;
+    _startStatusHeaderTimerIfNeeded();
     final effectiveText = _resolveContent();
     _targetCharacters = effectiveText.characters;
 
-    if (widget.message.isStreaming ||
-        widget.message.responseDuration != null ||
-        widget.message.questions.any((q) => q.selectedOption != null) ||
-        !widget.animate ||
-        _targetCharacters.isEmpty) {
+    // หากไม่ใช่ข้อความใหม่ที่ต้อง animate หรือเป็นแบบสอบถามที่ตอบแล้ว
+    final isNotAnimated = !widget.animate;
+    final hasAnsweredQuestion =
+        widget.message.questions.any((q) => q.selectedOption != null);
+
+    if (isNotAnimated || hasAnsweredQuestion) {
       _visibleCount = _targetCharacters.length;
       _revealedCardsCount = widget.message.recommendedItems.length;
+      _isTypewriting = false;
       return;
     }
 
     _visibleCount = 0;
     _revealedCardsCount = 0;
+    _isTypewriting = true;
     widget.onAnimationStarted?.call();
-    _startTypewriter();
+
+    if (_targetCharacters.isNotEmpty) {
+      _startTypewriter();
+    }
   }
 
   @override
   void didUpdateWidget(covariant _AnimatedAssistantContent oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.message.id != oldWidget.message.id ||
+        widget.message.createdAt != oldWidget.message.createdAt) {
+      _fallbackStartTime = widget.message.createdAt ?? DateTime.now();
+      final start = widget.message.createdAt ?? _fallbackStartTime;
+      _secondsElapsed = start != null
+          ? math.max(0, DateTime.now().difference(start).inSeconds)
+          : 0;
+    }
+    _startStatusHeaderTimerIfNeeded();
     final effectiveText = _resolveContent();
     _targetCharacters = effectiveText.characters;
 
-    if (widget.message.isStreaming || oldWidget.message.isStreaming) {
-      _typewriterTimer?.cancel();
-      _typewriterTimer = null;
-      _visibleCount = _targetCharacters.length;
-      if (oldWidget.message.isStreaming && !widget.message.isStreaming) {
-        _startCardStagger();
-      }
-      return;
-    }
-
+    // หากมีการเลือกตัวเลือกในแบบสอบถามแล้ว ให้หยุด typewriter และแสดงทั้งหมดทันที
     if (widget.message.questions.any((q) => q.selectedOption != null)) {
       _typewriterTimer?.cancel();
       _typewriterTimer = null;
+      _isTypewriting = false;
       _visibleCount = _targetCharacters.length;
       _revealedCardsCount = widget.message.recommendedItems.length;
       return;
     }
 
+    if (_isTypewriting) {
+      // อยู่ระหว่างการพิมพ์ดีดแบบ Stream หรือ Animate
+      if (_visibleCount < _targetCharacters.length) {
+        if (_typewriterTimer == null || !_typewriterTimer!.isActive) {
+          _startTypewriter();
+        }
+      } else if (!widget.message.isStreaming) {
+        // สตรีมสิ้นสุดแล้วและพิมพ์จนครบทุกตัวอักษรแล้ว
+        _isTypewriting = false;
+        _typewriterTimer?.cancel();
+        _typewriterTimer = null;
+        if (_revealedCardsCount < widget.message.recommendedItems.length) {
+          _startCardStagger();
+        }
+      }
+      return;
+    }
+
     if (oldWidget.message.content != widget.message.content) {
-      if (widget.animate && widget.message.responseDuration == null) {
+      if (widget.animate) {
         _visibleCount = 0;
         _revealedCardsCount = 0;
+        _isTypewriting = true;
         widget.onAnimationStarted?.call();
         _startTypewriter();
       } else {
         _visibleCount = _targetCharacters.length;
+        _revealedCardsCount = widget.message.recommendedItems.length;
+      }
+    } else if (oldWidget.message.recommendedItems.length !=
+        widget.message.recommendedItems.length) {
+      if (!widget.message.isStreaming && !_isTypewriting) {
         _revealedCardsCount = widget.message.recommendedItems.length;
       }
     }
@@ -201,7 +284,7 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
   void _startTypewriter() {
     _typewriterTimer?.cancel();
 
-    _typewriterTimer = Timer.periodic(const Duration(milliseconds: 26), (
+    _typewriterTimer = Timer.periodic(const Duration(milliseconds: 20), (
       timer,
     ) {
       if (!mounted) {
@@ -213,14 +296,31 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
       if (_visibleCount >= targetLen) {
         timer.cancel();
         _typewriterTimer = null;
-        setState(() {
-          _visibleCount = targetLen;
-        });
-        _startCardStagger();
+        if (!widget.message.isStreaming) {
+          _isTypewriting = false;
+          setState(() {
+            _visibleCount = targetLen;
+          });
+          _startCardStagger();
+        }
         return;
       }
 
-      final step = (targetLen / 80).ceil().clamp(1, 4);
+      // คำนวณ step ในการพิมพ์อย่างนุ่มนวลตามจำนวนตัวอักษรที่ค้างอยู่ (backlog)
+      final backlog = targetLen - _visibleCount;
+      final int step;
+      if (backlog <= 8) {
+        step = 1;
+      } else if (backlog <= 24) {
+        step = 1;
+      } else if (backlog <= 60) {
+        step = 2;
+      } else if (backlog <= 120) {
+        step = 3;
+      } else {
+        step = (backlog / 35).ceil().clamp(3, 8);
+      }
+
       setState(() {
         final next = _visibleCount + step;
         _visibleCount = next > targetLen ? targetLen : next;
@@ -231,9 +331,11 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
         _lastProgressCall = now;
         widget.onProgress?.call();
       }
+
       if (_isComplete) {
         timer.cancel();
         _typewriterTimer = null;
+        _isTypewriting = false;
         _startCardStagger();
       }
     });
@@ -260,11 +362,13 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
         _revealedCardsCount++;
       });
       widget.onProgress?.call();
+      widget.onCardRevealed?.call();
     });
   }
 
   @override
   void dispose() {
+    _statusHeaderTimer?.cancel();
     _typewriterTimer?.cancel();
     _cardStaggerTimer?.cancel();
     super.dispose();
@@ -422,6 +526,22 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
     return '$m นาที $s วิ';
   }
 
+  String _getCompletedStatusTitle() {
+    final status = widget.message.statusMessage;
+    if (status != null &&
+        status.isNotEmpty &&
+        !status.startsWith('กำลัง')) {
+      return status;
+    }
+    if (widget.message.questions.isNotEmpty) {
+      return 'สอบถามข้อมูลเพิ่มเติม';
+    }
+    if (widget.message.searchQuery != null && widget.message.searchQuery!.isNotEmpty) {
+      return 'ผลการเปรียบเทียบ';
+    }
+    return 'สรุปคำแนะนำ';
+  }
+
   Widget _buildStatusHeader() {
     String text;
     if (widget.message.responseDuration != null) {
@@ -429,13 +549,11 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
       final displaySec = seconds > 0
           ? seconds
           : (widget.message.responseDuration!.inMilliseconds > 0 ? 1 : 0);
-      text = 'สรุปคำแนะนำ (${_formatSeconds(displaySec)})';
+      final title = _getCompletedStatusTitle();
+      text = '$title (${_formatSeconds(displaySec)})';
     } else {
-      final seconds = widget.message.createdAt != null
-          ? DateTime.now().difference(widget.message.createdAt!).inSeconds
-          : 0;
-      final status = widget.message.statusMessage ?? 'กำลังสรุปคำแนะนำ';
-      text = '$status (${_formatSeconds(seconds)})..';
+      final status = widget.message.statusMessage ?? 'กำลังประมวลผล';
+      text = '$status (${_formatSeconds(_secondsElapsed)})..';
     }
 
     return Padding(
@@ -494,6 +612,11 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
       'chatbot-animated-response-${widget.message.id}',
     );
 
+    final matchingItems = widget.message.recommendedItems.where((item) {
+      return RecommendedItemCard.isItemMentioned(item.name, effectiveText);
+    }).toList();
+    final itemsToRender = matchingItems;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -518,15 +641,15 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
         if (widget.message.questions.any((q) => q.selectedOption != null))
           QuestionnaireRecapCard(questions: widget.message.questions),
         if (!widget.message.questions.any((q) => q.selectedOption == null) && _isComplete) ...[
-          for (var i = 0; i < widget.message.recommendedItems.length; i++) ...[
+          for (var i = 0; i < itemsToRender.length; i++) ...[
             if (i < _revealedCardsCount) ...[
               const SizedBox(height: 16),
               _AnimatedCardEntrance(
                 key: ValueKey('staggered-card-${widget.message.id}-$i'),
                 child: RecommendedItemCard(
-                  item: widget.message.recommendedItems[i],
+                  item: itemsToRender[i],
                   messageContent: effectiveText,
-                  onPressed: () => widget.onRentPressed(widget.message.recommendedItems[i]),
+                  onPressed: () => widget.onRentPressed(itemsToRender[i]),
                 ),
               ),
             ],
@@ -560,18 +683,44 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
       RegExp(r'</?(?:strong|b|span|p|div|li|ul|ol)>', caseSensitive: false),
       '',
     );
-    // Ensure property labels (ค่าเช่า, จุดเด่น, เหมาะสำหรับ) are always bold
+    // If the message contains "ชื่ออุปกรณ์: [ชื่อ]", remove "ชื่ออุปกรณ์:" and make the device name bold: **[ชื่อ]**
     formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|\n)\s*[-•●*]\s*(?:\*\*)?\s*เหมาะสำหรับ\s*(?:\*\*)?\s*:', caseSensitive: false),
-      (match) => '\n- **เหมาะสำหรับ**:',
+      RegExp(r'(?:^|\n)\s*(?:\*\*)?\s*ชื่ออุปกรณ์\s*[:：]\s*(?:\*\*)?\s*([^\n]+)', caseSensitive: false),
+      (match) {
+        final deviceName = match.group(1)?.replaceAll('*', '').trim() ?? '';
+        return deviceName.isNotEmpty ? '\n\n**$deviceName**' : '';
+      },
+    );
+    // Ensure property labels have clean opening and closing asterisks: - **รายละเอียด:**, - **ราคาเช่า:**
+    formatted = formatted.replaceAllMapped(
+      RegExp(r'(?:^|\n)\s*[-•●*]?\s*(?:\*\*)?\s*รายละเอียด\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?\s*', caseSensitive: false),
+      (match) => '\n- **รายละเอียด:** ',
     );
     formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|\n)\s*[-•●*]\s*(?:\*\*)?\s*จุดเด่น\s*(?:\*\*)?\s*:', caseSensitive: false),
-      (match) => '\n- **จุดเด่น**:',
+      RegExp(r'(?:^|\n)\s*[-•●*]?\s*(?:\*\*)?\s*(?:ราคาเช่า|ค่าเช่า)\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?\s*', caseSensitive: false),
+      (match) => '\n- **ราคาเช่า:** ',
     );
     formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|\n)\s*[-•●*]\s*(?:\*\*)?\s*ค่าเช่า\s*(?:\*\*)?\s*:', caseSensitive: false),
-      (match) => '\n- **ค่าเช่า**:',
+      RegExp(r'(?:^|\n)\s*[-•●*]?\s*(?:\*\*)?\s*เหมาะสำหรับ\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?\s*', caseSensitive: false),
+      (match) => '\n- **เหมาะสำหรับ:** ',
+    );
+    formatted = formatted.replaceAllMapped(
+      RegExp(r'(?:^|\n)\s*[-•●*]?\s*(?:\*\*)?\s*จุดเด่น\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?\s*', caseSensitive: false),
+      (match) => '\n- **จุดเด่น:** ',
+    );
+
+    // Format units to Thai "บาท ต่อ วัน" / "บาท ต่อ ชั่วโมง"
+    formatted = formatted.replaceAll(RegExp(r'(?:บาท\s*/\s*daily|บาท\s+ต่อ\s+daily)', caseSensitive: false), 'บาท ต่อ วัน');
+    formatted = formatted.replaceAll(RegExp(r'(?:บาท\s*/\s*hourly|บาท\s+ต่อ\s+hourly)', caseSensitive: false), 'บาท ต่อ ชั่วโมง');
+    formatted = formatted.replaceAll(RegExp(r'(?:บาท\s*/\s*weekly|บาท\s+ต่อ\s+weekly)', caseSensitive: false), 'บาท ต่อ สัปดาห์');
+    formatted = formatted.replaceAll(RegExp(r'(?:บาท\s*/\s*monthly|บาท\s+ต่อ\s+monthly)', caseSensitive: false), 'บาท ต่อ เดือน');
+    formatted = formatted.replaceAll(RegExp(r'บาท\s*/\s*วัน', caseSensitive: false), 'บาท ต่อ วัน');
+    formatted = formatted.replaceAll(RegExp(r'บาท\s*/\s*ชั่วโมง', caseSensitive: false), 'บาท ต่อ ชั่วโมง');
+
+    // Remove redundant .0 decimal from prices (e.g. 850.0 บาท -> 850 บาท)
+    formatted = formatted.replaceAllMapped(
+      RegExp(r'(\d+)\.0(?=\s*บาท|\s+ต่อ)', caseSensitive: false),
+      (match) => match.group(1)!,
     );
 
     // If a bullet item starts with a device emoji/icon, convert it to a Heading 3 so it renders in app purple without a bullet
@@ -621,6 +770,7 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
         text.contains('<strong') ||
         text.contains('<b>') ||
         text.contains('```') ||
+        text.contains('|') ||
         text.contains('เหมาะสำหรับ') ||
         text.contains('จุดเด่น') ||
         text.contains('ค่าเช่า') ||
@@ -700,25 +850,58 @@ class RecommendedItemCard extends StatelessWidget {
       return catalogName;
     }
 
+    // 0. ตรวจสอบบรรทัด **ชื่ออุปกรณ์:** ... หรือ **ชื่ออุปกรณ์: ...** โดยตรง
+    final deviceLineRegex = RegExp(
+      r'(?:^|\n)\s*(?:\*\*)?\s*ชื่ออุปกรณ์\s*[:：]\s*(?:\*\*)?\s*([^\n]+)',
+      caseSensitive: false,
+    );
+    for (final match in deviceLineRegex.allMatches(messageContent)) {
+      var candidate = match.group(1)?.trim() ?? '';
+      candidate = candidate.replaceAll(RegExp(r'\*+'), '').trim();
+      if (candidate.isEmpty) continue;
+
+      final lowerCatalog = catalogName.toLowerCase();
+      final lowerCandidate = candidate.toLowerCase();
+
+      if (lowerCatalog == lowerCandidate ||
+          (lowerCatalog.contains(lowerCandidate) && lowerCandidate.length >= 3) ||
+          (lowerCandidate.contains(lowerCatalog) && lowerCatalog.length >= 3)) {
+        return candidate;
+      }
+
+      final catalogWords = lowerCatalog.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
+      final candidateWords = lowerCandidate.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
+      final intersection = catalogWords.intersection(candidateWords);
+      if (intersection.length >= 2 && intersection.length >= (candidateWords.length * 0.6)) {
+        return candidate;
+      }
+    }
+
     // 1. ตรวจจับชื่อรุ่นในรูปแบบ Markdown Bold: **...** ที่ AI สกัดมา
-    final boldMatches = RegExp(r'\*\*\s*([^*\n]+?)\s*\*').allMatches(messageContent);
+    final boldMatches = RegExp(r'\*\*\s*([^*\n]+?)\s*\*+').allMatches(messageContent);
     for (final m in boldMatches) {
-      final candidate = m.group(1)?.trim();
-      if (candidate == null || candidate.isEmpty) continue;
+      final rawCandidate = m.group(1)?.trim();
+      if (rawCandidate == null || rawCandidate.isEmpty) continue;
 
       // กรองคำทั่วไปที่ไม่ใช่ชื่อสินค้า เช่น หัวข้อสรุปหรือคำแนะนำ
-      if (candidate.contains('สรุป') ||
-          candidate.contains('คำแนะนำ') ||
-          candidate.contains('ค้นหา') ||
-          candidate.contains('เปรียบเทียบ') ||
-          candidate.contains('ข้อควรระวัง') ||
-          candidate.contains('จุดเด่น') ||
-          candidate.contains('หน้าจอ') ||
-          candidate.contains('ประสิทธิภาพ') ||
-          candidate.contains('หน่วยความจำ') ||
-          candidate.contains('ความคล่องตัว')) {
+      if (rawCandidate.contains('สรุป') ||
+          rawCandidate.contains('คำแนะนำ') ||
+          rawCandidate.contains('ค้นหา') ||
+          rawCandidate.contains('เปรียบเทียบ') ||
+          rawCandidate.contains('ข้อควรระวัง') ||
+          rawCandidate.contains('จุดเด่น') ||
+          rawCandidate.contains('หน้าจอ') ||
+          rawCandidate.contains('ประสิทธิภาพ') ||
+          rawCandidate.contains('หน่วยความจำ') ||
+          rawCandidate.contains('รายละเอียด') ||
+          rawCandidate.contains('ราคาเช่า') ||
+          rawCandidate.contains('ความคล่องตัว')) {
         continue;
       }
+
+      // ตัด prefix เช่น "ชื่ออุปกรณ์: " ออกถ้ามี
+      final candidate = rawCandidate.replaceFirst(RegExp(r'^(?:ชื่ออุปกรณ์|อุปกรณ์)\s*[:：]\s*'), '').trim();
+      if (candidate.isEmpty) continue;
 
       final lowerCatalog = catalogName.toLowerCase();
       final lowerCandidate = candidate.toLowerCase();
@@ -751,6 +934,47 @@ class RecommendedItemCard extends StatelessWidget {
     }
 
     return catalogName;
+  }
+
+  /// ตรวจสอบว่าอุปกรณ์ถูกระบุถึงหรือแนะนำในข้อความ AI หรือไม่ เพื่อให้การ์ดตรงกับข้อความ 100%
+  static bool isItemMentioned(String catalogName, String? messageContent) {
+    if (messageContent == null || messageContent.trim().isEmpty || catalogName.isEmpty) {
+      return false;
+    }
+    final resolved = resolveItemDisplayName(catalogName, messageContent);
+    final lowerCatalog = catalogName.toLowerCase();
+    final lowerContent = messageContent.toLowerCase();
+
+    // 1. ถ้า resolveItemDisplayName สกัดชื่อเฉพาะที่ตรงกับ Markdown Bold หรือบรรทัดชื่ออุปกรณ์ในข้อความมาได้
+    if (resolved != catalogName && lowerContent.contains(resolved.toLowerCase())) {
+      return true;
+    }
+
+    // 2. ชื่อเต็มของอุปกรณ์ปรากฏในข้อความโดยตรง
+    if (lowerContent.contains(lowerCatalog)) {
+      return true;
+    }
+
+    // 3. ตรวจสอบคำสำคัญ/ชื่อรุ่น ในบรรทัดที่มีการแนะนำ (Bullet point หรือ บรรทัดชื่ออุปกรณ์)
+    final words = lowerCatalog
+        .split(RegExp(r'\s+'))
+        .where((w) => w.length >= 3 && !RegExp(r'^\d+$').hasMatch(w) && !['เครื่อง', 'สำหรับ', 'พร้อม', 'ชุด', 'ขนาด'].contains(w))
+        .toList();
+    for (final line in messageContent.split('\n')) {
+      final lineTrim = line.trim();
+      if (lineTrim.startsWith('•') ||
+          lineTrim.startsWith('-') ||
+          lineTrim.startsWith('*') ||
+          lineTrim.contains('ชื่ออุปกรณ์')) {
+        final lineLower = lineTrim.toLowerCase();
+        final matched = words.where((w) => lineLower.contains(w)).toList();
+        if (matched.length >= 2 || (words.length == 1 && matched.length == 1)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   @override
@@ -877,69 +1101,29 @@ class RecommendedItemCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text.rich(
+        Text.rich(
+          TextSpan(
+            children: [
               TextSpan(
-                children: [
-                  TextSpan(
-                    text: '${_priceLabel(item.price)} ฿',
-                    style: const TextStyle(
-                      fontFamily: 'Prompt',
-                      color: AppColors.primaryColor,
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  TextSpan(
-                    text: ' / ${_formatUnit(item.unit)}',
-                    style: const TextStyle(
-                      fontFamily: 'Prompt',
-                      color: Color(0xFF64748B),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 30,
-              child: FilledButton(
-                onPressed: onPressed,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'รายละเอียด',
-                      style: TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(width: 2),
-                    Icon(Icons.chevron_right_rounded, size: 15),
-                  ],
+                text: '${_priceLabel(item.price)} ฿',
+                style: const TextStyle(
+                  fontFamily: 'Prompt',
+                  color: AppColors.primaryColor,
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            ),
-          ],
+              TextSpan(
+                text: ' / ${_formatUnit(item.unit)}',
+                style: const TextStyle(
+                  fontFamily: 'Prompt',
+                  color: Color(0xFF64748B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

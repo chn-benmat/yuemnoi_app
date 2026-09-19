@@ -55,7 +55,6 @@ type AuthRepository interface {
 	SendOTP(ctx context.Context, email string) error
 	VerifyOTP(ctx context.Context, email, otpCode string) (*AuthTokens, error)
 	IsEmailExists(ctx context.Context, email string) (bool, error)
-	Logout(ctx context.Context, userToken string) error
 	GetProfile(ctx context.Context, userID string) (*UserProfile, error)
 	UpdateProfile(ctx context.Context, userID string, req UpdateProfileRequest, img *ProfileImage) (*UserProfile, error)
 	UpdateContact(ctx context.Context, userID string, phone string) error

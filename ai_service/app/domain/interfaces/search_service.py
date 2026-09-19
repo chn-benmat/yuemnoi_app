@@ -1,14 +1,10 @@
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Protocol
+from app.domain.entities.search_source import SearchSource
 
-class SearchServiceInterface(ABC):
-    @abstractmethod
-    async def search(
-        self,
-        query: str,
-        gl: str = "th",
-        hl: str = "th",
-        num_results: int = 5
-    ) -> List[Dict[str, Any]]:
-        """Perform external web search and return structured organic results."""
-        pass
+
+class SearchServiceInterface(Protocol):
+    """Abstract port for web search retrieval."""
+
+    async def search(self, query: str, max_results: int = 3) -> List[SearchSource]:
+        """Search the web for technical specifications and relevant sources."""
+        ...

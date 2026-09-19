@@ -9,8 +9,10 @@ This document provides definitive instructions, architectural principles, and op
 - **Repository**: `ai_service` (Backend for Mobile Rental Chatbot)
 - **Role**: AI Assistant & Rental Consultant Service
 - **Runtime**: Python 3.12 (Virtual Environment: `.venv`)
-- **Local Model**: `llama3.1-typhoon2-8b-instruct:latest` hosted via local **Ollama** (`http://localhost:11434`)
-- **Primary Hardware**: NVIDIA GeForce RTX 4060 (8 GB VRAM) — model runs in VRAM (~4.9 GB)
+- **LLM Providers & API Keys**: Cloud LLMs via external APIs with dual-provider cascade failover:
+  - **Google Gemini API** (`GEMINI_API_KEY`) - Primary Provider
+  - **Groq API** (`GROQ_API_KEY`) - Fallback Provider
+  *(100% Free Dual-Cloud setup, strictly no credit card requirement, strictly no local Ollama dependency)*
 - **Database**: **Supabase** table `item_tb` (33 active rental inventory items)
 - **Search Provider**: **Tavily Search API** (1,000 monthly free credits, basic depth)
 
@@ -22,9 +24,14 @@ This document provides definitive instructions, architectural principles, and op
 
 Any modification or addition to this codebase **MUST strictly adhere** to the following rules:
 
-1. **NO Keyword Matching**:
-   - ❌ Never use `if "compare" in text:` or `if "กล้อง" in query:` to route user intent, match categories, or select items.
-   - ✅ All semantic routing and entity extraction must be performed via **AI-Native Structured Reasoning** (`generate_structured` with Pydantic schemas).
+1. **NO Keyword Matching & NO Keyword Locking in Prompts (Zero-Keyword Policy)**:
+   - ❌ **No Code-Level Keyword Routing**: Never use `if "compare" in text:` or `if "กล้อง" in query:` to route user intent, match categories, or select items.
+   - ❌ **No Keyword Locking in Prompts & Schemas**: Never hardcode lists of canned user phrases, rigid sentence templates, or specific Thai keywords into system prompts, Pydantic field descriptions, or routing instructions (e.g., listing `"ทำไรได้"`, `"ช่วยอะไรได้บ้าง"`, `"คุณคือใคร"`, `"ยืมหน่อยคืออะไร"`, `"เช่ายังไง"`, or `"อยากเช่าคอม"`, `"อยากเช่ากล้อง"`).
+     - *Technical Rationale & Anti-Bias*: Locking specific phrases in prompts introduces strong attention bias into the LLM, causing overfitting to exact wording while failing on colloquial, regional, or creative phrasing. This creates artificial behavioral bias and contradicts AI-Native semantic reasoning.
+   - ✅ **Pure Semantic Intent Definitions (นิยามเจตนาเชิงความหมาย)**:
+     - Prompts, schema docstrings, and Pydantic field descriptions must be framed entirely around **communicative purpose (เป้าหมายการสื่อสาร)**, **information completeness (ความครบถ้วนของข้อมูล)**, and **conceptual hierarchy (ลำดับชั้นเชิงมโนทัศน์)**.
+     - Classify by *intent state* (e.g., "inquiries regarding bot identity, capabilities, platform onboarding, or rental FAQ", "broad category-level queries lacking specific model names", "comparisons across 2+ equipment models").
+     - All semantic routing and entity extraction must be performed via **AI-Native Structured Reasoning** (`generate_structured` with Pydantic schemas) grounded on conceptual definitions.
 
 2. **NO Regular Expressions**:
    - ❌ Never use `re.search()`, `re.findall()`, or regex patterns for intent routing, slot extraction, or ambiguity detection.
@@ -32,7 +39,7 @@ Any modification or addition to this codebase **MUST strictly adhere** to the fo
 
 3. **NO Hardcoded Values & Logic (Strictly Zero-Hardcode Policy)**:
    - ❌ **No Hardcoded Configurations / Secrets**: Never hardcode API keys, URLs, endpoints, IP addresses, ports, database credentials, timeouts, retry counts, or model names in the source code.
-     - ✅ Must always inject configuration via `Settings` (`app/core/config.py`) loaded from `.env` through `pydantic-settings`.
+     - ✅ Must always inject configuration via `Settings` (`app/core/config.py`) loaded from `.env` through `pydantic-settings` (e.g., `GEMINI_API_KEY`, `GROQ_API_KEY`, `SUPABASE_KEY`, `TAVILY_API_KEY`).
    - ❌ **No Hardcoded Catalog / Inventory Data**: Never hardcode item catalogs, item IDs, category lists, technical specifications, or rental prices into code or static prompt strings.
      - ✅ Item inventory and category lists must be retrieved dynamically from Supabase (`item_tb`) or `MemoryCacheService`.
    - ❌ **No Hardcoded Dialogues / Canned Responses / Fallbacks**: Never hardcode canned assistant responses, static greetings, clarification questions, or interactive button options/chips.
@@ -41,6 +48,11 @@ Any modification or addition to this codebase **MUST strictly adhere** to the fo
      - ✅ Rely on LLM Semantic Reasoning and Clean Architecture Use Cases / Domain Entities for semantic decisions.
    - ❌ **No Mock / Dummy Data in Production Flow**: Never inject mock data, dummy items, or hardcoded fallback returns into the Application or Infrastructure layers to bypass external dependencies.
      - ✅ If an external system or service fails, rely on structured exception handling and domain-level error handling following Clean Architecture.
+
+4. **NO Local Ollama & NO Credit-Card Cloud Dependencies (100% Free Cloud API Policy)**:
+   - ❌ Never configure, enforce, or assume local Ollama (`http://localhost:11434`) or local hardware VRAM execution.
+   - ❌ Never configure cloud providers requiring credit card binding or paid deposit tiers (e.g., Cerebras, SambaNova).
+   - ✅ All LLM inference, structured output generation, and streaming must utilize 100% free cloud LLM API providers configured via `GEMINI_API_KEY` (Google Gemini) and `GROQ_API_KEY` (Groq Cloud).
 
 ### ⚖️ STRICT NEUTRALITY & ZERO-BIAS POLICY
 
@@ -100,7 +112,7 @@ Infrastructure (Adapters: DB, LLM, Search, Cache) & Interface (FastAPI Controlle
 
 - **`app/infrastructure/` (Frameworks & Drivers)**:
   - `SupabaseRepository`: Interacts asynchronously with Supabase PostgREST endpoint for `item_tb`.
-  - `OllamaClient`: Manages interaction with `typhoon2.5-qwen3-4b:latest` supporting structured JSON schema generation and Server-Sent Events (SSE) streaming.
+  - `LLM Adapters` (`GeminiClient` Primary & `GroqClient` Fallback via `MultiProviderLLMService`): Manages interactions with Cloud LLMs via `GEMINI_API_KEY` and `GROQ_API_KEY` supporting structured JSON schema generation and Server-Sent Events (SSE) streaming.
   - `TavilyClient`: Asynchronous client for Tavily Search API.
   - `MemoryCacheService`: In-memory TTL cache for the 33-item catalog to minimize DB roundtrips.
   - `prompt_templates.py`: Structured system instructions in Thai for the model.
@@ -109,7 +121,7 @@ Infrastructure (Adapters: DB, LLM, Search, Cache) & Interface (FastAPI Controlle
   - `app/interface/api/v1/endpoints/`:
     - `chat.py`: `POST /api/v1/chat` (Full JSON response) and `POST /api/v1/chat/stream` (SSE tokens).
     - `items.py`: `GET /api/v1/items` (Catalog list).
-    - `health.py`: `GET /health` (Ollama, Supabase, and Tavily health checks).
+    - `health.py`: `GET /health` (Cloud LLMs [Gemini / Groq], Supabase, and Tavily health checks).
   - `app/interface/schemas/`: Pydantic request and response schemas for web APIs.
 
 - **`app/core/` (Cross-Cutting Concerns)**:
@@ -151,7 +163,7 @@ When the user query is underspecified or ambiguous (e.g., _"อยากได�
 ## 5. Coding Standards & Conventions
 
 1. **Python Version**: Always write Python 3.12 compliant code.
-2. **Async-First**: All network operations (Supabase, Tavily, Ollama) must be asynchronous using `httpx.AsyncClient` or native async primitives. Never block the event loop with synchronous I/O.
+2. **Async-First**: All network operations (Supabase, Tavily, Cloud LLM APIs: Gemini, Groq, GitHub) must be asynchronous using `httpx.AsyncClient` or native async primitives. Never block the event loop with synchronous I/O.
 3. **Typing**: Use standard Python type annotations (`typing.List`, `typing.Optional`, `typing.Dict`, `typing.Tuple`).
 4. **Pydantic v2**: Use `model_validate_json()`, `model_dump()`, and `model_json_schema()`. Avoid deprecated Pydantic v1 methods.
 5. **Virtual Environment**:

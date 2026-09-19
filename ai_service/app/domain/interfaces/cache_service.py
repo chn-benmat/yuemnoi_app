@@ -1,18 +1,17 @@
-from abc import ABC, abstractmethod
-from typing import Optional, Any
+from typing import Any, Optional, Protocol
 
-class CacheServiceInterface(ABC):
-    @abstractmethod
+
+class CacheServiceInterface(Protocol):
+    """Abstract port for in-memory caching."""
+
     async def get(self, key: str) -> Optional[Any]:
-        """Retrieve an item from cache if not expired."""
-        pass
+        """Retrieve cached value if present and not expired."""
+        ...
 
-    @abstractmethod
     async def set(self, key: str, value: Any, ttl_seconds: int = 300) -> None:
-        """Store an item in cache with a TTL (seconds)."""
-        pass
+        """Store value in cache with time-to-live."""
+        ...
 
-    @abstractmethod
-    async def clear(self) -> None:
-        """Clear all items in the cache."""
-        pass
+    async def invalidate(self, key: str) -> None:
+        """Invalidate a specific cache key."""
+        ...

@@ -29,14 +29,16 @@ func (r *ChatbotRequest) EffectiveMessage() string {
 
 // RecommendedItem ข้อมูลสินค้าที่ AI แนะนำให้เช่า
 type RecommendedItem struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Category    string   `json:"category"`
-	Price       float64  `json:"price"`
-	PriceUnit   string   `json:"price_unit"`
-	Status      string   `json:"status"`
-	ImageURL    string   `json:"image_url"`
-	Description string   `json:"description"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	ItemName    string  `json:"item_name,omitempty"`
+	Category    string  `json:"category"`
+	Price       float64 `json:"price"`
+	PriceUnit   string  `json:"price_unit"`
+	Unit        string  `json:"unit,omitempty"`
+	Status      string  `json:"status"`
+	ImageURL    string  `json:"image_url"`
+	Description string  `json:"description"`
 }
 
 // ClarificationQuestion คำถามถามกลับเพื่อช่วยระบุความต้องการให้ชัดเจนขึ้น

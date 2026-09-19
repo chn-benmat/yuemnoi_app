@@ -397,16 +397,6 @@ func (r *supabaseUserRepository) IsEmailExists(ctx context.Context, email string
 	return isExists, nil
 }
 
-// Logout ออกจากระบบโดยการลบ Session ผ่าน Supabase Auth
-func (r *supabaseUserRepository) Logout(ctx context.Context, accessToken string) error {
-	err := r.client.Auth.SignOut(ctx, accessToken)
-	if err != nil {
-		return fmt.Errorf("supabase logout failed: %w", err)
-	}
-
-	return nil
-}
-
 func (r *supabaseUserRepository) GetProfile(ctx context.Context, userID string) (*domain.UserProfile, error) {
 	var profiles []struct {
 		UserID       string `json:"user_id"`

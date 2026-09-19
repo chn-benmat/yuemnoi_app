@@ -75,11 +75,15 @@ type aiClarificationDTO struct {
 type aiItemDTO struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
+	ItemName    string   `json:"item_name"`
 	Category    string   `json:"category"`
 	Price       float64  `json:"price"`
 	Type        string   `json:"type"`
+	Unit        string   `json:"unit"`
+	PriceUnit   string   `json:"price_unit"`
 	Status      string   `json:"status"`
 	ImageURLs   []string `json:"image_urls"`
+	ImageURL    string   `json:"image_url"`
 	Description string   `json:"description"`
 }
 
@@ -154,16 +158,29 @@ func (c *Client) SendMessage(ctx context.Context, req domain.ChatbotRequest) (*d
 	// แปลงข้อมูลจาก DTO ภายในของ AI Service ให้เป็น Domain Response ที่สอดคล้องกับ Mobile Client
 	recommended := make([]domain.RecommendedItem, 0, len(aiResp.Items))
 	for _, it := range aiResp.Items {
-		imgURL := ""
-		if len(it.ImageURLs) > 0 {
+		name := it.Name
+		if name == "" {
+			name = it.ItemName
+		}
+		imgURL := it.ImageURL
+		if imgURL == "" && len(it.ImageURLs) > 0 {
 			imgURL = it.ImageURLs[0]
+		}
+		unit := it.PriceUnit
+		if unit == "" {
+			unit = it.Unit
+		}
+		if unit == "" {
+			unit = it.Type
 		}
 		recommended = append(recommended, domain.RecommendedItem{
 			ID:          it.ID,
-			Name:        it.Name,
+			Name:        name,
+			ItemName:    name,
 			Category:    it.Category,
 			Price:       it.Price,
-			PriceUnit:   it.Type,
+			PriceUnit:   unit,
+			Unit:        unit,
 			Status:      it.Status,
 			ImageURL:    imgURL,
 			Description: it.Description,

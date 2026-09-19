@@ -240,15 +240,21 @@ class RecommendedItemModel {
   factory RecommendedItemModel.fromJson(Map<String, dynamic> json) {
     final rawId = json['id'];
     final rawPrice = json['price'];
+    final rawName = json['item_name'] ?? json['name'] ?? json['title'];
+    final rawImageUrl = json['image_url'] ??
+        ((json['image_urls'] is List && (json['image_urls'] as List).isNotEmpty)
+            ? (json['image_urls'] as List).first
+            : null);
+    final rawUnit = json['unit'] ?? json['price_unit'] ?? json['type'];
 
     return RecommendedItemModel(
       id: rawId is num ? rawId.toInt() : int.tryParse('$rawId'),
-      name: _stringValue(json['item_name'], fallback: 'อุปกรณ์แนะนำ'),
+      name: _stringValue(rawName, fallback: 'อุปกรณ์แนะนำ'),
       price: rawPrice is num
           ? rawPrice.toDouble()
           : double.tryParse('$rawPrice'),
-      unit: _stringValue(json['unit'], fallback: 'วัน'),
-      imageUrl: _stringValue(json['image_url']),
+      unit: _stringValue(rawUnit, fallback: 'วัน'),
+      imageUrl: _stringValue(rawImageUrl),
       status: _nullableString(json['status']),
       category: _nullableString(json['category']),
       description: _nullableString(json['description']),

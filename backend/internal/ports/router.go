@@ -24,7 +24,6 @@ func SetupRouter(
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(blockScannerPaths())
-	router.Use(ResponseLoggingMiddleware())
 
 	// ตั้งค่า CORS แบบปลอดภัย ไม่อนุญาตให้สะท้อน Arbitrary Origin ควบคู่กับ Credentials
 	router.Use(func(c *gin.Context) {
@@ -96,8 +95,6 @@ func SetupRouter(
 			user.POST("/send-otp", userController.SendOTP)
 			// POST /api/v1/auth/verify-otp
 			user.POST("/verify-otp", userController.VerifyResetOTP)
-			// POST /api/v1/auth/logout
-			user.POST("/logout", userController.Logout)
 		}
 
 		// จัดการโปรไฟล์และข้อมูลผู้ใช้ (User Profile & Settings)

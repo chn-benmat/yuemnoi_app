@@ -1,20 +1,28 @@
 class DomainException(Exception):
-    """Base domain exception."""
+    """Base exception for domain layer errors."""
     pass
 
-class ItemNotFoundException(DomainException):
-    """Raised when an item is not found in database."""
-    def __init__(self, item_id: int):
-        super().__init__(f"Item with id {item_id} not found.")
 
-class LLMServiceException(DomainException):
-    """Raised when LLM fails to generate or format output."""
+class LLMProviderException(DomainException):
+    """Raised when an individual LLM provider encounters an error (rate limit, timeout, failure)."""
+    def __init__(self, provider: str, model: str, message: str, status_code: int = 500):
+        super().__init__(f"[{provider}:{model}] {message}")
+        self.provider = provider
+        self.model = model
+        self.status_code = status_code
+
+
+class AllLLMProvidersExhaustedException(DomainException):
+    """Raised when all primary and fallback LLM models have been exhausted without success."""
+    def __init__(self, message: str = "All cloud LLM models in the cascade failed or exhausted quotas."):
+        super().__init__(message)
+
+
+class DatabaseException(DomainException):
+    """Raised when database query or connection fails."""
     pass
 
-class SearchServiceException(DomainException):
-    """Raised when search API fails or yields invalid response."""
-    pass
 
-class FactVerificationException(DomainException):
-    """Raised when fact verification fails."""
+class SearchException(DomainException):
+    """Raised when web search fails."""
     pass

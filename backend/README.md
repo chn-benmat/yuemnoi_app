@@ -1,212 +1,234 @@
-<div align="center">
+# ⚡ Backend: ยืมหน่อย REST API (Go)
 
-# 🛠️ Yuemnoi — Backend API Server
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://golang.org)
+[![Gin Framework](https://img.shields.io/badge/Gin-v1.12-008ECF?style=for-the-badge&logo=gin&logoColor=white)](https://gin-gonic.com)
+[![Supabase](https://img.shields.io/badge/Supabase-Backend%20Adapter-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
+[![Firebase](https://img.shields.io/badge/Firebase-Admin%20FCM-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com)
 
-### ระบบ API หลังบ้านของแอปพลิเคชัน "ยืมหน่อย"
-
-[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
-[![Gin](https://img.shields.io/badge/Gin-1.12-00897B?style=for-the-badge&logo=go&logoColor=white)](https://gin-gonic.com)
-[![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
-
-<br/>
-
-> **Backend API** ที่เป็นตัวกลางเชื่อมต่อระหว่าง Flutter Frontend กับฐานข้อมูล Supabase
-
-</div>
+บริการ Core REST API และ Gateway ของระบบ **ยืมหน่อย (Yuemnoi)** พัฒนาด้วยภาษา **Go (Golang)** และ **Gin Framework** โดยยึดหลัก **Hexagonal Architecture (Ports and Adapters)** เพื่อแยก Business Rules ออกจาก Infrastructure และ Frameworks อย่างเด็ดขาด
 
 ---
 
-## 📖 ภาพรวมระบบ
+## 📑 สารบัญ (Table of Contents)
 
-Backend ของ Yuemnoi ถูกพัฒนาด้วยภาษา **Go** โดยใช้ **Gin** เป็น HTTP Framework หลัก และออกแบบตาม **Hexagonal Architecture (Ports & Adapters)** เพื่อให้สามารถแยกส่วนของ Business Logic ออกจาก Infrastructure ได้อย่างสะอาด สามารถเปลี่ยนฐานข้อมูลหรือ External Service ได้โดยไม่กระทบ Core Logic
-
----
-
-## 🧩 รายละเอียดแต่ละส่วน
-
-### 🚀 `cmd/server/main.go` — จุดเริ่มต้น (Composition Root)
-
-ไฟล์นี้ทำหน้าที่:
-
-- อ่านค่า **Environment Variables** (`PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FIREBASE_SERVICE_ACCOUNT_PATH`, `APP_SECRET_KEY`)
-- สร้าง **Supabase Client** และ **Adapters** ทั้งหมด (`ItemRepo`, `AuthGateway`, `ContactRepo`, `RentalRepo`, `FCMSender`)
-- ฉีด Dependencies ทั้งหมดเข้า `ports.SetupRouter` (Dependency Injection)
-- ตั้งค่า **HTTP Server** พร้อม Read/Write Timeout
-- รัน Server แบบ **Non-blocking** ด้วย Goroutine
-- รองรับ **Graceful Shutdown** (รอ Request ที่ค้างอยู่จบก่อนปิดเซิร์ฟเวอร์)
+1. [สถาปัตยกรรม (Hexagonal Architecture)](#-สถาปัตยกรรม-hexagonal-architecture)
+2. [โครงสร้างไดเรกทอรี (Directory Structure)](#-โครงสร้างไดเรกทอรี-directory-structure)
+3. [ขอบเขตหน้าที่ของระบบ (Responsibilities)](#-ขอบเขตหน้าที่ของระบบ-responsibilities)
+4. [ข้อกำหนดเบื้องต้น (Prerequisites)](#-ข้อกำหนดเบื้องต้น-prerequisites)
+5. [การตั้งค่า Environment Variables](#-การตั้งค่า-environment-variables)
+6. [ขั้นตอนการติดตั้งและรันเซิร์ฟเวอร์ (Getting Started)](#-ขั้นตอนการติดตั้งและรันเซิร์ฟเวอร์-getting-started)
+7. [รายการ API Endpoints (API Routes)](#-รายการ-api-endpoints-api-routes)
+8. [ความปลอดภัยและการควบคุมสิทธิ์ (Security & Hardening)](#-ความปลอดภัยและการควบคุมสิทธิ์-security--hardening)
+9. [การทดสอบ (Testing)](#-การทดสอบ-testing)
 
 ---
 
-### 💎 `internal/domain/` — Business Entities & Ports
+## 🏛️ สถาปัตยกรรม (Hexagonal Architecture)
 
-ชั้น Domain เป็นหัวใจหลักของระบบ เป็น Pure Go ไม่พึ่งพา Framework หรือ Database ใดๆ
+ระบบออกแบบตามแนวคิด **Hexagonal Architecture (Ports and Adapters)** โดยมีแกนหลักอยู่ที่ `internal/domain/` ซึ่งไม่มีการผูกติดกับเฟรมเวิร์กหรือฐานข้อมูลใดๆ:
 
-| ไฟล์              | Struct & Interface หลัก                                  | คำอธิบาย                                                       |
-| :---------------- | :------------------------------------------------------- | :------------------------------------------------------------- |
-| `contact.go`      | `ConversationContactRepository`                          | สัญญาสิทธิ์การเข้าถึงข้อมูลติดต่อของผู้เข้าร่วมห้องสนทนา       |
-| `item.go`         | `Item`, `RankedItem`, `ItemImage`, `ItemRepository`      | ข้อมูลอุปกรณ์เช่า, รูปภาพ, สถิติการจัดอันดับ และฟังก์ชันจัดการ |
-| `notification.go` | `ChatPushNotification`, `PushNotificationSender`         | สัญญาการส่ง Push Notification สำหรับข้อความแชท                 |
-| `rental.go`       | `RentalOrder`, `CreateRentalRequest`, `RentalRepository` | ข้อมูลคำขอและรายการเช่าอุปกรณ์                                 |
-| `user.go`         | `UserProfile`, `AuthRepository`, `TokenVerifier`         | ข้อมูลโปรไฟล์, การเข้าสู่ระบบ และการตรวจสอบ Token              |
-
----
-
-### 🔌 `internal/adapters/` — Infrastructure Layer
-
-#### `fcm/fcm_sender.go`
-
-Implement `domain.PushNotificationSender` ผ่าน FCM HTTP v1:
-
-- จัดการ Service Account และแลกเปลี่ยน Google OAuth2 Access Token ด้วยการเซ็น JWT (RSA SHA256)
-- ส่ง Chat Push Notification แบบมีเสียงและ Payload รองรับทั้ง iOS (APNs) และ Android
-- แคช Token อัตโนมัติและล้าง Token ที่หมดอายุ (`UNREGISTERED`) ออกจากระบบ
-
-#### `supabase/`
-
-- **`client.go`** — สร้างและตรวจสอบ Supabase Client
-- **`item_repository.go`** — จัดการ CRUD อุปกรณ์และดึงฟีดจาก `home_feed_ranked_v`
-- **`user_repository.go`** — จัดการ Supabase Auth, Storage รูปโปรไฟล์, และข้อมูลใน `profile_tb`
-- **`rental_repository.go`** — เรียก Database Function ตรวจสอบช่วงเวลาและคำนวณราคาเช่า
-- **`contact_repository.go`** — ตรวจสอบสิทธิ์ผู้สนทนาและดึงเบอร์ติดต่อ
-
----
-
-### 🌐 `internal/ports/` — Inbound HTTP Layer (Gin)
-
-- **`auth_helper.go`** — รวมศูนย์ฟังก์ชันถอด Bearer Token และตรวจสอบความถูกต้องของสิทธิ์ผู้ใช้
-- **`response_logging_middleware.go`** — ตรวจสอบและปิดบังข้อมูลส่วนบุคคล (PII/Tokens/Passwords) ใน Log ของ Response อัตโนมัติ
-- **`router.go`** — จัดเส้นทาง API ทั้งหมดภายใต้ prefix `/api/v1` และเปิดใช้งาน CORS, Security Scanner Blocker, Response Redaction Logger
-
-#### API Endpoints
-
-| Method   | Endpoint                 | Handler                                     | คำอธิบาย                               |
-| :------- | :----------------------- | :------------------------------------------ | :------------------------------------- |
-| `GET`    | `/api/v1/items`          | `ItemHandler.GetAllItems`                   | ดึงฟีดอุปกรณ์พร้อมเช่าที่จัดอันดับแล้ว |
-| `GET`    | `/api/v1/items/:id`      | `ItemHandler.GetItemByID`                   | ดึงข้อมูลอุปกรณ์ตาม ID                 |
-| `POST`   | `/api/v1/items`          | `ItemHandler.CreateItem`                    | เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ    |
-| `PUT`    | `/api/v1/items/:id`      | `ItemHandler.UpdateItem`                    | แก้ไขอุปกรณ์ของเจ้าของรายการ           |
-| `DELETE` | `/api/v1/items/:id`      | `ItemHandler.DeleteItem`                    | ลบอุปกรณ์ของเจ้าของรายการ              |
-| `POST`   | `/api/v1/rentals`        | `RentalHandler.CreateRentalOrder`           | สร้างใบจองเช่าอุปกรณ์                  |
-| `POST`   | `/api/v1/chat/contact`   | `ChatContactHandler.GetConversationContact` | ดึงเบอร์คู่สนทนาสำหรับสมาชิกในห้อง     |
-| `POST`   | `/api/v1/chat-ai`        | `ChatbotHandler.SendMessage`                | สนทนากับ AI Chatbot แบบ Non-Streaming  |
-| `POST`   | `/api/v1/chat-ai/stream` | `ChatbotHandler.SendMessageStream`          | สนทนากับ AI Chatbot แบบ SSE Streaming  |
-
-คำสั่ง `POST`, `PUT` และ `DELETE` ของ Items ต้องส่ง Supabase access token:
-
-```http
-Authorization: Bearer <SUPABASE_ACCESS_TOKEN>
+```text
+       ┌────────────────────────────────────────────────────────┐
+       │                       HTTP Inbound                     │
+       │     (Mobile App / Web via Gin Router & Middlewares)    │
+       └───────────────────────────┬────────────────────────────┘
+                                   │
+                                   ▼
+             ┌───────────────────────────────────────────┐
+             │       Inbound Ports (HTTP Handlers)       │
+             │   ItemHandler, RentalHandler, UserHandler │
+             └─────────────────────┬─────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Core Domain (Business)                          │
+│   Entities, Models, Business Rules, Inbound/Outbound Port Interfaces   │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+             ┌───────────────────────────────────────────┐
+             │      Outbound Adapters (Infrastructure)   │
+             ├─────────────────────┬─────────────────────┤
+             │      Supabase       │      Firebase       │      AI Service     │
+             │   (PostgreSQL DB)   │     (Admin SDK)     │    (FastAPI Proxy)  │
+             └─────────────────────┴─────────────────────┴─────────────────────┘
 ```
 
-`GET /api/v1/items` เรียงฟีดจากยอดเช่าที่ชำระแล้ว คะแนนรีวิว ความใหม่
-และความหลากหลายของหมวดหมู่/เจ้าของ โดยคืน `rating`, `review_count` และ
-`paid_booking_count` เพิ่มเติม แต่ไม่เปิดเผยคะแนนจัดอันดับภายใน
-
-`POST /api/v1/chat/contact` ต้องส่ง access token เช่นกัน และจะคืนข้อมูลติดต่อ
-เฉพาะเมื่อผู้ใช้เป็นผู้เช่าหรือเจ้าของในห้องสนทนาที่ระบุเท่านั้น
-
-การเพิ่มอุปกรณ์ใช้ `multipart/form-data` และแนบรูปด้วยชื่อฟิลด์ `images` ได้สูงสุด 5 รูป
-(JPEG, PNG หรือ WebP รูปละไม่เกิน 5 MB):
-
-```bash
-curl -X POST http://localhost:8080/api/v1/items \
-  -H "Authorization: Bearer <SUPABASE_ACCESS_TOKEN>" \
-  -F "item_name=กล้องถ่ายวิดีโอ 4K" \
-  -F "description=กล้องพร้อมแบตเตอรี่และกระเป๋า" \
-  -F "category=กล้อง" \
-  -F "price=2500" \
-  -F "type=รายวัน" \
-  -F "images=@camera-front.jpg" \
-  -F "images=@camera-back.jpg"
-```
-
-Backend จะสร้างรายการด้วยสถานะ `pending` อัตโนมัติ อัปโหลดรูปไปที่ bucket
-`item_bk` ภายใต้ path `{item_id}/...` และบันทึก public URL ลง `item_tb.item_image_url`
-
-ตัวอย่างแก้ไขเฉพาะบางฟิลด์:
-
-```json
-{
-  "price": 2200,
-  "status": "available"
-}
-```
-
-`user_id` จะถูกอ่านจาก access token โดย Backend และไม่รับค่าจาก request body
+### รายละเอียดในแต่ละ Layer:
+- `cmd/server/`: จัดการโหลดคอนฟิก, ทำ Dependency Injection และรัน HTTP Server พร้อมระบบ Graceful Shutdown
+- `internal/domain/`: บรรจุ Pure Business Entities และ Interface Ports สำหรับเชื่อมต่อภายนอก (ห้าม Import `gin` หรือ Database Libraries)
+- `internal/adapters/`: ดำเนินการตาม Interface ของ Domain เพื่อคุยกับ Third-party Services:
+  - `supabase/`: จัดการ Table `item_tb`, `booking_tb`, `profile_tb`, `conversation_tb`
+  - `fcm/`: ส่ง Push Notifications ผ่าน Firebase Admin SDK
+  - `aiservice/`: เชื่อมต่อไปยัง Python FastAPI AI Service
+- `internal/ports/`: ควบคุมการรับ Request ของ Gin, การแปลง DTO, Validation, Rate Limiter, และ Security Middlewares
 
 ---
 
-## ⚙️ ตัวแปรสภาพแวดล้อม (Environment Variables)
+## 📁 โครงสร้างไดเรกทอรี (Directory Structure)
 
-สร้างไฟล์ `.env` ในโฟลเดอร์ `backend/` :
+```text
+backend/
+├── cmd/
+│   └── server/
+│       └── main.go              # Application Entry Point & Dependency Wiring
+├── internal/
+│   ├── adapters/
+│   │   ├── aiservice/           # AI Gateway Client (HTTP Proxy & Streaming)
+│   │   ├── fcm/                 # Firebase Cloud Messaging Adapter
+│   │   └── supabase/            # Supabase Repositories (Item, Rental, Profile, Contact)
+│   ├── config/
+│   │   └── config.go            # Centralized Config with caarlos0/env & godotenv
+│   ├── domain/
+│   │   ├── errors.go            # Domain Errors
+│   │   └── *.go                 # Domain Interfaces & Core Entities
+│   └── ports/
+│       ├── *_handler.go         # Gin Controllers (Auth, Item, Rental, Chatbot, Push)
+│       ├── rate_limiter_middleware.go # In-memory Rate Limiting
+│       ├── response_logging_middleware.go # Slog Structured Logging
+│       └── router.go            # Route Grouping, CORS, AppSecret Check
+├── tests/                       # Unit & Integration Tests (Testify)
+├── go.mod                       # Go Module Dependencies
+└── go.sum                       # Dependency Checksums
+```
+
+---
+
+## 🎯 ขอบเขตหน้าที่ของระบบ (Responsibilities)
+
+1. **Core CRUD & Business Logic**: บริหารจัดการข้อมูลอุปกรณ์, การสร้างคำขอเช่า, คำนวณยอดเงิน และจัดการสถานะการส่งมอบ/ส่งคืน
+2. **AI Chatbot Gateway**: ทำหน้าที่เป็น Gateway เชื่อมต่อไปยัง Python AI Service ตรวจสอบ Rate Limit ป้องกัน DoS และถ่ายทอด SSE Stream กลับไปยัง Mobile App
+3. **Sensitive Data Protection**: ให้บริการตรวจสอบข้อมูลส่วนตัวและหมายเลขติดต่อ (`/api/v1/chat/contact`) หลังผ่านการยืนยันสิทธิ์ ป้องกัน Client ทำ Direct Query สู่ Database
+4. **Push Notification Dispatcher**: แปลงเหตุการณ์ของระบบเป็นข้อความแจ้งเตือนผ่าน Firebase Cloud Messaging (FCM)
+5. **Session Verification**: ตรวจสอบ Supabase JWT Bearer Token และระบุตัวตนของผู้ใช้จาก Token เท่านั้น (ไม่รับ User ID ผ่าน Request Body)
+
+---
+
+## 📋 ข้อกำหนดเบื้องต้น (Prerequisites)
+
+- **Go**: เวอร์ชัน `1.26` หรือใหม่กว่า
+- บัญชีและโครงการ **Supabase** (ต้องมี `SUPABASE_URL` และ `SUPABASE_SERVICE_ROLE_KEY`)
+- ไฟล์ Service Account ของ **Firebase** (สำหรับระบบ Push Notifications)
+
+---
+
+## ⚙️ การตั้งค่า Environment Variables
+
+สร้างไฟล์ `.env` ไว้ในโฟลเดอร์ `backend/`:
 
 ```env
-GIN_MODE=debug
-PORT=.......
-SUPABASE_URL=......
-SUPABASE_SERVICE_ROLE_KEY=.......
-FIREBASE_SERVICE_ACCOUNT_PATH=......
-APP_SECRET_KEY=......
-INTERNAL_SERVICE_KEY=......
+# ตั้งค่าโหมดการทำงานและพอร์ตเซิร์ฟเวอร์
+PORT=8080
+GIN_MODE=debug                           # ใช้ 'debug' ขณะพัฒนา และ 'release' บน Production
+
+# Supabase Configurations (ห้ามเปิดเผย Service Role Key ออกไปภายนอก)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+
+# Firebase Cloud Messaging Credentials
+FIREBASE_SERVICE_ACCOUNT_PATH=service-account.json
+# หรือสามารถระบุเป็น JSON String ใน FIREBASE_SERVICE_ACCOUNT_KEY แทนได้
+
+# กุญแจความปลอดภัย (รองรับ Multi-Key Rotation ด้วยการคั่นด้วยเครื่องหมายจุลภาค ,)
+APP_SECRET_KEY=your-super-secure-app-secret-key-32chars
+INTERNAL_SERVICE_KEY=your-internal-shared-service-key-32chars
+
+# การเชื่อมต่อกับ Python AI Service
+AI_SERVICE_URL=http://localhost:8000
+AI_SERVICE_TIMEOUT=60s
+
+# Timeouts สำหรับ Network I/O
+READ_TIMEOUT=15s
+WRITE_TIMEOUT=90s
+SHUTDOWN_TIMEOUT=5s
 ```
 
 ---
 
-## 🚀 วิธีรันโปรเจ็ค
+## 🚀 ขั้นตอนการติดตั้งและรันเซิร์ฟเวอร์ (Getting Started)
 
-### ข้อกำหนดเบื้องต้น
-
-- [Go](https://go.dev/dl/) เวอร์ชัน 1.26 ขึ้นไป
-- [Air](https://github.com/air-verse/air) (สำหรับ Hot Reload ขณะพัฒนา)
-
-### ติดตั้ง Dependencies
-
-หลังจาก clone โปรเจกต์ ให้เข้าไปที่โฟลเดอร์ `backend` และติดตั้ง package ที่ระบุไว้ใน `go.mod` ด้วยคำสั่ง:
-
+### 1. ติดตั้ง Go Modules
 ```bash
 cd backend
-go mod tidy
+go mod download
 ```
 
-### รันด้วย Air (แนะนำสำหรับการพัฒนา)
-
+### 2. รันเซิร์ฟเวอร์
 ```bash
-cd backend
-go install github.com/air-verse/air@latest
-air
+go run cmd/server/main.go
 ```
+> เซิร์ฟเวอร์จะเริ่มทำงานที่ `http://localhost:8080`
 
-Air จะคอยดูไฟล์ `.go`, `.tpl`, `.tmpl`, `.html` และ Build ใหม่อัตโนมัติเมื่อมีการแก้ไข
-
-### รันด้วย Go ตรงๆ
-
+### 3. ตรวจสอบสถานะการทำงาน (Healthcheck)
 ```bash
-cd backend
-go run ./cmd/server/main.go
+curl http://localhost:8080/health
 ```
-
-### Build สำหรับ Production
-
-```bash
-cd backend
-go build -o ./tmp/main ./cmd/server/main.go
-./tmp/main
+Response:
+```json
+{"status":"ok"}
 ```
-
-เซิร์ฟเวอร์จะรันที่ `http://localhost:8080` (หรือพอร์ตที่กำหนดใน `.env`)
 
 ---
 
-## 📚 เทคโนโลยีที่ใช้
+## 🌐 รายการ API Endpoints (API Routes)
 
-| เทคโนโลยี        | เวอร์ชัน | วัตถุประสงค์                                        |
-| :--------------- | :------- | :-------------------------------------------------- |
-| **Go**           | 1.26     | ภาษาหลักในการพัฒนา                                  |
-| **Gin**          | 1.12     | HTTP Web Framework                                  |
-| **Supabase Go**  | 0.5.0    | SDK เชื่อมต่อฐานข้อมูล Supabase (PostgreSQL)        |
-| **caarlos0/env** | 11.4     | อ่านและ Parse Environment Variables เป็น Go Struct  |
-| **godotenv**     | 1.5.1    | โหลดตัวแปรสภาพแวดล้อมจากไฟล์ `.env`                 |
-| **log/slog**     | Go std   | Structured Logging พร้อมฟังก์ชัน Redact ข้อมูลสำคัญ |
-| **testify**      | 1.12     | Unit Test Assertions & Test Suites                  |
-| **Air**          | —        | Hot Reload สำหรับ Development                       |
+ทุกเส้นทางขึ้นต้นด้วย `/api/v1` และจำเป็นต้องมี Header `X-App-Secret`:
+
+### Authentication & Profiles
+- `POST /api/v1/auth/register` - สมัครสมาชิกใหม่
+- `POST /api/v1/auth/login` - เข้าสู่ระบบด้วย Email/Password
+- `POST /api/v1/auth/google-profile` - ซิงค์ข้อมูลรูปโปรไฟล์จาก Google OAuth
+- `POST /api/v1/auth/change-password` - เปลี่ยนรหัสผ่าน
+- `POST /api/v1/auth/send-otp` - ส่ง OTP สำหรับรีเซ็ตรหัสผ่าน
+- `POST /api/v1/auth/verify-otp` - ตรวจสอบรหัส OTP
+- `GET /api/v1/user/profile` - ดึงข้อมูลโปรไฟล์ผู้ใช้งาน
+- `PUT /api/v1/user/profile` - อัปเดตข้อมูลโปรไฟล์
+- `PUT /api/v1/user/contact` - บันทึกเบอร์โทรศัพท์ติดต่อ
+- `POST /api/v1/user/fcm-token` - บันทึกหรืออัปเดต FCM Device Token
+
+### Items Management
+- `GET /api/v1/items` - รายการอุปกรณ์ (รองรับ Query Params: `category`, `search`, `limit`, `offset`)
+- `POST /api/v1/items` - ลงประกาศอุปกรณ์ให้เช่าใหม่
+- `GET /api/v1/items/:id` - ดูรายละเอียดอุปกรณ์ตาม ID
+- `PUT /api/v1/items/:id` - อัปเดตข้อมูลอุปกรณ์ (เฉพาะเจ้าของ)
+- `DELETE /api/v1/items/:id` - ลบรายการอุปกรณ์ (เฉพาะเจ้าของ)
+
+### Rental Orders & Handover
+- `POST /api/v1/rentals` - สร้างคำขอเช่าอุปกรณ์และหักเงิน Wallet
+- `POST /api/v1/rentals/:id/handover` - ยืนยันการส่งมอบอุปกรณ์ (OTP/QR)
+- `POST /api/v1/rentals/:id/return` - ยืนยันการรับคืนอุปกรณ์และปลดล็อกเงินมัดจำ
+
+### Chat & Notifications
+- `POST /api/v1/chat/contact` - ดึงข้อมูลคู่สนทนาแบบปลอดภัย
+- `POST /api/v1/push/chat` - ส่งการแจ้งเตือน Push Notification เมื่อมีข้อความใหม่
+
+### AI Chatbot Gateway
+- `POST /api/v1/chat-ai` - สนทนากับ AI (Full JSON Response)
+- `POST /api/v1/chat-ai/stream` - สนทนากับ AI แบบถ่ายทอดสด (Server-Sent Events)
 
 ---
+
+## 🔒 ความปลอดภัยและการควบคุมสิทธิ์ (Security & Hardening)
+
+1. **X-App-Secret Verification**: ป้องกัน Direct Endpoint Abuse โดยบังคับให้คำขอส่งมาจาก Mobile Client ที่มีกุญแจลับที่ถูกต้อง รองรับการทำ Zero-Downtime Secret Rotation
+2. **In-Memory Token Bucket Rate Limiting**:
+   - Authentication Group: จำกัด 5 ครั้งต่อนาที ป้องกัน Brute-force โจมตีรหัสผ่าน
+   - AI Chatbot Group: จำกัด 15 ครั้งต่อนาที ป้องกันการใช้ทรัพยากร AI เกินขนาด
+3. **Automated Scanner Path Blocking**: ตัดการเชื่อมต่อและตอบกลับ 404 ทันทีหากพบลักษณะ URL สแกนช่องโหว่ เช่น `.env`, `.git`, `.php`
+4. **Structured Logging (log/slog)**: จัดเก็บ Log เป็น JSON Format ในโหมด Release พร้อมเซนเซอร์ข้อมูลที่เป็นความลับ เช่น รหัสผ่านและ Bearer Token
+
+---
+
+## 🧪 การทดสอบ (Testing)
+
+โปรเจกต์ใช้ `testify` สำหรับการทำ Mocking และ Unit Testing โดยไม่ต้องเชื่อมต่อฐานข้อมูลภายนอกจริง:
+
+```bash
+cd backend
+go test -v ./tests/...
+```
+
+รันการทดสอบพร้อมตรวจสอบ Code Coverage:
+```bash
+go test -cover ./...
+```
