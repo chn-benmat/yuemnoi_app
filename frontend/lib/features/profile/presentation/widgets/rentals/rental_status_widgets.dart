@@ -95,14 +95,8 @@ class RentalStatusLoadingSkeleton extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Column(
             children: [
@@ -345,29 +339,77 @@ class RentalStatusCard extends StatelessWidget {
     );
   }
 
+  Widget _buildStatusBadge(RentalStatusItemData item) {
+    final status = item.statusCode.toLowerCase().trim();
+    Color bg;
+    Color fg;
+    BorderSide border;
+
+    switch (status) {
+      case 'pending':
+        bg = const Color(0xFFFFFBEB);
+        fg = const Color(0xFFB45309);
+        border = const BorderSide(color: Color(0xFFFDE68A));
+        break;
+      case 'confirmed':
+        bg = const Color(0xFFEFF6FF);
+        fg = const Color(0xFF1D4ED8);
+        border = const BorderSide(color: Color(0xFFBFDBFE));
+        break;
+      case 'active':
+        bg = const Color(0xFFF5F3FF);
+        fg = AppColors.primaryColor;
+        border = const BorderSide(color: Color(0xFFDDD6FE));
+        break;
+      case 'completed':
+      case 'finished':
+        bg = const Color(0xFFF0FDF4);
+        fg = const Color(0xFF15803D);
+        border = const BorderSide(color: Color(0xFFBBF7D0));
+        break;
+      case 'cancelled':
+        bg = const Color(0xFFFEF2F2);
+        fg = const Color(0xFFB91C1C);
+        border = const BorderSide(color: Color(0xFFFECACA));
+        break;
+      default:
+        bg = const Color(0xFFF8FAFC);
+        fg = const Color(0xFF475569);
+        border = const BorderSide(color: Color(0xFFE2E8F0));
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.fromBorderSide(border),
+      ),
+      child: Text(
+        item.status,
+        style: TextStyle(
+          fontFamily: AppTextStyles.fontFamily,
+          fontSize: 11,
+          color: fg,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => _showDetailModal(context),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF7400C9), Color(0xFF5200A0)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryColor.withValues(alpha: 0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
             children: [
               // ── Top row: image + info + status ────────────────────
@@ -376,36 +418,36 @@ class RentalStatusCard extends StatelessWidget {
                 children: [
                   // Thumbnail
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      width: 70,
-                      height: 70,
-                      color: const Color(0xFF3A0070),
+                      width: 66,
+                      height: 66,
+                      color: const Color(0xFFF1F5F9),
                       child: item.imageUrl != null && item.imageUrl!.isNotEmpty
                           ? CachedNetworkImage(
                               imageUrl: item.imageUrl!,
                               fit: BoxFit.cover,
                               placeholder: (context, url) => Container(
-                                color: const Color(0xFF3A0070),
+                                color: const Color(0xFFF1F5F9),
                                 child: Icon(
                                   item.iconData,
-                                  color: Colors.white54,
-                                  size: 28,
+                                  color: const Color(0xFF94A3B8),
+                                  size: 24,
                                 ),
                               ),
                               errorWidget: (context, url, err) => Container(
-                                color: const Color(0xFF3A0070),
+                                color: const Color(0xFFF1F5F9),
                                 child: Icon(
                                   item.iconData,
-                                  color: Colors.white54,
-                                  size: 28,
+                                  color: const Color(0xFF94A3B8),
+                                  size: 24,
                                 ),
                               ),
                             )
                           : Icon(
                               item.iconData,
-                              color: Colors.white54,
-                              size: 28,
+                              color: const Color(0xFF94A3B8),
+                              size: 24,
                             ),
                     ),
                   ),
@@ -421,51 +463,34 @@ class RentalStatusCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                            color: Color(0xFF0F172A),
                           ),
                         ),
-                        const SizedBox(height: 5),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.person_outline_rounded,
-                              color: Colors.white70,
-                              size: 14,
-                            ),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                '${item.partnerRole}: ${item.ownerName}',
-                                style: const TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 12,
-                                  color: Colors.white70,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(height: 3),
+                        Text(
+                          '${item.partnerRole}: ${item.ownerName}',
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                         if (item.duration != null || item.totalPrice != null) ...[
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 4),
                           Row(
                             children: [
                               if (item.duration != null &&
                                   item.duration!.isNotEmpty) ...[
-                                const Icon(
-                                  Icons.access_time_rounded,
-                                  color: Colors.white60,
-                                  size: 13,
-                                ),
-                                const SizedBox(width: 4),
                                 Text(
                                   item.duration!,
                                   style: const TextStyle(
                                     fontFamily: AppTextStyles.fontFamily,
-                                    fontSize: 11,
-                                    color: Colors.white70,
+                                    fontSize: 11.5,
+                                    color: Color(0xFF64748B),
                                   ),
                                 ),
                               ],
@@ -475,7 +500,7 @@ class RentalStatusCard extends StatelessWidget {
                                 const Text(
                                   ' • ',
                                   style: TextStyle(
-                                    color: Colors.white60,
+                                    color: Color(0xFFCBD5E1),
                                     fontSize: 11,
                                   ),
                                 ),
@@ -484,9 +509,9 @@ class RentalStatusCard extends StatelessWidget {
                                   '฿${item.totalPrice}',
                                   style: const TextStyle(
                                     fontFamily: AppTextStyles.fontFamily,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primaryColor,
                                   ),
                                 ),
                             ],
@@ -497,67 +522,43 @@ class RentalStatusCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   // Status badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: item.statusColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: item.statusColor.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    child: Text(
-                      item.status,
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 11,
-                        color: item.statusColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+                  _buildStatusBadge(item),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               // ── Tracking route & action button ─────────────────────────────
               SizedBox(
                 width: double.infinity,
-                child: OutlinedButton(
+                height: 40,
+                child: ElevatedButton.icon(
                   onPressed: () => _openTrackingMap(context),
-                  style: OutlinedButton.styleFrom(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.8),
-                    ),
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        item.statusCode.toLowerCase() == 'active'
-                            ? Icons.inventory_2_outlined
-                            : Icons.near_me_rounded,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        item.statusCode.toLowerCase() == 'active'
-                            ? 'ดูรายละเอียดการเช่า'
-                            : 'ดูเส้นทางนัดรับ & ตรวจรับของ',
-                        style: const TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                  icon: Icon(
+                    item.statusCode.toLowerCase() == 'active'
+                        ? Icons.inventory_2_outlined
+                        : Icons.near_me_outlined,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    item.statusCode.toLowerCase() == 'active'
+                        ? 'ดูรายละเอียดการเช่า'
+                        : 'ดูเส้นทางนัดรับ & ตรวจรับของ',
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),

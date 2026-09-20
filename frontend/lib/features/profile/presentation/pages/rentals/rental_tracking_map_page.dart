@@ -1153,24 +1153,25 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                       ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const Icon(
                             Icons.directions_car_rounded,
-                            size: 15,
-                            color: AppColors.primaryColor,
+                            size: 14,
+                            color: Color(0xFF64748B),
                           ),
                           const SizedBox(width: 5),
                           Text(
                             _routeResult!.formattedDistance,
                             style: const TextStyle(
                               fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 12.5,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF1E2022),
+                              color: Color(0xFF0F172A),
                             ),
                           ),
                         ],
@@ -1190,16 +1191,16 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Row(
                     children: [
                       const Icon(
-                        Icons.calendar_month_rounded,
-                        color: Color(0xFF2563EB),
-                        size: 20,
+                        Icons.calendar_today_outlined,
+                        color: Color(0xFF64748B),
+                        size: 16,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -1209,7 +1210,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1D4ED8),
+                            color: Color(0xFF334155),
                           ),
                         ),
                       ),
@@ -1223,7 +1224,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: const Color(0xFFE2E8F0),
                     width: 0.8,
@@ -1271,8 +1272,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                                 style: const TextStyle(
                                   fontFamily: AppTextStyles.fontFamily,
                                   fontSize: 13.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1E2022),
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF0F172A),
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -1293,7 +1294,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                             style: const TextStyle(
                               fontFamily: AppTextStyles.fontFamily,
                               fontSize: 15,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w700,
                               color: AppColors.primaryColor,
                             ),
                           ),
@@ -1301,7 +1302,10 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                       ],
                     ),
 
-                    const Divider(height: 18, color: Color(0xFFE2E8F0)),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    ),
 
                     // แถวจุดนัดรับ
                     InkWell(
@@ -1312,13 +1316,13 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFEE2E2),
+                              color: const Color(0xFFF1F5F9),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(
-                              Icons.location_on_rounded,
+                              Icons.location_on_outlined,
                               size: 16,
-                              color: Color(0xFFEF4444),
+                              color: Color(0xFF475569),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -1332,7 +1336,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                                     fontFamily: AppTextStyles.fontFamily,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1E2022),
+                                    color: Color(0xFF0F172A),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -1375,10 +1379,10 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                   Expanded(
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF1E2022),
-                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        foregroundColor: const Color(0xFF0F172A),
+                        side: const BorderSide(color: Color(0xFFE2E8F0)),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
@@ -1400,21 +1404,15 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _currentStatusCode == 'active'
-                            ? const Color(0xFF10B981)
+                            ? const Color(0xFF0F172A)
                             : (_currentStatusCode == 'cancelled'
                                   ? const Color(0xFF94A3B8)
                                   : AppColors.primaryColor),
                         foregroundColor: Colors.white,
-                        elevation: _currentStatusCode == 'active' ? 0 : 2,
-                        shadowColor:
-                            (_currentStatusCode == 'active'
-                                    ? Colors.transparent
-                                    : (_currentStatusCode == 'cancelled'
-                                          ? Colors.transparent
-                                          : AppColors.primaryColor))
-                                .withValues(alpha: 0.3),
+                        elevation: 0,
+                        shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),

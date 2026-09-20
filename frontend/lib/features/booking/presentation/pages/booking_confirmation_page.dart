@@ -87,114 +87,128 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) => SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 68,
-                height: 68,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_circle_rounded,
-                  color: Color(0xFF10B981),
-                  size: 42,
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-              const SizedBox(height: 14),
-              const Text(
-                'ส่งคำขอเช่าเรียบร้อยแล้ว!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E2022),
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
-              // กล่องแจ้งเตือนเรื่องเงิน ชัดเจน ป้องกันการสับสน
+              const Text(
+                'ส่งคำขอเช่าเรียบร้อยแล้ว',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'คำขอของคุณถูกส่งไปยังเจ้าของอุปกรณ์แล้ว',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 12.5,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Payment notice banner (Swiss clean neutral)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.info_outline_rounded,
-                          color: Color(0xFF2563EB),
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'ยังไม่มีการหักเงินในขั้นตอนนี้',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1D4ED8),
-                          ),
-                        ),
-                      ],
+                    const Text(
+                      'ยังไม่มีการหักเงินในขั้นตอนนี้',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                      ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
-                      'คุณเลือกชำระด้วย ${_selectedPaymentMethod == 'promptpay' ? 'พร้อมเพย์ (PromptPay)' : 'เงินสด (Cash)'} โดยจะชำระเงินใน "วันนัดรับของจริง" หลังจากได้ตรวจเช็กสภาพอุปกรณ์เรียบร้อยแล้วเท่านั้น',
+                      'คุณเลือกชำระด้วย ${_selectedPaymentMethod == 'promptpay' ? 'พร้อมเพย์ (PromptPay)' : 'เงินสด (Cash)'} โดยจะชำระเงินในวันนัดรับของจริง หลังตรวจเช็กสภาพอุปกรณ์เรียบร้อยแล้วเท่านั้น',
                       style: const TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 12.5,
-                        color: Color(0xFF1E40AF),
+                        fontSize: 12,
+                        color: Color(0xFF475569),
                         height: 1.45,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-              // สรุปข้อมูลการเช่า
+              const SizedBox(height: 12),
+              // Tabular Key-Value Summary
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(16),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Column(
                   children: [
                     _buildSummaryRow(
-                      icon: Icons.inventory_2_outlined,
                       label: 'อุปกรณ์',
                       value: _bookingData.item.title,
                     ),
-                    const Divider(height: 14, color: Color(0xFFE2E8F0)),
+                    const SizedBox(height: 10),
                     _buildSummaryRow(
-                      icon: Icons.calendar_today_outlined,
                       label: 'ระยะเวลา',
                       value: _bookingData.formattedPeriodSummary,
                     ),
-                    const Divider(height: 14, color: Color(0xFFE2E8F0)),
+                    const SizedBox(height: 10),
                     _buildSummaryRow(
-                      icon: Icons.location_on_outlined,
                       label: 'สถานที่นัดรับ',
                       value: _bookingData.location,
                     ),
-                    const Divider(height: 14, color: Color(0xFFE2E8F0)),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Divider(height: 1, color: Color(0xFFF1F5F9)),
+                    ),
                     _buildSummaryRow(
-                      icon: Icons.payments_outlined,
                       label: 'ยอดชำระเมื่อรับของ',
                       value: '${_bookingData.totalPrice.toStringAsFixed(0)} ฿',
                       isBold: true,
@@ -203,47 +217,48 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-              // ไทม์ไลน์ 3 ขั้นตอนถัดไป
+              const SizedBox(height: 12),
+              // Next steps list (Typographic 01, 02, 03)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'ขั้นตอนต่อไปที่คุณต้องทำ:',
+                      'ขั้นตอนต่อไป',
                       style: TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF374151),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                        color: Color(0xFF64748B),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    _buildStepRow('01', 'นัดรับและตรวจสอบอุปกรณ์ตามที่ระบุ'),
                     const SizedBox(height: 8),
-                    _buildStepRow('1', 'รอเจ้าของอุปกรณ์ตรวจสอบและกดยืนยันคำขอ'),
-                    const SizedBox(height: 6),
-                    _buildStepRow('2', 'พูดคุยตกลงเวลาและจุดนัดพบที่ชัดเจนผ่านแชท'),
-                    const SizedBox(height: 6),
-                    _buildStepRow('3', 'พบกันในวันนัด ตรวจสภาพของ และชำระเงิน'),
+                    _buildStepRow('02', 'ชำระเงิน'),
+                    const SizedBox(height: 8),
+                    _buildStepRow('03', 'สแกน QR Code หรือใส่รหัส PIN เพื่อเริ่มการเช่า'),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 48,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,
-                    elevation: 1,
+                    elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   onPressed: () {
@@ -255,8 +270,8 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     'ตรวจสอบสถานะการเช่า',
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -521,7 +536,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
   }
 
   Widget _buildSummaryRow({
-    required IconData icon,
+    IconData? icon,
     required String label,
     required String value,
     bool isBold = false,
@@ -529,13 +544,15 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
   }) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF64748B)),
-        const SizedBox(width: 8),
+        if (icon != null) ...[
+          Icon(icon, size: 16, color: const Color(0xFF64748B)),
+          const SizedBox(width: 8),
+        ],
         Text(
           label,
           style: const TextStyle(
             fontFamily: AppTextStyles.fontFamily,
-            fontSize: 12.5,
+            fontSize: 13,
             color: Color(0xFF64748B),
           ),
         ),
@@ -548,9 +565,9 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
             textAlign: TextAlign.end,
             style: TextStyle(
               fontFamily: AppTextStyles.fontFamily,
-              fontSize: 12.5,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: valueColor ?? const Color(0xFF1E2022),
+              fontSize: 13,
+              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+              color: valueColor ?? const Color(0xFF0F172A),
             ),
           ),
         ),
@@ -562,32 +579,23 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 18,
-          height: 18,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.primaryColor.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Text(
-            number,
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primaryColor,
-            ),
+        Text(
+          number,
+          style: const TextStyle(
+            fontFamily: AppTextStyles.fontFamily,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primaryColor,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
           child: Text(
             text,
             style: const TextStyle(
               fontFamily: AppTextStyles.fontFamily,
-              fontSize: 12,
-              color: Color(0xFF4B5563),
+              fontSize: 12.5,
+              color: Color(0xFF334155),
               height: 1.35,
             ),
           ),
