@@ -278,51 +278,31 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                   ),
                 ),
 
-                // หัวข้อ
-                Row(
+                // หัวข้อ (Swiss Style Typography Header)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryColor.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        widget.isEditMode
-                            ? Icons.edit_note_rounded
-                            : Icons.receipt_long_rounded,
-                        color: AppColors.primaryColor,
-                        size: 22,
+                    Text(
+                      widget.isEditMode
+                          ? 'ตรวจสอบรายละเอียดการแก้ไข'
+                          : 'ตรวจสอบรายละเอียดคำขอเช่า',
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                        color: Color(0xFF0F172A),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.isEditMode
-                                ? 'ตรวจสอบรายละเอียดการแก้ไข'
-                                : 'ตรวจสอบรายละเอียดคำขอเช่า',
-                            style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E2022),
-                            ),
-                          ),
-                          Text(
-                            widget.isEditMode
-                                ? 'ระบบจะส่งข้อมูลที่แก้ไขเข้าห้องแชท'
-                                : 'ระบบจะส่งการ์ดคำขอนี้เข้าห้องแชททันที',
-                            style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 12.5,
-                              color: Color(0xFF777A7C),
-                            ),
-                          ),
-                        ],
+                    const SizedBox(height: 3),
+                    Text(
+                      widget.isEditMode
+                          ? 'ระบบจะส่งข้อมูลที่แก้ไขเข้าห้องแชท'
+                          : 'ระบบจะส่งการ์ดคำขอนี้เข้าห้องแชททันที',
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 12.5,
+                        color: Color(0xFF64748B),
                       ),
                     ),
                   ],
@@ -330,38 +310,39 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
 
                 const SizedBox(height: 16),
 
-                // กล่องสรุปรายละเอียด
+                // การ์ดสรุปข้อมูลสไตล์ Clean SaaS
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Column(
                     children: [
-                      // สินค้า
+                      // ส่วนแสดงสินค้า
                       Row(
                         children: [
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                             child: Container(
-                              width: 52,
-                              height: 52,
+                              width: 46,
+                              height: 46,
                               color: const Color(0xFFEDF2F7),
                               child: _bookingData.item.imageUrl.isNotEmpty
                                   ? CachedNetworkImage(
                                       imageUrl: _bookingData.item.imageUrl,
                                       fit: BoxFit.cover,
                                       errorWidget: (_, _, _) => const Icon(
-                                        Icons.image_not_supported_outlined,
+                                        Icons.inventory_2_outlined,
                                         color: Color(0xFF94A3B8),
-                                        size: 24,
+                                        size: 22,
                                       ),
                                     )
                                   : const Icon(
                                       Icons.inventory_2_outlined,
                                       color: Color(0xFF94A3B8),
+                                      size: 22,
                                     ),
                             ),
                           ),
@@ -376,22 +357,22 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     fontFamily: AppTextStyles.fontFamily,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1E2022),
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0F172A),
                                   ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   _bookingData.rentalType ==
                                           BookingRentalType.daily
-                                      ? 'รายวัน (${_bookingData.item.dailyRate.toStringAsFixed(0)} ฿/วัน)'
-                                      : 'รายชั่วโมง (${_bookingData.item.hourlyRate.toStringAsFixed(0)} ฿/ชม.)',
+                                      ? 'ค่าเช่ารายวัน (${_bookingData.item.dailyRate.toStringAsFixed(0)} ฿/วัน)'
+                                      : 'ค่าเช่ารายชั่วโมง (${_bookingData.item.hourlyRate.toStringAsFixed(0)} ฿/ชม.)',
                                   style: const TextStyle(
                                     fontFamily: AppTextStyles.fontFamily,
                                     fontSize: 12,
-                                    color: AppColors.primaryColor,
-                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF64748B),
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
@@ -401,33 +382,25 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                       ),
 
                       const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 10),
+                        padding: EdgeInsets.symmetric(vertical: 12),
                         child: Divider(height: 1, color: Color(0xFFE2E8F0)),
                       ),
 
-                      // เวลา
+                      // รายการข้อมูล Key-Value เรียบคม
                       _buildSummaryItem(
-                        icon: Icons.access_time_filled_rounded,
-                        iconColor: const Color(0xFF8B5CF6),
-                        label: 'เวลาเช่า:',
+                        label: 'ระยะเวลาเช่า',
                         value: _bookingData.formattedPeriodSummary,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 9),
 
-                      // สถานที่
                       _buildSummaryItem(
-                        icon: Icons.location_on_rounded,
-                        iconColor: const Color(0xFFEF4444),
-                        label: 'สถานที่นัดพบ:',
+                        label: 'สถานที่นัดพบ',
                         value: _bookingData.location,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 9),
 
-                      // ยอดรวม
                       _buildSummaryItem(
-                        icon: Icons.payments_rounded,
-                        iconColor: const Color(0xFF10B981),
-                        label: 'ยอดรวม:',
+                        label: 'ยอดรวมสุทธิ',
                         value:
                             '${_bookingData.totalPrice.toStringAsFixed(0)} ฿',
                         isHighlight: true,
@@ -438,36 +411,33 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
 
                 const SizedBox(height: 12),
 
-                // ข้อความเตือนความปลอดภัย "ให้ตรวจสอบรายละเอียดอย่างถี่ถ้วน"
+                // แถบข้อความระบุเงื่อนไข เรียบง่าย คมชัด ไม่ใช่กล่องเหลือง AI Slop
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 9,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFFBEB),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFFFDE68A),
-                      width: 1,
-                    ),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: const Row(
                     children: [
                       Icon(
                         Icons.info_outline_rounded,
-                        color: Color(0xFFD97706),
-                        size: 18,
+                        color: Color(0xFF64748B),
+                        size: 15,
                       ),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'ให้ตรวจสอบรายละเอียดอย่างถี่ถ้วน ก่อนยืนยันการส่งคำขอ',
+                          'โปรดตรวจสอบความถูกต้องของวันและสถานที่นัดพบก่อนส่งคำขอ',
                           style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFFB45309),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF475569),
                           ),
                         ),
                       ),
@@ -475,12 +445,12 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
 
-                // ปุ่ม "ยืนยันและส่งคำขอ"
+                // ปุ่มยืนยันและส่งคำขอ
                 SizedBox(
                   width: double.infinity,
-                  height: 52,
+                  height: 48,
                   child: ElevatedButton(
                     key: const ValueKey('confirm-send-booking-request-button'),
                     style: ElevatedButton.styleFrom(
@@ -488,7 +458,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(26),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     onPressed: _isSubmitting
@@ -496,52 +466,40 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                         : () => _submitBookingRequestToChat(ctx),
                     child: _isSubmitting
                         ? const SizedBox(
-                            width: 22,
-                            height: 22,
+                            width: 20,
+                            height: 20,
                             child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
+                              strokeWidth: 2,
                               color: Colors.white,
                             ),
                           )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                widget.isEditMode
-                                    ? Icons.check_circle_outline_rounded
-                                    : Icons.send_rounded,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                widget.isEditMode
-                                    ? 'ยืนยันและส่งข้อมูลที่แก้ไข'
-                                    : 'ยืนยันและส่งคำขอเข้าแชท',
-                                style: const TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                        : Text(
+                            widget.isEditMode
+                                ? 'ยืนยันและส่งข้อมูลที่แก้ไข'
+                                : 'ยืนยันและส่งคำขอเข้าแชท',
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
 
-                // ปุ่ม "กลับไปแก้ไข"
+                // ปุ่มกลับไปแก้ไข
                 SizedBox(
                   width: double.infinity,
-                  height: 44,
+                  height: 40,
                   child: TextButton(
                     onPressed: () => Navigator.pop(ctx),
                     child: const Text(
                       'กลับไปแก้ไขข้อมูล',
                       style: TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF777A7C),
+                        color: Color(0xFF64748B),
                       ),
                     ),
                   ),
@@ -555,8 +513,6 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
   }
 
   Widget _buildSummaryItem({
-    required IconData icon,
-    required Color iconColor,
     required String label,
     required String value,
     bool isHighlight = false,
@@ -564,8 +520,6 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 15, color: iconColor),
-        const SizedBox(width: 6),
         Text(
           label,
           style: const TextStyle(
@@ -575,18 +529,18 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 12),
         Expanded(
           child: Text(
             value,
             textAlign: TextAlign.right,
             style: TextStyle(
               fontFamily: AppTextStyles.fontFamily,
-              fontSize: 12.5,
-              fontWeight: isHighlight ? FontWeight.bold : FontWeight.w600,
+              fontSize: isHighlight ? 14 : 12.5,
+              fontWeight: isHighlight ? FontWeight.w700 : FontWeight.w600,
               color: isHighlight
                   ? AppColors.primaryColor
-                  : const Color(0xFF1E2022),
+                  : const Color(0xFF0F172A),
             ),
           ),
         ),

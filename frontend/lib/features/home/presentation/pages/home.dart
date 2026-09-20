@@ -110,6 +110,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
         }
       },
       child: Scaffold(
+        extendBody: true,
         body: IndexedStack(index: _selectedIndex, children: _pages),
         floatingActionButton: _selectedIndex == 0
             ? Column(

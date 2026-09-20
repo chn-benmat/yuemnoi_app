@@ -1485,12 +1485,27 @@ void main() {
     });
 
     testWidgets(
-      'ChatDetailScreen displays floating rental request button in center for owner and hides when booking request exists',
+      'ChatDetailScreen displays rental request button on item inquiry card for owner',
       (tester) async {
         final bloc = ChatDetailBloc(
           streamMessages: mockStreamMessages,
           sendMessage: mockSendMessage,
           conversationId: sampleConversation2.id,
+        );
+
+        const inquiry = ItemInquiryData(
+          itemId: 2,
+          itemName: 'เต็นท์ Coleman 4 คน',
+          price: 500,
+          unitLabel: 'วัน',
+        );
+        final inquiryMsg = ChatMessage(
+          id: 'msg-inq-1',
+          conversationId: sampleConversation2.id,
+          senderId: 'user-renter-1',
+          message: inquiry.toChatMessagePayload(),
+          createdAt: DateTime.now(),
+          isMine: false,
         );
 
         await tester.pumpWidget(
@@ -1502,51 +1517,15 @@ void main() {
           ),
         );
 
-        // Owner should see the floating rental request button initially
-        expect(
-          find.byKey(const ValueKey('chat-floating-rental-request-button')),
-          findsOneWidget,
-        );
-        expect(find.text('ส่งคำขอการเช่า'), findsOneWidget);
-
-        // When a booking request is added to messages
-        final bookingData = BookingRequestData(
-          item: const BookingItemInfo(
-            id: 2,
-            title: 'เต็นท์ Coleman 4 คน',
-            imageUrl: '',
-            rating: 4.8,
-            reviewCount: 5,
-            hourlyRate: 100,
-            dailyRate: 500,
-            defaultLocation: 'กรุงเทพ',
-            ownerName: 'วิภาวี',
-          ),
-          startDate: DateTime.now(),
-          endDate: DateTime.now().add(const Duration(days: 1)),
-          startTime: const TimeOfDay(hour: 9, minute: 0),
-          endTime: const TimeOfDay(hour: 17, minute: 0),
-          location: 'กรุงเทพ',
-          conversationId: sampleConversation2.id,
-        );
-
-        final bookingMsg = ChatMessage(
-          id: 'msg-booking-1',
-          conversationId: sampleConversation2.id,
-          senderId: 'user-owner',
-          message: bookingData.toChatMessagePayload(),
-          createdAt: DateTime.now(),
-          isMine: true,
-        );
-
-        bloc.add(ChatMessagesUpdated([bookingMsg]));
+        bloc.add(ChatMessagesUpdated([inquiryMsg]));
         await tester.pumpAndSettle();
 
-        // The floating rental request button should now be hidden
+        // Owner should see the rental request button on the inquiry card
         expect(
-          find.byKey(const ValueKey('chat-floating-rental-request-button')),
-          findsNothing,
+          find.byKey(const ValueKey('inquiry-send-request-2')),
+          findsOneWidget,
         );
+        expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsOneWidget);
       },
     );
 
@@ -1705,12 +1684,12 @@ void main() {
         bloc.add(ChatMessagesUpdated([inquiryMsg1, bookingMsg1, inquiryMsg2]));
         await tester.pumpAndSettle();
 
-        // Button should RE-APPEAR for the new inquiry!
+        // Button should appear on the new inquiry card!
         expect(
-          find.byKey(const ValueKey('chat-floating-rental-request-button')),
+          find.byKey(const ValueKey('inquiry-send-request-25')),
           findsOneWidget,
         );
-        expect(find.text('ส่งคำขอการเช่า'), findsOneWidget);
+        expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsWidgets);
       },
     );
   });

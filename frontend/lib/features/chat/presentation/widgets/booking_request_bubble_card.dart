@@ -208,15 +208,8 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -224,7 +217,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 1. ภาพขนาดใหญ่จุใจ เห็นชัดเจนเต็มตา พร้อมแถบชื่อสินค้ามุมซ้ายล่าง
+            // 1. ภาพขนาดใหญ่ พร้อมป้ายชื่อสินค้าแบบ Swiss Minimal
             GestureDetector(
               onTap: () {
                 if (displayImageUrl.isNotEmpty) {
@@ -236,12 +229,12 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                 }
               },
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(10),
                 child: Stack(
                   children: [
                     Container(
                       width: double.infinity,
-                      height: 225,
+                      height: 210,
                       color: const Color(0xFFF1F5F9),
                       child: displayImageUrl.isNotEmpty
                           ? CachedNetworkImage(
@@ -273,46 +266,32 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                             ),
                     ),
 
-                    // ป้ายชื่ออุปกรณ์โปร่งแสงที่มุมซ้ายล่าง (■ [ชื่อสินค้า])
+                    // ป้ายชื่ออุปกรณ์โปร่งแสงที่มุมซ้ายล่าง
                     Positioned(
                       left: 8,
                       bottom: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8.5,
-                          vertical: 4.5,
+                          horizontal: 8,
+                          vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.68),
-                          borderRadius: BorderRadius.circular(8),
+                          color: const Color(0xFF0F172A).withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF9333EA),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 220),
+                          child: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
                             ),
-                            const SizedBox(width: 6),
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 200),
-                              child: Text(
-                                item.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -325,30 +304,31 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
 
             // 2. ข้อความรายละเอียดแบบ Minimal
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     isMine
-                        ? 'คุณส่งรายละเอียด'
-                        : '$senderTextส่งรายละเอียด',
+                        ? 'คุณส่งรายละเอียดคำขอเช่า'
+                        : '$senderText ส่งรายละเอียดคำขอเช่า',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E2022),
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: -0.2,
                       height: 1.3,
                     ),
                   ),
                   const SizedBox(height: 2),
                   const Text(
-                    'ตรวจสอบอย่างละเอียดข้อมูลถูกต้องไหม',
+                    'ตรวจสอบข้อมูลและรายละเอียดยืนยันการนัดรับ',
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 12,
                       fontWeight: FontWeight.w400,
-                      color: Color(0xFF777A7C),
+                      color: Color(0xFF64748B),
                       height: 1.3,
                     ),
                   ),
@@ -358,31 +338,25 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
 
             const SizedBox(height: 10),
 
-            // 3. กล่องข้อมูลการเช่าแบบกระชับ (เวลา/วัน, จุดนัดพบ, ราคา)
+            // 3. กล่องข้อมูลการเช่าแบบ Swiss Table (Anti-AI Slop: ไม่มีไอคอนรกทุกแถว)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Column(
                 children: [
-                  // แถวเวลา/วัน
                   _buildMiniInfoRow(
-                    icon: Icons.access_time_filled_rounded,
-                    iconColor: const Color(0xFF8B5CF6),
                     label: 'เวลาเช่า',
                     value: widget.bookingData.formattedPeriodSummary,
                   ),
-                  const SizedBox(height: 6),
-
-                  // แถวจุดนัดพบ
+                  const SizedBox(height: 7),
                   _buildMiniInfoRow(
-                    icon: Icons.location_on_rounded,
-                    iconColor: const Color(0xFFEF4444),
                     label: 'จุดนัดพบ',
                     value: widget.bookingData.location,
+                    showLinkIcon: true,
                     onTap: () {
                       final coordinates = LocationService.resolveCoordinates(
                         locationName: widget.bookingData.location,
@@ -395,28 +369,21 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                       );
                     },
                   ),
-                  const SizedBox(height: 6),
-
-                  // แถวยอดรวม
+                  const SizedBox(height: 7),
                   _buildMiniInfoRow(
-                    icon: Icons.payments_rounded,
-                    iconColor: const Color(0xFF10B981),
-                    label: 'ยอดรวม',
-                    value: _formatPrice(widget.bookingData.totalPrice),
-                    isPrice: true,
-                  ),
-                  const SizedBox(height: 6),
-
-                  // แถววิธีชำระเงิน
-                  _buildMiniInfoRow(
-                    icon: widget.bookingData.paymentMethod == 'promptpay'
-                        ? Icons.qr_code_2_rounded
-                        : Icons.account_balance_wallet_outlined,
-                    iconColor: const Color(0xFF3B82F6),
                     label: 'การชำระเงิน',
                     value: widget.bookingData.paymentMethod == 'promptpay'
                         ? 'พร้อมเพย์ (ชำระเมื่อรับของ)'
                         : 'เงินสด (ชำระเมื่อรับของ)',
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 7),
+                    child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+                  ),
+                  _buildMiniInfoRow(
+                    label: 'ยอดรวม',
+                    value: _formatPrice(widget.bookingData.totalPrice),
+                    isPrice: true,
                   ),
                 ],
               ),
@@ -424,28 +391,27 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
 
             const SizedBox(height: 12),
 
-            // 4. ปุ่ม Action (เมื่อกดยืนยันแล้ว แสดงปุ่ม "รายละเอียดนัดรับ" ทั้งฝั่งผู้เช่าและปล่อยเช่า)
+            // 4. ปุ่ม Action
             if (_isConfirmed)
               SizedBox(
                 width: double.infinity,
-                height: 40,
+                height: 42,
                 child: ElevatedButton.icon(
                   key: const ValueKey('chat-booking-action-button'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,
-                    elevation: 2,
-                    shadowColor:
-                        AppColors.primaryColor.withValues(alpha: 0.3),
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
                   onPressed: () => _handleAction(context, isOwnerUser),
                   icon: const Icon(
-                    Icons.event_available_rounded,
-                    size: 18,
+                    Icons.calendar_today_outlined,
+                    size: 16,
                     color: Colors.white,
                   ),
                   label: const Text(
@@ -453,7 +419,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
                   ),
@@ -462,13 +428,13 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             else if (isOwnerUser)
               SizedBox(
                 width: double.infinity,
-                height: 36,
+                height: 38,
                 child: OutlinedButton(
                   key: const ValueKey('chat-booking-action-button'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primaryColor,
                     side: const BorderSide(
-                      color: Color(0xFFD8B4FE),
+                      color: Color(0xFFE2E8F0),
                       width: 1,
                     ),
                     shape: RoundedRectangleBorder(
@@ -482,7 +448,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     children: [
                       Icon(
                         Icons.edit_outlined,
-                        size: 16,
+                        size: 15,
                         color: AppColors.primaryColor,
                       ),
                       SizedBox(width: 6),
@@ -490,7 +456,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                         'แก้ไข',
                         style: TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 12.5,
+                          fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.primaryColor,
                         ),
@@ -502,26 +468,25 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             else
               SizedBox(
                 width: double.infinity,
-                height: 40,
+                height: 42,
                 child: ElevatedButton(
                   key: const ValueKey('chat-booking-action-button'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE5E7EB),
-                    foregroundColor: const Color(0xFF1E2022),
+                    backgroundColor: AppColors.primaryColor,
+                    foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
                   onPressed: () => _handleAction(context, false),
                   child: const Text(
-                    'ตรวจสอบ',
+                    'ตรวจสอบคำขอเช่า',
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E2022),
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -533,56 +498,63 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   }
 
   Widget _buildMiniInfoRow({
-    required IconData icon,
-    required Color iconColor,
     required String label,
     required String value,
     bool isPrice = false,
+    bool showLinkIcon = false,
     VoidCallback? onTap,
   }) {
     final row = Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
-        Icon(icon, size: 14, color: iconColor),
-        const SizedBox(width: 5),
         Text(
-          '$label:',
+          label,
           style: const TextStyle(
             fontFamily: AppTextStyles.fontFamily,
-            fontSize: 11.5,
+            fontSize: 12,
             fontWeight: FontWeight.w500,
             color: Color(0xFF64748B),
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 8),
         Expanded(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontSize: 11.5,
-              fontWeight: isPrice ? FontWeight.bold : FontWeight.w600,
-              color: isPrice ? AppColors.primaryColor : const Color(0xFF1E2022),
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: isPrice ? 14 : 12,
+                    fontWeight: isPrice ? FontWeight.w800 : FontWeight.w600,
+                    color: isPrice ? AppColors.primaryColor : const Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              if (showLinkIcon) ...[
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.open_in_new_rounded,
+                  size: 12,
+                  color: Color(0xFF64748B),
+                ),
+              ],
+            ],
           ),
         ),
-        if (onTap != null) ...[
-          const SizedBox(width: 4),
-          const Icon(
-            Icons.open_in_new_rounded,
-            size: 11,
-            color: AppColors.primaryColor,
-          ),
-        ],
       ],
     );
 
     if (onTap != null) {
       return InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(4),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 1),
           child: row,

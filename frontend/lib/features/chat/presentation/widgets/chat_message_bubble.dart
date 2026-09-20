@@ -53,6 +53,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.onEdit,
     this.onDelete,
     this.onQuotedTap,
+    this.onSendBookingRequest,
   });
 
   final ChatMessage message;
@@ -68,6 +69,7 @@ class ChatMessageBubble extends StatelessWidget {
   final bool isHighlighted;
   final VoidCallback? onRetry;
   final ValueChanged<ChatMessage>? onReply;
+  final void Function(ItemInquiryData)? onSendBookingRequest;
   final ValueChanged<ChatMessage>? onEdit;
   final ValueChanged<ChatMessage>? onDelete;
   final ValueChanged<String>? onQuotedTap;
@@ -346,6 +348,8 @@ class ChatMessageBubble extends StatelessWidget {
           child: ItemInquiryBubbleCard(
             message: message,
             inquiryData: inquiryData,
+            isOwner: isOwner,
+            onSendBookingRequest: onSendBookingRequest,
           ),
         );
 

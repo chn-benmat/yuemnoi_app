@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -698,112 +697,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     return null;
   }
 
-  Widget _buildFloatingRentalRequestButton() {
-    if (!_isCurrentUserOwner) return const SizedBox.shrink();
 
-    return BlocBuilder<ChatDetailBloc, ChatDetailState>(
-      buildWhen: (previous, current) => previous.messages != current.messages,
-      builder: (context, state) {
-        final messages = state.messages;
-        int lastInquiryIndex = -1;
-        ItemInquiryData? latestInquiry;
-        int lastBookingIndex = -1;
-
-        for (int i = messages.length - 1; i >= 0; i--) {
-          final msg = messages[i];
-          if (lastInquiryIndex == -1 && ItemInquiryData.isInquiry(msg.message)) {
-            lastInquiryIndex = i;
-            latestInquiry = ItemInquiryData.fromChatMessage(
-              msg.message,
-              imageUrl: msg.imageUrl,
-            );
-          }
-          if (lastBookingIndex == -1 &&
-              BookingRequestData.isBookingRequest(msg.message)) {
-            lastBookingIndex = i;
-          }
-          if (lastInquiryIndex != -1 && lastBookingIndex != -1) {
-            break;
-          }
-        }
-
-        final bool shouldShowButton;
-        if (lastInquiryIndex != -1) {
-          shouldShowButton =
-              (lastBookingIndex == -1 || lastInquiryIndex > lastBookingIndex);
-        } else {
-          final hasConversationItem = (_conversation.itemId != null) ||
-              (_conversation.itemName?.isNotEmpty == true);
-          shouldShowButton = hasConversationItem && (lastBookingIndex == -1);
-        }
-
-        if (!shouldShowButton) {
-          return const SizedBox.shrink();
-        }
-
-        return Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 8),
-          child: Center(
-            child: Material(
-              color: Colors.transparent,
-              elevation: 3,
-              shadowColor: AppColors.primaryColor.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(20),
-              child: InkWell(
-                key: const ValueKey('chat-floating-rental-request-button'),
-                onTap: () => _openBookingRequest(latestInquiry),
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.3),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.receipt_long_rounded,
-                        color: Colors.white,
-                        size: 15,
-                      ),
-                      SizedBox(width: 5),
-                      Text(
-                        'ส่งคำขอการเช่า',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                      SizedBox(width: 2),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: Colors.white70,
-                        size: 16,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -942,6 +836,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                 ),
                                 isOwner: _conversation.role ==
                                     ChatParticipantRole.renter,
+                                onSendBookingRequest: _openBookingRequest,
                                 onRetry: () {
                                   context.read<ChatDetailBloc>().add(
                                     ChatRetryMessageSent(
@@ -1025,7 +920,6 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
               ],
             ),
           ),
-          _buildFloatingRentalRequestButton(),
           BlocBuilder<ChatDetailBloc, ChatDetailState>(
             buildWhen: (prev, curr) =>
                 prev.isOtherUserTyping != curr.isOtherUserTyping,
