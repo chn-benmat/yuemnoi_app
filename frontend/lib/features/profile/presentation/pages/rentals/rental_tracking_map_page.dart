@@ -82,6 +82,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   late double _resolvedPrice;
   late String _currentStatusCode;
   late bool _isOwner;
+  int _renterHandoverStep = 0;
 
   DateTime? get _startDate {
     return widget.bookingData?.startDate;
@@ -189,9 +190,18 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       totalPrice: _resolvedPrice,
       paymentMethod: widget.bookingData?.paymentMethod ?? 'promptpay',
       initialIsOwner: _isOwner,
+      initialStep: _renterHandoverStep,
+      onStepChanged: (step) {
+        if (mounted) {
+          setState(() {
+            _renterHandoverStep = step;
+          });
+        }
+      },
       onHandoverSuccess: (newStatus) {
         setState(() {
           _currentStatusCode = newStatus;
+          _renterHandoverStep = 0;
         });
       },
     );
@@ -252,6 +262,23 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
         locationName: _resolvedLocation,
       );
       _destinationLocation = LatLng(fallback.latitude, fallback.longitude);
+    }
+
+    _loadSavedHandoverStep();
+  }
+
+  Future<void> _loadSavedHandoverStep() async {
+    final step = await RentalHandoverModal.getSavedStep(
+      bookingId: widget.bookingId,
+      conversationId:
+          widget.conversationId ?? widget.bookingData?.conversationId,
+      itemId: widget.bookingData?.item.id,
+      itemTitle: _resolvedTitle,
+    );
+    if (mounted) {
+      setState(() {
+        _renterHandoverStep = step;
+      });
     }
   }
 
@@ -1410,7 +1437,11 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                                   ? Icons.cancel_outlined
                                   : (_isOwner
                                         ? Icons.inventory_2_rounded
-                                        : Icons.payments_rounded)),
+                                        : (_renterHandoverStep == 2
+                                              ? Icons.qr_code_rounded
+                                              : (_renterHandoverStep == 1
+                                                    ? Icons.payments_rounded
+                                                    : Icons.checklist_rounded)))),
                         size: 18,
                         color: Colors.white,
                       ),
@@ -1419,7 +1450,13 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                             ? (_isOwner ? 'กำลังปล่อยเช่า' : 'กำลังเช่าอุปกรณ์')
                             : (_currentStatusCode == 'cancelled'
                                   ? 'ยกเลิกการเช่าแล้ว'
-                                  : (_isOwner ? 'ส่งมอบอุปกรณ์' : 'ชำระเงิน')),
+                                  : (_isOwner
+                                        ? 'ส่งมอบอุปกรณ์'
+                                        : (_renterHandoverStep == 2
+                                              ? 'รหัสส่งมอบ'
+                                              : (_renterHandoverStep == 1
+                                                    ? 'ชำระเงิน'
+                                                    : 'ตรวจรับ & ชำระเงิน')))),
                         style: const TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 13,

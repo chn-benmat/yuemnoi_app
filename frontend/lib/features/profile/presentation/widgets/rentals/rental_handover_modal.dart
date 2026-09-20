@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../../core/constants/colors.dart';
@@ -28,8 +29,90 @@ class RentalHandoverModal extends StatefulWidget {
   final double totalPrice;
   final String paymentMethod; // 'promptpay' หรือ 'cash'
   final bool initialIsOwner;
+  final int? initialStep;
+  final ValueChanged<int>? onStepChanged;
   final ValueChanged<String>? onHandoverSuccess;
   final UpdateBookingStatusUseCase? updateBookingStatusUseCase;
+
+  static final Map<String, int> _memoryProgressCache = {};
+  static final Map<String, int> _memoryMaxStepCache = {};
+
+  static String getStorageKey({
+    int? bookingId,
+    String? conversationId,
+    int? itemId,
+    String? itemTitle,
+  }) {
+    if (bookingId != null && bookingId > 0) {
+      return 'handover_progress_step_booking_$bookingId';
+    }
+    if (conversationId != null && conversationId.isNotEmpty) {
+      return 'handover_progress_step_conv_$conversationId';
+    }
+    if (itemId != null && itemId > 0) {
+      return 'handover_progress_step_item_$itemId';
+    }
+    final clean = (itemTitle ?? 'default').replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+    return 'handover_progress_step_title_$clean';
+  }
+
+  static int getCachedStep({
+    int? bookingId,
+    String? conversationId,
+    int? itemId,
+    String? itemTitle,
+  }) {
+    final key = getStorageKey(
+      bookingId: bookingId,
+      conversationId: conversationId,
+      itemId: itemId,
+      itemTitle: itemTitle,
+    );
+    return _memoryProgressCache[key] ?? 0;
+  }
+
+  static Future<int> getSavedStep({
+    int? bookingId,
+    String? conversationId,
+    int? itemId,
+    String? itemTitle,
+  }) async {
+    final key = getStorageKey(
+      bookingId: bookingId,
+      conversationId: conversationId,
+      itemId: itemId,
+      itemTitle: itemTitle,
+    );
+    final cached = _memoryProgressCache[key];
+    if (cached != null) return cached;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(key) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static Future<void> clearSavedStep({
+    int? bookingId,
+    String? conversationId,
+    int? itemId,
+    String? itemTitle,
+  }) async {
+    final key = getStorageKey(
+      bookingId: bookingId,
+      conversationId: conversationId,
+      itemId: itemId,
+      itemTitle: itemTitle,
+    );
+    _memoryProgressCache.remove(key);
+    _memoryMaxStepCache.remove(key);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+      await prefs.remove('${key}_max');
+    } catch (_) {}
+  }
 
   const RentalHandoverModal({
     super.key,
@@ -43,6 +126,8 @@ class RentalHandoverModal extends StatefulWidget {
     required this.totalPrice,
     this.paymentMethod = 'promptpay',
     this.initialIsOwner = false,
+    this.initialStep,
+    this.onStepChanged,
     this.onHandoverSuccess,
     this.updateBookingStatusUseCase,
   });
@@ -59,6 +144,8 @@ class RentalHandoverModal extends StatefulWidget {
     required double totalPrice,
     String paymentMethod = 'promptpay',
     bool initialIsOwner = false,
+    int? initialStep,
+    ValueChanged<int>? onStepChanged,
     ValueChanged<String>? onHandoverSuccess,
     UpdateBookingStatusUseCase? updateBookingStatusUseCase,
   }) {
@@ -81,6 +168,8 @@ class RentalHandoverModal extends StatefulWidget {
         totalPrice: totalPrice,
         paymentMethod: paymentMethod,
         initialIsOwner: initialIsOwner,
+        initialStep: initialStep,
+        onStepChanged: onStepChanged,
         onHandoverSuccess: onHandoverSuccess,
         updateBookingStatusUseCase: updateBookingStatusUseCase,
       ),
@@ -95,6 +184,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   late bool _isOwner;
   late final UpdateBookingStatusUseCase _updateBookingStatusUseCase;
   int _currentStep = 0; // 0: ตรวจสภาพ, 1: ชำระเงิน, 2: รหัสยืนยัน PIN, 3: สำเร็จ
+  int _maxStepReached = 0;
 
   // สเต็ป 3: Handover PIN & QR Code
   late final String _generatedPin;
@@ -104,6 +194,15 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
 
   Timer? _statusPollTimer;
   RealtimeChannel? _realtimeChannel;
+
+  String get _storageKey {
+    return RentalHandoverModal.getStorageKey(
+      bookingId: widget.bookingId,
+      conversationId: widget.conversationId,
+      itemId: widget.itemId,
+      itemTitle: widget.itemTitle,
+    );
+  }
 
   String get _handoverChannelName {
     if (widget.bookingId != null && widget.bookingId! > 0) {
@@ -128,6 +227,21 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
 
     if (_isOwner) {
       _currentStep = 2; // ฝั่งผู้ปล่อยเช่าเริ่มที่ขั้นตอนเดียวคือ รับรหัสส่งมอบ ทันที
+      _maxStepReached = 2;
+    } else {
+      final key = _storageKey;
+      final cachedStep = RentalHandoverModal._memoryProgressCache[key];
+      final cachedMax = RentalHandoverModal._memoryMaxStepCache[key];
+      final initStep = widget.initialStep ?? cachedStep;
+      if (initStep != null) {
+        _currentStep = initStep.clamp(0, 2);
+      }
+      if (cachedMax != null) {
+        _maxStepReached = cachedMax.clamp(_currentStep, 2);
+      } else {
+        _maxStepReached = _currentStep;
+      }
+      _loadSavedStep();
     }
 
     if (widget.bookingId != null && widget.bookingId! > 0) {
@@ -140,6 +254,71 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
 
     // เริ่มการซิงก์สถานะส่งมอบแบบ Realtime (ทั้งสองฝั่ง)
     _initHandoverSync();
+  }
+
+  Future<void> _loadSavedStep() async {
+    if (_isOwner) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = _storageKey;
+      final savedStep = prefs.getInt(key);
+      final savedMax = prefs.getInt('${key}_max');
+      if (mounted) {
+        setState(() {
+          if (savedStep != null) {
+            _currentStep = savedStep.clamp(0, 2);
+            RentalHandoverModal._memoryProgressCache[key] = _currentStep;
+          }
+          if (savedMax != null) {
+            _maxStepReached = savedMax.clamp(_currentStep, 2);
+            RentalHandoverModal._memoryMaxStepCache[key] = _maxStepReached;
+          } else {
+            _maxStepReached = _currentStep;
+            RentalHandoverModal._memoryMaxStepCache[key] = _currentStep;
+          }
+        });
+        widget.onStepChanged?.call(_currentStep);
+      }
+    } catch (e) {
+      debugPrint('Error loading saved handover step: $e');
+    }
+  }
+
+  void _setStep(int newStep) {
+    final clamped = newStep.clamp(0, 3);
+    setState(() {
+      _currentStep = clamped;
+      if (_currentStep > _maxStepReached && _currentStep <= 2) {
+        _maxStepReached = _currentStep;
+      }
+    });
+
+    widget.onStepChanged?.call(_currentStep);
+
+    if (!_isOwner && _currentStep < 3) {
+      final key = _storageKey;
+      RentalHandoverModal._memoryProgressCache[key] = _currentStep;
+      RentalHandoverModal._memoryMaxStepCache[key] = _maxStepReached;
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setInt(key, _currentStep);
+        prefs.setInt('${key}_max', _maxStepReached);
+      }).catchError((dynamic e) {
+        debugPrint('Error saving handover step: $e');
+      });
+    }
+  }
+
+  Future<void> _clearSavedStep() async {
+    final key = _storageKey;
+    RentalHandoverModal._memoryProgressCache.remove(key);
+    RentalHandoverModal._memoryMaxStepCache.remove(key);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+      await prefs.remove('${key}_max');
+    } catch (e) {
+      debugPrint('Error clearing saved handover step: $e');
+    }
   }
 
   void _initHandoverSync() {
@@ -217,6 +396,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   void _onHandoverCompleted() {
     _statusPollTimer?.cancel();
     _realtimeChannel?.unsubscribe();
+    _clearSavedStep();
     if (!mounted) return;
 
     widget.onHandoverSuccess?.call('active');
@@ -330,6 +510,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
     );
 
     if (result == true && mounted) {
+      _clearSavedStep();
       Navigator.of(context).pop();
       widget.onHandoverSuccess?.call('cancelled');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -458,39 +639,48 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   Widget _buildStepIndicator({required int stepIndex, required String label}) {
     final isPassed = _currentStep > stepIndex;
     final isCurrent = _currentStep == stepIndex;
+    // เมื่อถึงขั้นตอนที่ 3 (รหัสส่งมอบ) แล้ว ได้ชำระเงินเรียบร้อย จะไม่อนุญาตให้กดย้อนกลับไปขั้นตอนชำระเงิน
+    final isAccessible = _currentStep < 2 && stepIndex <= _maxStepReached;
 
     Color color = const Color(0xFF94A3B8);
     if (isCurrent) color = AppColors.primaryColor;
     if (isPassed) color = const Color(0xFF10B981);
 
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 12,
-          backgroundColor: color.withValues(alpha: 0.15),
-          child: isPassed
-              ? const Icon(Icons.check, size: 14, color: Color(0xFF10B981))
-              : Text(
-                  '${stepIndex + 1}',
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
+    return InkWell(
+      onTap: isAccessible && !isCurrent ? () => _setStep(stepIndex) : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 12,
+              backgroundColor: color.withValues(alpha: 0.15),
+              child: isPassed
+                  ? const Icon(Icons.check, size: 14, color: Color(0xFF10B981))
+                  : Text(
+                      '${stepIndex + 1}',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontSize: 10.5,
+                fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                color: color,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 3),
-        Text(
-          label,
-          style: TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontSize: 10.5,
-            fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-            color: color,
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -542,7 +732,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
           width: double.infinity,
           height: 48,
           child: ElevatedButton(
-            onPressed: () => setState(() => _currentStep = 1),
+            onPressed: () => _setStep(1),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryColor,
               foregroundColor: Colors.white,
@@ -725,7 +915,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('คุณได้แจ้งชำระเงินแล้ว กำลังรอผู้ปล่อยเช่ายืนยัน')),
                 );
-                setState(() => _currentStep = 2);
+                _setStep(2);
               },
               icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
               label: Text(
@@ -739,12 +929,29 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
               ),
             ),
           ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 44,
+            child: TextButton.icon(
+              onPressed: () => _setStep(0),
+              icon: const Icon(Icons.arrow_back_rounded, size: 16, color: Color(0xFF64748B)),
+              label: const Text(
+                'ย้อนกลับไปตรวจสภาพ',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
         ] else ...[
           SizedBox(
             height: 48,
             child: ElevatedButton.icon(
               onPressed: () {
-                setState(() => _currentStep = 2);
+                _setStep(2);
               },
               icon: const Icon(Icons.verified_rounded, size: 18),
               label: Text(
@@ -965,7 +1172,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
         ] else ...[
           // ── ฝั่งผู้ปล่อยเช่า: สแกน QR Code หรือกรอกรหัส PIN จากผู้เช่า ────────
           SizedBox(

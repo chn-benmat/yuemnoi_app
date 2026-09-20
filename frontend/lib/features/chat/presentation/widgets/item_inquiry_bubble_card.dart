@@ -13,11 +13,15 @@ class ItemInquiryBubbleCard extends StatelessWidget {
     super.key,
     required this.message,
     required this.inquiryData,
+    this.isOwner,
+    this.onSendBookingRequest,
     this.onTap,
   });
 
   final ChatMessage message;
   final ItemInquiryData inquiryData;
+  final bool? isOwner;
+  final void Function(ItemInquiryData)? onSendBookingRequest;
   final VoidCallback? onTap;
 
   @override
@@ -275,6 +279,37 @@ class ItemInquiryBubbleCard extends StatelessWidget {
                       SizedBox(width: 4),
                       Icon(Icons.chevron_right_rounded, size: 16),
                     ],
+                  ),
+                ),
+              ),
+            ],
+
+            // 5. ปุ่มส่งคำขอเช่าอุปกรณ์นี้ (แสดงเฉพาะผู้ปล่อยเช่า)
+            if (isOwner == true && onSendBookingRequest != null) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 36,
+                child: ElevatedButton.icon(
+                  key: ValueKey('inquiry-send-request-${inquiryData.itemId ?? inquiryData.itemName}'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  onPressed: () => onSendBookingRequest!(inquiryData),
+                  icon: const Icon(Icons.receipt_long_rounded, size: 15),
+                  label: const Text(
+                    'ส่งคำขอเช่าอุปกรณ์นี้',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
