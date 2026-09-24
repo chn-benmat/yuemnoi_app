@@ -24,7 +24,7 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
         );
 
   /// โหลดข้อมูลการเช่า
-  Future<void> loadSession(int rentalId) async {
+  Future<void> loadSession([int? rentalId]) async {
     emit(state.copyWith(status: RentalReturnStatus.loading));
     try {
       final session = await _repository.getReturnSession(rentalId);

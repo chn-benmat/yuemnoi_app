@@ -22,7 +22,6 @@ class LiveCameraCaptureSheet extends StatelessWidget {
 
     try {
       // โหมดถ่ายรูปจากกล้องสดเท่านั้น ป้องกันการเลือกภาพจากอัลบั้ม 100%
-      // ไม่อนุญาตให้เลือกจาก Gallery หรือ Album ไม่ว่าจะเปิดจากเครื่องใด
       final XFile? photo = await picker.pickImage(
         source: ImageSource.camera,
         preferredCameraDevice: CameraDevice.rear,
@@ -45,12 +44,12 @@ class LiveCameraCaptureSheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             icon: const Icon(
-              Icons.no_photography_rounded,
+              Icons.camera_alt_outlined,
               color: Color(0xFFDC2626),
-              size: 44,
+              size: 40,
             ),
             title: const Text(
-              'บังคับถ่ายภาพสดจากกล้องเท่านั้น',
+              'ต้องถ่ายภาพสดจากกล้อง',
               style: TextStyle(
                 fontFamily: AppTextStyles.fontFamily,
                 fontWeight: FontWeight.bold,
@@ -58,31 +57,15 @@ class LiveCameraCaptureSheet extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            content: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'มาตรการความปลอดภัยขั้นสูง (Anti-Fraud Policy):',
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: Color(0xFFDC2626),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'เพื่อป้องกันการนำรูปเก่ามาใช้ซ้ำและการปลอมแปลงสภาพเครื่อง ระบบไม่อนุญาตให้เลือกภาพจากอัลบั้มหรือคลังภาพในทุกกรณี ไม่ว่าจะเปิดใช้งานจากโทรศัพท์ แท็บเล็ต หรือคอมพิวเตอร์\n\nหากเครื่องนี้ไม่มีกล้อง หรือถูกปิดกั้นสิทธิ์กล้อง กรุณาเปิดแอปผ่านสมาร์ตโฟนที่มีกล้องเพื่อถ่ายภาพส่งมอบเครื่องจริง',
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 12,
-                    color: Color(0xFF475569),
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+            content: const Text(
+              'เพื่อความปลอดภัยและป้องกันข้อพิพาท ระบบเปิดใช้งานเฉพาะกล้องถ่ายสดเท่านั้น กรุณาอนุญาตสิทธิ์การเข้าถึงกล้องเพื่อดำเนินการต่อ',
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontSize: 13,
+                color: Color(0xFF475569),
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
             ),
             actionsAlignment: MainAxisAlignment.center,
             actions: [
@@ -93,10 +76,9 @@ class LiveCameraCaptureSheet extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                 ),
                 child: const Text(
-                  'รับทราบและปฏิบัติตาม',
+                  'รับทราบ',
                   style: TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontWeight: FontWeight.bold,
@@ -118,115 +100,88 @@ class LiveCameraCaptureSheet extends StatelessWidget {
         final cubit = context.read<RentalReturnCubit>();
 
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          padding: const EdgeInsets.all(18),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFF1F5F9)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Security Warning Banner (เน้นย้ำความปลอดภัย ห้ามเลือกจากอัลบั้มเด็ดขาด) ──
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF2F2),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFFECACA)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDC2626),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.security_rounded,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'มาตรการบังคับถ่ายภาพสด (Camera Only)',
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF991B1B),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      '• ห้ามเลือกรูปจากอัลบั้มหรือคลังภาพโดยเด็ดขาดในทุกกรณี\n'
-                      '• ต้องใช้กล้องถ่ายภาพเครื่องจริง ณ จุดส่งมอบเท่านั้น (เปิดจากเครื่องไหนก็ต้องถ่ายสด)\n'
-                      '• โปรดถ่ายให้ติดรหัสยืนยันความปลอดภัยในภาพเพื่อป้องกันการนำภาพเก่ามาใช้ซ้ำ',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 11.5,
-                        color: Color(0xFF7F1D1D),
-                        height: 1.45,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // หัวข้อและการป้องกันการโกง
+              // ── หัวข้อพร้อมรหัสยืนยัน ──
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.primaryColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
                       Icons.camera_alt_rounded,
                       color: AppColors.primaryColor,
-                      size: 22,
+                      size: 20,
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'ถ่ายภาพตรวจสอบสภาพเครื่อง (กล้องสด)',
+                        const Text(
+                          'ถ่ายภาพตรวจสอบสภาพ (กล้องสด)',
                           style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 15,
+                            fontSize: 14.5,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E2022),
+                            color: Color(0xFF0F172A),
                           ),
                         ),
-                        Text(
-                          'ระบบล็อกการทำงาน: กล้องถ่ายภาพสดเท่านั้น ไม่อนุญาตให้อัปโหลดไฟล์ภาพ',
+                        const SizedBox(height: 2),
+                        const Text(
+                          'ถ่าย 3 มุมเพื่อป้องกันข้อพิพาท ณ จุดส่งมอบ',
                           style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 11,
-                            color: Color(0xFFB91C1C),
-                            fontWeight: FontWeight.w600,
+                            fontSize: 11.5,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // รหัส Challenge Code ขนาดกะทัดรัด
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.tag_rounded,
+                          size: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                        Text(
+                          session.dynamicChallengeCode,
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
                           ),
                         ),
                       ],
@@ -237,119 +192,75 @@ class LiveCameraCaptureSheet extends StatelessWidget {
 
               const SizedBox(height: 14),
 
-              // รหัสสุ่มความปลอดภัยประจำรอบ (Dynamic Challenge Code)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFCBD5E1)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.verified_user_outlined, size: 18, color: Color(0xFF475569)),
-                        SizedBox(width: 8),
-                        Text(
-                          'รหัสยืนยันภาพถ่ายสด:',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 13,
-                            color: Color(0xFF334155),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryColor,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        session.dynamicChallengeCode,
-                        style: const TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ช่องถ่ายรูป 3 มุมบังคับ
-              Column(
+              // ── ตารางถ่ายภาพ 3 มุม (3-Slot Grid สไตล์โมเดิร์น) ──
+              Row(
                 children: session.photos.map((photo) {
-                  return _AnglePhotoTile(
-                    photo: photo,
-                    onTap: () => _capturePhoto(context, photo.angleKey),
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: _CompactPhotoSlot(
+                        photo: photo,
+                        onTap: () => _capturePhoto(context, photo.angleKey),
+                      ),
+                    ),
                   );
                 }).toList(),
               ),
 
-              const SizedBox(height: 16),
-              const Divider(color: Color(0xFFE2E8F0)),
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              const SizedBox(height: 12),
 
-              // Checklist สภาพเครื่อง
+              // ── รายการ Checklist สภาพอุปกรณ์ ──
               const Text(
-                'รายการยืนยันสภาพอุปกรณ์โดยผู้เช่า',
+                'ตรวจสอบสภาพอุปกรณ์เบื้องต้น',
                 style: TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF334155),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
 
-              _ChecklistCheckbox(
+              _ChecklistTile(
                 title: 'เครื่องเปิดติดและทำงานได้ตามปกติ',
                 value: session.checklist['power_on'] ?? false,
                 onChanged: (val) => cubit.toggleChecklist('power_on', val),
               ),
-              _ChecklistCheckbox(
+              _ChecklistTile(
                 title: 'ไม่มีรอยแตกร้าวหรือความเสียหายใหม่',
                 value: session.checklist['no_new_cracks'] ?? false,
                 onChanged: (val) => cubit.toggleChecklist('no_new_cracks', val),
               ),
-              _ChecklistCheckbox(
+              _ChecklistTile(
                 title: 'อุปกรณ์เสริม สายชาร์จ และกล่องครบถ้วน',
                 value: session.checklist['accessories_complete'] ?? false,
                 onChanged: (val) => cubit.toggleChecklist('accessories_complete', val),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
 
-              // ปุ่มส่งผลตรวจสภาพ
+              // ── ปุ่มส่งข้อมูลยืนยัน ──
               SizedBox(
                 width: double.infinity,
-                height: 48,
+                height: 44,
                 child: ElevatedButton.icon(
                   onPressed: state.isSubmitting
                       ? null
                       : () => cubit.submitLiveConditionVerification(),
                   icon: state.isSubmitting
                       ? const SizedBox(
-                          width: 18,
-                          height: 18,
+                          width: 16,
+                          height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Icon(Icons.send_rounded, size: 18, color: Colors.white),
+                      : const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
                   label: Text(
-                    state.isSubmitting ? 'กำลังส่งข้อมูล...' : 'ส่งภาพถ่ายยืนยันให้ร้านค้า',
+                    state.isSubmitting ? 'กำลังส่งข้อมูล...' : 'ส่งภาพยืนยันให้ร้านค้า',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 14,
+                      fontSize: 13.5,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -358,7 +269,7 @@ class LiveCameraCaptureSheet extends StatelessWidget {
                     backgroundColor: AppColors.primaryColor,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
@@ -371,11 +282,11 @@ class LiveCameraCaptureSheet extends StatelessWidget {
   }
 }
 
-class _AnglePhotoTile extends StatelessWidget {
+class _CompactPhotoSlot extends StatelessWidget {
   final ReturnInspectionPhoto photo;
   final VoidCallback onTap;
 
-  const _AnglePhotoTile({
+  const _CompactPhotoSlot({
     required this.photo,
     required this.onTap,
   });
@@ -384,29 +295,28 @@ class _AnglePhotoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasImage = photo.hasPhoto;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: hasImage ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: hasImage ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
-        ),
-      ),
-      child: Row(
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
         children: [
-          // ภาพตัวอย่างหรือปุ่มเปิดกล้อง
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              onTap: onTap,
-              child: Container(
-                width: 64,
-                height: 64,
-                color: hasImage ? Colors.black87 : const Color(0xFFE2E8F0),
-                child: hasImage && photo.localPath != null
-                    ? (kIsWeb
+          Container(
+            height: 90,
+            decoration: BoxDecoration(
+              color: hasImage ? Colors.black : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: hasImage ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
+                width: hasImage ? 1.5 : 1,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(13),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (hasImage && photo.localPath != null)
+                    (kIsWeb
                         ? Image.network(
                             photo.localPath!,
                             fit: BoxFit.cover,
@@ -417,128 +327,81 @@ class _AnglePhotoTile extends StatelessWidget {
                             File(photo.localPath!),
                             fit: BoxFit.cover,
                           ))
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.camera_alt_outlined,
-                            size: 24,
-                            color: hasImage ? Colors.white : const Color(0xFF64748B),
+                  else
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add_a_photo_outlined,
+                          size: 26,
+                          color: AppColors.primaryColor.withValues(alpha: 0.8),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'แตะถ่ายสด',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF64748B),
                           ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            'ถ่ายรูป',
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 10,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+
+                  // ตราประทับเมื่อถ่ายแล้ว
+                  if (hasImage)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF16A34A),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check,
+                          color: Colors.white,
+                          size: 11,
+                        ),
                       ),
+                    ),
+
+                  // ปุ่มถ่ายใหม่ขนาดเล็กเมื่อมีรูปแล้ว
+                  if (hasImage)
+                    Positioned(
+                      bottom: 4,
+                      right: 4,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.refresh_rounded,
+                          color: Colors.white,
+                          size: 12,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
-
-          const SizedBox(width: 12),
-
-          // รายละเอียดมุม
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  photo.angleTitle,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E2022),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                if (hasImage) ...[
-                  Row(
-                    children: [
-                      const Icon(Icons.verified_rounded, size: 13, color: Color(0xFF16A34A)),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'ถ่ายสดจากกล้อง: ${photo.formattedTime}',
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 11,
-                            color: Color(0xFF16A34A),
-                            fontWeight: FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFDCFCE7),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'รหัสยืนยัน: ${photo.challengeCode} (ตรวจสอบแล้ว)',
-                      style: const TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 10,
-                        color: Color(0xFF15803D),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ] else ...[
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEE2E2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'กล้องสดเท่านั้น • ห้ามใช้อัลบั้ม',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 9.5,
-                            color: Color(0xFFB91C1C),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'กดที่นี่เพื่อเปิดกล้องถ่ายภาพพร้อมรหัส ${photo.challengeCode}',
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 10.5,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                ],
-              ],
+          const SizedBox(height: 5),
+          Text(
+            photo.angleTitle,
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 11,
+              fontWeight: hasImage ? FontWeight.bold : FontWeight.w500,
+              color: hasImage ? const Color(0xFF0F172A) : const Color(0xFF64748B),
             ),
-          ),
-
-          // ปุ่ม Action
-          IconButton(
-            onPressed: onTap,
-            icon: Icon(
-              hasImage ? Icons.cached_rounded : Icons.photo_camera_rounded,
-              color: hasImage ? const Color(0xFF16A34A) : AppColors.primaryColor,
-              size: 22,
-            ),
-            tooltip: hasImage
-                ? 'ถ่ายใหม่ด้วยกล้องสด'
-                : 'เปิดกล้องถ่ายภาพสด (ห้ามเลือกจากอัลบั้ม)',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -546,12 +409,12 @@ class _AnglePhotoTile extends StatelessWidget {
   }
 }
 
-class _ChecklistCheckbox extends StatelessWidget {
+class _ChecklistTile extends StatelessWidget {
   final String title;
   final bool value;
   final ValueChanged<bool> onChanged;
 
-  const _ChecklistCheckbox({
+  const _ChecklistTile({
     required this.title,
     required this.value,
     required this.onChanged,
@@ -561,31 +424,33 @@ class _ChecklistCheckbox extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => onChanged(!value),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           children: [
             SizedBox(
-              width: 24,
-              height: 24,
+              width: 22,
+              height: 22,
               child: Checkbox(
                 value: value,
                 onChanged: (v) => onChanged(v ?? false),
                 activeColor: AppColors.primaryColor,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(5),
                 ),
+                side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontSize: 12,
-                  color: Color(0xFF334155),
+                  color: value ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                  fontWeight: value ? FontWeight.w500 : FontWeight.normal,
                 ),
               ),
             ),
