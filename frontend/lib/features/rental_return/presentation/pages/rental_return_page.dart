@@ -29,7 +29,7 @@ class RentalReturnPage extends StatelessWidget {
     return BlocProvider(
       create: (context) => RentalReturnCubit(
         repository: RentalReturnRepositoryImpl(),
-      )..loadSession(rentalId ?? 1024),
+      )..loadSession(rentalId),
       child: const _RentalReturnView(),
     );
   }
@@ -75,7 +75,6 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
           prev.errorMessage != current.errorMessage ||
           prev.successMessage != current.successMessage,
       listener: (context, state) {
-        // แจ้งเตือนข้อผิดพลาด
         if (state.errorMessage != null && state.errorMessage!.isNotEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -83,12 +82,13 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                 state.errorMessage!,
                 style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
               ),
-              backgroundColor: Colors.red,
+              backgroundColor: const Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           );
         }
 
-        // แจ้งเตือนข้อความสำเร็จ
         if (state.successMessage != null && state.successMessage!.isNotEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -97,11 +97,12 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                 style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
               ),
               backgroundColor: const Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           );
         }
 
-        // เปิด Alert เมื่อนาฬิกาปลุกฉุกเฉินทำงาน
         if (state.isAlarmActive && !_didShowAlarm && state.isRenter) {
           _didShowAlarm = true;
           UrgentReturnAlarmDialog.show(
@@ -113,7 +114,6 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
           );
         }
 
-        // เปิด Dialog สำเร็จเมื่อสแกนจบขั้นตอน
         if (state.session.step == RentalReturnStep.completed && !_didShowSuccess) {
           _didShowSuccess = true;
           ReturnCompletedDialog.show(
@@ -128,8 +128,10 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
       builder: (context, state) {
         if (state.status == RentalReturnStatus.loading) {
           return const Scaffold(
-            backgroundColor: Color(0xFFF7F7F9),
-            body: Center(child: CircularProgressIndicator()),
+            backgroundColor: Color(0xFFF8FAFC),
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.primaryColor),
+            ),
           );
         }
 
@@ -138,67 +140,139 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
         final isCompleted = session.step == RentalReturnStep.completed;
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF7F7F9),
+          backgroundColor: const Color(0xFFF8FAFC),
           appBar: AppBar(
-            backgroundColor: isRenter ? AppColors.primaryColor : const Color(0xFF10B981),
-            foregroundColor: Colors.white,
+            backgroundColor: Colors.white,
+            foregroundColor: const Color(0xFF1E293B),
             elevation: 0,
-            leading: const BackButton(),
+            leading: const BackButton(color: Color(0xFF1E293B)),
             centerTitle: true,
             title: Text(
-              isRenter ? 'การคืนอุปกรณ์ (ผู้เช่า)' : 'รับมอบอุปกรณ์คืน (ร้านค้า)',
+              isRenter ? 'การคืนอุปกรณ์' : 'รับมอบอุปกรณ์คืน',
               style: const TextStyle(
                 fontFamily: AppTextStyles.fontFamily,
                 fontWeight: FontWeight.bold,
                 fontSize: 17,
+                color: Color(0xFF0F172A),
               ),
             ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(
+                color: const Color(0xFFF1F5F9),
+                height: 1,
+              ),
+            ),
+            actions: [
+              PopupMenuButton<String>(
+                icon: const Icon(
+                  Icons.more_horiz_rounded,
+                  color: Color(0xFF64748B),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                onSelected: (value) {
+                  final cubit = context.read<RentalReturnCubit>();
+                  if (value == 'alarm') {
+                    cubit.triggerUrgentAlarm();
+                  } else if (value == 'reset') {
+                    cubit.resetDemo();
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: 'alarm',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.notifications_active_outlined,
+                          size: 18,
+                          color: Color(0xFFD97706),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          'ทดสอบปลุกเตือนภัย',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 13,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'reset',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.refresh_rounded,
+                          size: 18,
+                          color: Color(0xFF64748B),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          'รีเซ็ตสถานะ',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 13,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           body: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 100),
+            padding: const EdgeInsets.only(bottom: 110),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // แถบสลับบทบาทสำหรับทดสอบสองฝั่ง
+                // สวิตช์สลับบทบาทแบบมินิมอล
                 const RoleSwitcherBar(),
 
-                // การ์ดสรุปเวลาเช่าได้ถึงกี่โมง และกำหนดเวลาคืน
+                // ข้อมูลอุปกรณ์และกำหนดเวลาคืน (อ่านง่าย)
                 RentalTimeCard(session: session),
 
                 // มุมมองตามบทบาท
                 if (isRenter) ...[
-                  // ฝั่งผู้เช่า: ถ่ายภาพสดผ่านกล้องเท่านั้น
                   if (!isCompleted) const LiveCameraCaptureSheet(),
                 ] else ...[
-                  // ฝั่งร้านค้า: ตรวจสอบภาพสด และกดรับเครื่องเพื่อสร้าง QR
                   if (!isCompleted) const LenderInspectionView(),
                 ],
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
               ],
             ),
           ),
 
-          // ปุ่ม Action ลอยด้านล่างตามบทบาท
+          // ปุ่ม Action ลอยด้านล่าง
           bottomSheet: isCompleted
               ? null
               : Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 16,
                         offset: const Offset(0, -4),
                       ),
                     ],
+                    border: const Border(
+                      top: BorderSide(color: Color(0xFFF1F5F9)),
+                    ),
                   ),
                   child: SafeArea(
                     child: isRenter
                         ? SizedBox(
                             width: double.infinity,
-                            height: 50,
+                            height: 48,
                             child: ElevatedButton.icon(
                               onPressed: () => _openQrScanner(context),
                               icon: const Icon(
@@ -210,7 +284,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                                 'สแกน QR Code ร้านค้าเพื่อจบการคืน',
                                 style: TextStyle(
                                   fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 15,
+                                  fontSize: 14.5,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
@@ -219,14 +293,14 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                                 backgroundColor: AppColors.primaryColor,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(25),
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
                             ),
                           )
                         : SizedBox(
                             width: double.infinity,
-                            height: 50,
+                            height: 48,
                             child: ElevatedButton.icon(
                               onPressed: session.merchantQrToken == null
                                   ? () => context
@@ -244,7 +318,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                                     : 'เปิดแสดง QR Code ให้ลูกค้าสแกน',
                                 style: const TextStyle(
                                   fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 15,
+                                  fontSize: 14.5,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
@@ -253,7 +327,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                                 backgroundColor: const Color(0xFF10B981),
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(25),
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
                             ),

@@ -520,6 +520,23 @@ abstract final class AppRoutes {
             child: RentalReviewScreen(),
           ),
         ),
+        GoRoute(
+          path: rentalReturn,
+          pageBuilder: (context, state) {
+            final rentalId = int.tryParse(state.pathParameters['rentalId'] ?? '');
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: RentalReturnPage(rentalId: rentalId),
+            );
+          },
+        ),
+        GoRoute(
+          path: rentalReturnDemo,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: const RentalReturnPage(),
+          ),
+        ),
       ],
     );
   }

@@ -13,148 +13,109 @@ class RoleSwitcherBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<RentalReturnCubit, RentalReturnState>(
+      buildWhen: (prev, current) => prev.isRenter != current.isRenter,
       builder: (context, state) {
         final cubit = context.read<RentalReturnCubit>();
         final isRenter = state.isRenter;
 
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            color: const Color(0xFFECEEF2),
+            borderRadius: BorderRadius.circular(16),
           ),
-          child: Column(
+          child: Row(
             children: [
-              Row(
-                children: [
-                  // แท็บผู้เช่า
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => cubit.switchRole(RentalUserRole.renter),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeInOut,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isRenter
-                              ? AppColors.primaryColor
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.person_outline_rounded,
-                              size: 18,
-                              color: isRenter ? Colors.white : AppColors.fieldIconColor,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'มุมมองผู้เช่า (Customer)',
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.fontFamily,
-                                fontSize: 13,
-                                fontWeight: isRenter ? FontWeight.bold : FontWeight.w500,
-                                color: isRenter ? Colors.white : AppColors.labelColor,
+              // แท็บผู้เช่า
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => cubit.switchRole(RentalUserRole.renter),
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: isRenter ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: isRenter
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
                               ),
-                            ),
-                          ],
+                            ]
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.person_rounded,
+                          size: 16,
+                          color: isRenter ? AppColors.primaryColor : const Color(0xFF64748B),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'ผู้เช่า (Customer)',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 12.5,
+                            fontWeight: isRenter ? FontWeight.bold : FontWeight.w500,
+                            color: isRenter ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-
-                  // แท็บผู้ให้เช่า
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => cubit.switchRole(RentalUserRole.lender),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeInOut,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: !isRenter
-                              ? const Color(0xFF10B981)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.storefront_outlined,
-                              size: 18,
-                              color: !isRenter ? Colors.white : AppColors.fieldIconColor,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'มุมมองร้านค้า (Lender)',
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.fontFamily,
-                                fontSize: 13,
-                                fontWeight: !isRenter ? FontWeight.bold : FontWeight.w500,
-                                color: !isRenter ? Colors.white : AppColors.labelColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
 
-              // แถบปุ่มช่วยเหลือสำหรับทดสอบ Scenario
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton.icon(
-                      onPressed: cubit.triggerUrgentAlarm,
-                      icon: const Icon(Icons.notifications_active_outlined, size: 16, color: Color(0xFFF59E0B)),
-                      label: const Text(
-                        'ทดสอบปลุกเตือนภัย',
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFD97706),
-                        ),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
+              // แท็บร้านค้า
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => cubit.switchRole(RentalUserRole.lender),
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: !isRenter ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: !isRenter
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
                     ),
-                    TextButton.icon(
-                      onPressed: cubit.resetDemo,
-                      icon: const Icon(Icons.refresh_rounded, size: 16, color: AppColors.fieldIconColor),
-                      label: const Text(
-                        'รีเซ็ตสถานะ',
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 11,
-                          color: AppColors.labelColor,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.storefront_rounded,
+                          size: 16,
+                          color: !isRenter ? const Color(0xFF10B981) : const Color(0xFF64748B),
                         ),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'ร้านค้า (Lender)',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 12.5,
+                            fontWeight: !isRenter ? FontWeight.bold : FontWeight.w500,
+                            color: !isRenter ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ],

@@ -13,23 +13,43 @@ class RentalReturnRemoteDataSource {
       : _client = client ?? Supabase.instance.client;
 
   /// ดึงข้อมูลรายการเช่าจริงจาก Supabase (booking_tb หรือ item_tb + profile_tb)
-  Future<RentalReturnSession> getSession(int rentalId) async {
+  Future<RentalReturnSession> getSession([int? rentalId]) async {
     try {
-      // 1. ลองดึงข้อมูลจาก booking_tb ด้วย ID
-      final bookingResp = await _client
-          .from('booking_tb')
-          .select()
-          .eq('id', rentalId)
-          .maybeSingle();
-
+      Map<String, dynamic>? bookingResp;
       int itemId = 0;
       String renterId = '';
       DateTime startAt = DateTime.now().subtract(const Duration(hours: 4));
       DateTime endAt = DateTime.now().add(const Duration(hours: 2, minutes: 15));
       String pickupLocation = 'จุดนัดพบที่ตกลงไว้ (สยามพารากอน ชั้น 3)';
       double totalPrice = 1000.0;
+      int activeRentalId = rentalId ?? 0;
 
+      // 1. ถ้ามี rentalId ส่งเข้ามา ลองหาจาก booking_tb ด้วย ID
+      if (activeRentalId > 0) {
+        bookingResp = await _client
+            .from('booking_tb')
+            .select()
+            .eq('id', activeRentalId)
+            .maybeSingle();
+      }
+
+      // 2. ถ้าไม่มี rentalId หรือยังไม่เจอ ลองค้นหาออเดอร์ล่าสุดของผู้ใช้ปัจจุบัน
+      if (bookingResp == null) {
+        final currentUserId = _client.auth.currentUser?.id;
+        if (currentUserId != null && currentUserId.isNotEmpty) {
+          bookingResp = await _client
+              .from('booking_tb')
+              .select()
+              .eq('user_id', currentUserId)
+              .order('created_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+        }
+      }
+
+      // 3. ถอดข้อมูลจาก bookingResp
       if (bookingResp != null) {
+        activeRentalId = (bookingResp['id'] as num?)?.toInt() ?? activeRentalId;
         itemId = (bookingResp['item_id'] as num?)?.toInt() ?? 0;
         renterId = bookingResp['user_id']?.toString() ?? '';
 
@@ -47,12 +67,24 @@ class RentalReturnRemoteDataSource {
         totalPrice = (bookingResp['total_price'] as num?)?.toDouble() ??
             (bookingResp['price'] as num?)?.toDouble() ??
             1000.0;
-      } else {
+      } else if (activeRentalId > 0) {
         // หากไม่พบใน booking_tb ให้ถือว่า rentalId คือ itemId จาก item_tb โดยตรง
-        itemId = rentalId;
+        itemId = activeRentalId;
+      } else {
+        // หากยังไม่มีรายการ booking ของ user ให้ลองดึงสินค้าจริงล่าสุดในระบบมาแสดง
+        final latestItem = await _client
+            .from('item_tb')
+            .select('id')
+            .order('id', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (latestItem != null) {
+          itemId = (latestItem['id'] as num?)?.toInt() ?? 0;
+          activeRentalId = itemId;
+        }
       }
 
-      // 2. ดึงข้อมูลอุปกรณ์จาก item_tb
+      // 4. ดึงข้อมูลอุปกรณ์จาก item_tb
       Map<String, dynamic>? itemData;
       if (itemId > 0) {
         itemData = await _client
@@ -123,8 +155,8 @@ class RentalReturnRemoteDataSource {
         final photos = _buildPhotosForCategory(category, randomChallenge);
 
         return RentalReturnSession(
-          rentalId: rentalId,
-          itemName: itemData['item_name']?.toString() ?? 'อุปกรณ์เช่า #$rentalId',
+          rentalId: activeRentalId > 0 ? activeRentalId : 1024,
+          itemName: itemData['item_name']?.toString() ?? 'อุปกรณ์เช่า #${activeRentalId > 0 ? activeRentalId : 1024}',
           itemImageUrl: mainImageUrl,
           category: category,
           renterId: renterId,
@@ -152,7 +184,7 @@ class RentalReturnRemoteDataSource {
     }
 
     // หากไม่พบในฐานข้อมูล ให้ใช้ Mock Session ที่จำลองตาม rentalId อย่างแม่นยำ
-    return RentalReturnSession.createMockSession(rentalId: rentalId);
+    return RentalReturnSession.createMockSession(rentalId: rentalId ?? 1024);
   }
 
   List<ReturnInspectionPhoto> _buildPhotosForCategory(String category, String challengeCode) {

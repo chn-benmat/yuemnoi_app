@@ -9,7 +9,7 @@ class RentalReturnRepositoryImpl implements RentalReturnRepository {
       : _remoteDataSource = remoteDataSource ?? RentalReturnRemoteDataSource();
 
   @override
-  Future<RentalReturnSession> getReturnSession(int rentalId) {
+  Future<RentalReturnSession> getReturnSession([int? rentalId]) {
     return _remoteDataSource.getSession(rentalId);
   }
 

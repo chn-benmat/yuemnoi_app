@@ -2,7 +2,7 @@ import '../entities/rental_return_session.dart';
 
 abstract class RentalReturnRepository {
   /// ดึงข้อมูล Session การคืนจาก bookingId หรือรายการเช่าปัจจุบัน
-  Future<RentalReturnSession> getReturnSession(int rentalId);
+  Future<RentalReturnSession> getReturnSession([int? rentalId]);
 
   /// อัปโหลดภาพถ่ายตรวจสอบสภาพเครื่องสด
   Future<String> uploadInspectionPhoto({
