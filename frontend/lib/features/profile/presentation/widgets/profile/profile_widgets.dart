@@ -19,20 +19,23 @@ class ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
+        color: AppColors.primaryColor,
         gradient: LinearGradient(
-          colors: [AppColors.primaryColor, AppColors.gradient1],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(32),
-          bottomRight: Radius.circular(32),
+          colors: [
+            Color(0xFF6B00B8),
+            AppColors.primaryColor,
+            Color(0xFF8618E2),
+          ],
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+      padding: EdgeInsets.fromLTRB(20, topPadding + 12, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

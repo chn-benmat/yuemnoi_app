@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/constants/colors.dart';
+import '../../../../../core/services/rental_notification_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../data/repositories/rental_management_repository_impl.dart';
 import '../../../domain/usecases/update_booking_status_usecase.dart';
@@ -109,6 +110,7 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
           bookingId: widget.bookingId!,
           status: 'completed',
         );
+        RentalNotificationService.instance.cancelRentalReminders(widget.bookingId!);
       } catch (_) {}
     }
 

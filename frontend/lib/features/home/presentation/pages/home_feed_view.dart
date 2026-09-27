@@ -12,7 +12,11 @@ import '../widgets/category_filter_sheet.dart';
 import '../widgets/home_empty_state.dart';
 import '../widgets/home_header.dart';
 import '../widgets/home_search_bar.dart';
+import '../widgets/rental_notification_bottom_sheet.dart';
 import '../widgets/shopee_product_card.dart';
+import '../../../../core/network/supabase_client.dart';
+import '../../../profile/data/repositories/rental_management_repository_impl.dart';
+import '../../../profile/domain/entities/rental_booking.dart';
 
 /// หน้า Home Feed หลักของแอป Yuemnoi (Shopee 2-Column Grid)
 class HomeFeedView extends StatefulWidget {
@@ -24,6 +28,56 @@ class HomeFeedView extends StatefulWidget {
 
 class _HomeFeedViewState extends State<HomeFeedView> {
   final TextEditingController _searchController = TextEditingController();
+  List<RentalBooking> _activeRentals = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRentalAlerts();
+  }
+
+  Future<void> _fetchRentalAlerts() async {
+    try {
+      final userId = SupabaseConfig.isInitialized
+          ? SupabaseConfig.client.auth.currentUser?.id
+          : null;
+      if (userId == null || userId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _activeRentals = [];
+          });
+        }
+        return;
+      }
+
+      final repo = RentalManagementRepositoryImpl();
+      final bookings = await repo.getRentingBookings(userId);
+      final active = bookings.where((b) {
+        final code = b.statusCode.toLowerCase().trim();
+        return code == 'active';
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _activeRentals = active;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching rental alerts: $e');
+    }
+  }
+
+  void _openNotifications() {
+    RentalNotificationBottomSheet.show(
+      context,
+      activeRentals: _activeRentals,
+      onRefresh: _fetchRentalAlerts,
+    ).then((_) {
+      if (mounted) {
+        _fetchRentalAlerts();
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -103,15 +157,8 @@ class _HomeFeedViewState extends State<HomeFeedView> {
       children: [
         // ส่วน Header ตรึงด้านบน
         HomeHeader(
-          unreadCount: 3,
-          onNotificationTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('ไม่มีการแจ้งเตือนใหม่'),
-                duration: Duration(seconds: 1),
-              ),
-            );
-          },
+          unreadCount: _activeRentals.length,
+          onNotificationTap: _openNotifications,
         ),
 
         // แถบค้นหาและตัวกรองอยู่นอกพื้นที่ Pull to Refresh เพื่อไม่ให้ถูกดึงลง
@@ -126,6 +173,7 @@ class _HomeFeedViewState extends State<HomeFeedView> {
             edgeOffset: 0,
             onRefresh: () async {
               context.read<HomeBloc>().add(const RefreshHomeFeedRequested());
+              await _fetchRentalAlerts();
               await Future<void>.delayed(const Duration(milliseconds: 500));
             },
             child: CustomScrollView(

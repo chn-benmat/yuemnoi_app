@@ -27,25 +27,24 @@ class CustomBottomNavbar extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
               decoration: BoxDecoration(
-                // ขาวโปร่งแสง 92% ให้ฉากหลังเบลอทะลุได้ แต่ไม่จางกลืนไปกับหน้าจอขาว
-                color: Colors.white.withValues(alpha: 0.92),
+                // ขาวโปร่งแสงสไตล์ Frosted Glass ที่โปร่งใสและเห็นพื้นหลังด้านหลังชัดเจนขึ้น
+                color: Colors.white.withValues(alpha: 0.75),
                 borderRadius: BorderRadius.circular(36),
-                // เส้นขอบตัดกับพื้นหลังของหน้าแชทได้อย่างคมชัด
                 border: Border.all(
-                  color: const Color(0xFFE2E8F0),
-                  width: 1.2,
+                  color: const Color(0xFFE2E8F0).withValues(alpha: 0.7),
+                  width: 1.0,
                 ),
                 boxShadow: [
                   BoxShadow(
                     blurRadius: 20,
                     spreadRadius: 1,
-                    color: Colors.black.withValues(alpha: 0.10),
+                    color: Colors.black.withValues(alpha: 0.06),
                     offset: const Offset(0, 6),
                   ),
                   BoxShadow(
                     blurRadius: 6,
                     spreadRadius: -1,
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: Colors.black.withValues(alpha: 0.03),
                     offset: const Offset(0, 2),
                   ),
                 ],

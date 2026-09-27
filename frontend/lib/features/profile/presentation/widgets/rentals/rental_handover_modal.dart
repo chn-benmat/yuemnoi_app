@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/network/supabase_client.dart';
+import '../../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../data/repositories/rental_management_repository_impl.dart';
 import '../../../domain/usecases/update_booking_status_usecase.dart';
@@ -438,7 +439,12 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
     }
 
     // 2. บันทึกลง booking_tb ผ่าน UseCase เป็น status 'active' (ถ้ามี bookingId)
+    final handoverNow = DateTime.now();
     if (widget.bookingId != null && widget.bookingId! > 0) {
+      await BookingConfirmationTracker.markHandoverStarted(
+        bookingId: widget.bookingId,
+        startTime: handoverNow,
+      );
       try {
         await _updateBookingStatusUseCase.execute(
           bookingId: widget.bookingId!,
