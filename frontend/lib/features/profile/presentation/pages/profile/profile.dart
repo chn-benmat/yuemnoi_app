@@ -195,9 +195,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       listener: (context, state) {
         if (mounted) setState(() {});
       },
-      child: Scaffold(
-      backgroundColor: const Color(0xFFF7F7F9),
-      body: SafeArea(
+      child: Container(
+        color: const Color(0xFFF7F7F9),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -208,6 +207,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             Expanded(
               child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -423,7 +425,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 110),
                         ],
                       ),
                     ),
@@ -433,7 +435,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
         ),
-      ),
       ),
     );
   }
