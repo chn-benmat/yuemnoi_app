@@ -33,6 +33,8 @@ import '../../features/item_detail/presentation/bloc/item_detail_bloc.dart';
 import '../../features/item_detail/presentation/bloc/item_detail_event.dart';
 import '../../features/item_detail/presentation/pages/edit_item.dart';
 import '../../features/item_detail/presentation/pages/item_detail.dart';
+import '../../features/home/domain/entities/feed_item.dart';
+import '../../features/home/presentation/pages/equipment_search_screen.dart';
 import '../../features/home/presentation/pages/home.dart';
 import '../../features/rental_item/data/datasources/rental_item_remote_data_source.dart';
 import '../../features/rental_item/data/repositories/rental_item_repository_impl.dart';
@@ -59,6 +61,7 @@ import '../../features/profile/presentation/pages/support/faq_screen.dart';
 import '../../features/wallet/presentation/pages/wallet.dart';
 import '../../features/wallet/presentation/pages/wallet_payment_screen.dart';
 import '../../features/wallet/presentation/pages/wallet_success_screen.dart';
+import '../../features/notification/presentation/pages/page.dart';
 import '../../features/review/presentation/pages/rental_review_screen.dart';
 import '../../features/rental_return/presentation/pages/rental_return_page.dart';
 
@@ -68,6 +71,7 @@ abstract final class AppRoutes {
 
   static const login = '/login';
   static const home = '/home';
+  static const search = '/search';
   static const chatbot = '/chatbot';
   static const chatDetail = '/chat/detail';
   static const register = '/register';
@@ -104,6 +108,7 @@ abstract final class AppRoutes {
   static const rentalReturnDemo = '/rental/return';
   static const rentalPaymentSuccess = '/rentals/payment-success';
   static const review = '/review';
+  static const notification = '/notifications';
 
   static GoRouter? _currentRouter;
   static GoRouter? get router => _currentRouter;
@@ -140,6 +145,32 @@ abstract final class AppRoutes {
                 initialIndex: initialIndex,
               ),
               transitionDuration: const Duration(milliseconds: 600),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return FadeTransition(opacity: animation, child: child);
+                  },
+            );
+          },
+        ),
+        GoRoute(
+          path: search,
+          pageBuilder: (context, state) {
+            final extra = state.extra;
+            List<FeedItem>? curatedItems;
+            String? initialQuery;
+            if (extra is List<FeedItem>) {
+              curatedItems = extra;
+            } else if (extra is Map<String, dynamic>) {
+              curatedItems = extra['curatedItems'] as List<FeedItem>?;
+              initialQuery = extra['query'] as String?;
+            }
+            return CustomTransitionPage<void>(
+              key: state.pageKey,
+              child: EquipmentSearchScreen(
+                initialCuratedItems: curatedItems,
+                initialQuery: initialQuery,
+              ),
+              transitionDuration: const Duration(milliseconds: 200),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
                     return FadeTransition(opacity: animation, child: child);
@@ -537,6 +568,13 @@ abstract final class AppRoutes {
             child: const RentalReturnPage(),
           ),
         ),
+        GoRoute(
+          path: notification,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: const NotificationPage(),
+          ),
+        ),
       ],
     );
   }
@@ -567,12 +605,20 @@ abstract final class AppRoutes {
     context.go(home, extra: initialIndex);
   }
 
+  static void openNotification(BuildContext context) {
+    goToHome(context, initialIndex: 2);
+  }
+
+  static void goToNotification(BuildContext context) {
+    goToHome(context, initialIndex: 2);
+  }
+
   static void openProfile(BuildContext context) {
-    goToHome(context, initialIndex: 3);
+    goToHome(context, initialIndex: 4);
   }
 
   static void goToProfile(BuildContext context) {
-    goToHome(context, initialIndex: 3);
+    goToHome(context, initialIndex: 4);
   }
 
   static Future<void> openChatbot(BuildContext context) {
@@ -775,6 +821,20 @@ abstract final class AppRoutes {
     return context.push<void>('/items/$itemId');
   }
 
+  static Future<void> openSearch(
+    BuildContext context, {
+    List<FeedItem>? curatedItems,
+    String? initialQuery,
+  }) {
+    return context.push<void>(
+      search,
+      extra: {
+        if (curatedItems != null) 'curatedItems': curatedItems,
+        if (initialQuery != null) 'query': initialQuery,
+      },
+    );
+  }
+
   static Future<bool?> openEditRentalItem(
     BuildContext context, {
     required ItemDetail item,
@@ -827,7 +887,21 @@ abstract final class AppRoutes {
     int? rentalId,
   }) {
     final route = rentalId != null ? '/rental/return/$rentalId' : rentalReturnDemo;
-    return context.push<void>(route);
+    try {
+      return context.push<void>(route);
+    } catch (_) {
+      final navigator = Navigator.maybeOf(context, rootNavigator: true) ??
+          Navigator.maybeOf(context);
+      if (navigator != null) {
+        return navigator.push<void>(
+          MaterialPageRoute<void>(
+            settings: RouteSettings(name: route),
+            builder: (_) => RentalReturnPage(rentalId: rentalId),
+          ),
+        );
+      }
+      return Future.value();
+    }
   }
 
   static Future<void> openRentalPaymentSuccess(BuildContext context) {

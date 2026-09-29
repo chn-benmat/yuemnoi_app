@@ -4,17 +4,26 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/network/supabase_client.dart';
 import '../../domain/entities/rental_return_session.dart';
 
 class RentalReturnRemoteDataSource {
-  final SupabaseClient _client;
+  final SupabaseClient? _customClient;
 
   RentalReturnRemoteDataSource({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+      : _customClient = client;
+
+  SupabaseClient? get _client =>
+      _customClient ??
+      (SupabaseConfig.isInitialized ? SupabaseConfig.client : null);
 
   /// ดึงข้อมูลรายการเช่าจริงจาก Supabase (booking_tb หรือ item_tb + profile_tb)
   Future<RentalReturnSession> getSession([int? rentalId]) async {
     try {
+      final client = _client;
+      if (client == null) {
+        return RentalReturnSession.createMockSession(rentalId: rentalId);
+      }
       Map<String, dynamic>? bookingResp;
       int itemId = 0;
       String renterId = '';
@@ -26,7 +35,7 @@ class RentalReturnRemoteDataSource {
 
       // 1. ถ้ามี rentalId ส่งเข้ามา ลองหาจาก booking_tb ด้วย ID
       if (activeRentalId > 0) {
-        bookingResp = await _client
+        bookingResp = await client
             .from('booking_tb')
             .select()
             .eq('id', activeRentalId)
@@ -35,9 +44,9 @@ class RentalReturnRemoteDataSource {
 
       // 2. ถ้าไม่มี rentalId หรือยังไม่เจอ ลองค้นหาออเดอร์ล่าสุดของผู้ใช้ปัจจุบัน
       if (bookingResp == null) {
-        final currentUserId = _client.auth.currentUser?.id;
+        final currentUserId = client.auth.currentUser?.id;
         if (currentUserId != null && currentUserId.isNotEmpty) {
-          bookingResp = await _client
+          bookingResp = await client
               .from('booking_tb')
               .select()
               .eq('user_id', currentUserId)
@@ -72,7 +81,7 @@ class RentalReturnRemoteDataSource {
         itemId = activeRentalId;
       } else {
         // หากยังไม่มีรายการ booking ของ user ให้ลองดึงสินค้าจริงล่าสุดในระบบมาแสดง
-        final latestItem = await _client
+        final latestItem = await client
             .from('item_tb')
             .select('id')
             .order('id', ascending: false)
@@ -87,7 +96,7 @@ class RentalReturnRemoteDataSource {
       // 4. ดึงข้อมูลอุปกรณ์จาก item_tb
       Map<String, dynamic>? itemData;
       if (itemId > 0) {
-        itemData = await _client
+        itemData = await client
             .from('item_tb')
             .select('id, user_id, item_name, category, price, item_image_url')
             .eq('id', itemId)
@@ -101,7 +110,7 @@ class RentalReturnRemoteDataSource {
 
         // 3. ดึงชื่อผู้ให้เช่าจาก profile_tb
         if (lenderId.isNotEmpty) {
-          final lenderProfile = await _client
+          final lenderProfile = await client
               .from('profile_tb')
               .select('email, phone_number')
               .eq('user_id', lenderId)
@@ -120,10 +129,10 @@ class RentalReturnRemoteDataSource {
 
         // ดึงชื่อผู้เช่าปัจจุบัน
         String renterName = 'คุณพัชรพล (ผู้เช่า)';
-        final currentAuthUser = _client.auth.currentUser;
+        final currentAuthUser = client.auth.currentUser;
         if (currentAuthUser != null) {
           renterId = currentAuthUser.id;
-          final userProfile = await _client
+          final userProfile = await client
               .from('profile_tb')
               .select('email')
               .eq('user_id', currentAuthUser.id)
@@ -285,6 +294,9 @@ class RentalReturnRemoteDataSource {
     required String angleKey,
   }) async {
     try {
+      final client = _client;
+      if (client == null) return photoPath;
+
       final fileName =
           'return_${rentalId}_${angleKey}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final path = 'return_inspections/$fileName';
@@ -293,13 +305,13 @@ class RentalReturnRemoteDataSource {
       final bytes = await XFile(photoPath).readAsBytes();
 
       // อัปโหลดไปยัง bucket 'item_bk'
-      await _client.storage.from('item_bk').uploadBinary(
+      await client.storage.from('item_bk').uploadBinary(
             path,
             bytes,
             fileOptions: const FileOptions(cacheControl: '3600', upsert: true),
           );
 
-      return _client.storage.from('item_bk').getPublicUrl(path);
+      return client.storage.from('item_bk').getPublicUrl(path);
     } catch (e) {
       debugPrint('Storage upload note: $e. Using local image path.');
       return photoPath;
@@ -313,7 +325,10 @@ class RentalReturnRemoteDataSource {
     required Map<String, bool> checklist,
   }) async {
     try {
-      await _client.from('booking_tb').update({
+      final client = _client;
+      if (client == null) return;
+
+      await client.from('booking_tb').update({
         'status': 'รอส่งคืน',
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', rentalId);
@@ -336,7 +351,10 @@ class RentalReturnRemoteDataSource {
   /// บันทึกการคืนของเสร็จสมบูรณ์
   Future<void> markCompleted(int rentalId) async {
     try {
-      await _client.from('booking_tb').update({
+      final client = _client;
+      if (client == null) return;
+
+      await client.from('booking_tb').update({
         'status': 'คืนของสำเร็จ',
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', rentalId);

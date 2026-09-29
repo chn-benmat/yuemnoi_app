@@ -119,21 +119,16 @@ class CategoryFilterButton extends StatelessWidget {
           height: 48,
           width: 48,
           decoration: BoxDecoration(
-            color: isFilterActive ? AppColors.primaryColor : Colors.white,
+            color: isFilterActive ? const Color(0xFFF3E8FF) : Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isFilterActive
-                  ? AppColors.primaryColor
-                  : const Color(0xFFECEEF1),
-              width: 1.2,
-            ),
+            border: isFilterActive
+                ? Border.all(color: Colors.white, width: 1.5)
+                : null,
             boxShadow: [
               BoxShadow(
-                color: isFilterActive
-                    ? AppColors.primaryColor.withValues(alpha: 0.3)
-                    : Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -143,10 +138,10 @@ class CategoryFilterButton extends StatelessWidget {
               key: const ValueKey('category-filter-button'),
               borderRadius: BorderRadius.circular(16),
               onTap: () => _showTopFilterModal(context),
-              child: Icon(
+              child: const Icon(
                 // เปลี่ยนไอคอน Filter เป็นรูปกรวยกรอง (Filter Alt) ตามที่ผู้ใช้ต้องการ
                 Icons.filter_alt_rounded,
-                color: isFilterActive ? Colors.white : const Color(0xFF4A4D4F),
+                color: AppColors.primaryColor,
                 size: 24,
               ),
             ),
@@ -287,11 +282,15 @@ class _FilterPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3E8FF),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.primaryColor.withValues(alpha: 0.25),
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

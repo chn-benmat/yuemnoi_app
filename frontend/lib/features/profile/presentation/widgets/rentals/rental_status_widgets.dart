@@ -584,7 +584,10 @@ class RentalStatusCard extends StatelessWidget {
                   height: 42,
                   child: ElevatedButton(
                     onPressed: () {
-                      // กดแล้วไม่ไปไหนตามที่กำหนด
+                      AppRoutes.openRentalReturn(
+                        context,
+                        rentalId: item.bookingId,
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryColor,
@@ -888,7 +891,11 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                     ),
                   ),
                   onPressed: () {
-                    // กดแล้วไม่ไปไหนตามที่กำหนด
+                    Navigator.pop(context);
+                    AppRoutes.openRentalReturn(
+                      context,
+                      rentalId: item.bookingId,
+                    );
                   },
                   icon: const Icon(
                     Icons.assignment_turned_in_outlined,

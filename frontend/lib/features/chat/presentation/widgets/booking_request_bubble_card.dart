@@ -553,7 +553,10 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
                   onPressed: () {
-                    // ปุ่มส่งคืนอุปกรณ์ยังกดแล้วไม่ไปไหนตามที่ต้องการ
+                    AppRoutes.openRentalReturn(
+                      context,
+                      rentalId: _bookingId,
+                    );
                   },
                   child: const Text(
                     'ส่งคืนอุปกรณ์',

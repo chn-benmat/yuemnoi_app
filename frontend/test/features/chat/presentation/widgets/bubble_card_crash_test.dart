@@ -5,6 +5,7 @@ import 'package:frontend/core/widgets/rental_countdown_timer_widget.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
 import 'package:frontend/features/chat/presentation/widgets/booking_request_bubble_card.dart';
+import 'package:frontend/features/rental_return/presentation/pages/rental_return_page.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -113,16 +114,12 @@ void main() {
     expect(find.text('ครบกำหนดเมื่อ'), findsOneWidget);
     expect(find.text('เริ่มการเช่าแล้ว • แจ้งเตือนเวลาผ่านการแจ้งเตือน'), findsOneWidget);
 
-    // ตรวจสอบปุ่ม "ส่งคืนอุปกรณ์" กดแล้วไม่ไปไหน ไม่เปิดหน้า/โมดอลคืนของ
+    // ตรวจสอบปุ่ม "ส่งคืนอุปกรณ์" กดแล้วนำทางไปยังหน้าการคืนอุปกรณ์
     expect(find.text('ส่งคืนอุปกรณ์'), findsOneWidget);
     await tester.tap(find.text('ส่งคืนอุปกรณ์'));
     await tester.pump();
-    expect(find.textContaining('Checklist ตรวจรับของคืน'), findsNothing);
-    expect(find.textContaining('ส่งคืนอุปกรณ์ & จบการเช่า'), findsNothing);
-
-    // ทำความสะอาด widget เพื่อยกเลิก ticker timer
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(RentalReturnPage), findsOneWidget);
   });
 
   testWidgets('RentalCountdownTimerWidget within narrow 270px width constraint does not overflow', (tester) async {
