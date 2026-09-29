@@ -186,12 +186,14 @@ class ProfileQuickActionsRow extends StatelessWidget {
 }
 
 class ProfileQuickActionData {
-  final IconData icon;
+  final IconData? icon;
+  final String? imageAsset;
   final String label;
   final VoidCallback? onTap;
 
   const ProfileQuickActionData({
-    required this.icon,
+    this.icon,
+    this.imageAsset,
     required this.label,
     this.onTap,
   });
@@ -215,7 +217,40 @@ class ProfileQuickActionItem extends StatelessWidget {
               color: const Color(0xFFF3E8FF),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(data.icon, color: AppColors.primaryColor, size: 22),
+            child: Center(
+              child: data.imageAsset != null
+                  ? Image.asset(
+                      data.imageAsset!,
+                      width: 28,
+                      height: 28,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) {
+                        if (data.imageAsset == 'assets/icons/calendar.png') {
+                          return Image.asset(
+                            'assets/icons/calender.png',
+                            width: 28,
+                            height: 28,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => Icon(
+                              data.icon ?? Icons.category_rounded,
+                              color: AppColors.primaryColor,
+                              size: 22,
+                            ),
+                          );
+                        }
+                        return Icon(
+                          data.icon ?? Icons.category_rounded,
+                          color: AppColors.primaryColor,
+                          size: 22,
+                        );
+                      },
+                    )
+                  : Icon(
+                      data.icon ?? Icons.category_rounded,
+                      color: AppColors.primaryColor,
+                      size: 22,
+                    ),
+            ),
           ),
           const SizedBox(height: 6),
           Text(

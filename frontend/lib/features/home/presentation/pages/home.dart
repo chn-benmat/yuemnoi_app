@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/auth_session.dart';
+import '../../../../core/network/supabase_client.dart';
 import '../../../../core/widgets/custom_bottom_navbar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
@@ -14,6 +15,8 @@ import '../../../chat/presentation/bloc/chat_list_bloc.dart';
 import '../../../chat/presentation/bloc/chat_list_event.dart';
 import '../../../chat/presentation/bloc/chat_list_state.dart';
 import '../../../chat/presentation/pages/chat.dart';
+import '../../../notification/presentation/pages/page.dart';
+import '../../../profile/data/repositories/rental_management_repository_impl.dart';
 import '../../../profile/presentation/pages/profile/profile.dart';
 import '../../../wallet/presentation/pages/wallet.dart';
 import '../../data/repositories/home_repository_impl.dart';
@@ -71,11 +74,30 @@ class _HomeScreenContent extends StatefulWidget {
 
 class _HomeScreenContentState extends State<_HomeScreenContent> {
   late int _selectedIndex;
+  bool _hasActiveRentals = false;
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+    _checkNotifications();
+  }
+
+  Future<void> _checkNotifications() async {
+    try {
+      final userId = SupabaseConfig.isInitialized
+          ? SupabaseConfig.client.auth.currentUser?.id
+          : null;
+      if (userId == null || userId.isEmpty) return;
+
+      final bookings = await RentalManagementRepositoryImpl().getRentingBookings(userId);
+      final hasActive = bookings.any((b) => b.statusCode.toLowerCase().trim() == 'active');
+      if (mounted) {
+        setState(() {
+          _hasActiveRentals = hasActive;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -91,6 +113,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
   List<Widget> get _pages => [
         const HomeFeedView(),
         const ChatScreen(),
+        const NotificationPage(),
         WalletScreen(
           onBack: () {
             setState(() {
@@ -107,6 +130,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
       listener: (context, authState) {
         if (authState is LoginSuccess || authState is GoogleLoginSuccess) {
           context.read<ChatListBloc>().add(const LoadChatListStarted());
+          _checkNotifications();
         }
       },
       child: Scaffold(
@@ -139,10 +163,14 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
             return CustomBottomNavbar(
               selectedIndex: _selectedIndex,
               hasUnreadChat: hasUnread,
+              hasUnreadNotification: _hasActiveRentals,
               onTabChange: (index) {
                 setState(() {
                   _selectedIndex = index;
                 });
+                if (index == 2) {
+                  _checkNotifications();
+                }
               },
             );
           },
