@@ -335,9 +335,11 @@ class HomeMockDataSource {
 
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
       final query = searchQuery.trim().toLowerCase();
+      final matchedCategoryIds = _matchedCategoryIdsForQuery(query);
       items = items.where((item) {
         final matchesTitle = item.title.toLowerCase().contains(query);
-        final matchesCategory = item.categoryId.toLowerCase().contains(query);
+        final matchesCategory = item.categoryId.toLowerCase().contains(query) ||
+            matchedCategoryIds.contains(item.categoryId.toLowerCase());
         final matchesTags = item.tags.any((t) => t.toLowerCase().contains(query));
         final matchesLocation = item.locationName.toLowerCase().contains(query);
         return matchesTitle || matchesCategory || matchesTags || matchesLocation;
@@ -369,5 +371,28 @@ class HomeMockDataSource {
       _favoriteItemIds.add(itemId);
       return true;
     }
+  }
+
+  static const Map<String, List<String>> _categoryKeywords = {
+    'camera': ['camera', 'กล้อง', 'กล้องถ่ายภาพ', 'เลนส์', 'photo'],
+    'camping': ['camping', 'แคมป์', 'แคมป์ปิ้ง', 'เต็นท์', 'กลางแจ้ง', 'เต้นท์'],
+    'computer': ['computer', 'คอม', 'คอมพิวเตอร์', 'โน้ตบุ๊ก', 'โน้ตบุ๊ค', 'laptop', 'macbook', 'ไอที'],
+    'music': ['music', 'ดนตรี', 'เครื่องดนตรี', 'กีตาร์', 'กีต้าร์', 'เปียโน'],
+    'gaming': ['gaming', 'เกม', 'เกมส์', 'บันเทิง', 'เกม/บันเทิง', 'playstation', 'ps5', 'nintendo'],
+    'tools': ['tools', 'ช่าง', 'อุปกรณ์ช่าง', 'เครื่องมือช่าง', 'สว่าน'],
+    'audio': ['audio', 'เสียง', 'เครื่องเสียง', 'หูฟัง', 'ลำโพง', 'speaker', 'headphone'],
+    'phone': ['phone', 'โทรศัพท์', 'โทรศัพท์/สื่อสาร', 'มือถือ', 'smartphone', 'iphone', 'ipad', 'แท็บเล็ต'],
+    'sports': ['sports', 'กีฬา', 'กีฬา/ฟิตเนส', 'ฟิตเนส', 'ออกกำลังกาย', 'จักรยาน', 'แบดมินตัน'],
+  };
+
+  static Set<String> _matchedCategoryIdsForQuery(String query) {
+    final lower = query.toLowerCase().trim();
+    final matched = <String>{};
+    for (final entry in _categoryKeywords.entries) {
+      if (entry.value.any((kw) => lower.contains(kw) || kw.contains(lower))) {
+        matched.add(entry.key);
+      }
+    }
+    return matched;
   }
 }

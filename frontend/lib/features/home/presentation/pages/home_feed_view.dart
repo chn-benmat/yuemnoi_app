@@ -10,7 +10,6 @@ import '../bloc/home_bloc.dart';
 import '../bloc/home_event.dart';
 import '../bloc/home_state.dart';
 import '../widgets/category_filter_chips.dart';
-import '../widgets/category_filter_sheet.dart';
 import '../widgets/home_empty_state.dart';
 import '../widgets/home_search_bar.dart';
 import '../widgets/shopee_product_card.dart';
@@ -26,6 +25,19 @@ class HomeFeedView extends StatefulWidget {
 class _HomeFeedViewState extends State<HomeFeedView> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    final homeBloc = context.read<HomeBloc>();
+    if (homeBloc.state is HomeLoaded) {
+      final loaded = homeBloc.state as HomeLoaded;
+      if (loaded.selectedCategoryId != 'all') {
+        _searchController.text =
+            CategoryFilterChips.getCategoryLabel(loaded.selectedCategoryId);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -48,7 +60,16 @@ class _HomeFeedViewState extends State<HomeFeedView> {
   /// รวมและตัดรายการสินค้าซ้ำ
   List<FeedItem> _getDisplayedItems(HomeLoaded state) {
     if (state.hasActiveFilters || state.searchQuery.isNotEmpty) {
-      return state.nearbyItems;
+      final categoryFilteredCurated = state.selectedCategoryId == 'all'
+          ? state.curatedItems
+          : state.curatedItems
+              .where((item) => item.categoryId == state.selectedCategoryId)
+              .toList();
+      final seenIds = <String>{};
+      return [
+        ...categoryFilteredCurated.where((item) => seenIds.add(item.id)),
+        ...state.nearbyItems.where((item) => seenIds.add(item.id)),
+      ];
     }
     final seenIds = <String>{};
     return [
@@ -64,6 +85,11 @@ class _HomeFeedViewState extends State<HomeFeedView> {
     int? maxPrice,
     double? minRating,
   }) {
+    if (categoryId == 'all') {
+      _searchController.clear();
+    } else {
+      _searchController.text = CategoryFilterChips.getCategoryLabel(categoryId);
+    }
     context.read<HomeBloc>().add(
       ApplyFilterRequested(
         categoryId: categoryId,
@@ -80,7 +106,23 @@ class _HomeFeedViewState extends State<HomeFeedView> {
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: const Color(0xFFF1F5F9),
-        body: BlocBuilder<HomeBloc, HomeState>(
+        body: BlocConsumer<HomeBloc, HomeState>(
+          listener: (context, state) {
+            if (state is HomeLoaded) {
+              if (state.selectedCategoryId == 'all') {
+                if (_searchController.text.isNotEmpty) {
+                  _searchController.clear();
+                }
+              } else {
+                final label = CategoryFilterChips.getCategoryLabel(
+                  state.selectedCategoryId,
+                );
+                if (_searchController.text != label) {
+                  _searchController.text = label;
+                }
+              }
+            }
+          },
           builder: (context, state) {
             if (state is HomeInitial || state is HomeLoading) {
               return const _HomeLoadingView();
@@ -214,13 +256,35 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                         child: CategoryFilterChips(
                           categories: state.categories,
                           selectedCategoryId: state.selectedCategoryId,
-                          onCategorySelected: (categoryId) {
-                            _applyFilter(
-                              categoryId: categoryId,
-                              minPrice: state.minPrice,
-                              maxPrice: state.maxPrice,
-                              minRating: state.minRating,
+                          onCategorySelected: (categoryId) async {
+                            if (categoryId == 'all') {
+                              _applyFilter(
+                                categoryId: 'all',
+                                minPrice: state.minPrice,
+                                maxPrice: state.maxPrice,
+                                minRating: state.minRating,
+                              );
+                              return;
+                            }
+
+                            final label =
+                                CategoryFilterChips.getCategoryLabel(categoryId);
+                            await AppRoutes.openSearch(
+                              context,
+                              initialQuery: label,
+                              curatedItems: _getDisplayedItems(state),
                             );
+                            if (mounted &&
+                                (state.selectedCategoryId != 'all' ||
+                                    _searchController.text.isNotEmpty)) {
+                              _searchController.clear();
+                              _applyFilter(
+                                categoryId: 'all',
+                                minPrice: state.minPrice,
+                                maxPrice: state.maxPrice,
+                                minRating: state.minRating,
+                              );
+                            }
                           },
                         ),
                       ),
@@ -248,71 +312,86 @@ class _HomeFeedViewState extends State<HomeFeedView> {
     );
   }
 
-  /// แถบค้นหา + ปุ่มตัวกรอง + ป้าย Filter Tag
+  /// แถบค้นหา + ปุ่มหัวใจไปยังหน้าอุปกรณ์ที่ถูกใจ
   Widget _buildSearchAndFilterSection(HomeLoaded state) {
     final bloc = context.read<HomeBloc>();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: HomeSearchBar(
-                  controller: _searchController,
-                  readOnly: true,
-                  onTap: () {
-                    AppRoutes.openSearch(
-                      context,
-                      curatedItems: _getDisplayedItems(state),
-                    );
-                  },
-                  onChanged: (query) => bloc.add(SearchQueryChanged(query)),
-                  onClear: () => bloc.add(const SearchQueryChanged('')),
-                ),
-              ),
-              const SizedBox(width: 10),
-              CategoryFilterButton(
-                categories: state.categories,
-                selectedCategoryId: state.selectedCategoryId,
-                minPrice: state.minPrice,
-                maxPrice: state.maxPrice,
-                minRating: state.minRating,
-                onApplyFilter:
-                    ({required categoryId, minPrice, maxPrice, minRating}) =>
-                        _applyFilter(
-                          categoryId: categoryId,
-                          minPrice: minPrice,
-                          maxPrice: maxPrice,
-                          minRating: minRating,
-                        ),
-                onResetFilter: () => bloc.add(const ClearFilterRequested()),
-              ),
-            ],
+          Expanded(
+            child: HomeSearchBar(
+              controller: _searchController,
+              readOnly: true,
+              onTap: () async {
+                await AppRoutes.openSearch(
+                  context,
+                  curatedItems: _getDisplayedItems(state),
+                  initialQuery: _searchController.text.isNotEmpty
+                      ? _searchController.text
+                      : null,
+                );
+                if (mounted &&
+                    (_searchController.text.isNotEmpty ||
+                        state.selectedCategoryId != 'all')) {
+                  _searchController.clear();
+                  _applyFilter(
+                    categoryId: 'all',
+                    minPrice: state.minPrice,
+                    maxPrice: state.maxPrice,
+                    minRating: state.minRating,
+                  );
+                }
+              },
+              onChanged: (query) => bloc.add(SearchQueryChanged(query)),
+              onClear: () {
+                _searchController.clear();
+                _applyFilter(
+                  categoryId: 'all',
+                  minPrice: state.minPrice,
+                  maxPrice: state.maxPrice,
+                  minRating: state.minRating,
+                );
+              },
+            ),
           ),
-          ActiveCategoryTag(
-            categories: state.categories,
-            selectedCategoryId: 'all',
-            minPrice: state.minPrice,
-            maxPrice: state.maxPrice,
-            minRating: state.minRating,
-            onClearCategory: () {},
-            onClearPrice: () => _applyFilter(
-              categoryId: state.selectedCategoryId,
-              minPrice: null,
-              maxPrice: null,
-              minRating: state.minRating,
-            ),
-            onClearRating: () => _applyFilter(
-              categoryId: state.selectedCategoryId,
-              minPrice: state.minPrice,
-              maxPrice: state.maxPrice,
-              minRating: null,
-            ),
+          const SizedBox(width: 10),
+          _buildFavoritesButton(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFavoritesButton(BuildContext context) {
+    return Container(
+      height: 48,
+      width: 48,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const ValueKey('home-favorites-button'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => AppRoutes.openFavorite(context),
+          child: const Center(
+            child: Icon(
+              Icons.favorite_rounded,
+              color: AppColors.primaryColor,
+              size: 24,
+            ),
+          ),
+        ),
       ),
     );
   }

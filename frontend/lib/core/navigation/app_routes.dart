@@ -33,6 +33,7 @@ import '../../features/item_detail/presentation/bloc/item_detail_bloc.dart';
 import '../../features/item_detail/presentation/bloc/item_detail_event.dart';
 import '../../features/item_detail/presentation/pages/edit_item.dart';
 import '../../features/item_detail/presentation/pages/item_detail.dart';
+import '../../features/home/domain/entities/feed_category.dart';
 import '../../features/home/domain/entities/feed_item.dart';
 import '../../features/home/presentation/pages/equipment_search_screen.dart';
 import '../../features/home/presentation/pages/home.dart';
@@ -158,17 +159,20 @@ abstract final class AppRoutes {
             final extra = state.extra;
             List<FeedItem>? curatedItems;
             String? initialQuery;
+            List<FeedCategory>? categories;
             if (extra is List<FeedItem>) {
               curatedItems = extra;
             } else if (extra is Map<String, dynamic>) {
               curatedItems = extra['curatedItems'] as List<FeedItem>?;
               initialQuery = extra['query'] as String?;
+              categories = extra['categories'] as List<FeedCategory>?;
             }
             return CustomTransitionPage<void>(
               key: state.pageKey,
               child: EquipmentSearchScreen(
                 initialCuratedItems: curatedItems,
                 initialQuery: initialQuery,
+                initialCategories: categories,
               ),
               transitionDuration: const Duration(milliseconds: 200),
               transitionsBuilder:
@@ -768,7 +772,11 @@ abstract final class AppRoutes {
   }
 
   static Future<void> openFavorite(BuildContext context) {
-    return context.push<void>(favorite);
+    try {
+      return context.push<void>(favorite);
+    } catch (_) {
+      return Future.value();
+    }
   }
 
   static Future<void> openRentalIncome(BuildContext context) {
@@ -825,14 +833,20 @@ abstract final class AppRoutes {
     BuildContext context, {
     List<FeedItem>? curatedItems,
     String? initialQuery,
+    List<FeedCategory>? categories,
   }) {
-    return context.push<void>(
-      search,
-      extra: {
-        if (curatedItems != null) 'curatedItems': curatedItems,
-        if (initialQuery != null) 'query': initialQuery,
-      },
-    );
+    try {
+      return context.push<void>(
+        search,
+        extra: {
+          'curatedItems': ?curatedItems,
+          'query': ?initialQuery,
+          'categories': ?categories,
+        },
+      );
+    } catch (_) {
+      return Future.value();
+    }
   }
 
   static Future<bool?> openEditRentalItem(

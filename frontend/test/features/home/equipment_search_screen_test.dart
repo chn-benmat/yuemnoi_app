@@ -238,4 +238,53 @@ void main() {
     expect(find.textContaining('"กล้อง Sony"'), findsOneWidget);
     expect(find.text('กล้อง Sony A7 IV'), findsOneWidget);
   });
+
+  testWidgets('initialQuery executes search immediately on open',
+      (tester) async {
+    final fakeRepo = _FakeHomeRepository(
+      curatedItems: dummyCurated,
+      nearbyItems: dummySearchable,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EquipmentSearchScreen(
+          homeRepository: fakeRepo,
+          initialQuery: 'กล้อง Sony',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify search bar input is pre-populated
+    final searchInput = find.byKey(const ValueKey('equipment-search-input'));
+    expect(tester.widget<TextField>(searchInput).controller?.text, 'กล้อง Sony');
+
+    // Verify results are automatically displayed
+    expect(find.textContaining('ผลการค้นหาสำหรับ'), findsOneWidget);
+    expect(find.textContaining('"กล้อง Sony"'), findsOneWidget);
+    expect(find.text('กล้อง Sony A7 IV'), findsOneWidget);
+  });
+
+  testWidgets('search results view includes category filter button and system',
+      (tester) async {
+    final fakeRepo = _FakeHomeRepository(
+      curatedItems: dummyCurated,
+      nearbyItems: dummySearchable,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EquipmentSearchScreen(
+          homeRepository: fakeRepo,
+          initialQuery: 'กล้อง Sony',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify filter button is present in search results header
+    expect(find.byKey(const ValueKey('category-filter-button')), findsOneWidget);
+    expect(find.byIcon(Icons.filter_alt_rounded), findsOneWidget);
+  });
 }
