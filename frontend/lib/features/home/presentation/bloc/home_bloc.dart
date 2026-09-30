@@ -60,7 +60,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     try {
       final nearby = await homeRepository.getNearbyItems(
         categoryId: event.categoryId,
-        searchQuery: currentState.searchQuery,
+        searchQuery: '',
         minPrice: currentState.minPrice,
         maxPrice: currentState.maxPrice,
         minRating: currentState.minRating,
@@ -69,6 +69,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       emit(
         currentState.copyWith(
           selectedCategoryId: event.categoryId,
+          searchQuery: '',
           nearbyItems: nearby,
         ),
       );
@@ -87,7 +88,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     try {
       final nearby = await homeRepository.getNearbyItems(
         categoryId: event.categoryId,
-        searchQuery: currentState.searchQuery,
+        searchQuery: '',
         minPrice: event.minPrice,
         maxPrice: event.maxPrice,
         minRating: event.minRating,
@@ -96,6 +97,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       emit(
         currentState.copyWith(
           selectedCategoryId: event.categoryId,
+          searchQuery: '',
           nearbyItems: nearby,
           minPrice: () => event.minPrice,
           maxPrice: () => event.maxPrice,
@@ -117,12 +119,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     try {
       final nearby = await homeRepository.getNearbyItems(
         categoryId: 'all',
-        searchQuery: currentState.searchQuery,
+        searchQuery: '',
       );
 
       emit(
         currentState.copyWith(
           selectedCategoryId: 'all',
+          searchQuery: '',
           nearbyItems: nearby,
           minPrice: () => null,
           maxPrice: () => null,

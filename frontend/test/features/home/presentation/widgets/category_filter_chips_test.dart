@@ -34,13 +34,13 @@ void main() {
     );
     await tester.pump();
 
-    // Verify presence of first few visible categories
-    expect(find.text('ทั้งหมด'), findsOneWidget);
+    // Verify presence of first few visible categories (all/ทั้งหมด is excluded)
+    expect(find.text('ทั้งหมด'), findsNothing);
     expect(find.text('กล้องถ่ายภาพ'), findsOneWidget);
     expect(find.text('แคมป์ปิ้ง'), findsOneWidget);
 
     // Verify icons & assets
-    expect(find.byIcon(Icons.grid_view_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.grid_view_rounded), findsNothing);
     expect(find.byType(Image), findsWidgets);
   });
 
@@ -53,7 +53,7 @@ void main() {
           backgroundColor: AppColors.primaryColor,
           body: CategoryFilterChips(
             categories: testCategories,
-            selectedCategoryId: 'all',
+            selectedCategoryId: 'camera',
             onCategorySelected: _dummyCallback,
           ),
         ),
@@ -61,12 +61,12 @@ void main() {
     );
     await tester.pump();
 
-    final allChipFinder = find.byKey(const ValueKey('category-chip-all'));
-    expect(allChipFinder, findsOneWidget);
+    final cameraChipFinder = find.byKey(const ValueKey('category-chip-camera'));
+    expect(cameraChipFinder, findsOneWidget);
 
     final animatedContainer = tester.widget<AnimatedContainer>(
       find.descendant(
-        of: allChipFinder,
+        of: cameraChipFinder,
         matching: find.byType(AnimatedContainer),
       ),
     );
@@ -74,10 +74,7 @@ void main() {
     final boxDecoration = animatedContainer.decoration as BoxDecoration;
     expect(boxDecoration.color, Colors.white);
 
-    final icon = tester.widget<Icon>(find.byIcon(Icons.grid_view_rounded));
-    expect(icon.color, AppColors.primaryColor);
-
-    final text = tester.widget<Text>(find.text('ทั้งหมด'));
+    final text = tester.widget<Text>(find.text('กล้องถ่ายภาพ'));
     expect(text.style?.color, Colors.white);
   });
 
@@ -178,6 +175,50 @@ void main() {
 
     expect(find.text('อื่น ๆ'), findsNothing);
     expect(find.text('อื่นๆ'), findsNothing);
+  });
+
+  testWidgets('excludes general / ทั่วไป from chips', (tester) async {
+    const categoriesWithGeneral = [
+      ...testCategories,
+      FeedCategory(id: 'general', name: 'ทั่วไป'),
+    ];
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: CategoryFilterChips(
+            categories: categoriesWithGeneral,
+            selectedCategoryId: 'all',
+            onCategorySelected: _dummyCallback,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+  });
+
+  testWidgets('excludes all / ทั้งหมด from chips', (tester) async {
+    const categoriesWithAll = [
+      FeedCategory(id: 'all', name: 'ทั้งหมด'),
+      ...testCategories,
+    ];
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: CategoryFilterChips(
+            categories: categoriesWithAll,
+            selectedCategoryId: 'camera',
+            onCategorySelected: _dummyCallback,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('ทั้งหมด'), findsNothing);
+    expect(find.byKey(const ValueKey('category-chip-all')), findsNothing);
   });
 
   testWidgets('categories use configured asset icons and fallback icons', (tester) async {

@@ -39,11 +39,6 @@ class CategoryFilterChips extends StatelessWidget {
   /// รายการหมวดหมู่หลักพร้อมไอคอนที่กำหนดตามดีไซน์
   static const List<CategoryChipItem> _orderedCategories = [
     CategoryChipItem(
-      id: 'all',
-      label: 'ทั้งหมด',
-      icon: Icons.grid_view_rounded,
-    ),
-    CategoryChipItem(
       id: 'camera',
       label: 'กล้องถ่ายภาพ',
       icon: Icons.photo_camera_rounded,
@@ -153,6 +148,10 @@ class CategoryFilterChips extends StatelessWidget {
     }
   }
 
+  static String getCategoryLabel(String id, [String rawName = '']) {
+    return _getLabelForCategory(id, rawName);
+  }
+
   static String _getLabelForCategory(String id, String rawName) {
     switch (id.toLowerCase().trim()) {
       case 'all':
@@ -185,12 +184,17 @@ class CategoryFilterChips extends StatelessWidget {
   static bool _isExcludedCategory(String id, String rawName) {
     final lowerId = id.toLowerCase().trim();
     final lowerName = rawName.toLowerCase().trim();
-    return lowerId == 'appliances' ||
+    return lowerId == 'all' ||
+        lowerName == 'ทั้งหมด' ||
+        lowerId == 'appliances' ||
         lowerId.contains('appliance') ||
         lowerName.contains('เครื่องใช้ไฟฟ้า') ||
         lowerId == 'other' ||
         lowerId == 'others' ||
-        lowerName.contains('อื่น');
+        lowerName.contains('อื่น') ||
+        lowerId == 'general' ||
+        lowerId.contains('general') ||
+        lowerName.contains('ทั่วไป');
   }
 
   List<CategoryChipItem> _buildItems() {
@@ -212,7 +216,7 @@ class CategoryFilterChips extends StatelessWidget {
     // 1. นำหมวดหมู่หลักที่มีลำดับตาม Requirement มาแสดงก่อน (กรองหมวดหมู่ที่ไม่ต้องการออก เช่น เครื่องใช้ไฟฟ้า)
     for (final pref in _orderedCategories) {
       if (!_isExcludedCategory(pref.id, pref.label) &&
-          (categoryMap.containsKey(pref.id) || pref.id == 'all')) {
+          categoryMap.containsKey(pref.id)) {
         items.add(pref);
         addedIds.add(pref.id);
       }

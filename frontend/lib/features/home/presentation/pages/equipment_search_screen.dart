@@ -5,8 +5,10 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../data/repositories/home_repository_impl.dart';
+import '../../domain/entities/feed_category.dart';
 import '../../domain/entities/feed_item.dart';
 import '../../domain/repositories/home_repository.dart';
+import '../widgets/category_filter_sheet.dart';
 import '../widgets/shopee_product_card.dart';
 
 /// หน้าค้นหาอุปกรณ์สไตล์ Shopee ผสาน Swiss Style / Clean SaaS
@@ -18,11 +20,13 @@ class EquipmentSearchScreen extends StatefulWidget {
     super.key,
     this.initialCuratedItems,
     this.initialQuery,
+    this.initialCategories,
     this.homeRepository,
   });
 
   final List<FeedItem>? initialCuratedItems;
   final String? initialQuery;
+  final List<FeedCategory>? initialCategories;
   final HomeRepository? homeRepository;
 
   @override
@@ -39,6 +43,11 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
   List<String> _recentSearches = [];
   List<FeedItem> _curatedItems = [];
   List<FeedItem> _searchResults = [];
+  List<FeedCategory> _categories = [];
+  String _selectedCategoryId = 'all';
+  int? _minPrice;
+  int? _maxPrice;
+  double? _minRating;
 
   bool _isSearchSubmitted = false;
   bool _isLoadingResults = false;
@@ -59,6 +68,13 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       _curatedItems = widget.initialCuratedItems!;
     } else {
       _fetchCuratedItems();
+    }
+
+    if (widget.initialCategories != null &&
+        widget.initialCategories!.isNotEmpty) {
+      _categories = widget.initialCategories!;
+    } else {
+      _fetchCategories();
     }
 
     if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
@@ -182,6 +198,19 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     }
   }
 
+  Future<void> _fetchCategories() async {
+    try {
+      final list = await _repository.getCategories();
+      if (mounted) {
+        setState(() {
+          _categories = list;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching categories in search: $e');
+    }
+  }
+
   // ==========================================
   // ทำการค้นหา (Triggered เมื่อกดค้นหา / Enter / แท็ก)
   // ==========================================
@@ -203,7 +232,11 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
 
     try {
       final results = await _repository.getNearbyItems(
+        categoryId: _selectedCategoryId != 'all' ? _selectedCategoryId : null,
         searchQuery: trimmed,
+        minPrice: _minPrice,
+        maxPrice: _maxPrice,
+        minRating: _minRating,
       );
 
       if (mounted) {
@@ -223,12 +256,45 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     }
   }
 
+  void _applyFilter({
+    required String categoryId,
+    int? minPrice,
+    int? maxPrice,
+    double? minRating,
+  }) {
+    setState(() {
+      _selectedCategoryId = categoryId;
+      _minPrice = minPrice;
+      _maxPrice = maxPrice;
+      _minRating = minRating;
+    });
+    _executeSearch(
+      _lastSubmittedQuery.isNotEmpty ? _lastSubmittedQuery : _searchController.text,
+    );
+  }
+
+  void _resetFilter() {
+    setState(() {
+      _selectedCategoryId = 'all';
+      _minPrice = null;
+      _maxPrice = null;
+      _minRating = null;
+    });
+    _executeSearch(
+      _lastSubmittedQuery.isNotEmpty ? _lastSubmittedQuery : _searchController.text,
+    );
+  }
+
   /// รีเซ็ตกลับไปหน้าคำค้นหาเก่าและสิ่งที่ผู้เช่าสนใจ
   void _resetToPreSearch() {
     setState(() {
       _isSearchSubmitted = false;
       _searchResults = [];
       _lastSubmittedQuery = '';
+      _selectedCategoryId = 'all';
+      _minPrice = null;
+      _maxPrice = null;
+      _minRating = null;
     });
     _focusNode.requestFocus();
   }
@@ -663,79 +729,135 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       );
     }
 
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        SliverToBoxAdapter(
-          child: _buildResultsHeader(),
-        ),
-        if (_searchResults.isEmpty)
-          SliverToBoxAdapter(
-            child: _buildEmptyResultsState(),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 0.61,
+    return Column(
+      children: [
+        _buildResultsHeader(),
+        Expanded(
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              if (_searchResults.isEmpty)
+                SliverToBoxAdapter(
+                  child: _buildEmptyResultsState(),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 0.61,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final item = _searchResults[index];
+                        return ShopeeProductCard(
+                          item: item,
+                          onTap: () => _onItemTap(item),
+                        );
+                      },
+                      childCount: _searchResults.length,
+                    ),
+                  ),
+                ),
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 50),
               ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final item = _searchResults[index];
-                  return ShopeeProductCard(
-                    item: item,
-                    onTap: () => _onItemTap(item),
-                  );
-                },
-                childCount: _searchResults.length,
-              ),
-            ),
+            ],
           ),
-        const SliverToBoxAdapter(
-          child: SizedBox(height: 50),
         ),
       ],
     );
   }
 
   Widget _buildResultsHeader({bool isPlaceholder = false}) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                style: const TextStyle(
-                  color: Color(0xFF71717A),
-                  fontSize: 13.5,
-                ),
-                children: [
-                  const TextSpan(text: 'ผลการค้นหาสำหรับ '),
+          Row(
+            children: [
+              Expanded(
+                child: Text.rich(
                   TextSpan(
-                    text: '"$_lastSubmittedQuery"',
                     style: const TextStyle(
-                      color: Color(0xFF18181B),
-                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF71717A),
+                      fontSize: 13.5,
                     ),
+                    children: [
+                      const TextSpan(text: 'ผลการค้นหาสำหรับ '),
+                      TextSpan(
+                        text: '"$_lastSubmittedQuery"',
+                        style: const TextStyle(
+                          color: Color(0xFF18181B),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              overflow: TextOverflow.ellipsis,
-            ),
+              if (!isPlaceholder) ...[
+                Text(
+                  '${_searchResults.length} รายการ',
+                  style: const TextStyle(
+                    color: Color(0xFF71717A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CategoryFilterButton(
+                  categories: _categories,
+                  selectedCategoryId: _selectedCategoryId,
+                  minPrice: _minPrice,
+                  maxPrice: _maxPrice,
+                  minRating: _minRating,
+                  onApplyFilter: ({
+                    required categoryId,
+                    minPrice,
+                    maxPrice,
+                    minRating,
+                  }) => _applyFilter(
+                    categoryId: categoryId,
+                    minPrice: minPrice,
+                    maxPrice: maxPrice,
+                    minRating: minRating,
+                  ),
+                  onResetFilter: _resetFilter,
+                ),
+              ],
+            ],
           ),
           if (!isPlaceholder)
-            Text(
-              '${_searchResults.length} รายการ',
-              style: const TextStyle(
-                color: Color(0xFF71717A),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+            ActiveCategoryTag(
+              categories: _categories,
+              selectedCategoryId: _selectedCategoryId,
+              minPrice: _minPrice,
+              maxPrice: _maxPrice,
+              minRating: _minRating,
+              onClearCategory: () => _applyFilter(
+                categoryId: 'all',
+                minPrice: _minPrice,
+                maxPrice: _maxPrice,
+                minRating: _minRating,
+              ),
+              onClearPrice: () => _applyFilter(
+                categoryId: _selectedCategoryId,
+                minPrice: null,
+                maxPrice: null,
+                minRating: _minRating,
+              ),
+              onClearRating: () => _applyFilter(
+                categoryId: _selectedCategoryId,
+                minPrice: _minPrice,
+                maxPrice: _maxPrice,
+                minRating: null,
               ),
             ),
         ],

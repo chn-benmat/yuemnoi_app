@@ -7,6 +7,7 @@ import 'package:frontend/features/home/domain/repositories/home_repository.dart'
 import 'package:frontend/features/home/domain/usecases/get_home_feed_usecase.dart';
 import 'package:frontend/features/home/presentation/bloc/home_bloc.dart';
 import 'package:frontend/features/home/presentation/bloc/home_event.dart';
+import 'package:frontend/features/home/presentation/bloc/home_state.dart';
 import 'package:frontend/features/home/presentation/pages/home_feed_view.dart';
 import 'package:frontend/features/home/presentation/widgets/category_filter_chips.dart';
 import 'package:frontend/features/home/presentation/widgets/home_search_bar.dart';
@@ -101,5 +102,73 @@ void main() {
     // 2. Category chips scrolled up (เลื่อนตามการไถหน้าจอ)
     final afterScrollChipPosition = tester.getTopLeft(find.byType(CategoryFilterChips));
     expect(afterScrollChipPosition.dy, lessThan(initialChipPosition.dy));
+  });
+
+  testWidgets('tapping category chip opens search and keeps home feed normal on return', (
+    tester,
+  ) async {
+    final repository = _FakeHomeRepository();
+    final bloc = HomeBloc(
+      getHomeFeed: GetHomeFeedUseCase(repository),
+      homeRepository: repository,
+    )..add(const LoadHomeFeedStarted());
+    addTearDown(bloc.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BlocProvider<HomeBloc>.value(
+          value: bloc,
+          child: const HomeFeedView(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Initially search bar is empty and category is all
+    final searchTextField = find.byKey(const ValueKey('home-search-field'));
+    expect(tester.widget<TextField>(searchTextField).controller?.text, '');
+    expect((bloc.state as HomeLoaded).selectedCategoryId, 'all');
+
+    // Tap 'กล้องถ่ายภาพ' chip
+    await tester.tap(find.text('กล้องถ่ายภาพ'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    // Home feed remains in normal state ('all') so returning from search shows diverse items
+    expect(tester.widget<TextField>(searchTextField).controller?.text, '');
+    expect(bloc.state is HomeLoaded, isTrue);
+    expect((bloc.state as HomeLoaded).selectedCategoryId, 'all');
+  });
+
+  testWidgets('control deck displays favorites heart button instead of filter button', (
+    tester,
+  ) async {
+    final repository = _FakeHomeRepository();
+    final bloc = HomeBloc(
+      getHomeFeed: GetHomeFeedUseCase(repository),
+      homeRepository: repository,
+    )..add(const LoadHomeFeedStarted());
+    addTearDown(bloc.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BlocProvider<HomeBloc>.value(
+          value: bloc,
+          child: const HomeFeedView(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Favorites heart button is present in control deck
+    expect(find.byKey(const ValueKey('home-favorites-button')), findsOneWidget);
+    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+
+    // Old filter button is NOT in control deck
+    expect(find.byKey(const ValueKey('category-filter-button')), findsNothing);
   });
 }
