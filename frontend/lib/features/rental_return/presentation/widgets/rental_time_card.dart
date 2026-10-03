@@ -120,12 +120,12 @@ class RentalTimeCard extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            '#${session.rentalId}',
+                            '#${session.orderNumber}',
                             style: const TextStyle(
                               fontFamily: AppTextStyles.fontFamily,
                               fontSize: 11,
                               color: Color(0xFF94A3B8),
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],

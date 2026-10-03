@@ -3,26 +3,93 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/network/supabase_client.dart';
 import '../models/feed_category_model.dart';
 import '../models/feed_item_model.dart';
 import 'home_mock_data_source.dart';
 
-/// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงผ่าน Go Backend REST API (`/api/v1/items`)
-/// พร้อม fallback จาก Go API ไปยัง Local Cache
+/// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงจาก Supabase และ Go Backend REST API (`/api/v1/items`)
+/// พร้อม fallback ไปยัง Local Cache
 class HomeSupabaseDataSource {
   HomeSupabaseDataSource({
+    SupabaseClient? supabaseClient,
     ApiClient? apiClient,
     HomeMockDataSource? fallbackDataSource,
-  }) : _apiClient = apiClient ?? DioApiClient(),
+  }) : _supabaseClient = supabaseClient,
+       _apiClient = apiClient ?? DioApiClient(),
        _fallbackDataSource = fallbackDataSource ?? HomeMockDataSource();
 
   static const String _cacheKey = 'cached_home_feed_items_v2_ranked';
 
+  final SupabaseClient? _supabaseClient;
   final ApiClient _apiClient;
   final HomeMockDataSource _fallbackDataSource;
   final Set<String> _favoriteItemIds = {};
+
+  /// ชื่อหมวดหมู่ภาษาไทยที่เป็นทางการ
+  static const Map<String, String> categoryThaiNames = {
+    'camera': 'กล้องและอุปกรณ์ถ่ายภาพ',
+    'audio': 'เครื่องเสียงและอุปกรณ์จัดงาน',
+    'computer': 'คอมพิวเตอร์และอุปกรณ์ไอที',
+    'phone': 'โทรศัพท์และอุปกรณ์สื่อสาร',
+    'tools': 'เครื่องมือช่างและงานก่อสร้าง',
+    'appliances': 'เครื่องใช้ไฟฟ้าและอุปกรณ์ภายในบ้าน',
+    'camping': 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+    'sports': 'กีฬาและออกกำลังกาย',
+    'gaming': 'เกมและความบันเทิง',
+    'music': 'ดนตรีและเครื่องดนตรี',
+    'other': 'อื่น ๆ',
+  };
+
+  /// คำค้นหายอดนิยมและคำพ้องความหมาย (Synonyms) ภาษาไทยและภาษาอังกฤษประจำหมวดหมู่
+  static const Map<String, List<String>> categoryKeywords = {
+    'camera': [
+      'กล้อง', 'โดรน', 'เลนส์', 'ถ่ายภาพ', 'ถ่ายรูป', 'ไฟสตูดิโอ',
+      'โปรเจคเตอร์', 'ขาตั้งกล้อง', 'camera', 'canon', 'sony', 'fuji',
+      'nikon', 'gopro', 'dslr', 'mirrorless', 'แคนนอน', 'โซนี่',
+    ],
+    'audio': [
+      'เครื่องเสียง', 'ลำโพง', 'ไมค์', 'ไมโครโฟน', 'มิกเซอร์', 'หูฟัง',
+      'แอมป์', 'audio', 'sound', 'speaker', 'mic', 'jbl', 'shure', 'yamaha',
+      'ยามาฮ่า',
+    ],
+    'computer': [
+      'คอม', 'คอมพิวเตอร์', 'โน้ตบุ๊ก', 'โน้ตบุ๊ค', 'แล็ปท็อป', 'ไอที',
+      'computer', 'laptop', 'macbook', 'pc', 'ipad', 'tablet', 'แมคบุ๊ก',
+    ],
+    'phone': [
+      'โทรศัพท์', 'มือถือ', 'ไอโฟน', 'ซัมซุง', 'phone', 'iphone', 'samsung',
+      'android', 'smartphone',
+    ],
+    'tools': [
+      'เครื่องมือช่าง', 'ช่าง', 'สว่าน', 'เลื่อย', 'ค้อน', 'บันได',
+      'เครื่องฉีดน้ำ', 'ก่อสร้าง', 'tools', 'bosch', 'makita', 'บ๊อช',
+    ],
+    'appliances': [
+      'เครื่องใช้ไฟฟ้า', 'เครื่องดูดฝุ่น', 'พัดลม', 'หม้อทอด', 'ตู้เย็น',
+      'แอร์', 'appliances', 'dyson', 'ไดสัน',
+    ],
+    'camping': [
+      'แคมป์', 'แคมป์ปิง', 'เต็นท์', 'เต้นท์', 'เก้าอี้สนาม', 'โต๊ะพับ',
+      'ถุงนอน', 'กระติก', 'เดินป่า', 'กลางแจ้ง', 'camping', 'coleman',
+      'naturehike', 'โคลแมน',
+    ],
+    'sports': [
+      'กีฬา', 'ออกกำลังกาย', 'จักรยาน', 'ซับบอร์ด', 'ฟิตเนส', 'sports',
+      'bike', 'bicycle', 'trek', 'sup board',
+    ],
+    'gaming': [
+      'เกม', 'เครื่องเล่นเกม', 'บอร์ดเกม', 'gaming', 'game', 'playstation',
+      'ps5', 'ps4', 'nintendo', 'switch', 'xbox', 'นินเทนโด',
+    ],
+    'music': [
+      'ดนตรี', 'เครื่องดนตรี', 'กีตาร์', 'กีต้าร์', 'เบส', 'คีย์บอร์ด',
+      'เปียโน', 'กลอง', 'music', 'guitar', 'piano',
+    ],
+  };
 
   List<FeedItemModel>? _cachedFeedItems;
   DateTime? _lastFetchTime;
@@ -229,8 +296,11 @@ class HomeSupabaseDataSource {
 
       if (ownerName == null || ownerName.isEmpty) {
         final profile = profilesMap?[item['user_id']?.toString()];
+        final displayName = profile?['display_name']?.toString().trim() ?? '';
         final email = profile?['email']?.toString() ?? '';
-        if (email.contains('@')) {
+        if (displayName.isNotEmpty) {
+          ownerName = displayName;
+        } else if (email.contains('@')) {
           ownerName = email.split('@').first;
         } else if (email.isNotEmpty) {
           ownerName = email;
@@ -267,7 +337,9 @@ class HomeSupabaseDataSource {
         FeedItemModel(
           id: id,
           title: title,
+          description: description,
           categoryId: categoryId,
+          rawCategory: rawCategory ?? '',
           price: price,
           priceUnit: priceUnit,
           rating: double.parse(rating.toStringAsFixed(1)),
@@ -287,7 +359,75 @@ class HomeSupabaseDataSource {
     return items;
   }
 
-  /// ดึงข้อมูลทั้งหมดผ่าน Go Backend API (`/api/v1/items`) หรือ Local Cache
+  SupabaseClient? get _activeSupabaseClient {
+    if (_supabaseClient != null) return _supabaseClient;
+    if (SupabaseConfig.isInitialized) return SupabaseConfig.client;
+    return null;
+  }
+
+  /// ดึงข้อมูลรายการอุปกรณ์จริงจาก Supabase โดยตรง (Tier 1)
+  Future<List<FeedItemModel>> _fetchFromSupabaseDirectly() async {
+    final client = _activeSupabaseClient;
+    if (client == null) {
+      throw const FormatException('Supabase client is not available');
+    }
+
+    List<dynamic>? rawItems;
+    try {
+      rawItems = await client
+          .from('home_feed_ranked_v')
+          .select('*')
+          .order('rank_position', ascending: true);
+    } catch (e) {
+      debugPrint('Direct Supabase home_feed_ranked_v error: $e, fallback to item_tb');
+    }
+
+    if (rawItems == null || rawItems.isEmpty) {
+      try {
+        rawItems = await client
+            .from('item_tb')
+            .select('*')
+            .inFilter('status', ['available', 'พร้อมใช้งาน'])
+            .order('created_at', ascending: false);
+      } catch (e) {
+        debugPrint('Direct Supabase item_tb fallback error: $e');
+      }
+    }
+
+    if (rawItems == null || rawItems.isEmpty) {
+      return const [];
+    }
+
+    final rawList = rawItems;
+    final userIds = rawList
+        .map((r) => (r as Map)['user_id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    Map<String, Map<String, dynamic>> profilesMap = {};
+    if (userIds.isNotEmpty) {
+      try {
+        final List<dynamic> profiles = await client
+            .from('public_profile_v')
+            .select('user_id, display_name, email, user_image_url')
+            .inFilter('user_id', userIds);
+        for (final p in profiles) {
+          final uid = (p as Map)['user_id']?.toString();
+          if (uid != null) {
+            profilesMap[uid] = Map<String, dynamic>.from(p);
+          }
+        }
+      } catch (e) {
+        debugPrint('Profiles query error for home items: $e');
+      }
+    }
+
+    return _mapRawListToFeedItems(rawList, profilesMap: profilesMap);
+  }
+
+  /// ดึงข้อมูลทั้งหมดผ่าน Supabase Direct, Go Backend API (`/api/v1/items`) หรือ Local Cache
   Future<List<FeedItemModel>> _fetchAllSupabaseItems({
     bool forceRefresh = false,
   }) async {
@@ -298,7 +438,22 @@ class HomeSupabaseDataSource {
       return _cachedFeedItems!;
     }
 
-    // Tier 1: Try Go Backend API
+    // Tier 1: Try Direct Supabase (ดึงข้อมูลจริงจาก Supabase)
+    if (_activeSupabaseClient != null) {
+      try {
+        final items = await _fetchFromSupabaseDirectly();
+        if (items.isNotEmpty) {
+          _cachedFeedItems = items;
+          _lastFetchTime = DateTime.now();
+          unawaited(_saveCachedItems(items));
+          return items;
+        }
+      } catch (e) {
+        debugPrint('Home Supabase direct fetch error: $e');
+      }
+    }
+
+    // Tier 2: Try Go Backend API
     try {
       final response = await _apiClient.get('/api/v1/items');
       if (response.statusCode == 200 && response.data is List) {
@@ -313,11 +468,17 @@ class HomeSupabaseDataSource {
       debugPrint('Home Go Backend API fetch error: $e');
     }
 
-    // Tier 2: Try Local Cache from SharedPreferences
+    // Tier 3: Try Local Cache from SharedPreferences
     final cached = await _loadCachedItems();
     if (cached.isNotEmpty) {
       _cachedFeedItems = cached;
       return cached;
+    }
+
+    // Tier 4: Fallback to mock data if in testing or server unconfigured
+    final fallbackItems = await _fallbackDataSource.fetchNearbyItems();
+    if (fallbackItems.isNotEmpty) {
+      return fallbackItems;
     }
 
     throw const FormatException(
@@ -335,6 +496,48 @@ class HomeSupabaseDataSource {
     return curated;
   }
 
+  /// ตรวจสอบว่าอุปกรณ์ตรงกับคำค้นหาหรือไม่ (รองรับภาษาไทย, ชื่ออุปกรณ์, คำอธิบาย, หมวดหมู่ และคำพ้อง)
+  bool _matchesItem(
+    FeedItemModel item,
+    String fullQuery,
+    List<String> keywords,
+  ) {
+    final title = item.title.toLowerCase();
+    final description = item.description.toLowerCase();
+    final catId = item.categoryId.toLowerCase();
+    final rawCat = item.rawCategory.toLowerCase();
+    final thaiCat = categoryThaiNames[item.categoryId]?.toLowerCase() ?? '';
+    final location = item.locationName.toLowerCase();
+    final owner = item.ownerName.toLowerCase();
+    final tags = item.tags.map((t) => t.toLowerCase()).toList();
+    final synonyms = categoryKeywords[item.categoryId] ?? const [];
+
+    bool tokenMatches(String token) {
+      if (title.contains(token)) return true;
+      if (description.contains(token)) return true;
+      if (rawCat.contains(token)) return true;
+      if (thaiCat.contains(token)) return true;
+      if (catId.contains(token)) return true;
+      if (location.contains(token)) return true;
+      if (owner.contains(token)) return true;
+      if (tags.any((t) => t.contains(token))) return true;
+      if (synonyms.any((syn) => syn.contains(token) || token.contains(syn))) {
+        return true;
+      }
+      return false;
+    }
+
+    // 1. ถ้าคำค้นหาแบบเต็มตรงกับข้อมูลใดๆ
+    if (tokenMatches(fullQuery)) return true;
+
+    // 2. ถ้าเป็นคำค้นหลายคำ (แยกด้วยช่องว่าง) ทุกคำต้องตรงกับข้อมูลของอุปกรณ์
+    if (keywords.length > 1) {
+      return keywords.every(tokenMatches);
+    }
+
+    return false;
+  }
+
   /// ดึงรายการอุปกรณ์ใกล้เคียงจาก Supabase / Backend พร้อมตัวกรองหมวดหมู่, คำค้นหา, ราคา, คะแนนรีวิว
   Future<List<FeedItemModel>> fetchNearbyItems({
     String? categoryId,
@@ -350,20 +553,14 @@ class HomeSupabaseDataSource {
     }
 
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
-      final query = searchQuery.trim().toLowerCase();
+      final rawQuery = searchQuery.trim().toLowerCase();
+      final keywords = rawQuery
+          .split(RegExp(r'\s+'))
+          .where((k) => k.isNotEmpty)
+          .toList();
+
       items = items.where((item) {
-        final matchesTitle = item.title.toLowerCase().contains(query);
-        final matchesCategory = item.categoryId.toLowerCase().contains(query);
-        final matchesTags = item.tags.any(
-          (t) => t.toLowerCase().contains(query),
-        );
-        final matchesLocation = item.locationName.toLowerCase().contains(query);
-        final matchesOwner = item.ownerName.toLowerCase().contains(query);
-        return matchesTitle ||
-            matchesCategory ||
-            matchesTags ||
-            matchesLocation ||
-            matchesOwner;
+        return _matchesItem(item, rawQuery, keywords);
       }).toList();
     }
 

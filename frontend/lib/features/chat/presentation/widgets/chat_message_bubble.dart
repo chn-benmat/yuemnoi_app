@@ -54,6 +54,8 @@ class ChatMessageBubble extends StatelessWidget {
     this.onDelete,
     this.onQuotedTap,
     this.onSendBookingRequest,
+    this.isHandoverCompleted = false,
+    this.isReturnCompleted = false,
   });
 
   final ChatMessage message;
@@ -67,6 +69,8 @@ class ChatMessageBubble extends StatelessWidget {
   final bool showDeliveryStatus;
   final bool isFailed;
   final bool isHighlighted;
+  final bool isHandoverCompleted;
+  final bool isReturnCompleted;
   final VoidCallback? onRetry;
   final ValueChanged<ChatMessage>? onReply;
   final void Function(ItemInquiryData)? onSendBookingRequest;
@@ -213,6 +217,8 @@ class ChatMessageBubble extends StatelessWidget {
             bookingData: bookingData,
             senderName: otherUserName,
             isOwner: isOwner,
+            isHandoverCompleted: isHandoverCompleted,
+            isReturnCompleted: isReturnCompleted,
           ),
         );
 

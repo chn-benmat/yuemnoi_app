@@ -5,7 +5,9 @@ class FeedItemModel extends FeedItem {
   const FeedItemModel({
     required super.id,
     required super.title,
+    super.description = '',
     required super.categoryId,
+    super.rawCategory = '',
     required super.price,
     required super.priceUnit,
     required super.rating,
@@ -25,10 +27,15 @@ class FeedItemModel extends FeedItem {
     return FeedItemModel(
       id: json['id']?.toString() ?? '',
       title: json['title'] as String? ?? json['item_name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
       categoryId:
           json['category_id'] as String? ??
           json['category'] as String? ??
           'all',
+      rawCategory:
+          json['raw_category'] as String? ??
+          json['category'] as String? ??
+          '',
       price: (json['price'] as num?)?.toInt() ?? 0,
       priceUnit: json['price_unit'] as String? ?? '/ วัน',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
@@ -54,7 +61,9 @@ class FeedItemModel extends FeedItem {
     return {
       'id': id,
       'title': title,
+      'description': description,
       'category_id': categoryId,
+      'raw_category': rawCategory,
       'price': price,
       'price_unit': priceUnit,
       'rating': rating,
@@ -75,7 +84,9 @@ class FeedItemModel extends FeedItem {
   FeedItemModel copyWith({
     String? id,
     String? title,
+    String? description,
     String? categoryId,
+    String? rawCategory,
     int? price,
     String? priceUnit,
     double? rating,
@@ -93,7 +104,9 @@ class FeedItemModel extends FeedItem {
     return FeedItemModel(
       id: id ?? this.id,
       title: title ?? this.title,
+      description: description ?? this.description,
       categoryId: categoryId ?? this.categoryId,
+      rawCategory: rawCategory ?? this.rawCategory,
       price: price ?? this.price,
       priceUnit: priceUnit ?? this.priceUnit,
       rating: rating ?? this.rating,
@@ -113,7 +126,9 @@ class FeedItemModel extends FeedItem {
   FeedItem toEntity() => FeedItem(
     id: id,
     title: title,
+    description: description,
     categoryId: categoryId,
+    rawCategory: rawCategory,
     price: price,
     priceUnit: priceUnit,
     rating: rating,

@@ -4,6 +4,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/network/supabase_client.dart';
 import '../../domain/entities/rental_return_session.dart';
 import '../../domain/repositories/rental_return_repository.dart';
 import 'rental_return_state.dart';
@@ -23,20 +24,42 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
           ),
         );
 
-  /// โหลดข้อมูลการเช่า
-  Future<void> loadSession([int? rentalId]) async {
+  /// โหลดข้อมูลการเช่า และแยกบทบาทอัตโนมัติ (ผู้เช่า vs ผู้ให้เช่า)
+  Future<void> loadSession({int? rentalId, bool? isLender}) async {
     emit(state.copyWith(status: RentalReturnStatus.loading));
     try {
       final session = await _repository.getReturnSession(rentalId);
+
+      // กำหนดบทบาทตามผู้ใช้จริง:
+      final RentalUserRole resolvedRole;
+      if (isLender != null) {
+        resolvedRole = isLender ? RentalUserRole.lender : RentalUserRole.renter;
+      } else {
+        final currentUserId = SupabaseConfig.isConfigured && SupabaseConfig.isInitialized
+            ? SupabaseConfig.client.auth.currentUser?.id
+            : null;
+        if (currentUserId != null &&
+            currentUserId.isNotEmpty &&
+            session.lenderId.isNotEmpty &&
+            currentUserId == session.lenderId) {
+          resolvedRole = RentalUserRole.lender;
+        } else {
+          resolvedRole = RentalUserRole.renter;
+        }
+      }
+
       emit(
         state.copyWith(
           status: RentalReturnStatus.loaded,
           session: session,
+          activeRole: resolvedRole,
         ),
       );
 
-      // ถ้าเหลือเวลาน้อยกว่า 1 ชั่วโมง และยังอยู่ในขั้นตอนเช่า ให้เปิดการเตือน
-      if (session.isNearDeadline && session.step == RentalReturnStep.inProgress) {
+      // ถ้าเหลือเวลาน้อยกว่า 1 ชั่วโมง และยังอยู่ในขั้นตอนเช่า (สำหรับฝั่งผู้เช่า) ให้เปิดการเตือน
+      if (resolvedRole == RentalUserRole.renter &&
+          session.isNearDeadline &&
+          session.step == RentalReturnStep.inProgress) {
         triggerUrgentAlarm();
       }
     } catch (e) {

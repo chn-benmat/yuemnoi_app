@@ -160,7 +160,7 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                       ],
                     ),
                   ),
-                  // Challenge Code
+                  // Order Number Badge
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
@@ -172,12 +172,13 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(
-                          Icons.tag_rounded,
+                          Icons.receipt_long_rounded,
                           size: 13,
                           color: Color(0xFF15803D),
                         ),
+                        const SizedBox(width: 4),
                         Text(
-                          session.dynamicChallengeCode,
+                          '# ${session.orderNumber}',
                           style: const TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 12,
@@ -195,17 +196,17 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
 
               if (!hasPhotos) ...[
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.hourglass_empty_rounded, color: Color(0xFF94A3B8), size: 20),
-                      SizedBox(width: 10),
-                      Expanded(
+                      const Icon(Icons.hourglass_empty_rounded, color: Color(0xFF94A3B8), size: 20),
+                      const SizedBox(width: 10),
+                      const Expanded(
                         child: Text(
                           'รอลูกค้าถ่ายภาพสดส่งเข้ามาตรวจสอบสภาพ...',
                           style: TextStyle(
@@ -215,10 +216,70 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                           ),
                         ),
                       ),
+                      InkWell(
+                        onTap: () => cubit.loadSession(rentalId: session.rentalId, isLender: true),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF0284C7)),
+                              SizedBox(width: 4),
+                              Text(
+                                'รีเฟรช',
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF0284C7),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ] else ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'ภาพถ่ายสดจากลูกค้า (3 มุม)',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => cubit.loadSession(rentalId: session.rentalId, isLender: true),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.refresh_rounded, size: 13, color: Color(0xFF64748B)),
+                          SizedBox(width: 3),
+                          Text(
+                            'รีเฟรชภาพ',
+                            style: TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 // ตารางแสดงภาพถ่าย 3 มุม
                 Row(
                   children: session.photos.map((photo) {

@@ -5,7 +5,9 @@ class FeedItem extends Equatable {
   const FeedItem({
     required this.id,
     required this.title,
+    this.description = '',
     required this.categoryId,
+    this.rawCategory = '',
     required this.price,
     required this.priceUnit,
     required this.rating,
@@ -27,8 +29,14 @@ class FeedItem extends Equatable {
   /// ชื่ออุปกรณ์
   final String title;
 
+  /// รายละเอียดหรือคำอธิบายอุปกรณ์
+  final String description;
+
   /// หมวดหมู่อุปกรณ์
   final String categoryId;
+
+  /// ชื่อหมวดหมู่ดั้งเดิมในฐานข้อมูล (เช่น ภาษาไทย)
+  final String rawCategory;
 
   /// ราคาเช่า (บาท)
   final int price;
@@ -72,7 +80,9 @@ class FeedItem extends Equatable {
   FeedItem copyWith({
     String? id,
     String? title,
+    String? description,
     String? categoryId,
+    String? rawCategory,
     int? price,
     String? priceUnit,
     double? rating,
@@ -90,7 +100,9 @@ class FeedItem extends Equatable {
     return FeedItem(
       id: id ?? this.id,
       title: title ?? this.title,
+      description: description ?? this.description,
       categoryId: categoryId ?? this.categoryId,
+      rawCategory: rawCategory ?? this.rawCategory,
       price: price ?? this.price,
       priceUnit: priceUnit ?? this.priceUnit,
       rating: rating ?? this.rating,
@@ -111,7 +123,9 @@ class FeedItem extends Equatable {
   List<Object?> get props => [
     id,
     title,
+    description,
     categoryId,
+    rawCategory,
     price,
     priceUnit,
     rating,

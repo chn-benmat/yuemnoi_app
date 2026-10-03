@@ -12,24 +12,28 @@ import '../widgets/live_camera_capture_sheet.dart';
 import '../widgets/merchant_qr_dialog.dart';
 import '../widgets/rental_time_card.dart';
 import '../widgets/renter_qr_scanner_sheet.dart';
+import '../../domain/repositories/rental_return_repository.dart';
 import '../widgets/return_completed_dialog.dart';
-import '../widgets/role_switcher_bar.dart';
 import '../widgets/urgent_return_alarm_dialog.dart';
 
 class RentalReturnPage extends StatelessWidget {
   final int? rentalId;
+  final bool? isLender;
+  final RentalReturnRepository? repository;
 
   const RentalReturnPage({
     super.key,
     this.rentalId,
+    this.isLender,
+    this.repository,
   });
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => RentalReturnCubit(
-        repository: RentalReturnRepositoryImpl(),
-      )..loadSession(rentalId),
+        repository: repository ?? RentalReturnRepositoryImpl(),
+      )..loadSession(rentalId: rentalId, isLender: isLender),
       child: const _RentalReturnView(),
     );
   }
@@ -163,80 +167,14 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                 height: 1,
               ),
             ),
-            actions: [
-              PopupMenuButton<String>(
-                icon: const Icon(
-                  Icons.more_horiz_rounded,
-                  color: Color(0xFF64748B),
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                onSelected: (value) {
-                  final cubit = context.read<RentalReturnCubit>();
-                  if (value == 'alarm') {
-                    cubit.triggerUrgentAlarm();
-                  } else if (value == 'reset') {
-                    cubit.resetDemo();
-                  }
-                },
-                itemBuilder: (ctx) => [
-                  const PopupMenuItem(
-                    value: 'alarm',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.notifications_active_outlined,
-                          size: 18,
-                          color: Color(0xFFD97706),
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          'ทดสอบปลุกเตือนภัย',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 13,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'reset',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.refresh_rounded,
-                          size: 18,
-                          color: Color(0xFF64748B),
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          'รีเซ็ตสถานะ',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 13,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ),
           body: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 110),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // สวิตช์สลับบทบาทแบบมินิมอล
-                const RoleSwitcherBar(),
-
-                // ข้อมูลอุปกรณ์และกำหนดเวลาคืน (อ่านง่าย)
-                RentalTimeCard(session: session),
+              padding: const EdgeInsets.only(bottom: 110),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ข้อมูลอุปกรณ์และกำหนดเวลาคืน (อ่านง่าย)
+                  RentalTimeCard(session: session),
 
                 // มุมมองตามบทบาท
                 if (isRenter) ...[

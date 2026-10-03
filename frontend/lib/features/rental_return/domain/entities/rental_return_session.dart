@@ -132,6 +132,9 @@ class RentalReturnSession {
     this.completedAt,
   });
 
+  /// เลขที่คำสั่งซื้อ/เลขออเดอร์ (Order Number)
+  String get orderNumber => 'YM-${rentalId.toString().padLeft(5, '0')}';
+
   /// สรุปเวลาคงเหลือโดยประมาณ เช่น "ประมาณ 2 ชั่วโมง 15 นาที" หรือ "ประมาณ 1 วัน"
   String get remainingDurationText {
     if (step == RentalReturnStep.completed) return 'คืนของเรียบร้อยแล้ว';
@@ -262,7 +265,7 @@ class RentalReturnSession {
     final now = DateTime.now();
     // กำหนดให้คืนในอีก 2 ชั่วโมง 15 นาทีข้างหน้า เพื่อแสดงกรณี "เช่าได้ถึง 18:00 น."
     final scheduledReturn = now.add(const Duration(hours: 2, minutes: 15));
-    final randomChallenge = 'YM-${(7000 + (effectiveId * 17) % 2900)}';
+    final randomChallenge = 'YM-${effectiveId.toString().padLeft(5, '0')}';
 
     // แคตตาล็อกจำลองข้อมูลที่สมจริงสอดคล้องกับรายการสินค้าจริง
     final catalog = <int, Map<String, dynamic>>{

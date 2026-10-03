@@ -73,12 +73,41 @@ func writeItemError(c *gin.Context, err error) {
 	}
 }
 
-// [GET] /api/v1/items - ดึงข้อมูลอุปกรณ์เช่าทั้งหมด
+// [GET] /api/v1/items - ดึงข้อมูลอุปกรณ์เช่าทั้งหมด (รองรับ query params: search, category)
 func (h *ItemHandler) GetAllItems(c *gin.Context) {
 	items, err := h.repo.FindAll(c.Request.Context())
 	if err != nil {
 		writeItemError(c, err)
 		return
+	}
+
+	search := strings.TrimSpace(strings.ToLower(c.Query("search")))
+	category := strings.TrimSpace(strings.ToLower(c.Query("category")))
+
+	if search != "" || (category != "" && category != "all") {
+		filtered := make([]domain.RankedItem, 0, len(items))
+		for _, item := range items {
+			if category != "" && category != "all" {
+				itemCat := strings.ToLower(item.Category)
+				if !strings.Contains(itemCat, category) {
+					continue
+				}
+			}
+
+			if search != "" {
+				nameMatch := strings.Contains(strings.ToLower(item.ItemName), search)
+				descMatch := strings.Contains(strings.ToLower(item.Description), search)
+				catMatch := strings.Contains(strings.ToLower(item.Category), search)
+				ownerMatch := strings.Contains(strings.ToLower(item.OwnerName), search)
+
+				if !nameMatch && !descMatch && !catMatch && !ownerMatch {
+					continue
+				}
+			}
+
+			filtered = append(filtered, item)
+		}
+		items = filtered
 	}
 
 	c.JSON(http.StatusOK, items)
@@ -126,7 +155,7 @@ func (h *ItemHandler) CreateItem(c *gin.Context) {
 		Description:  strings.TrimSpace(req.Description),
 		Category:     strings.TrimSpace(req.Category),
 		Price:        req.Price,
-		Status:       "pending",
+		Status:       "available",
 		Type:         req.Type,
 	}, images)
 	if err != nil {

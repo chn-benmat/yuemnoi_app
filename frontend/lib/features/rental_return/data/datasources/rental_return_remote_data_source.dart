@@ -1,16 +1,21 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/network/supabase_client.dart';
 import '../../domain/entities/rental_return_session.dart';
 
 class RentalReturnRemoteDataSource {
   final SupabaseClient _client;
 
   RentalReturnRemoteDataSource({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+      : _client = client ??
+            (SupabaseConfig.isConfigured && SupabaseConfig.isInitialized
+                ? SupabaseConfig.client
+                : SupabaseClient('https://mock.supabase.co', 'mock-anon-key'));
 
   /// ดึงข้อมูลรายการเช่าจริงจาก Supabase (booking_tb หรือ item_tb + profile_tb)
   Future<RentalReturnSession> getSession([int? rentalId]) async {
@@ -99,19 +104,22 @@ class RentalReturnRemoteDataSource {
         String lenderName = 'ร้านค้าผู้ปล่อยเช่า';
         String lenderPhone = '081-999-8877';
 
-        // 3. ดึงชื่อผู้ให้เช่าจาก profile_tb
+        // 3. ดึงชื่อผู้ให้เช่าจาก public_profile_v
         if (lenderId.isNotEmpty) {
           final lenderProfile = await _client
-              .from('profile_tb')
-              .select('email, phone_number')
+              .from('public_profile_v')
+              .select('display_name, email, phone')
               .eq('user_id', lenderId)
               .maybeSingle();
           if (lenderProfile != null) {
-            final email = lenderProfile['email']?.toString();
-            if (email != null && email.isNotEmpty) {
+            final displayName = lenderProfile['display_name']?.toString().trim() ?? '';
+            final email = lenderProfile['email']?.toString() ?? '';
+            if (displayName.isNotEmpty) {
+              lenderName = displayName;
+            } else if (email.isNotEmpty) {
               lenderName = email.split('@').first;
             }
-            final phone = lenderProfile['phone_number']?.toString();
+            final phone = lenderProfile['phone']?.toString();
             if (phone != null && phone.isNotEmpty) {
               lenderPhone = phone;
             }
@@ -148,15 +156,51 @@ class RentalReturnRemoteDataSource {
         }
         final depositAmount = (itemPrice * 2.5).clamp(1000.0, 15000.0);
 
-        final randomChallenge = 'YM-${Random().nextInt(9000) + 1000}';
+        final effectiveOrderId = activeRentalId > 0 ? activeRentalId : 1024;
+        final orderChallenge = 'YM-${effectiveOrderId.toString().padLeft(5, '0')}';
         final category = itemData['category']?.toString() ?? 'ทั่วไป';
 
-        // ปรับมุมการตรวจสภาพให้สอดคล้องกับประเภทอุปกรณ์
-        final photos = _buildPhotosForCategory(category, randomChallenge);
+        // ตรวจสอบว่ามี return_photos ที่ลูกค้าเคยส่งไว้ใน booking_tb หรือไม่
+        List<ReturnInspectionPhoto> photos = [];
+        final rawPhotos = bookingResp?['return_photos'];
+        if (rawPhotos != null && rawPhotos.toString().isNotEmpty) {
+          try {
+            final decoded = rawPhotos is List ? rawPhotos : jsonDecode(rawPhotos.toString());
+            if (decoded is List) {
+              photos = decoded.map((item) {
+                final map = item is Map<String, dynamic> ? item : Map<String, dynamic>.from(item as Map);
+                return ReturnInspectionPhoto(
+                  angleKey: map['angleKey']?.toString() ?? 'angle_1',
+                  angleTitle: map['angleTitle']?.toString() ?? 'ภาพถ่ายสภาพเครื่อง',
+                  localPath: map['localPath']?.toString(),
+                  imageUrl: map['imageUrl']?.toString(),
+                  challengeCode: map['challengeCode']?.toString() ?? orderChallenge,
+                  timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? '') ?? DateTime.now(),
+                  locationText: map['locationText']?.toString(),
+                );
+              }).toList();
+            }
+          } catch (e) {
+            debugPrint('Failed to decode return_photos: $e');
+          }
+        }
+
+        // หากยังไม่มีภาพถ่ายส่งมา ให้สร้างมุมตามหมวดหมู่อุปกรณ์
+        if (photos.isEmpty) {
+          photos = _buildPhotosForCategory(category, orderChallenge);
+        }
+
+        final dbStatus = bookingResp?['status']?.toString().toLowerCase().trim();
+        RentalReturnStep initialStep = RentalReturnStep.inProgress;
+        if (dbStatus == 'คืนของสำเร็จ' || dbStatus == 'completed') {
+          initialStep = RentalReturnStep.completed;
+        } else if (photos.any((p) => p.hasPhoto) || dbStatus == 'รอส่งคืน' || dbStatus == 'awaiting_return') {
+          initialStep = RentalReturnStep.lenderInspecting;
+        }
 
         return RentalReturnSession(
-          rentalId: activeRentalId > 0 ? activeRentalId : 1024,
-          itemName: itemData['item_name']?.toString() ?? 'อุปกรณ์เช่า #${activeRentalId > 0 ? activeRentalId : 1024}',
+          rentalId: effectiveOrderId,
+          itemName: itemData['item_name']?.toString() ?? 'อุปกรณ์เช่า #${effectiveOrderId.toString().padLeft(5, '0')}',
           itemImageUrl: mainImageUrl,
           category: category,
           renterId: renterId,
@@ -169,13 +213,13 @@ class RentalReturnRemoteDataSource {
           pickupLocation: pickupLocation,
           totalPrice: totalPrice,
           depositAmount: depositAmount,
-          step: RentalReturnStep.inProgress,
-          dynamicChallengeCode: randomChallenge,
+          step: initialStep,
+          dynamicChallengeCode: orderChallenge,
           photos: photos,
           checklist: {
-            'power_on': false,
-            'no_new_cracks': false,
-            'accessories_complete': false,
+            'power_on': photos.any((p) => p.hasPhoto),
+            'no_new_cracks': photos.any((p) => p.hasPhoto),
+            'accessories_complete': photos.any((p) => p.hasPhoto),
           },
         );
       }
@@ -296,7 +340,7 @@ class RentalReturnRemoteDataSource {
       await _client.storage.from('item_bk').uploadBinary(
             path,
             bytes,
-            fileOptions: const FileOptions(cacheControl: '3600', upsert: true),
+            fileOptions: FileOptions(cacheControl: '3600', upsert: true),
           );
 
       return _client.storage.from('item_bk').getPublicUrl(path);
@@ -306,19 +350,52 @@ class RentalReturnRemoteDataSource {
     }
   }
 
-  /// อัปเดตสถานะการส่งตรวจสภาพใน booking_tb
+  /// อัปเดตสถานะการส่งตรวจสภาพใน booking_tb และบันทึกภาพถ่ายสภาพเครื่อง
   Future<void> submitVerification({
     required int rentalId,
     required List<ReturnInspectionPhoto> photos,
     required Map<String, bool> checklist,
   }) async {
     try {
+      final List<Map<String, dynamic>> photosData = [];
+      for (final p in photos) {
+        String? finalImageUrl = p.imageUrl;
+        if ((finalImageUrl == null || finalImageUrl.isEmpty) &&
+            p.localPath != null &&
+            p.localPath!.isNotEmpty) {
+          try {
+            finalImageUrl = await uploadPhoto(
+              rentalId: rentalId,
+              photoPath: p.localPath!,
+              angleKey: p.angleKey,
+            );
+          } catch (e) {
+            debugPrint('Failed to upload photo for ${p.angleKey}: $e');
+            finalImageUrl = p.localPath;
+          }
+        }
+        photosData.add({
+          'angleKey': p.angleKey,
+          'angleTitle': p.angleTitle,
+          'localPath': p.localPath,
+          'imageUrl': finalImageUrl,
+          'challengeCode': p.challengeCode,
+          'timestamp': p.timestamp.toUtc().toIso8601String(),
+          'locationText': p.locationText,
+        });
+      }
+
+      final photosJson = jsonEncode(photosData);
+      final challengeCode = photos.isNotEmpty ? photos.first.challengeCode : 'YM-${rentalId.toString().padLeft(5, '0')}';
+
       await _client.from('booking_tb').update({
         'status': 'รอส่งคืน',
+        'return_photos': photosJson,
+        'challenge_code': challengeCode,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', rentalId);
     } catch (e) {
-      debugPrint('Note updating booking status: $e');
+      debugPrint('Note updating booking status and return photos: $e');
     }
   }
 

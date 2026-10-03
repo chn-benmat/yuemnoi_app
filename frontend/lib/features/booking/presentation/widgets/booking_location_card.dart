@@ -68,6 +68,9 @@ class BookingLocationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final latLng = _resolvedLatLng;
     final resolvedAddress = locationAddress?.trim();
+    final displaySubtitle = (resolvedAddress != null && resolvedAddress.isNotEmpty)
+        ? resolvedAddress
+        : locationNote.trim();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,11 +148,10 @@ class BookingLocationCard extends StatelessWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              if (resolvedAddress != null &&
-                                  resolvedAddress.isNotEmpty) ...[
-                                const SizedBox(height: 6),
+                              if (displaySubtitle.isNotEmpty) ...[
+                                const SizedBox(height: 4),
                                 Text(
-                                  resolvedAddress,
+                                  displaySubtitle,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(

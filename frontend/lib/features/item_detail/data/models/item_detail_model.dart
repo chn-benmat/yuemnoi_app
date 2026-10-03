@@ -69,11 +69,15 @@ abstract final class ItemDetailModel {
   }
 
   static ItemOwner _owner(String userId, Map<String, dynamic>? profile) {
+    final displayName = _string(profile?['display_name']);
     final email = _string(profile?['email']);
     final emailName = email.contains('@') ? email.split('@').first : email;
+    final name = displayName.isNotEmpty
+        ? displayName
+        : (emailName.isNotEmpty ? emailName : 'ผู้ใช้งาน Yuemnoi');
     return ItemOwner(
       userId: userId,
-      displayName: emailName.isEmpty ? 'ผู้ใช้งาน Yuemnoi' : emailName,
+      displayName: name,
       imageUrl: _string(profile?['user_image_url']),
     );
   }

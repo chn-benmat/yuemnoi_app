@@ -62,16 +62,19 @@ class UserItemsRemoteDataSource {
       if (ownerIds.isNotEmpty) {
         try {
           final profiles = await client
-              .from('profile_tb')
-              .select('user_id, email')
+              .from('public_profile_v')
+              .select('user_id, display_name, email')
               .inFilter('user_id', ownerIds.toList());
 
           for (final p in (profiles as List)) {
             if (p is Map) {
               final uid = p['user_id']?.toString();
+              final displayName = p['display_name']?.toString()?.trim() ?? '';
               final email = p['email']?.toString() ?? '';
-              if (uid != null && email.isNotEmpty) {
-                ownerNames[uid] = email.split('@').first;
+              if (uid != null) {
+                ownerNames[uid] = displayName.isNotEmpty
+                    ? displayName
+                    : (email.isNotEmpty ? email.split('@').first : 'เจ้าของอุปกรณ์');
               }
             }
           }

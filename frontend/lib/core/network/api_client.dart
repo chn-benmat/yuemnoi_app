@@ -315,11 +315,17 @@ class DioApiClient implements ApiClient {
       configuredUrl = configuredUrl.substring(0, configuredUrl.length - 1);
     }
     if (configuredUrl.isEmpty) {
-      throw StateError('API_URL is not configured.');
+      configuredUrl = 'http://127.0.0.1:8080';
     }
 
-    if (kIsWeb && configuredUrl.contains('10.0.2.2')) {
-      configuredUrl = configuredUrl.replaceAll('10.0.2.2', 'localhost');
+    final isDesktopOrWeb = kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+
+    if (isDesktopOrWeb && configuredUrl.contains('10.0.2.2')) {
+      configuredUrl = configuredUrl.replaceAll('10.0.2.2', '127.0.0.1');
     }
 
     return configuredUrl;
