@@ -287,18 +287,22 @@ abstract final class AppRoutes {
           pageBuilder: (context, state) {
             final idStr = state.pathParameters['rentalId'];
             final rentalId = idStr != null ? int.tryParse(idStr) : null;
+            final isLender = state.extra as bool?;
             return MaterialPage<void>(
               key: state.pageKey,
-              child: RentalReturnPage(rentalId: rentalId),
+              child: RentalReturnPage(rentalId: rentalId, isLender: isLender),
             );
           },
         ),
         GoRoute(
           path: rentalReturnDemo,
-          pageBuilder: (context, state) => MaterialPage<void>(
-            key: state.pageKey,
-            child: const RentalReturnPage(),
-          ),
+          pageBuilder: (context, state) {
+            final isLender = state.extra as bool?;
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: RentalReturnPage(isLender: isLender),
+            );
+          },
         ),
         GoRoute(
           path: favorite,
@@ -559,18 +563,22 @@ abstract final class AppRoutes {
           path: rentalReturn,
           pageBuilder: (context, state) {
             final rentalId = int.tryParse(state.pathParameters['rentalId'] ?? '');
+            final isLender = state.extra as bool?;
             return MaterialPage<void>(
               key: state.pageKey,
-              child: RentalReturnPage(rentalId: rentalId),
+              child: RentalReturnPage(rentalId: rentalId, isLender: isLender),
             );
           },
         ),
         GoRoute(
           path: rentalReturnDemo,
-          pageBuilder: (context, state) => MaterialPage<void>(
-            key: state.pageKey,
-            child: const RentalReturnPage(),
-          ),
+          pageBuilder: (context, state) {
+            final isLender = state.extra as bool?;
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: RentalReturnPage(isLender: isLender),
+            );
+          },
         ),
         GoRoute(
           path: notification,
@@ -899,8 +907,10 @@ abstract final class AppRoutes {
   static Future<void> openRentalReturn(
     BuildContext context, {
     int? rentalId,
+    bool? isLender,
   }) {
     final route = rentalId != null ? '/rental/return/$rentalId' : rentalReturnDemo;
+    return context.push<void>(route, extra: isLender);
     try {
       return context.push<void>(route);
     } catch (_) {

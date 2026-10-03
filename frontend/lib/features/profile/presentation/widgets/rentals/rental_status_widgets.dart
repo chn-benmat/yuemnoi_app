@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../../core/constants/colors.dart';
@@ -368,46 +369,71 @@ class RentalStatusCard extends StatelessWidget {
     );
   }
 
+  bool _isItemRenting(RentalStatusItemData item) {
+    final code = item.statusCode.toLowerCase().trim();
+    return code == 'active' ||
+        code == 'in_use' ||
+        code == 'ongoing' ||
+        item.status.contains('กำลังเช่า') ||
+        item.status.contains('กำลังใช้งาน');
+  }
+
+  bool _isItemOverdue(RentalStatusItemData item) {
+    if (!_isItemRenting(item)) return false;
+    final now = DateTime.now();
+    DateTime? effectiveEnd = item.endDate;
+    if (effectiveEnd == null && item.startDate != null) {
+      effectiveEnd = item.startDate!.add(const Duration(days: 1));
+    }
+    return effectiveEnd != null && now.isAfter(effectiveEnd);
+  }
+
   Widget _buildStatusBadge(RentalStatusItemData item) {
     final status = item.statusCode.toLowerCase().trim();
+    final isOverdue = _isItemOverdue(item);
     Color bg;
     Color fg;
     BorderSide border;
+    String badgeText = item.status;
 
-    switch (status) {
-      case 'confirmed':
-        bg = const Color(0xFFEFF6FF);
-        fg = const Color(0xFF1D4ED8);
-        border = const BorderSide(color: Color(0xFFBFDBFE));
-        break;
-      case 'active':
-        final effectiveEnd = _computeEffectiveRentalEnd(item);
-        final isOverdue = DateTime.now().isAfter(effectiveEnd);
-        if (isOverdue) {
-          bg = const Color(0xFFFEF2F2);
-          fg = const Color(0xFFDC2626);
-          border = const BorderSide(color: Color(0xFFFECACA));
-        } else {
+    if (isOverdue) {
+      bg = const Color(0xFFFEF2F2);
+      fg = const Color(0xFFDC2626);
+      border = const BorderSide(color: Color(0xFFFECACA));
+      badgeText = 'เลยกำหนดคืน';
+    } else {
+      switch (status) {
+        case 'pending':
+          bg = const Color(0xFFFFFBEB);
+          fg = const Color(0xFFB45309);
+          border = const BorderSide(color: Color(0xFFFDE68A));
+          break;
+        case 'confirmed':
+          bg = const Color(0xFFEFF6FF);
+          fg = const Color(0xFF1D4ED8);
+          border = const BorderSide(color: Color(0xFFBFDBFE));
+          break;
+        case 'active':
           bg = const Color(0xFFF5F3FF);
           fg = AppColors.primaryColor;
           border = const BorderSide(color: Color(0xFFDDD6FE));
-        }
-        break;
-      case 'completed':
-      case 'finished':
-        bg = const Color(0xFFF0FDF4);
-        fg = const Color(0xFF15803D);
-        border = const BorderSide(color: Color(0xFFBBF7D0));
-        break;
-      case 'cancelled':
-        bg = const Color(0xFFFEF2F2);
-        fg = const Color(0xFFB91C1C);
-        border = const BorderSide(color: Color(0xFFFECACA));
-        break;
-      default:
-        bg = const Color(0xFFF8FAFC);
-        fg = const Color(0xFF475569);
-        border = const BorderSide(color: Color(0xFFE2E8F0));
+          break;
+        case 'completed':
+        case 'finished':
+          bg = const Color(0xFFF0FDF4);
+          fg = const Color(0xFF15803D);
+          border = const BorderSide(color: Color(0xFFBBF7D0));
+          break;
+        case 'cancelled':
+          bg = const Color(0xFFFEF2F2);
+          fg = const Color(0xFFB91C1C);
+          border = const BorderSide(color: Color(0xFFFECACA));
+          break;
+        default:
+          bg = const Color(0xFFF8FAFC);
+          fg = const Color(0xFF475569);
+          border = const BorderSide(color: Color(0xFFE2E8F0));
+      }
     }
 
     final effectiveEnd = _computeEffectiveRentalEnd(item);
@@ -419,9 +445,7 @@ class RentalStatusCard extends StatelessWidget {
         border: Border.fromBorderSide(border),
       ),
       child: Text(
-        (status == 'active' && DateTime.now().isAfter(effectiveEnd))
-            ? '⚠️ เลยกำหนดคืน'
-            : item.status,
+        badgeText,
         style: TextStyle(
           fontFamily: AppTextStyles.fontFamily,
           fontSize: 11,
@@ -430,6 +454,103 @@ class RentalStatusCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildRentalTimeStatusBox(RentalStatusItemData item) {
+    if (!_isItemRenting(item)) return const SizedBox.shrink();
+
+    final now = DateTime.now();
+    DateTime? effectiveEnd = item.endDate;
+    if (effectiveEnd == null && item.startDate != null) {
+      effectiveEnd = item.startDate!.add(const Duration(days: 1));
+    }
+
+    final isExpired = effectiveEnd != null && now.isAfter(effectiveEnd);
+
+    final bgColor = isExpired ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4);
+    final borderColor = isExpired ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0);
+    final accentColor = isExpired ? const Color(0xFFDC2626) : const Color(0xFF16A34A);
+
+    String statusText;
+    if (effectiveEnd == null) {
+      statusText = 'กำลังอยู่ในระหว่างการเช่าอุปกรณ์ตามกำหนด';
+    } else if (isExpired) {
+      final diff = now.difference(effectiveEnd);
+      final diffText = _formatDurationDiff(diff);
+      statusText = 'เลยกำหนดส่งคืนแล้ว $diffText (กรุณาส่งคืนด่วน)';
+    } else {
+      final diff = effectiveEnd.difference(now);
+      final diffText = _formatDurationDiff(diff);
+      final deadlineStr = _formatDeadlineTime(effectiveEnd);
+      statusText = 'ครบกำหนด: $deadlineStr (เหลือเวลาอีก $diffText)';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7.5),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor, width: 1),
+      ),
+      child: Row(
+        children: [
+          FaIcon(
+            isExpired
+                ? FontAwesomeIcons.triangleExclamation
+                : FontAwesomeIcons.clock,
+            size: 12.5,
+            color: accentColor,
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              statusText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontSize: 11.5,
+                fontWeight: isExpired ? FontWeight.w700 : FontWeight.w600,
+                color: accentColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDurationDiff(Duration diff) {
+    if (diff.inDays > 0) {
+      final hours = diff.inHours % 24;
+      return hours > 0 ? '${diff.inDays} วัน $hours ชม.' : '${diff.inDays} วัน';
+    } else if (diff.inHours > 0) {
+      final mins = diff.inMinutes % 60;
+      return mins > 0 ? '${diff.inHours} ชม. $mins นาที' : '${diff.inHours} ชม.';
+    } else {
+      final mins = diff.inMinutes;
+      return '${mins > 0 ? mins : 1} นาที';
+    }
+  }
+
+  String _formatDeadlineTime(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final timeStr = '${DateFormat('HH:mm').format(dt)} น.';
+    if (isToday) {
+      return 'วันนี้ $timeStr';
+    }
+    final tomorrow = now.add(const Duration(days: 1));
+    final isTomorrow = dt.year == tomorrow.year && dt.month == tomorrow.month && dt.day == tomorrow.day;
+    if (isTomorrow) {
+      return 'พรุ่งนี้ $timeStr';
+    }
+    try {
+      return '${DateFormat('d MMM', 'th').format(dt)} $timeStr';
+    } catch (_) {
+      return '${dt.day}/${dt.month} $timeStr';
+    }
   }
 
   @override
@@ -560,17 +681,8 @@ class RentalStatusCard extends StatelessWidget {
                   _buildStatusBadge(item),
                 ],
               ),
-
-              // ── วิดเจ็ตนับเวลาถอยหลังการส่งคืน / ติดตามเวลาเลท (เมื่อสถานะเป็น active) ──
-              if (item.statusCode.toLowerCase() == 'active') ...[
-                const SizedBox(height: 10),
-                RentalCountdownTimerWidget(
-                  endDateTime: _computeEffectiveRentalEnd(item),
-                  startDateTime: item.startDate,
-                  isCompact: false,
-                ),
-              ],
-
+              // Option 1: แถบกล่องเวลาภายในตัวการ์ด (Time Status Box)
+              _buildRentalTimeStatusBox(item),
               const SizedBox(height: 12),
               // ── Tracking route & action button ─────────────────────────────
               if (item.statusCode.toLowerCase() == 'active') ...[
@@ -820,6 +932,40 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+            ],
+            if ((item.statusCode.toLowerCase() == 'active' || item.status.contains('กำลังเช่า')) &&
+                item.endDate != null &&
+                DateTime.now().isAfter(item.endDate!)) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFECACA)),
+                ),
+                child: const Row(
+                  children: [
+                    FaIcon(
+                      FontAwesomeIcons.triangleExclamation,
+                      color: Color(0xFFDC2626),
+                      size: 15,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'เลยกำหนดส่งคืนอุปกรณ์แล้ว กรุณาดำเนินการส่งคืน',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
             ],
             // Rental Details Box
             Container(

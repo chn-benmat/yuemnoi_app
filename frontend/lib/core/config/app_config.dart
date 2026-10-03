@@ -16,23 +16,26 @@ abstract final class AppConfig {
 
   static String get apiUrl {
     if (_envApiUrl.isNotEmpty) return _envApiUrl;
-    return dotenv.env['API_URL']?.trim() ?? '';
+    if (dotenv.isInitialized) return dotenv.env['API_URL']?.trim() ?? '';
+    return '';
   }
 
   static String get supabaseUrl {
     if (_envSupabaseUrl.isNotEmpty) return _envSupabaseUrl;
-    return dotenv.env['SUPABASE_URL']?.trim() ?? '';
+    if (dotenv.isInitialized) return dotenv.env['SUPABASE_URL']?.trim() ?? '';
+    return '';
   }
 
   static String get supabasePublishableKey {
     if (_envSupabasePublishableKey.isNotEmpty) return _envSupabasePublishableKey;
-    return dotenv.env['SUPABASE_PUBLISHABLE_KEY']?.trim() ?? '';
+    if (dotenv.isInitialized) return dotenv.env['SUPABASE_PUBLISHABLE_KEY']?.trim() ?? '';
+    return '';
   }
 
   static String get appSecretKey {
     final key = _envAppSecretKey.isNotEmpty
         ? _envAppSecretKey
-        : (dotenv.env['APP_SECRET_KEY']?.trim() ?? '');
+        : (dotenv.isInitialized ? (dotenv.env['APP_SECRET_KEY']?.trim() ?? '') : '');
     if (kDebugMode && key.isEmpty) {
       debugPrint('[SECURITY WARNING] APP_SECRET_KEY is empty in frontend environment.');
     }
@@ -41,6 +44,7 @@ abstract final class AppConfig {
 
   static String get googleWebClientId {
     if (_envGoogleWebClientId.isNotEmpty) return _envGoogleWebClientId;
-    return dotenv.env['GOOGLE_WEB_CLIENT_ID']?.trim() ?? '';
+    if (dotenv.isInitialized) return dotenv.env['GOOGLE_WEB_CLIENT_ID']?.trim() ?? '';
+    return '';
   }
 }

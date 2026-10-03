@@ -85,8 +85,8 @@ func TestCreateItemAcceptsMultipartImages(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("expected status 201, got %d: %s", response.Code, response.Body.String())
 	}
-	if repository.item == nil || repository.item.Status != "pending" {
-		t.Fatalf("expected pending item, got %#v", repository.item)
+	if repository.item == nil || repository.item.Status != "available" {
+		t.Fatalf("expected available item, got %#v", repository.item)
 	}
 	if repository.item.Type != "รายวัน" {
 		t.Fatalf("expected daily rental type, got %q", repository.item.Type)
@@ -137,5 +137,54 @@ func TestGetAllItemsPreservesRankedOrderAndMetrics(t *testing.T) {
 	}
 	if _, exposed := payload[0]["rank_score"]; exposed {
 		t.Fatalf("rank_score must not be exposed: %#v", payload[0])
+	}
+}
+
+func TestGetAllItems_WithSearchFilter(t *testing.T) {
+	repository := &itemHandlerRepository{
+		rankedItems: []domain.RankedItem{
+			{
+				Item: domain.Item{
+					ID:          29,
+					ItemName:    "กล้อง Canon EOS R50",
+					Description: "กล้องมิเรอร์เลสถ่ายภาพและวิดีโอ 4K",
+					Category:    "กล้องและอุปกรณ์ถ่ายภาพ",
+				},
+			},
+			{
+				Item: domain.Item{
+					ID:          8,
+					ItemName:    "เต็นท์ Coleman Instant Cabin",
+					Description: "เต็นท์แคมป์ปิ้งกันฝนและลมแรง",
+					Category:    "แคมป์ปิงและกิจกรรมกลางแจ้ง",
+				},
+			},
+		},
+	}
+	handler := ports.NewItemHandler(repository, itemTokenVerifier{})
+	router := gin.New()
+	router.GET("/api/v1/items", handler.GetAllItems)
+
+	// ค้นหาด้วยชื่อภาษาไทย "กล้อง"
+	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/items?search=กล้อง", nil)
+	resp1 := httptest.NewRecorder()
+	router.ServeHTTP(resp1, req1)
+	if resp1.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp1.Code)
+	}
+	var res1 []map[string]any
+	_ = json.Unmarshal(resp1.Body.Bytes(), &res1)
+	if len(res1) != 1 || res1[0]["id"] != float64(29) {
+		t.Fatalf("expected only Canon camera, got %#v", res1)
+	}
+
+	// ค้นหาด้วยคำอธิบาย "กันฝน"
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/items?search=กันฝน", nil)
+	resp2 := httptest.NewRecorder()
+	router.ServeHTTP(resp2, req2)
+	var res2 []map[string]any
+	_ = json.Unmarshal(resp2.Body.Bytes(), &res2)
+	if len(res2) != 1 || res2[0]["id"] != float64(8) {
+		t.Fatalf("expected only Coleman tent, got %#v", res2)
 	}
 }

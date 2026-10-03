@@ -284,8 +284,10 @@ class ItemInquiryBubbleCard extends StatelessWidget {
               ),
             ],
 
-            // 5. ปุ่มส่งคำขอเช่าอุปกรณ์นี้ (แสดงเฉพาะผู้ปล่อยเช่า)
-            if (isOwner == true && onSendBookingRequest != null) ...[
+            // 5. ปุ่มแอ็กชันบนการ์ดสินค้า
+            // - ถ้าเป็นผู้ปล่อยเช่า (isOwner == true): แสดง "สร้างข้อเสนอการเช่า / นัดรับ"
+            // - ถ้าเป็นผู้เช่า (isOwner != true): แสดง "ส่งคำขอเช่าอุปกรณ์นี้"
+            if (onSendBookingRequest != null) ...[
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -302,10 +304,17 @@ class ItemInquiryBubbleCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
                   onPressed: () => onSendBookingRequest!(inquiryData),
-                  icon: const Icon(Icons.receipt_long_rounded, size: 15),
-                  label: const Text(
-                    'ส่งคำขอเช่าอุปกรณ์นี้',
-                    style: TextStyle(
+                  icon: Icon(
+                    isOwner == true
+                        ? Icons.receipt_long_rounded
+                        : Icons.calendar_month_outlined,
+                    size: 15,
+                  ),
+                  label: Text(
+                    isOwner == true
+                        ? 'สร้างข้อเสนอการเช่า / นัดรับ'
+                        : 'ส่งคำขอเช่าอุปกรณ์นี้',
+                    style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,

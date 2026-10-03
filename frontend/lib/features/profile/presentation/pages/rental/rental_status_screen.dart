@@ -403,7 +403,11 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => AppRoutes.openRentalReturn(context, rentalId: item.rentalId),
+      onTap: () => AppRoutes.openRentalReturn(
+        context,
+        rentalId: item.rentalId,
+        isLender: item.isLender,
+      ),
       borderRadius: BorderRadius.circular(20),
       child: Container(
         decoration: BoxDecoration(
@@ -590,8 +594,11 @@ class _StatusCard extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () =>
-                      AppRoutes.openRentalReturn(context, rentalId: item.rentalId),
+                  onPressed: () => AppRoutes.openRentalReturn(
+                    context,
+                    rentalId: item.rentalId,
+                    isLender: item.isLender,
+                  ),
                   icon: Icon(
                     item.isLender
                         ? Icons.qr_code_2_rounded

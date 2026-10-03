@@ -70,8 +70,8 @@ class ItemDetailRemoteDataSource {
       final profilesByUserId = <String, Map<String, dynamic>>{};
       if (userIds.isNotEmpty) {
         final rawProfiles = await _client
-            .from('profile_tb')
-            .select('user_id,user_image_url,email')
+            .from('public_profile_v')
+            .select('user_id,user_image_url,display_name,email')
             .inFilter('user_id', userIds.toList(growable: false));
         for (final profile in rawProfiles.cast<Map<String, dynamic>>()) {
           final userId = profile['user_id'];

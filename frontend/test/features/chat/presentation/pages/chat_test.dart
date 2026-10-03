@@ -1520,12 +1520,12 @@ void main() {
         bloc.add(ChatMessagesUpdated([inquiryMsg]));
         await tester.pumpAndSettle();
 
-        // Owner should see the rental request button on the inquiry card
+        // Owner should see the rental offer button on the inquiry card
         expect(
           find.byKey(const ValueKey('inquiry-send-request-2')),
           findsOneWidget,
         );
-        expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsOneWidget);
+        expect(find.text('สร้างข้อเสนอการเช่า / นัดรับ'), findsOneWidget);
       },
     );
 
@@ -1689,7 +1689,201 @@ void main() {
           find.byKey(const ValueKey('inquiry-send-request-25')),
           findsOneWidget,
         );
-        expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsWidgets);
+        expect(find.text('สร้างข้อเสนอการเช่า / นัดรับ'), findsWidgets);
+      },
+    );
+
+    testWidgets(
+      'Renter sees "ส่งคำขอเช่าอุปกรณ์นี้" on the item inquiry card',
+      (tester) async {
+        final bloc = ChatDetailBloc(
+          streamMessages: mockStreamMessages,
+          sendMessage: mockSendMessage,
+          conversationId: sampleConversation1.id,
+        );
+
+        const inquiry = ItemInquiryData(
+          itemId: 1,
+          itemName: 'Sony Alpha A7 IV',
+          price: 1200,
+          unitLabel: 'วัน',
+        );
+        final inquiryMsg = ChatMessage(
+          id: 'msg-inq-renter-1',
+          conversationId: sampleConversation1.id,
+          senderId: 'my-renter-id',
+          message: inquiry.toChatMessagePayload(),
+          createdAt: DateTime.now(),
+          isMine: true,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatDetailScreen(
+              conversation: sampleConversation1,
+              chatDetailBloc: bloc,
+            ),
+          ),
+        );
+
+        bloc.add(ChatMessagesUpdated([inquiryMsg]));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('inquiry-send-request-1')),
+          findsOneWidget,
+        );
+        expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Owner sees "ตรวจสอบและยอมรับคำขอเช่า" when receiver of booking request, and sender sees "แก้ไขรายละเอียด"',
+      (tester) async {
+        final bloc = ChatDetailBloc(
+          streamMessages: mockStreamMessages,
+          sendMessage: mockSendMessage,
+          conversationId: sampleConversation2.id,
+        );
+
+        final bookingData = BookingRequestData(
+          item: const BookingItemInfo(
+            id: 2,
+            title: 'เต็นท์ Coleman 4 คน',
+            imageUrl: '',
+            rating: 5.0,
+            reviewCount: 2,
+            hourlyRate: 100,
+            dailyRate: 500,
+            defaultLocation: 'กรุงเทพ',
+            ownerName: 'ฉัน',
+          ),
+          startDate: DateTime(2026, 9, 2),
+          endDate: DateTime(2026, 9, 3),
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 17, minute: 0),
+          location: 'กรุงเทพ',
+          conversationId: sampleConversation2.id,
+        );
+
+        // ข้อความคำขอเช่าที่ผู้เช่าส่งมาให้ Owner (isMine: false)
+        final receivedBookingMsg = ChatMessage(
+          id: 'msg-book-received',
+          conversationId: sampleConversation2.id,
+          senderId: 'user-renter-1',
+          message: bookingData.toChatMessagePayload(),
+          createdAt: DateTime.now(),
+          isMine: false,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatDetailScreen(
+              conversation: sampleConversation2,
+              chatDetailBloc: bloc,
+            ),
+          ),
+        );
+
+        bloc.add(ChatMessagesUpdated([receivedBookingMsg]));
+        await tester.pumpAndSettle();
+
+        // ฝั่ง Owner ที่ได้รับคำขอ ต้องเห็นปุ่มตรวจสอบและยอมรับคำขอเช่า
+        expect(find.text('ตรวจสอบและยอมรับคำขอเช่า'), findsOneWidget);
+
+        // ทดสอบเมื่อ Owner เป็นคนส่งข้อเสนอเอง (isMine: true) -> ต้องเห็นปุ่มแก้ไขรายละเอียด
+        final sentBookingMsg = ChatMessage(
+          id: 'msg-book-sent',
+          conversationId: sampleConversation2.id,
+          senderId: 'my-owner-id',
+          message: bookingData.toChatMessagePayload(),
+          createdAt: DateTime.now(),
+          isMine: true,
+        );
+
+        bloc.add(ChatMessagesUpdated([sentBookingMsg]));
+        await tester.pumpAndSettle();
+
+        expect(find.text('แก้ไขรายละเอียด'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Displays active rental banner, countdown timer, status button, and return button after handover completed message arrives',
+      (tester) async {
+        final bloc = ChatDetailBloc(
+          streamMessages: mockStreamMessages,
+          sendMessage: mockSendMessage,
+          conversationId: sampleConversation1.id,
+        );
+
+        final now = DateTime.now();
+        final bookingData = BookingRequestData(
+          item: const BookingItemInfo(
+            id: 99,
+            title: 'ฟิกเกอร์ โกะโจ x เกะโท',
+            imageUrl: '',
+            rating: 5.0,
+            reviewCount: 1,
+            hourlyRate: 100,
+            dailyRate: 200,
+            defaultLocation: 'นัดรับตามตกลง',
+            ownerName: 'eiei',
+          ),
+          rentalType: BookingRentalType.daily,
+          startDate: DateTime(now.year, now.month, now.day),
+          endDate:
+              DateTime(now.year, now.month, now.day).add(const Duration(days: 1)),
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 17, minute: 0),
+          location: 'นัดรับตามตกลง',
+          locationNote: '',
+          paymentMethod: 'cash',
+        );
+
+        final bookingMsg = ChatMessage(
+          id: 'msg-book-1',
+          conversationId: sampleConversation1.id,
+          senderId: sampleConversation1.otherUserId,
+          message: bookingData.toChatMessagePayload(),
+          createdAt: now.subtract(const Duration(minutes: 5)),
+          isMine: false,
+        );
+
+        final handoverMsg = ChatMessage(
+          id: 'msg-handover-1',
+          conversationId: sampleConversation1.id,
+          senderId: 'my-user-id',
+          message: '✅ ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว เริ่มต้นช่วงเวลาเช่า',
+          createdAt: now,
+          isMine: true,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatDetailScreen(
+              conversation: sampleConversation1,
+              chatDetailBloc: bloc,
+            ),
+          ),
+        );
+
+        bloc.add(ChatMessagesUpdated([bookingMsg, handoverMsg]));
+        await tester.pumpAndSettle();
+
+        // 1. Pinned active rental banner should appear at top
+        expect(
+            find.byKey(const ValueKey('chat-active-rental-banner')), findsOneWidget);
+        expect(
+            find.byKey(const ValueKey('chat-banner-status-button')), findsOneWidget);
+        expect(
+            find.byKey(const ValueKey('chat-banner-return-button')), findsOneWidget);
+
+        // 2. Bubble card should update to active rental
+        expect(
+            find.byKey(const ValueKey('chat-booking-return-button')), findsOneWidget);
+        expect(find.byKey(const ValueKey('chat-booking-rental-status-button')),
+            findsOneWidget);
       },
     );
   });

@@ -139,17 +139,16 @@ abstract final class ChatConversationModel {
   static String formatTimeLabel(DateTime? time) {
     if (time == null) return 'ตอนนี้';
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final targetDay = DateTime(time.year, time.month, time.day);
+    final diffDays = today.difference(targetDay).inDays;
 
     // ถ้าเป็นข้อความของวันนี้ แสดงเป็นเวลาว่าส่งตอนกี่โมง (เช่น 14:30)
-    if (now.year == time.year &&
-        now.month == time.month &&
-        now.day == time.day) {
+    if (diffDays == 0) {
       final minuteStr = time.minute.toString().padLeft(2, '0');
       final hourStr = time.hour.toString().padLeft(2, '0');
       return '$hourStr:$minuteStr';
-    } else if (now.year == time.year &&
-        now.month == time.month &&
-        now.day - time.day == 1) {
+    } else if (diffDays == 1) {
       return 'เมื่อวาน';
     } else if (now.year == time.year) {
       try {

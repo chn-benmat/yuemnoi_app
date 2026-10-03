@@ -7,11 +7,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/item_review_service.dart';
 import '../../../../core/services/phone_call_service.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/active_conversation_tracker.dart';
 import '../../../../core/services/app_permission_service.dart';
+import '../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../core/services/chat_notification_service.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../data/datasources/chat_remote_data_source.dart';
@@ -28,6 +30,7 @@ import '../../domain/usecases/upload_chat_image_usecase.dart';
 import '../bloc/chat_detail_bloc.dart';
 import '../bloc/chat_detail_event.dart';
 import '../bloc/chat_detail_state.dart';
+import '../widgets/active_rental_header_banner.dart';
 import '../widgets/chat_detail_header.dart';
 import '../widgets/chat_empty_view.dart';
 import '../widgets/chat_message_bubble.dart';
@@ -572,15 +575,6 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       _conversation.role == ChatParticipantRole.renter;
 
   Future<void> _openBookingRequest([ItemInquiryData? activeInquiry]) async {
-    if (!_isCurrentUserOwner) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('เฉพาะผู้ปล่อยเช่าเท่านั้นที่สามารถส่งคำขอการเช่าได้'),
-        ),
-      );
-      return;
-    }
-
     final latestInquiry = activeInquiry ??
         _getLatestItemInquiry(
           context.read<ChatDetailBloc>().state.messages,
@@ -647,6 +641,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
+    final ownerDisplayName = _isCurrentUserOwner
+        ? 'ฉัน'
+        : _conversation.name;
+
     final itemInfo = BookingItemInfo(
       id: itemId,
       title: title,
@@ -660,8 +658,16 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
           ? price
           : (price * 8).roundToDouble(),
       defaultLocation: 'นัดรับตามตกลง',
-      ownerName: _conversation.name,
+      ownerName: ownerDisplayName,
     );
+
+    final currentUserId = SupabaseConfig.isConfigured && SupabaseConfig.isInitialized
+        ? SupabaseConfig.client.auth.currentUser?.id
+        : null;
+
+    final resolvedOwnerId = _isCurrentUserOwner
+        ? (currentUserId ?? _conversation.otherUserId)
+        : _conversation.otherUserId;
 
     final bookingData = BookingRequestData(
       item: itemInfo,
@@ -673,9 +679,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       startTime: const TimeOfDay(hour: 9, minute: 0),
       endTime: const TimeOfDay(hour: 17, minute: 0),
       location: 'นัดรับตามตกลง',
-      locationNote: 'เลือกโดยผู้ปล่อยเช่า',
+      locationNote: _isCurrentUserOwner
+          ? 'เลือกโดยผู้ปล่อยเช่า'
+          : 'เลือกโดยผู้เช่า',
       conversationId: _conversation.id,
-      ownerId: _conversation.otherUserId,
+      ownerId: resolvedOwnerId,
     );
 
     AppRoutes.openBooking(context, initialData: bookingData);
@@ -709,6 +717,54 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
             conversation: _conversation,
             onPhoneCallPressed: _startPhoneCall,
             isPhoneCallLoading: _isStartingPhoneCall,
+          ),
+          BlocBuilder<ChatDetailBloc, ChatDetailState>(
+            buildWhen: (prev, curr) =>
+                prev.messages.length != curr.messages.length ||
+                prev.status != curr.status,
+            builder: (context, state) {
+              final hasHandover = state.messages.any((m) =>
+                  m.message.contains('ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว') ||
+                  m.message.contains('เริ่มต้นช่วงเวลาเช่า') ||
+                  m.message.contains('ส่งมอบอุปกรณ์สำเร็จ'));
+              final hasReturn = state.messages.any((m) =>
+                  m.message.contains('ส่งคืนอุปกรณ์เรียบร้อย') ||
+                  m.message.contains('ตรวจรับคืนอุปกรณ์เรียบร้อย') ||
+                  m.message.contains('คืนของสำเร็จ'));
+
+              if (!hasHandover || hasReturn) {
+                return const SizedBox.shrink();
+              }
+
+              BookingRequestData? activeBooking;
+              ChatMessage? activeMessage;
+              int? activeBookingId;
+              for (final m in state.messages) {
+                final data = BookingRequestData.fromChatMessage(
+                  m.message,
+                  imageUrl: m.imageUrl,
+                  messageId: m.id,
+                );
+                if (data != null) {
+                  activeBooking = data;
+                  activeMessage = m;
+                  activeBookingId = BookingConfirmationTracker.getCachedBookingId(m.id);
+                  break;
+                }
+              }
+
+              if (activeBooking == null) return const SizedBox.shrink();
+
+              return ActiveRentalHeaderBanner(
+                bookingData: activeBooking,
+                bookingMessage: activeMessage,
+                bookingId: activeBookingId,
+                isOwner: _conversation.role == ChatParticipantRole.renter,
+                onTap: activeMessage != null
+                    ? () => _scrollToMessage(activeMessage!.id)
+                    : null,
+              );
+            },
           ),
           Expanded(
             child: Stack(
@@ -836,6 +892,14 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                 ),
                                 isOwner: _conversation.role ==
                                     ChatParticipantRole.renter,
+                                isHandoverCompleted: state.messages.any((m) =>
+                                    m.message.contains('ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว') ||
+                                    m.message.contains('เริ่มต้นช่วงเวลาเช่า') ||
+                                    m.message.contains('ส่งมอบอุปกรณ์สำเร็จ')),
+                                isReturnCompleted: state.messages.any((m) =>
+                                    m.message.contains('ส่งคืนอุปกรณ์เรียบร้อย') ||
+                                    m.message.contains('ตรวจรับคืนอุปกรณ์เรียบร้อย') ||
+                                    m.message.contains('คืนของสำเร็จ')),
                                 onSendBookingRequest: _openBookingRequest,
                                 onRetry: () {
                                   context.read<ChatDetailBloc>().add(

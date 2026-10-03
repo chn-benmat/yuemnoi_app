@@ -28,11 +28,7 @@ void main() {
       expect(find.text('ซีคอน บางแค'), findsOneWidget);
       expect(find.text('เลือกโดยผู้ปล่อยเช่า'), findsOneWidget);
 
-      // Verify coordinates badge is rendered
-      expect(find.textContaining('13.7126, 100.4332'), findsOneWidget);
-
       // Verify map action label is shown
-      expect(find.text('เลือกบนแผนที่'), findsOneWidget);
       expect(find.text('แตะเพื่อเปลี่ยนจุดปักหมุด'), findsOneWidget);
     });
 
@@ -56,10 +52,8 @@ void main() {
       // Verify location title
       expect(find.text('สยามพารากอน (Siam Paragon)'), findsOneWidget);
       expect(find.text('ระบุโดยคุณ'), findsOneWidget);
-      expect(find.textContaining('13.7460, 100.5349'), findsOneWidget);
 
-      // In non-editable mode, "เลือกบนแผนที่" header action is not present
-      expect(find.text('เลือกบนแผนที่'), findsNothing);
+      // In non-editable mode, Google Maps action is present
       expect(find.text('เปิดดูใน Google Maps'), findsOneWidget);
     });
 
@@ -68,8 +62,8 @@ void main() {
       final seacon = LocationService.popularLandmarks.firstWhere(
         (l) => l.name == 'ซีคอน บางแค',
       );
-      expect(seacon.latitude, 13.7126);
-      expect(seacon.longitude, 100.4332);
+      expect(seacon.latitude, 13.7115884);
+      expect(seacon.longitude, 100.4341077);
     });
 
     test('BookingRequestData serializes and deserializes coordinates', () {

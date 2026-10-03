@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/booking/presentation/widgets/booking_time_range_picker.dart';
@@ -47,9 +47,9 @@ void main() {
         expect(find.text('วันนัดรับของ'), findsOneWidget);
         expect(find.text('10/09/2026'), findsOneWidget);
 
-        // Verify that 'เริ่มเช่า' and 'สิ้นสุดการเช่า' labels are rendered
-        expect(find.text('เริ่มเช่า'), findsOneWidget);
-        expect(find.text('สิ้นสุดการเช่า'), findsOneWidget);
+        // Verify that 'เวลาเริ่มเช่า' and 'เวลาคืนของ' labels are rendered
+        expect(find.text('เวลาเริ่มเช่า'), findsOneWidget);
+        expect(find.text('เวลาคืนของ'), findsOneWidget);
 
         // Verify times
         expect(find.text('09:00 น.'), findsOneWidget);
@@ -88,9 +88,9 @@ void main() {
         // 'วันนัดรับของ' should not be shown in daily mode
         expect(find.text('วันนัดรับของ'), findsNothing);
 
-        // 'เริ่มเช่า' and 'สิ้นสุดการเช่า' should be shown
-        expect(find.text('เริ่มเช่า'), findsOneWidget);
-        expect(find.text('สิ้นสุดการเช่า'), findsOneWidget);
+        // 'วันที่เริ่มเช่า' and 'วันที่คืนของ' should be shown
+        expect(find.text('วันที่เริ่มเช่า'), findsOneWidget);
+        expect(find.text('วันที่คืนของ'), findsOneWidget);
 
         // Start and end dates in pills
         expect(find.text('10/09/2026'), findsOneWidget);
