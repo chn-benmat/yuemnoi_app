@@ -10,54 +10,61 @@ class HomeSearchBar extends StatelessWidget {
     required this.onChanged,
     this.onClear,
     this.onFilterTap,
+    this.readOnly = false,
+    this.onTap,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final VoidCallback? onClear;
   final VoidCallback? onFilterTap;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 48,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: TextField(
         key: const ValueKey('home-search-field'),
         controller: controller,
+        readOnly: readOnly,
+        onTap: onTap,
         onChanged: onChanged,
         style: const TextStyle(
-          fontSize: 15,
-          color: Color(0xFF2D3133),
+          fontSize: 14.5,
+          color: Color(0xFF0F172A),
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
           hintText: 'ค้นหาอุปกรณ์ที่ต้องการเช่า...',
           hintStyle: const TextStyle(
-            color: Color(0xFF9EA2A7),
-            fontSize: 14,
-            fontWeight: FontWeight.normal,
+            color: Color(0xFF94A3B8),
+            fontSize: 13.5,
+            fontWeight: FontWeight.w400,
           ),
           prefixIcon: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 14),
+            padding: EdgeInsets.symmetric(horizontal: 12),
             child: Icon(
               Icons.search_rounded,
-              color: Color(0xFF757778),
-              size: 22,
+              color: Color(0xFF64748B),
+              size: 20,
             ),
           ),
           prefixIconConstraints: const BoxConstraints(
-            minWidth: 44,
-            minHeight: 44,
+            minWidth: 42,
+            minHeight: 48,
           ),
           suffixIcon: ValueListenableBuilder<TextEditingValue>(
             valueListenable: controller,
@@ -73,7 +80,7 @@ class HomeSearchBar extends StatelessWidget {
                   icon: const Icon(
                     Icons.close_rounded,
                     color: Color(0xFF8C9093),
-                    size: 20,
+                    size: 18,
                   ),
                 );
               }
@@ -84,7 +91,7 @@ class HomeSearchBar extends StatelessWidget {
                   icon: const Icon(
                     Icons.tune_rounded,
                     color: AppColors.primaryColor,
-                    size: 20,
+                    size: 18,
                   ),
                 );
               }
@@ -95,22 +102,22 @@ class HomeSearchBar extends StatelessWidget {
           fillColor: Colors.white,
           isDense: true,
           contentPadding: const EdgeInsets.symmetric(
-            vertical: 14,
-            horizontal: 16,
+            vertical: 13,
+            horizontal: 14,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: const BorderSide(color: Color(0xFFF0F1F3), width: 1),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: const BorderSide(color: Color(0xFFECEEF1), width: 1),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(16),
             borderSide: const BorderSide(
               color: AppColors.primaryColor,
-              width: 1.5,
+              width: 1.2,
             ),
           ),
         ),

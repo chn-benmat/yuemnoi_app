@@ -27,9 +27,15 @@ class RentalManagementRemoteDataSource {
       final List<Map<String, dynamic>> rawBookings =
           List<Map<String, dynamic>>.from(rentingResp as List);
 
-      if (rawBookings.isEmpty) return [];
+      // กรองสถานะ pending และ reject ออกจากหน้ารายการสถานะ
+      final validBookings = rawBookings.where((b) {
+        final s = (b['status']?.toString() ?? '').toLowerCase().trim();
+        return s != 'pending' && s != 'rejected' && s != 'reject';
+      }).toList();
 
-      final itemIds = rawBookings
+      if (validBookings.isEmpty) return [];
+
+      final itemIds = validBookings
           .map((b) => (b['item_id'] as num?)?.toInt())
           .whereType<int>()
           .toSet()
@@ -47,7 +53,7 @@ class RentalManagementRemoteDataSource {
       final (userNames, userPhones) = await _fetchProfilesMap(partnerUserIds);
 
       final List<RentalBookingModel> result = [];
-      for (final b in rawBookings) {
+      for (final b in validBookings) {
         final itemId = (b['item_id'] as num?)?.toInt();
         final itemData = itemId != null ? itemsMap[itemId] : null;
         final ownerId = itemData?['user_id']?.toString() ?? '';
@@ -96,9 +102,15 @@ class RentalManagementRemoteDataSource {
       final List<Map<String, dynamic>> rawBookings =
           List<Map<String, dynamic>>.from(lendingResp as List);
 
-      if (rawBookings.isEmpty) return [];
+      // กรองสถานะ pending และ reject ออกจากหน้ารายการสถานะ
+      final validBookings = rawBookings.where((b) {
+        final s = (b['status']?.toString() ?? '').toLowerCase().trim();
+        return s != 'pending' && s != 'rejected' && s != 'reject';
+      }).toList();
 
-      final itemIds = rawBookings
+      if (validBookings.isEmpty) return [];
+
+      final itemIds = validBookings
           .map((b) => (b['item_id'] as num?)?.toInt())
           .whereType<int>()
           .toSet()
@@ -106,7 +118,7 @@ class RentalManagementRemoteDataSource {
 
       final itemsMap = await _fetchItemsMap(itemIds);
       final partnerUserIds = <String>{};
-      for (final b in rawBookings) {
+      for (final b in validBookings) {
         final renterId = b['user_id']?.toString();
         if (renterId != null && renterId.isNotEmpty) {
           partnerUserIds.add(renterId);
@@ -116,7 +128,7 @@ class RentalManagementRemoteDataSource {
       final (userNames, userPhones) = await _fetchProfilesMap(partnerUserIds);
 
       final List<RentalBookingModel> result = [];
-      for (final b in rawBookings) {
+      for (final b in validBookings) {
         final itemId = (b['item_id'] as num?)?.toInt();
         final itemData = itemId != null ? itemsMap[itemId] : null;
         final renterId = b['user_id']?.toString() ?? '';

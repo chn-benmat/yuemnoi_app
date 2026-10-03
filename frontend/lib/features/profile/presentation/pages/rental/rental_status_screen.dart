@@ -51,6 +51,10 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
           if (bookingsResp.isNotEmpty) {
             final List<_StatusItemData> loaded = [];
             for (final b in bookingsResp) {
+              final statusLower = (b['status']?.toString() ?? '').toLowerCase().trim();
+              if (statusLower == 'pending' || statusLower == 'rejected' || statusLower == 'reject') {
+                continue;
+              }
               final rentalId = (b['id'] as num?)?.toInt() ?? 0;
               final itemId = (b['item_id'] as num?)?.toInt() ?? 0;
 

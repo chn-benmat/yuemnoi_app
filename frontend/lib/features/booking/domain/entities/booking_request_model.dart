@@ -397,6 +397,17 @@ $metaStartTag$jsonString$metaEndTag''';
     }
   }
 
+  /// วันที่และช่วงเวลาแบบละเอียด (ระบุ วัน เดือน ปี และเวลาที่จะเช่า)
+  String get formattedDetailedRentalPeriod {
+    final startStr = '$formattedStartDate เวลา $formattedStartTime';
+    if (rentalType == BookingRentalType.daily) {
+      final endStr = '$formattedEndDate เวลา $formattedEndTime';
+      return '$startStr - $endStr ($duration วัน)';
+    } else {
+      return '$formattedStartDate เวลา $formattedStartTime - $formattedEndTime ($duration ชม.)';
+    }
+  }
+
   /// เวลาเริ่มต้นฟอร์แมต HH:mm น.
   String formatTime(TimeOfDay time) {
     final hour = time.hour.toString().padLeft(2, '0');

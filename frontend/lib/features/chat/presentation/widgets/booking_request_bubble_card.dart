@@ -9,6 +9,7 @@ import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../core/services/location_service.dart';
+import '../../../../core/services/rental_notification_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../../item_detail/presentation/widgets/full_screen_image_viewer.dart';
@@ -23,6 +24,7 @@ class BookingRequestBubbleCard extends StatefulWidget {
     this.isOwner,
     this.isHandoverCompleted = false,
     this.isReturnCompleted = false,
+    this.initialStatus,
     this.onTap,
   });
 
@@ -32,6 +34,7 @@ class BookingRequestBubbleCard extends StatefulWidget {
   final bool? isOwner;
   final bool isHandoverCompleted;
   final bool isReturnCompleted;
+  final String? initialStatus;
   final VoidCallback? onTap;
 
   @override
@@ -46,15 +49,33 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   DateTime? _endDateTime;
   Timer? _countdownTimer;
 
-  @override
-  void initState() {
-    super.initState();
-    _checkConfirmedStatus();
+    final initialEnd = _endDateTime ?? widget.bookingData.endDateTime;
+    final now = DateTime.now();
+
+    // 1. ถ้ามีเวลาเริ่มส่งมอบจริง (Handover Started) ให้เริ่มนับเวลาเช่าจากช่วงเวลาที่ส่งมอบจริง
+    if (handoverStart != null) {
+      return handoverStart.add(agreedDuration);
+    }
+
+    // 2. ถ้าสถานะเป็น active แต่เวลาสิ้นสุดเดิมอยู่ในอดีตแล้ว (เช่น จองไว้วันก่อนหน้า แล้วเพิ่งใส่ PIN/QR เริ่มยืมวันนี้)
+    // ป้องกันการนับเวลาว่าเลทล่วงหน้า 90 ชั่วโมง
+    if (_isRentalActive && initialEnd.isBefore(now)) {
+      return now.add(agreedDuration);
+    }
+
+    return initialEnd;
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
+  void initState() {
+    super.initState();
+    if (widget.initialStatus != null) {
+      _bookingStatus = widget.initialStatus;
+      if (widget.initialStatus == 'active' ||
+          widget.initialStatus == 'confirmed') {
+        _isConfirmed = true;
+      }
+    }
     _checkConfirmedStatus();
   }
 
@@ -491,8 +512,10 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w500,
+                      color: _isRentalActive
+                          ? AppColors.primaryColor
+                          : const Color(0xFF64748B),
                       height: 1.3,
                     ),
                   ),
@@ -502,13 +525,56 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
 
             const SizedBox(height: 10),
 
-            // 3. กล่องข้อมูลการเช่าแบบ Swiss Table (Anti-AI Slop: ไม่มีไอคอนรกทุกแถว)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+            // 3. กล่องข้อมูลการเช่าแบบ Swiss Table (แสดงเฉพาะก่อนเริ่มการเช่า)
+            if (!_isRentalActive) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  children: [
+                    _buildMiniInfoRow(
+                      label: 'เวลาเช่า',
+                      value: widget.bookingData.formattedDetailedRentalPeriod,
+                    ),
+                    const SizedBox(height: 7),
+                    _buildMiniInfoRow(
+                      label: 'จุดนัดพบ',
+                      value: widget.bookingData.location,
+                      showLinkIcon: true,
+                      onTap: () {
+                        final coordinates = LocationService.resolveCoordinates(
+                          locationName: widget.bookingData.location,
+                          latitude: widget.bookingData.latitude,
+                          longitude: widget.bookingData.longitude,
+                        );
+                        LocationService.openInExternalMaps(
+                          coordinates.latitude,
+                          coordinates.longitude,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 7),
+                    _buildMiniInfoRow(
+                      label: 'การชำระเงิน',
+                      value: widget.bookingData.paymentMethod == 'promptpay'
+                          ? 'พร้อมเพย์ (ชำระเมื่อรับของ)'
+                          : 'เงินสด (ชำระเมื่อรับของ)',
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 7),
+                      child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    ),
+                    _buildMiniInfoRow(
+                      label: 'ยอดรวม',
+                      value: _formatPrice(widget.bookingData.totalPrice),
+                      isPrice: true,
+                    ),
+                  ],
+                ),
               ),
               child: Column(
                 children: [
@@ -558,7 +624,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   ),
                 ],
               ),
-            ),
+            ],
 
             // 4. แถบนับเวลาถอยหลังและสถานะเมื่อกำลังเช่าอยู่
             if (_rentalStatus == 'active')
@@ -960,9 +1026,11 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     bool isPrice = false,
     bool showLinkIcon = false,
     VoidCallback? onTap,
+    int maxLines = 1,
   }) {
     final row = Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
+      crossAxisAlignment:
+          maxLines > 1 ? CrossAxisAlignment.start : CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
         Text(
@@ -983,7 +1051,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
               Flexible(
                 child: Text(
                   value,
-                  maxLines: 1,
+                  maxLines: maxLines,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.right,
                   style: TextStyle(

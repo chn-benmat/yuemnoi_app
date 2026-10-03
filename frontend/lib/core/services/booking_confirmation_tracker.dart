@@ -6,6 +6,88 @@ class BookingConfirmationTracker {
 
   static final Set<String> _inMemoryConfirmedMessageIds = {};
   static final Map<String, int> _inMemoryBookingIds = {};
+  static final Map<String, DateTime> _inMemoryHandoverStartTimes = {};
+
+  /// บันทึกเวลาที่เริ่มส่งมอบจริง (Handover Started)
+  static Future<void> markHandoverStarted({
+    int? bookingId,
+    String? messageId,
+    DateTime? startTime,
+  }) async {
+    final time = startTime ?? DateTime.now();
+    if (bookingId != null && bookingId > 0) {
+      _inMemoryHandoverStartTimes['b_$bookingId'] = time;
+    }
+    if (messageId != null && messageId.trim().isNotEmpty) {
+      _inMemoryHandoverStartTimes['m_${messageId.trim()}'] = time;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final iso = time.toIso8601String();
+      if (bookingId != null && bookingId > 0) {
+        await prefs.setString('handover_start_b_$bookingId', iso);
+      }
+      if (messageId != null && messageId.trim().isNotEmpty) {
+        await prefs.setString('handover_start_m_${messageId.trim()}', iso);
+      }
+    } catch (_) {}
+  }
+
+  /// ดึงเวลาเริ่มส่งมอบจาก Memory ทันที (Synchronous)
+  static DateTime? getHandoverStartTimeSync({
+    int? bookingId,
+    String? messageId,
+  }) {
+    if (bookingId != null &&
+        bookingId > 0 &&
+        _inMemoryHandoverStartTimes.containsKey('b_$bookingId')) {
+      return _inMemoryHandoverStartTimes['b_$bookingId'];
+    }
+    if (messageId != null &&
+        messageId.trim().isNotEmpty &&
+        _inMemoryHandoverStartTimes.containsKey('m_${messageId.trim()}')) {
+      return _inMemoryHandoverStartTimes['m_${messageId.trim()}'];
+    }
+    return null;
+  }
+
+  /// ดึงเวลาเริ่มส่งมอบแบบ Asynchronous (ตรวจ SharedPreferences ด้วย)
+  static Future<DateTime?> getHandoverStartTime({
+    int? bookingId,
+    String? messageId,
+  }) async {
+    final cached = getHandoverStartTimeSync(
+      bookingId: bookingId,
+      messageId: messageId,
+    );
+    if (cached != null) return cached;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (bookingId != null && bookingId > 0) {
+        final raw = prefs.getString('handover_start_b_$bookingId');
+        if (raw != null) {
+          final dt = DateTime.tryParse(raw);
+          if (dt != null) {
+            _inMemoryHandoverStartTimes['b_$bookingId'] = dt;
+            return dt;
+          }
+        }
+      }
+      if (messageId != null && messageId.trim().isNotEmpty) {
+        final raw = prefs.getString('handover_start_m_${messageId.trim()}');
+        if (raw != null) {
+          final dt = DateTime.tryParse(raw);
+          if (dt != null) {
+            _inMemoryHandoverStartTimes['m_${messageId.trim()}'] = dt;
+            return dt;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
 
   static String formatOrderNumber(int? id) {
     if (id == null || id <= 0) return 'YM-NEW';
@@ -139,11 +221,13 @@ class BookingConfirmationTracker {
     _inMemoryConfirmedMessageIds.remove(trimmedId);
     _inMemoryBookingIds.remove(trimmedId);
     _inMemoryStatuses.remove(trimmedId);
+    _inMemoryHandoverStartTimes.remove('m_$trimmedId');
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('booking_confirmed_msg_$trimmedId');
       await prefs.remove('booking_id_msg_$trimmedId');
       await prefs.remove('booking_status_msg_$trimmedId');
+      await prefs.remove('handover_start_m_$trimmedId');
     } catch (_) {}
   }
 
@@ -152,5 +236,6 @@ class BookingConfirmationTracker {
     _inMemoryConfirmedMessageIds.clear();
     _inMemoryBookingIds.clear();
     _inMemoryStatuses.clear();
+    _inMemoryHandoverStartTimes.clear();
   }
 }

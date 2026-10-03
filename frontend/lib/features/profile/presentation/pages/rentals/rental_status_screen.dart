@@ -49,8 +49,6 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
   Color _mapStatusColor(String? rawStatus, DateTime? startDate) {
     final status = rawStatus?.toLowerCase().trim();
     switch (status) {
-      case 'pending':
-        return const Color(0xFFFFD54F);
       case 'confirmed':
         if (startDate != null) {
           final now = DateTime.now();
@@ -69,7 +67,7 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
       case 'cancelled':
         return const Color(0xFFFF8A80);
       default:
-        return const Color(0xFFFFD54F);
+        return const Color(0xFF80DEEA);
     }
   }
 

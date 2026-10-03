@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
+import '../../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/widgets/rental_countdown_timer_widget.dart';
 import '../../../../../core/widgets/skeleton_shimmer.dart';
 import '../../../domain/entities/rental_booking.dart';
 
@@ -39,7 +41,7 @@ class RentalStatusItemData {
     this.ownerPhone,
     this.partnerRole = 'เจ้าของอุปกรณ์',
     required this.status,
-    this.statusCode = 'pending',
+    this.statusCode = 'confirmed',
     required this.statusColor,
     required this.iconData,
     this.imageUrl,
@@ -304,6 +306,33 @@ class RentalStatusList extends StatelessWidget {
 // Card Widget
 // ─────────────────────────────────────────────────────────────────────────────
 
+DateTime _computeEffectiveRentalEnd(RentalStatusItemData item) {
+  final initialEnd = item.endDate;
+  final handoverStart = BookingConfirmationTracker.getHandoverStartTimeSync(
+    bookingId: item.bookingId,
+  );
+
+  Duration duration = const Duration(days: 1);
+  if (item.startDate != null && item.endDate != null) {
+    final diff = item.endDate!.difference(item.startDate!);
+    if (diff > Duration.zero) {
+      duration = diff;
+    }
+  }
+
+  final now = DateTime.now();
+
+  if (handoverStart != null) {
+    return handoverStart.add(duration);
+  }
+
+  if (initialEnd != null && initialEnd.isBefore(now)) {
+    return now.add(duration);
+  }
+
+  return initialEnd ?? now.add(duration);
+}
+
 class RentalStatusCard extends StatelessWidget {
   final RentalStatusItemData item;
   const RentalStatusCard({super.key, required this.item});
@@ -407,6 +436,7 @@ class RentalStatusCard extends StatelessWidget {
       }
     }
 
+    final effectiveEnd = _computeEffectiveRentalEnd(item);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -655,41 +685,70 @@ class RentalStatusCard extends StatelessWidget {
               _buildRentalTimeStatusBox(item),
               const SizedBox(height: 12),
               // ── Tracking route & action button ─────────────────────────────
-              SizedBox(
-                width: double.infinity,
-                height: 40,
-                child: ElevatedButton.icon(
-                  onPressed: () => _openTrackingMap(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryColor,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+              if (item.statusCode.toLowerCase() == 'active') ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 42,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      AppRoutes.openRentalReturn(
+                        context,
+                        rentalId: item.bookingId,
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  icon: Icon(
-                    item.statusCode.toLowerCase() == 'active'
-                        ? Icons.inventory_2_outlined
-                        : Icons.near_me_outlined,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                  label: Text(
-                    item.statusCode.toLowerCase() == 'active'
-                        ? 'ดูรายละเอียดการเช่า'
-                        : 'ดูเส้นทางนัดรับ & ตรวจรับของ',
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                    child: const Text(
+                      'ส่งคืนอุปกรณ์',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ] else ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _openTrackingMap(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    icon: const Icon(
+                      Icons.near_me_outlined,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                    label: const Text(
+                      'ดูเส้นทางนัดรับ & ตรวจรับของ',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -712,12 +771,10 @@ class _RentalStatusDetailSheet extends StatelessWidget {
         return -1;
       case 'completed':
       case 'finished':
-        return 3;
-      case 'active':
         return 2;
-      case 'confirmed':
+      case 'active':
         return 1;
-      case 'pending':
+      case 'confirmed':
       default:
         return 0;
     }
@@ -948,8 +1005,53 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+            // ── วิดเจ็ตนับเวลาถอยหลังการส่งคืน / ติดตามเวลาส่งคืนเลท ในหน้า Sheet ──
+            if (item.statusCode.toLowerCase() == 'active') ...[
+              RentalCountdownTimerWidget(
+                endDateTime: _computeEffectiveRentalEnd(item),
+                startDateTime: item.startDate,
+                isCompact: false,
+              ),
+              const SizedBox(height: 16),
+            ],
             // Actions
+            if (item.statusCode.toLowerCase() == 'active') ...[
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    AppRoutes.openRentalReturn(
+                      context,
+                      rentalId: item.bookingId,
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.assignment_turned_in_outlined,
+                    size: 18,
+                  ),
+                  label: const Text(
+                    'ดำเนินการส่งคืนอุปกรณ์',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             if (item.pickupLocation != null && item.pickupLocation!.isNotEmpty) ...[
               SizedBox(
                 width: double.infinity,

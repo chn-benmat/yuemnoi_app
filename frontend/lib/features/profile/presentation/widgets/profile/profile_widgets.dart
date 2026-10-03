@@ -19,20 +19,23 @@ class ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
+        color: AppColors.primaryColor,
         gradient: LinearGradient(
-          colors: [AppColors.primaryColor, AppColors.gradient1],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(32),
-          bottomRight: Radius.circular(32),
+          colors: [
+            Color(0xFF6B00B8),
+            AppColors.primaryColor,
+            Color(0xFF8618E2),
+          ],
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+      padding: EdgeInsets.fromLTRB(20, topPadding + 12, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -183,12 +186,14 @@ class ProfileQuickActionsRow extends StatelessWidget {
 }
 
 class ProfileQuickActionData {
-  final IconData icon;
+  final IconData? icon;
+  final String? imageAsset;
   final String label;
   final VoidCallback? onTap;
 
   const ProfileQuickActionData({
-    required this.icon,
+    this.icon,
+    this.imageAsset,
     required this.label,
     this.onTap,
   });
@@ -212,7 +217,40 @@ class ProfileQuickActionItem extends StatelessWidget {
               color: const Color(0xFFF3E8FF),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(data.icon, color: AppColors.primaryColor, size: 22),
+            child: Center(
+              child: data.imageAsset != null
+                  ? Image.asset(
+                      data.imageAsset!,
+                      width: 28,
+                      height: 28,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) {
+                        if (data.imageAsset == 'assets/icons/calendar.png') {
+                          return Image.asset(
+                            'assets/icons/calender.png',
+                            width: 28,
+                            height: 28,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => Icon(
+                              data.icon ?? Icons.category_rounded,
+                              color: AppColors.primaryColor,
+                              size: 22,
+                            ),
+                          );
+                        }
+                        return Icon(
+                          data.icon ?? Icons.category_rounded,
+                          color: AppColors.primaryColor,
+                          size: 22,
+                        );
+                      },
+                    )
+                  : Icon(
+                      data.icon ?? Icons.category_rounded,
+                      color: AppColors.primaryColor,
+                      size: 22,
+                    ),
+            ),
           ),
           const SizedBox(height: 6),
           Text(
