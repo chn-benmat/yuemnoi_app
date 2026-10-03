@@ -24,9 +24,15 @@ class RentalStatusCubit extends Cubit<RentalStatusState> {
     try {
       final renting = await getRentalBookings.executeRenting(userId);
       final lending = await getRentalBookings.executeLending(userId);
+
+      bool isAllowedStatus(dynamic b) {
+        final s = (b.statusCode ?? '').toString().toLowerCase().trim();
+        return s != 'pending' && s != 'rejected' && s != 'reject';
+      }
+
       emit(RentalStatusLoaded(
-        rentingList: renting,
-        lendingList: lending,
+        rentingList: renting.where(isAllowedStatus).toList(),
+        lendingList: lending.where(isAllowedStatus).toList(),
       ));
     } catch (e) {
       emit(RentalStatusError(e.toString()));

@@ -10,7 +10,7 @@ void main() {
         'item_id': 202,
         'start_date': '2026-09-10T10:00:00Z',
         'end_date': '2026-09-12T10:00:00Z',
-        'status': 'pending',
+        'status': 'confirmed',
         'total_price': 1500.0,
         'pickup_location': 'BTS Siam',
       };
@@ -37,8 +37,8 @@ void main() {
       expect(model.partnerName, 'Jane Doe');
       expect(model.partnerPhone, '0812345678');
       expect(model.partnerRole, 'เจ้าของอุปกรณ์');
-      expect(model.statusCode, 'pending');
-      expect(model.status, 'รอเจ้าของยืนยัน');
+      expect(model.statusCode, 'confirmed');
+      expect(model.status, 'ยืนยันแล้ว / นัดรับของ');
       expect(model.totalPrice, 1500.0);
       expect(model.pickupLocation, 'BTS Siam');
       expect(model.isOwner, false);

@@ -59,21 +59,17 @@ class _HomeFeedViewState extends State<HomeFeedView> {
 
   /// รวมและตัดรายการสินค้าซ้ำ
   List<FeedItem> _getDisplayedItems(HomeLoaded state) {
-    if (state.hasActiveFilters || state.searchQuery.isNotEmpty) {
-      final categoryFilteredCurated = state.selectedCategoryId == 'all'
-          ? state.curatedItems
-          : state.curatedItems
-              .where((item) => item.categoryId == state.selectedCategoryId)
-              .toList();
-      final seenIds = <String>{};
-      return [
-        ...categoryFilteredCurated.where((item) => seenIds.add(item.id)),
-        ...state.nearbyItems.where((item) => seenIds.add(item.id)),
-      ];
-    }
+    final curatedList =
+        (state.hasActiveFilters || state.searchQuery.isNotEmpty) &&
+                state.selectedCategoryId != 'all'
+            ? state.curatedItems
+                .where((item) => item.categoryId == state.selectedCategoryId)
+                .toList()
+            : state.curatedItems;
+
     final seenIds = <String>{};
     return [
-      ...state.curatedItems.where((item) => seenIds.add(item.id)),
+      ...curatedList.where((item) => seenIds.add(item.id)),
       ...state.nearbyItems.where((item) => seenIds.add(item.id)),
     ];
   }

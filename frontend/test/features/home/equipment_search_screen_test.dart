@@ -148,14 +148,16 @@ void main() {
     expect(find.byKey(const ValueKey('search-submit-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('search-back-button')), findsOneWidget);
 
-    // 2. ตรวจสอบคำค้นหาเก่า (ประวัติการค้นหา)
-    expect(find.text('ประวัติการค้นหา'), findsOneWidget);
+    // 2. ตรวจสอบคำค้นหาเก่า (ไม่มีคำว่าประวัติการค้นหา, ไม่มีปุ่มล้างทั้งหมด, และไม่มีปุ่ม x ที่แท็ก)
+    expect(find.text('ประวัติการค้นหา'), findsNothing);
+    expect(find.text('ล้างทั้งหมด'), findsNothing);
+    expect(find.byKey(const ValueKey('clear-all-recent-searches')), findsNothing);
     expect(find.text('กล้อง Sony'), findsOneWidget);
     expect(find.text('ไมค์ไวเลส'), findsOneWidget);
-    expect(find.byKey(const ValueKey('clear-all-recent-searches')), findsOneWidget);
 
-    // 3. ตรวจสอบสิ่งที่ผู้เช่าสนใจ (ต้องเป็นการ์ดสินค้าจริง ShopeeProductCard ไม่ใช่แค่หมวดหมู่)
-    expect(find.text('สิ่งที่คุณอาจสนใจ'), findsOneWidget);
+    // 3. ตรวจสอบสินค้าแนะนำสำหรับคุณ (ต้องเป็นการ์ดสินค้าจริง ShopeeProductCard ไม่ใช่แค่หมวดหมู่)
+    expect(find.text('แนะนำสำหรับคุณ'), findsOneWidget);
+    expect(find.text('สิ่งที่คุณอาจสนใจ'), findsNothing);
     expect(find.byType(ShopeeProductCard), findsNWidgets(2));
     expect(find.text('MacBook Air M2 13 นิ้ว'), findsOneWidget);
     expect(find.text('กีตาร์โปร่ง Yamaha F310'), findsOneWidget);
@@ -166,8 +168,9 @@ void main() {
     await tester.pump();
 
     // ยังคงอยู่ในหน้าคำแนะนำ & ประวัติ ไม่ได้แสดงผลลัพธ์ค้นหาทันที
-    expect(find.text('สิ่งที่คุณอาจสนใจ'), findsOneWidget);
-    expect(find.text('ประวัติการค้นหา'), findsOneWidget);
+    expect(find.text('แนะนำสำหรับคุณ'), findsOneWidget);
+    expect(find.text('สิ่งที่คุณอาจสนใจ'), findsNothing);
+    expect(find.text('ประวัติการค้นหา'), findsNothing);
     expect(find.text('เต็นท์แคมป์ปิ้ง Naturehike'), findsNothing);
   });
 
@@ -208,8 +211,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('search-clear-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('สิ่งที่คุณอาจสนใจ'), findsOneWidget);
-    expect(find.text('ประวัติการค้นหา'), findsOneWidget);
+    expect(find.text('แนะนำสำหรับคุณ'), findsOneWidget);
+    expect(find.text('สิ่งที่คุณอาจสนใจ'), findsNothing);
+    expect(find.text('ประวัติการค้นหา'), findsNothing);
   });
 
   testWidgets('Tapping a recent search tag triggers search directly',
@@ -286,5 +290,63 @@ void main() {
     // Verify filter button is present in search results header
     expect(find.byKey(const ValueKey('category-filter-button')), findsOneWidget);
     expect(find.byIcon(Icons.filter_alt_rounded), findsOneWidget);
+  });
+
+  testWidgets(
+      'recent searches keeps max 4 items and replaces the oldest on new search',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'equipment_recent_searches_v1': ['item1', 'item2', 'item3', 'item4'],
+    });
+
+    final fakeRepo = _FakeHomeRepository(
+      curatedItems: dummyCurated,
+      nearbyItems: dummySearchable,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EquipmentSearchScreen(
+          homeRepository: fakeRepo,
+          initialCuratedItems: dummyCurated,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // ตรวจสอบว่าแสดง 4 รายการเริ่มต้น และแบ่งเป็น 2 บรรทัด (บน 2 ล่าง 2)
+    expect(find.text('item1'), findsOneWidget);
+    expect(find.text('item2'), findsOneWidget);
+    expect(find.text('item3'), findsOneWidget);
+    expect(find.text('item4'), findsOneWidget);
+
+    final item1Pos = tester.getTopLeft(find.text('item1'));
+    final item2Pos = tester.getTopLeft(find.text('item2'));
+    final item3Pos = tester.getTopLeft(find.text('item3'));
+    final item4Pos = tester.getTopLeft(find.text('item4'));
+
+    // แถวบน: item1 และ item2 อยู่ในแนว Y เดียวกัน
+    expect(item1Pos.dy, equals(item2Pos.dy));
+    // แถวล่าง: item3 และ item4 อยู่ในแนว Y เดียวกัน
+    expect(item3Pos.dy, equals(item4Pos.dy));
+    // แถวล่างอยู่ใต้แถวบน
+    expect(item3Pos.dy, greaterThan(item1Pos.dy));
+
+    // ค้นหารายการที่ 5
+    await tester.enterText(
+        find.byKey(const ValueKey('equipment-search-input')), 'item5');
+    await tester.tap(find.byKey(const ValueKey('search-submit-button')));
+    await tester.pumpAndSettle();
+
+    // ล้างคำค้นเพื่อกลับสู่หน้า Pre-Search
+    await tester.tap(find.byKey(const ValueKey('search-clear-button')));
+    await tester.pumpAndSettle();
+
+    // item5 ต้องเป็นคำค้นหาใหม่ล่าสุด และ item4 (เก่าสุด) ต้องถูกเอาออกไป
+    expect(find.text('item5'), findsOneWidget);
+    expect(find.text('item1'), findsOneWidget);
+    expect(find.text('item2'), findsOneWidget);
+    expect(find.text('item3'), findsOneWidget);
+    expect(find.text('item4'), findsNothing);
   });
 }

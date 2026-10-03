@@ -54,7 +54,7 @@ class RentalBookingModel {
 
     final (startDate, endDate) = _parseDates(booking);
     final duration = _calculateDuration(booking, startDate, endDate);
-    final statusCode = booking['status']?.toString() ?? 'pending';
+    final statusCode = booking['status']?.toString() ?? 'confirmed';
     final statusText = _formatStatusText(
       statusCode,
       isRenter: !isOwner,
@@ -149,8 +149,6 @@ class RentalBookingModel {
   }) {
     final status = rawStatus?.toLowerCase().trim();
     switch (status) {
-      case 'pending':
-        return isRenter ? 'รอเจ้าของยืนยัน' : 'รอยืนยันคำขอ';
       case 'confirmed':
         if (startDate != null) {
           final now = DateTime.now();
@@ -169,10 +167,8 @@ class RentalBookingModel {
         return 'เสร็จสิ้น';
       case 'cancelled':
         return 'ยกเลิกแล้ว';
-      case 'rejected':
-        return 'ถูกปฏิเสธ';
       default:
-        return status ?? 'รอดำเนินการ';
+        return status ?? 'ยืนยันแล้ว';
     }
   }
 
