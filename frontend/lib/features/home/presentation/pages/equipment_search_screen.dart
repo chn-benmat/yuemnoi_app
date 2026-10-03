@@ -103,7 +103,10 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
   Future<void> _loadRecentSearches() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final list = prefs.getStringList(_recentSearchesKey) ?? [];
+      var list = prefs.getStringList(_recentSearchesKey) ?? [];
+      if (list.length > 4) {
+        list = list.sublist(0, 4);
+      }
       if (mounted) {
         setState(() {
           _recentSearches = list;
@@ -122,9 +125,9 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     updated.removeWhere((item) => item.toLowerCase() == clean.toLowerCase());
     updated.insert(0, clean);
 
-    // เก็บประวัติสูงสุด 10 คำค้นหา
-    if (updated.length > 10) {
-      updated.removeRange(10, updated.length);
+    // เก็บประวัติสูงสุด 4 คำค้นหา (เมื่อครบ 4 คำค้นหาแล้วมีการค้นหาใหม่ นำประวัติเก่าที่สุดออก)
+    if (updated.length > 4) {
+      updated.removeRange(4, updated.length);
     }
 
     if (mounted) {
@@ -141,34 +144,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     }
   }
 
-  Future<void> _deleteSearchTag(String query) async {
-    final updated = List<String>.from(_recentSearches)..remove(query);
-    if (mounted) {
-      setState(() {
-        _recentSearches = updated;
-      });
-    }
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(_recentSearchesKey, updated);
-    } catch (e) {
-      debugPrint('Error deleting search tag: $e');
-    }
-  }
 
-  Future<void> _clearAllRecentSearches() async {
-    if (mounted) {
-      setState(() {
-        _recentSearches = [];
-      });
-    }
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_recentSearchesKey);
-    } catch (e) {
-      debugPrint('Error clearing recent searches: $e');
-    }
-  }
 
   // ==========================================
   // ดึงข้อมูลอุปกรณ์สิ่งที่ผู้เช่าสนใจ (Curated Items)
@@ -494,55 +470,26 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
-        // 2.1 ส่วนคำค้นหาเก่า (Search History)
+        // 2.1 ส่วนคำค้นหาเก่า (Search History: บน 2 ล่าง 2)
         if (_recentSearches.isNotEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'ประวัติการค้นหา',
-                    style: TextStyle(
-                      color: Color(0xFF18181B),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  GestureDetector(
-                    key: const ValueKey('clear-all-recent-searches'),
-                    onTap: _clearAllRecentSearches,
-                    behavior: HitTestBehavior.opaque,
-                    child: const Text(
-                      'ล้างทั้งหมด',
-                      style: TextStyle(
-                        color: Color(0xFF71717A),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
+                  _buildHistoryRow(_recentSearches.take(2).toList()),
+                  if (_recentSearches.length > 2) ...[
+                    const SizedBox(height: 8),
+                    _buildHistoryRow(_recentSearches.skip(2).take(2).toList()),
+                  ],
                 ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _recentSearches.map((query) {
-                  return _buildHistoryTag(query);
-                }).toList(),
               ),
             ),
           ),
           const SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.only(top: 20),
+              padding: EdgeInsets.only(top: 16),
               child: Divider(
                 color: Color(0xFFE4E4E7),
                 thickness: 1,
@@ -554,38 +501,18 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
           ),
         ],
 
-        // 2.2 ส่วนสิ่งที่ผู้เช่าสนใจ (Recommended item cards)
-        SliverToBoxAdapter(
+        // 2.2 ส่วนสินค้าแนะนำสำหรับคุณ (Recommended item cards)
+        const SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 20, 18, 14),
-            child: Row(
-              children: [
-                const Text(
-                  'สิ่งที่คุณอาจสนใจ',
-                  style: TextStyle(
-                    color: Color(0xFF18181B),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'แนะนำ',
-                    style: TextStyle(
-                      color: AppColors.primaryColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+            padding: EdgeInsets.fromLTRB(18, 18, 18, 14),
+            child: Text(
+              'แนะนำสำหรับคุณ',
+              style: TextStyle(
+                color: Color(0xFF18181B),
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+              ),
             ),
           ),
         ),
@@ -596,6 +523,19 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
         const SliverToBoxAdapter(
           child: SizedBox(height: 40),
         ),
+      ],
+    );
+  }
+
+  Widget _buildHistoryRow(List<String> items) {
+    return Row(
+      children: [
+        for (int i = 0; i < items.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Flexible(
+            child: _buildHistoryTag(items[i]),
+          ),
+        ],
       ],
     );
   }
@@ -611,32 +551,16 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
         borderRadius: BorderRadius.circular(8),
         onTap: () => _executeSearch(query),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                query,
-                style: const TextStyle(
-                  color: Color(0xFF27272A),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: () => _deleteSearchTag(query),
-                behavior: HitTestBehavior.opaque,
-                child: const Padding(
-                  padding: EdgeInsets.all(1.0),
-                  child: Icon(
-                    Icons.close_rounded,
-                    size: 14,
-                    color: Color(0xFFA1A1AA),
-                  ),
-                ),
-              ),
-            ],
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Text(
+            query,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF27272A),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),

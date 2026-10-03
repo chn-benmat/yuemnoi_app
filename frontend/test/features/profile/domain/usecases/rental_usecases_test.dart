@@ -14,8 +14,8 @@ class FakeRentalManagementRepository implements RentalManagementRepository {
       title: 'Sony A7 IV',
       partnerName: 'Owner 1',
       partnerRole: 'เจ้าของอุปกรณ์',
-      status: 'รอเจ้าของยืนยัน',
-      statusCode: 'pending',
+      status: 'ยืนยันแล้ว / นัดรับของ',
+      statusCode: 'confirmed',
     ),
   ];
 
@@ -25,8 +25,8 @@ class FakeRentalManagementRepository implements RentalManagementRepository {
       title: 'MacBook Pro',
       partnerName: 'Renter 1',
       partnerRole: 'ผู้เช่า',
-      status: 'รอยืนยันคำขอ',
-      statusCode: 'pending',
+      status: 'ยืนยันแล้ว / นัดรับของ',
+      statusCode: 'confirmed',
       isOwner: true,
     ),
   ];

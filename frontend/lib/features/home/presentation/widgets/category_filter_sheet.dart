@@ -359,9 +359,6 @@ class _FilterTopSheetDialog extends StatefulWidget {
 }
 
 class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
-  // แท็บที่เลือกใน Sidebar: 0 = หมวดหมู่, 1 = กรองราคา, 2 = คะแนนรีวิว
-  int _activeSidebarTabIndex = 0;
-
   late String _selectedCategoryId;
   int? _minPrice;
   int? _maxPrice;
@@ -391,6 +388,25 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
     _minPriceController.dispose();
     _maxPriceController.dispose();
     super.dispose();
+  }
+
+  int get _activeFilterCount {
+    int count = 0;
+    if (_selectedCategoryId != 'all') count++;
+    if (_minPrice != null || _maxPrice != null) count++;
+    if (_minRating != null) count++;
+    return count;
+  }
+
+  void _resetLocalFilters() {
+    setState(() {
+      _selectedCategoryId = 'all';
+      _minPrice = null;
+      _maxPrice = null;
+      _minRating = null;
+      _minPriceController.clear();
+      _maxPriceController.clear();
+    });
   }
 
   IconData _getCategoryIcon(String id) {
@@ -434,7 +450,7 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
       width: double.infinity,
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.85,
-        minHeight: 460,
+        minHeight: 380,
       ),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -472,15 +488,15 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.filter_alt_rounded,
                       color: Colors.white,
                       size: 22,
                     ),
-                    SizedBox(width: 8),
-                    Text(
+                    const SizedBox(width: 8),
+                    const Text(
                       'ตัวกรองสินค้า',
                       style: TextStyle(
                         color: Colors.white,
@@ -488,6 +504,27 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    if (_activeFilterCount > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '$_activeFilterCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 IconButton(
@@ -503,55 +540,31 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
             ),
           ),
 
-          // ส่วนเนื้อหาแบบ Sidebar 2 คอลัมน์ (Sidebar ซ้ายขนาดกะทัดรัด + Content ขวา)
+          // ส่วนเนื้อหาแบบ Single Page Scroll (สไตล์ Shopee/Lazada เลื่อนลงหน้าเดียว)
           Flexible(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. Sidebar ด้านซ้าย (หมวดหมู่ / กรองราคา / คะแนนรีวิว) ขนาดกะทัดรัด
-                Container(
-                  width: 92,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF8F9FA),
-                    border: Border(
-                      right: BorderSide(
-                        color: Color(0xFFE9ECEF),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildSidebarItem(
-                        index: 0,
-                        title: 'หมวดหมู่',
-                        icon: Icons.category_rounded,
-                        isActive: _selectedCategoryId != 'all',
-                      ),
-                      _buildSidebarItem(
-                        index: 1,
-                        title: 'กรองราคา',
-                        icon: Icons.attach_money_rounded,
-                        isActive: _minPrice != null || _maxPrice != null,
-                      ),
-                      _buildSidebarItem(
-                        index: 2,
-                        title: 'คะแนนรีวิว',
-                        icon: Icons.star_rounded,
-                        isActive: _minRating != null,
-                      ),
-                    ],
-                  ),
-                ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── 1. ช่วงราคา (Price Range) ──
+                  _buildPriceSection(),
 
-                // 2. Content ด้านขวา ตามแท็บที่เลือกใน Sidebar
-                Expanded(
-                  child: Container(
-                    color: Colors.white,
-                    child: _buildActiveTabContent(),
-                  ),
-                ),
-              ],
+                  const SizedBox(height: 18),
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  const SizedBox(height: 18),
+
+                  // ── 2. หมวดหมู่อุปกรณ์ (Categories) ──
+                  _buildCategorySection(),
+
+                  const SizedBox(height: 18),
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  const SizedBox(height: 18),
+
+                  // ── 3. คะแนนรีวิว (Rating) ──
+                  _buildRatingSection(),
+                ],
+              ),
             ),
           ),
 
@@ -566,10 +579,13 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
                   flex: 2,
                   child: OutlinedButton(
                     key: const ValueKey('reset-filter-modal-button'),
-                    onPressed: widget.onReset,
+                    onPressed: () {
+                      _resetLocalFilters();
+                      widget.onReset();
+                    },
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF4B5563),
-                      side: const BorderSide(color: Color(0xFFD1D5DB)),
+                      foregroundColor: const Color(0xFF475569),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
@@ -600,15 +616,17 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryColor,
                       foregroundColor: Colors.white,
-                      elevation: 2,
+                      elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                     ),
-                    child: const Text(
-                      'นำไปใช้',
-                      style: TextStyle(
+                    child: Text(
+                      _activeFilterCount > 0
+                          ? 'นำไปใช้ ($_activeFilterCount)'
+                          : 'นำไปใช้',
+                      style: const TextStyle(
                         fontSize: 14.5,
                         fontWeight: FontWeight.bold,
                       ),
@@ -623,415 +641,43 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
     );
   }
 
-  Widget _buildSidebarItem({
-    required int index,
-    required String title,
-    required IconData icon,
-    required bool isActive,
-  }) {
-    final isSelected = _activeSidebarTabIndex == index;
-
-    return Material(
-      color: isSelected ? Colors.white : Colors.transparent,
-      child: InkWell(
-        key: ValueKey('sidebar-tab-$index'),
-        onTap: () {
-          setState(() {
-            _activeSidebarTabIndex = index;
-          });
-        },
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: isSelected ? AppColors.primaryColor : Colors.transparent,
-                width: 3.0,
-              ),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Icon(
-                    icon,
-                    size: 20,
-                    color: isSelected
-                        ? AppColors.primaryColor
-                        : const Color(0xFF6C757D),
-                  ),
-                  if (isActive)
-                    Positioned(
-                      top: -2,
-                      right: -3,
-                      child: Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFF3B30),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 5),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                  color: isSelected
-                      ? AppColors.primaryColor
-                      : const Color(0xFF495057),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActiveTabContent() {
-    switch (_activeSidebarTabIndex) {
-      case 0:
-        return _buildCategoryContent();
-      case 1:
-        return _buildPriceContent();
-      case 2:
-        return _buildRatingContent();
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  // แท็บ 1: หมวดหมู่สินค้า
-  Widget _buildCategoryContent() {
+  // ── ส่วนที่ 1: ช่วงราคา (Price Range) ──
+  Widget _buildPriceSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 14, 16, 8),
-          child: Text(
-            'หมวดหมู่อุปกรณ์ (11 หมวด)',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF212529),
-            ),
-          ),
-        ),
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
-            itemCount: widget.categories.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 6),
-            itemBuilder: (context, index) {
-              final category = widget.categories[index];
-              final isSelected = _selectedCategoryId == category.id;
-              final icon = _getCategoryIcon(category.id);
-
-              return Material(
-                color: isSelected
-                    ? const Color(0xFFF4EBFF)
-                    : const Color(0xFFF8F9FA),
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  key: ValueKey('filter-category-item-${category.id}'),
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () {
-                    setState(() {
-                      _selectedCategoryId = category.id;
-                    });
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          icon,
-                          size: 18,
-                          color: isSelected
-                              ? AppColors.primaryColor
-                              : const Color(0xFF6C757D),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            category.name,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.w500,
-                              color: isSelected
-                                  ? AppColors.primaryColor
-                                  : const Color(0xFF343A40),
-                            ),
-                          ),
-                        ),
-                        if (isSelected)
-                          const Icon(
-                            Icons.check_circle_rounded,
-                            color: AppColors.primaryColor,
-                            size: 18,
-                          ),
-                      ],
-                    ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3E8FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.payments_outlined,
+                    size: 16,
+                    color: AppColors.primaryColor,
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  // แท็บ 2: กรองราคา (ช่องกรอกราคาต่ำสุดและสูงสุด)
-  Widget _buildPriceContent() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'ช่วงราคาเช่าต่อวัน (฿)',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF212529),
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'ระบุราคาต่ำสุดและราคาสูงสุดที่ต้องการ',
-            style: TextStyle(
-              fontSize: 11.5,
-              color: Color(0xFF6C757D),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // ช่องกรอกราคาต่ำสุดและราคาสูงสุด
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // ช่องราคาต่ำสุด
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'ราคาต่ำสุด',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF495057),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      key: const ValueKey('filter-min-price-input'),
-                      controller: _minPriceController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF212529),
-                      ),
-                      decoration: InputDecoration(
-                        hintText: '0',
-                        hintStyle: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFFADB5BD),
-                        ),
-                        prefixText: '฿ ',
-                        prefixStyle: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryColor,
-                        ),
-                        filled: true,
-                        fillColor: const Color(0xFFF8F9FA),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE9ECEF)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE9ECEF)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: AppColors.primaryColor,
-                            width: 1.5,
-                          ),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          final trimmed = value.trim();
-                          _minPrice = trimmed.isEmpty ? null : int.tryParse(trimmed);
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ),
-
-              // เส้นคั่นระหว่างช่อง
-              const Padding(
-                padding: EdgeInsets.only(top: 22, left: 8, right: 8),
-                child: Text(
-                  '-',
+                const SizedBox(width: 8),
+                const Text(
+                  'ช่วงราคาเช่าต่อวัน (฿)',
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFFADB5BD),
+                    color: Color(0xFF1E293B),
                   ),
                 ),
-              ),
-
-              // ช่องราคาสูงสุด
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'ราคาสูงสุด',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF495057),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      key: const ValueKey('filter-max-price-input'),
-                      controller: _maxPriceController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF212529),
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'ไม่จำกัด',
-                        hintStyle: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFFADB5BD),
-                        ),
-                        prefixText: '฿ ',
-                        prefixStyle: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryColor,
-                        ),
-                        filled: true,
-                        fillColor: const Color(0xFFF8F9FA),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE9ECEF)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE9ECEF)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: AppColors.primaryColor,
-                            width: 1.5,
-                          ),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          final trimmed = value.trim();
-                          _maxPrice = trimmed.isEmpty ? null : int.tryParse(trimmed);
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          // ปุ่มลัดเลือกช่วงราคา (Quick price presets)
-          const Text(
-            'ช่วงราคายอดนิยม',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF6C757D),
+              ],
             ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildPricePresetChip(
-                label: 'ไม่เกิน 500 ฿',
-                min: 1,
-                max: 500,
-              ),
-              _buildPricePresetChip(
-                label: '500 - 1,000 ฿',
-                min: 500,
-                max: 1000,
-              ),
-              _buildPricePresetChip(
-                label: '1,000 - 2,000 ฿',
-                min: 1000,
-                max: 2000,
-              ),
-              _buildPricePresetChip(
-                label: 'ไม่เกิน 2,000 ฿',
-                min: 1,
-                max: 2000,
-              ),
-              _buildPricePresetChip(
-                label: '2,000 ฿ ขึ้นไป',
-                min: 2000,
-                max: null,
-              ),
-            ],
-          ),
-
-          if (_minPrice != null || _maxPrice != null) ...[
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
+            if (_minPrice != null || _maxPrice != null)
+              GestureDetector(
                 key: const ValueKey('clear-price-tab-button'),
-                onPressed: () {
+                onTap: () {
                   setState(() {
                     _minPrice = null;
                     _maxPrice = null;
@@ -1039,20 +685,156 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
                     _maxPriceController.clear();
                   });
                 },
-                icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text(
-                  'ล้างช่วงราคา',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                child: const Text(
+                  'รีเซ็ต',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFDC2626),
+                  ),
                 ),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFDC2626),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // ช่องกรอกราคาต่ำสุดและราคาสูงสุด
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: TextField(
+                key: const ValueKey('filter-min-price-input'),
+                controller: _minPriceController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E293B),
+                ),
+                decoration: InputDecoration(
+                  hintText: 'ต่ำสุด (฿0)',
+                  hintStyle: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  prefixText: '฿ ',
+                  prefixStyle: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryColor,
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 11,
+                  ),
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                      color: AppColors.primaryColor,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    final trimmed = value.trim();
+                    _minPrice = trimmed.isEmpty ? null : int.tryParse(trimmed);
+                  });
+                },
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                '-',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF94A3B8),
                 ),
               ),
             ),
+            Expanded(
+              child: TextField(
+                key: const ValueKey('filter-max-price-input'),
+                controller: _maxPriceController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E293B),
+                ),
+                decoration: InputDecoration(
+                  hintText: 'สูงสุด (ไม่จำกัด)',
+                  hintStyle: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  prefixText: '฿ ',
+                  prefixStyle: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryColor,
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 11,
+                  ),
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                      color: AppColors.primaryColor,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    final trimmed = value.trim();
+                    _maxPrice = trimmed.isEmpty ? null : int.tryParse(trimmed);
+                  });
+                },
+              ),
+            ),
           ],
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        // ปุ่มลัดช่วงราคายอดนิยม
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildPricePresetChip(label: 'ไม่เกิน 500 ฿', min: 1, max: 500),
+            _buildPricePresetChip(label: '500 - 1,000 ฿', min: 500, max: 1000),
+            _buildPricePresetChip(label: '1,000 - 2,000 ฿', min: 1000, max: 2000),
+            _buildPricePresetChip(label: '2,000 ฿ ขึ้นไป', min: 2000, max: null),
+          ],
+        ),
+      ],
     );
   }
 
@@ -1064,24 +846,34 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
     final isSelected = _minPrice == min && _maxPrice == max;
 
     return Material(
-      color: isSelected ? const Color(0xFFF4EBFF) : const Color(0xFFF8F9FA),
+      color: isSelected ? const Color(0xFFF4EBFF) : const Color(0xFFF8FAFC),
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () {
           setState(() {
-            _minPrice = min;
-            _maxPrice = max;
-            _minPriceController.text = min?.toString() ?? '';
-            _maxPriceController.text = max?.toString() ?? '';
+            if (isSelected) {
+              _minPrice = null;
+              _maxPrice = null;
+              _minPriceController.clear();
+              _maxPriceController.clear();
+            } else {
+              _minPrice = min;
+              _maxPrice = max;
+              _minPriceController.text = min?.toString() ?? '';
+              _maxPriceController.text = max?.toString() ?? '';
+            }
           });
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? AppColors.primaryColor : const Color(0xFFE9ECEF),
+              color: isSelected
+                  ? AppColors.primaryColor
+                  : const Color(0xFFE2E8F0),
               width: isSelected ? 1.5 : 1.0,
             ),
           ),
@@ -1090,7 +882,9 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
             style: TextStyle(
               fontSize: 11.5,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-              color: isSelected ? AppColors.primaryColor : const Color(0xFF495057),
+              color: isSelected
+                  ? AppColors.primaryColor
+                  : const Color(0xFF475569),
             ),
           ),
         ),
@@ -1098,114 +892,264 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
     );
   }
 
-  // แท็บ 3: คะแนนรีวิว (1 ดาว ถึง 5 ดาว ไม่มีจุดทศนิยม)
-  Widget _buildRatingContent() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'คะแนนรีวิว',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF212529),
+  // ── ส่วนที่ 2: หมวดหมู่อุปกรณ์ (Categories - Shopee/Lazada Wrap Grid) ──
+  Widget _buildCategorySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3E8FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.grid_view_rounded,
+                    size: 16,
+                    color: AppColors.primaryColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'หมวดหมู่อุปกรณ์',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'เลือกระดับคะแนนความพึงพอใจ (1 - 5 ดาว)',
-            style: TextStyle(
-              fontSize: 11.5,
-              color: Color(0xFF6C757D),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Expanded(
-            child: ListView.separated(
-              itemCount: kRatingFilterOptions.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final opt = kRatingFilterOptions[index];
-                final isSelected = _isRatingSelected(opt);
+            if (_selectedCategoryId != 'all')
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedCategoryId = 'all';
+                  });
+                },
+                child: const Text(
+                  'รีเซ็ต',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: widget.categories.map((category) {
+            final isSelected = _selectedCategoryId == category.id;
+            final icon = _getCategoryIcon(category.id);
 
-                return Material(
-                  color: isSelected
-                      ? const Color(0xFFF4EBFF)
-                      : const Color(0xFFF8F9FA),
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    key: ValueKey('filter-rating-option-$index'),
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      setState(() {
-                        _minRating = opt.minRating;
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 11,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isSelected
-                                ? Icons.radio_button_checked_rounded
-                                : Icons.radio_button_off_rounded,
-                            size: 18,
-                            color: isSelected
-                                ? AppColors.primaryColor
-                                : const Color(0xFFADB5BD),
-                          ),
-                          const SizedBox(width: 10),
-                          if (opt.stars != null) ...[
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: List.generate(5, (starIdx) {
-                                final isFilled = starIdx < opt.stars!;
-                                return Icon(
-                                  Icons.star_rounded,
-                                  size: 16,
-                                  color: isFilled
-                                      ? const Color(0xFFFFB800)
-                                      : const Color(0xFFE2E8F0),
-                                );
-                              }),
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                          Expanded(
-                            child: Text(
-                              opt.label,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.w500,
-                                color: isSelected
-                                    ? AppColors.primaryColor
-                                    : const Color(0xFF343A40),
-                              ),
-                            ),
-                          ),
-                          if (isSelected)
-                            const Icon(
-                              Icons.check_rounded,
-                              color: AppColors.primaryColor,
-                              size: 18,
-                            ),
-                        ],
-                      ),
+            return Material(
+              color: isSelected
+                  ? const Color(0xFFF4EBFF)
+                  : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                key: ValueKey('filter-category-item-${category.id}'),
+                borderRadius: BorderRadius.circular(10),
+                onTap: () {
+                  setState(() {
+                    _selectedCategoryId = isSelected && category.id != 'all'
+                        ? 'all'
+                        : category.id;
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primaryColor
+                          : const Color(0xFFE2E8F0),
+                      width: isSelected ? 1.5 : 1.0,
                     ),
                   ),
-                );
-              },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 15,
+                        color: isSelected
+                            ? AppColors.primaryColor
+                            : const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        category.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected
+                              ? AppColors.primaryColor
+                              : const Color(0xFF334155),
+                        ),
+                      ),
+                      if (isSelected) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.check_rounded,
+                          size: 14,
+                          color: AppColors.primaryColor,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ── ส่วนที่ 3: คะแนนรีวิว (Rating) ──
+  Widget _buildRatingSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.star_rounded,
+                    size: 16,
+                    color: Color(0xFFF59E0B),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'คะแนนรีวิว',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
+            if (_minRating != null)
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _minRating = null;
+                  });
+                },
+                child: const Text(
+                  'รีเซ็ต',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: kRatingFilterOptions.asMap().entries.map((entry) {
+            final index = entry.key;
+            final opt = entry.value;
+            final isSelected = _isRatingSelected(opt);
+
+            return Material(
+              color: isSelected
+                  ? const Color(0xFFF4EBFF)
+                  : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                key: ValueKey('filter-rating-option-$index'),
+                borderRadius: BorderRadius.circular(10),
+                onTap: () {
+                  setState(() {
+                    _minRating = isSelected && opt.minRating != null
+                        ? null
+                        : opt.minRating;
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primaryColor
+                          : const Color(0xFFE2E8F0),
+                      width: isSelected ? 1.5 : 1.0,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (opt.stars != null) ...[
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 15,
+                          color: Color(0xFFF59E0B),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        opt.label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected
+                              ? AppColors.primaryColor
+                              : const Color(0xFF334155),
+                        ),
+                      ),
+                      if (isSelected) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.check_rounded,
+                          size: 14,
+                          color: AppColors.primaryColor,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

@@ -40,7 +40,7 @@ class RentalStatusItemData {
     this.ownerPhone,
     this.partnerRole = 'เจ้าของอุปกรณ์',
     required this.status,
-    this.statusCode = 'pending',
+    this.statusCode = 'confirmed',
     required this.statusColor,
     required this.iconData,
     this.imageUrl,
@@ -375,11 +375,6 @@ class RentalStatusCard extends StatelessWidget {
     BorderSide border;
 
     switch (status) {
-      case 'pending':
-        bg = const Color(0xFFFFFBEB);
-        fg = const Color(0xFFB45309);
-        border = const BorderSide(color: Color(0xFFFDE68A));
-        break;
       case 'confirmed':
         bg = const Color(0xFFEFF6FF);
         fg = const Color(0xFF1D4ED8);
@@ -664,12 +659,10 @@ class _RentalStatusDetailSheet extends StatelessWidget {
         return -1;
       case 'completed':
       case 'finished':
-        return 3;
-      case 'active':
         return 2;
-      case 'confirmed':
+      case 'active':
         return 1;
-      case 'pending':
+      case 'confirmed':
       default:
         return 0;
     }
