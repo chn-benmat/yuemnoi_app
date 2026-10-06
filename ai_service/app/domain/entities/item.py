@@ -7,7 +7,7 @@ class Item(BaseModel):
     id: str
     name: str
     category: str
-    price: float
+    price: float = Field(ge=0, allow_inf_nan=False)
     type: str = "วัน"
     status: str = "available"
     image_urls: List[str] = Field(default_factory=list)

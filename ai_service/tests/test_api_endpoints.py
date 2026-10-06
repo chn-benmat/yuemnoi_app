@@ -10,6 +10,12 @@ from app.core.container import container
 from app.domain.entities.item import Item
 
 
+def test_openapi_endpoint_paths():
+    assert set(app.openapi()["paths"]) == {
+        "/health", "/api/items", "/api/chat", "/api/chat/stream",
+    }
+
+
 @pytest.mark.asyncio
 async def test_health_endpoint():
     transport = httpx.ASGITransport(app=app)
@@ -30,7 +36,7 @@ async def test_get_items_endpoint():
         mock_get.return_value = mock_items
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/v1/items")
+            resp = await client.get("/api/items")
             assert resp.status_code == 200
             data = resp.json()
             assert len(data) == 1
@@ -59,7 +65,7 @@ async def test_post_chat_endpoint():
             headers = {}
             if settings.INTERNAL_SERVICE_KEY:
                 headers["X-Internal-Service-Key"] = settings.INTERNAL_SERVICE_KEY
-            resp = await client.post("/api/v1/chat", json=payload, headers=headers)
+            resp = await client.post("/api/chat", json=payload, headers=headers)
             assert resp.status_code == 200
             data = resp.json()
             assert data["response"] == "สวัสดีค่ะ มีกล้อง Sony A7 IV ให้เช่าค่ะ"
@@ -68,11 +74,30 @@ async def test_post_chat_endpoint():
 
 
 @pytest.mark.asyncio
-async def test_post_chat_unauthorized():
-    if not settings.INTERNAL_SERVICE_KEY:
-        return
+async def test_post_chat_stream_endpoint():
+    expected_sse = 'event: done\ndata: {"status": "ok"}\n\n'
+
+    async def mock_stream(request):
+        yield expected_sse
+
+    with patch.object(container.process_chat_message_use_case, "execute_stream", new=mock_stream):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = {}
+            if settings.INTERNAL_SERVICE_KEY:
+                headers["X-Internal-Service-Key"] = settings.INTERNAL_SERVICE_KEY
+            resp = await client.post("/api/chat/stream", json={"query": "test"}, headers=headers)
+            assert resp.status_code == 200
+            assert resp.headers["content-type"].startswith("text/event-stream")
+            assert resp.text == expected_sse
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/api/chat", "/api/chat/stream"])
+async def test_post_chat_unauthorized(path, monkeypatch):
+    monkeypatch.setattr(settings, "INTERNAL_SERVICE_KEY", "test-internal-key")
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {"query": "test"}
-        resp = await client.post("/api/v1/chat", json=payload, headers={"X-Internal-Service-Key": "wrong-key"})
+        resp = await client.post(path, json=payload, headers={"X-Internal-Service-Key": "wrong-key"})
         assert resp.status_code == 401

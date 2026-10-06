@@ -1,0 +1,206 @@
+{
+  "request": {
+    "message": "คำตอบเพิ่มเติม",
+    "query": null,
+    "session_id": "fixture-session",
+    "history": [],
+    "context": {
+      "session_id": "fixture-session",
+      "user_goal": "เลือกอุปกรณ์",
+      "budget_max": null,
+      "budget_unit": null,
+      "intended_use": null,
+      "categories": [],
+      "target_items": [],
+      "known_facts": [],
+      "user_constraints": [],
+      "excluded_items": [],
+      "referenced_item_ids": [],
+      "clarification_declined": false,
+      "questions": [
+        {
+          "id": "4801f0683a7f438e826795b42ca88892:batch:q1",
+          "title": "ใช้ที่ไหน",
+          "options": [
+            "ในอาคาร",
+            "กลางแจ้ง"
+          ],
+          "step": 1,
+          "total_steps": 1,
+          "dimension": "location",
+          "choices": [
+            {
+              "id": "indoor",
+              "label": "ในอาคาร",
+              "description": "",
+              "action_value": "indoor"
+            },
+            {
+              "id": "outdoor",
+              "label": "กลางแจ้ง",
+              "description": "",
+              "action_value": "outdoor"
+            }
+          ],
+          "branch_titles": {},
+          "branch_options": {}
+        }
+      ]
+    },
+    "questionnaire_answers": [
+      {
+        "question_id": "4801f0683a7f438e826795b42ca88892:batch:q1",
+        "option_id": "outdoor",
+        "text": null
+      }
+    ],
+    "questionnaire_skipped": false
+  },
+  "response": {
+    "response": "flow คำขอเช่าจากแชทใช้รายละเอียดอุปกรณ์ ประเภทการเช่า ช่วงวันหรือเวลา และสถานที่นัดพบ มีหน้าสรุปให้ตรวจรายละเอียดก่อนส่งการ์ดคำขอเข้าแชท การส่งการ์ดนี้เพียงอย่างเดียวไม่ใช่หลักฐานว่าเกิดการชำระเงินจริงหรือยืนยันจองสำเร็จแล้ว\n\nใช้ที่ไหน",
+    "intent": "inventory_search",
+    "confidence": 0.8,
+    "ambiguity_level": 0.5,
+    "clarification": {
+      "question": "ใช้ที่ไหน",
+      "missing_dimension": "",
+      "options": [],
+      "questions": [
+        {
+          "id": "4801f0683a7f438e826795b42ca88892:batch:q1",
+          "title": "ใช้ที่ไหน",
+          "options": [
+            "ในอาคาร",
+            "กลางแจ้ง"
+          ],
+          "step": 1,
+          "total_steps": 1,
+          "dimension": "location",
+          "choices": [
+            {
+              "id": "indoor",
+              "label": "ในอาคาร",
+              "description": "",
+              "action_value": "indoor"
+            },
+            {
+              "id": "outdoor",
+              "label": "กลางแจ้ง",
+              "description": "",
+              "action_value": "outdoor"
+            }
+          ],
+          "branch_titles": {},
+          "branch_options": {}
+        }
+      ]
+    },
+    "questions": [
+      {
+        "id": "4801f0683a7f438e826795b42ca88892:batch:q1",
+        "title": "ใช้ที่ไหน",
+        "options": [
+          "ในอาคาร",
+          "กลางแจ้ง"
+        ],
+        "step": 1,
+        "total_steps": 1,
+        "dimension": "location",
+        "choices": [
+          {
+            "id": "indoor",
+            "label": "ในอาคาร",
+            "description": "",
+            "action_value": "indoor"
+          },
+          {
+            "id": "outdoor",
+            "label": "กลางแจ้ง",
+            "description": "",
+            "action_value": "outdoor"
+          }
+        ],
+        "branch_titles": {},
+        "branch_options": {}
+      }
+    ],
+    "items": [],
+    "search_query": "",
+    "search_sources": [],
+    "suggested_replies": [],
+    "context": {
+      "session_id": "fixture-session",
+      "user_goal": "เลือกอุปกรณ์",
+      "budget_max": null,
+      "budget_unit": null,
+      "intended_use": null,
+      "categories": [],
+      "target_items": [],
+      "known_facts": [],
+      "user_constraints": [],
+      "excluded_items": [],
+      "referenced_item_ids": [],
+      "clarification_declined": false,
+      "questions": [
+        {
+          "id": "4801f0683a7f438e826795b42ca88892:batch:q1",
+          "title": "ใช้ที่ไหน",
+          "options": [
+            "ในอาคาร",
+            "กลางแจ้ง"
+          ],
+          "step": 1,
+          "total_steps": 1,
+          "dimension": "location",
+          "choices": [
+            {
+              "id": "indoor",
+              "label": "ในอาคาร",
+              "description": "",
+              "action_value": "indoor"
+            },
+            {
+              "id": "outdoor",
+              "label": "กลางแจ้ง",
+              "description": "",
+              "action_value": "outdoor"
+            }
+          ],
+          "branch_titles": {},
+          "branch_options": {}
+        }
+      ]
+    },
+    "references": [
+      {
+        "id": "rental.request_in_chat",
+        "kind": "app_knowledge",
+        "title": "เปิดคำขอเช่าจากแชท",
+        "reference": "frontend/lib/features/chat/presentation/pages/chat_detail.dart",
+        "reviewed_at": "2026-10-03",
+        "content_sha256": "4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36"
+      },
+      {
+        "id": "rental.request_in_chat",
+        "kind": "app_knowledge",
+        "title": "รายละเอียดและการส่งการ์ดคำขอ",
+        "reference": "frontend/lib/features/booking/presentation/pages/booking_request_page.dart",
+        "reviewed_at": "2026-10-03",
+        "content_sha256": "4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36"
+      },
+      {
+        "id": "rental.request_in_chat",
+        "kind": "app_knowledge",
+        "title": "เส้นทางคำขอเช่า",
+        "reference": "frontend/lib/core/navigation/app_routes.dart",
+        "reviewed_at": "2026-10-03",
+        "content_sha256": "4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36"
+      }
+    ],
+    "request_scope": "broad",
+    "information_sufficient": false,
+    "next_action": "clarify",
+    "response_flow": "general"
+  },
+  "sse": "event: status\ndata: {\"step\": \"processing\", \"message\": \"กำลังวิเคราะห์คำถาม...\"}\n\nevent: metadata\ndata: {\"mode\": \"clarification\", \"recommended_items\": [], \"questions\": [{\"id\": \"4801f0683a7f438e826795b42ca88892:batch:q1\", \"title\": \"ใช้ที่ไหน\", \"options\": [\"ในอาคาร\", \"กลางแจ้ง\"], \"step\": 1, \"total_steps\": 1, \"dimension\": \"location\", \"choices\": [{\"id\": \"indoor\", \"label\": \"ในอาคาร\", \"description\": \"\", \"action_value\": \"indoor\"}, {\"id\": \"outdoor\", \"label\": \"กลางแจ้ง\", \"description\": \"\", \"action_value\": \"outdoor\"}], \"branch_titles\": {}, \"branch_options\": {}}], \"references\": [{\"id\": \"rental.request_in_chat\", \"kind\": \"app_knowledge\", \"title\": \"เปิดคำขอเช่าจากแชท\", \"reference\": \"frontend/lib/features/chat/presentation/pages/chat_detail.dart\", \"reviewed_at\": \"2026-10-03\", \"content_sha256\": \"4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36\"}, {\"id\": \"rental.request_in_chat\", \"kind\": \"app_knowledge\", \"title\": \"รายละเอียดและการส่งการ์ดคำขอ\", \"reference\": \"frontend/lib/features/booking/presentation/pages/booking_request_page.dart\", \"reviewed_at\": \"2026-10-03\", \"content_sha256\": \"4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36\"}, {\"id\": \"rental.request_in_chat\", \"kind\": \"app_knowledge\", \"title\": \"เส้นทางคำขอเช่า\", \"reference\": \"frontend/lib/core/navigation/app_routes.dart\", \"reviewed_at\": \"2026-10-03\", \"content_sha256\": \"4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36\"}], \"request_scope\": \"broad\", \"information_sufficient\": false, \"next_action\": \"clarify\", \"response_flow\": \"general\"}\n\nevent: delta\ndata: {\"text\": \"flow \"}\n\nevent: delta\ndata: {\"text\": \"คำขอเ\"}\n\nevent: delta\ndata: {\"text\": \"ช่าจา\"}\n\nevent: delta\ndata: {\"text\": \"กแชทใ\"}\n\nevent: delta\ndata: {\"text\": \"ช้ราย\"}\n\nevent: delta\ndata: {\"text\": \"ละเอี\"}\n\nevent: delta\ndata: {\"text\": \"ยดอุป\"}\n\nevent: delta\ndata: {\"text\": \"กรณ์ \"}\n\nevent: delta\ndata: {\"text\": \"ประเภ\"}\n\nevent: delta\ndata: {\"text\": \"ทการเ\"}\n\nevent: delta\ndata: {\"text\": \"ช่า ช\"}\n\nevent: delta\ndata: {\"text\": \"่วงวั\"}\n\nevent: delta\ndata: {\"text\": \"นหรือ\"}\n\nevent: delta\ndata: {\"text\": \"เวลา \"}\n\nevent: delta\ndata: {\"text\": \"และสถ\"}\n\nevent: delta\ndata: {\"text\": \"านที่\"}\n\nevent: delta\ndata: {\"text\": \"นัดพบ\"}\n\nevent: delta\ndata: {\"text\": \" มีหน\"}\n\nevent: delta\ndata: {\"text\": \"้าสรุ\"}\n\nevent: delta\ndata: {\"text\": \"ปให้ต\"}\n\nevent: delta\ndata: {\"text\": \"รวจรา\"}\n\nevent: delta\ndata: {\"text\": \"ยละเอ\"}\n\nevent: delta\ndata: {\"text\": \"ียดก่\"}\n\nevent: delta\ndata: {\"text\": \"อนส่ง\"}\n\nevent: delta\ndata: {\"text\": \"การ์ด\"}\n\nevent: delta\ndata: {\"text\": \"คำขอเ\"}\n\nevent: delta\ndata: {\"text\": \"ข้าแช\"}\n\nevent: delta\ndata: {\"text\": \"ท การ\"}\n\nevent: delta\ndata: {\"text\": \"ส่งกา\"}\n\nevent: delta\ndata: {\"text\": \"ร์ดนี\"}\n\nevent: delta\ndata: {\"text\": \"้เพีย\"}\n\nevent: delta\ndata: {\"text\": \"งอย่า\"}\n\nevent: delta\ndata: {\"text\": \"งเดีย\"}\n\nevent: delta\ndata: {\"text\": \"วไม่ใ\"}\n\nevent: delta\ndata: {\"text\": \"ช่หลั\"}\n\nevent: delta\ndata: {\"text\": \"กฐานว\"}\n\nevent: delta\ndata: {\"text\": \"่าเกิ\"}\n\nevent: delta\ndata: {\"text\": \"ดการช\"}\n\nevent: delta\ndata: {\"text\": \"ำระเง\"}\n\nevent: delta\ndata: {\"text\": \"ินจริ\"}\n\nevent: delta\ndata: {\"text\": \"งหรือ\"}\n\nevent: delta\ndata: {\"text\": \"ยืนยั\"}\n\nevent: delta\ndata: {\"text\": \"นจองส\"}\n\nevent: delta\ndata: {\"text\": \"ำเร็จ\"}\n\nevent: delta\ndata: {\"text\": \"แล้ว\\n\"}\n\nevent: delta\ndata: {\"text\": \"\\nใช้ท\"}\n\nevent: delta\ndata: {\"text\": \"ี่ไหน\"}\n\nevent: done\ndata: {\"response\": \"flow คำขอเช่าจากแชทใช้รายละเอียดอุปกรณ์ ประเภทการเช่า ช่วงวันหรือเวลา และสถานที่นัดพบ มีหน้าสรุปให้ตรวจรายละเอียดก่อนส่งการ์ดคำขอเข้าแชท การส่งการ์ดนี้เพียงอย่างเดียวไม่ใช่หลักฐานว่าเกิดการชำระเงินจริงหรือยืนยันจองสำเร็จแล้ว\\n\\nใช้ที่ไหน\", \"intent\": \"inventory_search\", \"confidence\": 0.8, \"ambiguity_level\": 0.5, \"clarification\": {\"question\": \"ใช้ที่ไหน\", \"missing_dimension\": \"\", \"options\": [], \"questions\": [{\"id\": \"4801f0683a7f438e826795b42ca88892:batch:q1\", \"title\": \"ใช้ที่ไหน\", \"options\": [\"ในอาคาร\", \"กลางแจ้ง\"], \"step\": 1, \"total_steps\": 1, \"dimension\": \"location\", \"choices\": [{\"id\": \"indoor\", \"label\": \"ในอาคาร\", \"description\": \"\", \"action_value\": \"indoor\"}, {\"id\": \"outdoor\", \"label\": \"กลางแจ้ง\", \"description\": \"\", \"action_value\": \"outdoor\"}], \"branch_titles\": {}, \"branch_options\": {}}]}, \"questions\": [{\"id\": \"4801f0683a7f438e826795b42ca88892:batch:q1\", \"title\": \"ใช้ที่ไหน\", \"options\": [\"ในอาคาร\", \"กลางแจ้ง\"], \"step\": 1, \"total_steps\": 1, \"dimension\": \"location\", \"choices\": [{\"id\": \"indoor\", \"label\": \"ในอาคาร\", \"description\": \"\", \"action_value\": \"indoor\"}, {\"id\": \"outdoor\", \"label\": \"กลางแจ้ง\", \"description\": \"\", \"action_value\": \"outdoor\"}], \"branch_titles\": {}, \"branch_options\": {}}], \"items\": [], \"search_query\": \"\", \"search_sources\": [], \"suggested_replies\": [], \"context\": {\"session_id\": \"fixture-session\", \"user_goal\": \"เลือกอุปกรณ์\", \"budget_max\": null, \"budget_unit\": null, \"intended_use\": null, \"categories\": [], \"target_items\": [], \"known_facts\": [], \"user_constraints\": [], \"excluded_items\": [], \"referenced_item_ids\": [], \"clarification_declined\": false, \"questions\": [{\"id\": \"4801f0683a7f438e826795b42ca88892:batch:q1\", \"title\": \"ใช้ที่ไหน\", \"options\": [\"ในอาคาร\", \"กลางแจ้ง\"], \"step\": 1, \"total_steps\": 1, \"dimension\": \"location\", \"choices\": [{\"id\": \"indoor\", \"label\": \"ในอาคาร\", \"description\": \"\", \"action_value\": \"indoor\"}, {\"id\": \"outdoor\", \"label\": \"กลางแจ้ง\", \"description\": \"\", \"action_value\": \"outdoor\"}], \"branch_titles\": {}, \"branch_options\": {}}]}, \"references\": [{\"id\": \"rental.request_in_chat\", \"kind\": \"app_knowledge\", \"title\": \"เปิดคำขอเช่าจากแชท\", \"reference\": \"frontend/lib/features/chat/presentation/pages/chat_detail.dart\", \"reviewed_at\": \"2026-10-03\", \"content_sha256\": \"4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36\"}, {\"id\": \"rental.request_in_chat\", \"kind\": \"app_knowledge\", \"title\": \"รายละเอียดและการส่งการ์ดคำขอ\", \"reference\": \"frontend/lib/features/booking/presentation/pages/booking_request_page.dart\", \"reviewed_at\": \"2026-10-03\", \"content_sha256\": \"4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36\"}, {\"id\": \"rental.request_in_chat\", \"kind\": \"app_knowledge\", \"title\": \"เส้นทางคำขอเช่า\", \"reference\": \"frontend/lib/core/navigation/app_routes.dart\", \"reviewed_at\": \"2026-10-03\", \"content_sha256\": \"4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36\"}], \"answer\": \"flow คำขอเช่าจากแชทใช้รายละเอียดอุปกรณ์ ประเภทการเช่า ช่วงวันหรือเวลา และสถานที่นัดพบ มีหน้าสรุปให้ตรวจรายละเอียดก่อนส่งการ์ดคำขอเข้าแชท การส่งการ์ดนี้เพียงอย่างเดียวไม่ใช่หลักฐานว่าเกิดการชำระเงินจริงหรือยืนยันจองสำเร็จแล้ว\\n\\nใช้ที่ไหน\", \"recommended_items\": [], \"request_scope\": \"broad\", \"information_sufficient\": false, \"next_action\": \"clarify\", \"response_flow\": \"general\"}\n\ndata: [DONE]\n\n"
+}

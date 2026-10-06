@@ -12,10 +12,11 @@ class RentalReturnRemoteDataSource {
   final SupabaseClient? _customClient;
 
   RentalReturnRemoteDataSource({SupabaseClient? client})
-      : _client = client ??
-            (SupabaseConfig.isConfigured && SupabaseConfig.isInitialized
-                ? SupabaseConfig.client
-                : SupabaseClient('https://mock.supabase.co', 'mock-anon-key'));
+      : _customClient = client;
+
+  SupabaseClient? get _client =>
+      _customClient ??
+      (SupabaseConfig.isInitialized ? SupabaseConfig.client : null);
 
   /// ดึงข้อมูลรายการเช่าจริงจาก Supabase (booking_tb หรือ item_tb + profile_tb)
   Future<RentalReturnSession> getSession([int? rentalId]) async {
@@ -110,7 +111,7 @@ class RentalReturnRemoteDataSource {
 
         // 3. ดึงชื่อผู้ให้เช่าจาก public_profile_v
         if (lenderId.isNotEmpty) {
-          final lenderProfile = await _client
+          final lenderProfile = await client
               .from('public_profile_v')
               .select('display_name, email, phone')
               .eq('user_id', lenderId)
@@ -364,6 +365,9 @@ class RentalReturnRemoteDataSource {
     required Map<String, bool> checklist,
   }) async {
     try {
+      final client = _client;
+      if (client == null) return;
+
       final List<Map<String, dynamic>> photosData = [];
       for (final p in photos) {
         String? finalImageUrl = p.imageUrl;
@@ -395,7 +399,7 @@ class RentalReturnRemoteDataSource {
       final photosJson = jsonEncode(photosData);
       final challengeCode = photos.isNotEmpty ? photos.first.challengeCode : 'YM-${rentalId.toString().padLeft(5, '0')}';
 
-      await _client.from('booking_tb').update({
+      await client.from('booking_tb').update({
         'status': 'รอส่งคืน',
         'return_photos': photosJson,
         'challenge_code': challengeCode,

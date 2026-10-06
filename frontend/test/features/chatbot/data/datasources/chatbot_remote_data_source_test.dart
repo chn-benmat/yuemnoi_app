@@ -62,7 +62,7 @@ void main() {
     final captured =
         verify(
               () => client.post(
-                '/api/v1/chat-ai',
+                '/api/chat-ai',
                 data: captureAny(named: 'data'),
                 headers: any(named: 'headers'),
               ),

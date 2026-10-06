@@ -1,0 +1,232 @@
+{
+  "schema_version": "2",
+  "version": "2026-10-05-response-ready-30s",
+  "status": "approved",
+  "production_enabled": true,
+  "approval": {
+    "approved_by": "user",
+    "approved_at": "2026-10-05T13:42:43.338942+00:00",
+    "authorization": "User selected every message up to30seconds from send interaction to complete validated answer ready, excluding SSE character delivery/typewriter; confirmed implementation in this chat on2026-10-05. Preserve old trials. Keep providers, quota ledger, logical caps2/3/3, one fallback and mandatory independent actual-model review unchanged.",
+    "content_sha256": "9284c76c818e4f09bf222f7508bb6d0571c8c08ac41cf040ad4cb0655405f01e"
+  },
+  "knowledge_path": "knowledge/app_knowledge.json",
+  "interpretation_policy_path": "knowledge/interpretation_policy.json",
+  "settings_precedence": "explicit_environment_then_dotenv_then_json",
+  "model_order_status": "pending_development_measurement",
+  "providers": [
+    {
+      "id": "gemini-primary",
+      "protocol": "gemini_json_schema",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models",
+      "key_setting": "GEMINI_API_KEY",
+      "model_setting": "GEMINI_PRIMARY_MODEL",
+      "proposed_model": "gemini-3.5-flash-lite",
+      "reasoning_effort": null,
+      "enabled": true,
+      "disabled_reason": null,
+      "quota": {
+        "bucket": "gemini",
+        "requests_per_window": 30,
+        "tokens_per_window": 8000,
+        "window_seconds": 60.0,
+        "requests_per_day": 1000,
+        "tokens_per_day": 200000,
+        "day_seconds": 86400.0,
+        "scope": "provider"
+      }
+    },
+    {
+      "id": "gemini-fallback-1",
+      "protocol": "gemini_json_schema",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models",
+      "key_setting": "GEMINI_API_KEY",
+      "model_setting": "GEMINI_FALLBACK_MODEL_1",
+      "proposed_model": "gemini-3.1-flash-lite",
+      "reasoning_effort": null,
+      "enabled": false,
+      "disabled_reason": "timeout_during_access_recheck_2026_10_04",
+      "quota": {
+        "bucket": "gemini",
+        "requests_per_window": 30,
+        "tokens_per_window": 8000,
+        "window_seconds": 60.0,
+        "requests_per_day": 1000,
+        "tokens_per_day": 200000,
+        "day_seconds": 86400.0,
+        "scope": "provider"
+      }
+    },
+    {
+      "id": "gemini-fallback-2",
+      "protocol": "gemini_json_schema",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models",
+      "key_setting": "GEMINI_API_KEY",
+      "model_setting": "GEMINI_FALLBACK_MODEL_2",
+      "proposed_model": "gemini-flash-lite-latest",
+      "reasoning_effort": null,
+      "enabled": false,
+      "disabled_reason": "capability_only_full_chat_not_qualified_2026_10_04",
+      "quota": {
+        "bucket": "gemini",
+        "requests_per_window": 30,
+        "tokens_per_window": 8000,
+        "window_seconds": 60.0,
+        "requests_per_day": 1000,
+        "tokens_per_day": 200000,
+        "day_seconds": 86400.0,
+        "scope": "provider"
+      }
+    },
+    {
+      "id": "groq-primary",
+      "protocol": "groq_json_schema",
+      "endpoint": "https://api.groq.com/openai/v1/chat/completions",
+      "key_setting": "GROQ_API_KEY",
+      "model_setting": "GROQ_PRIMARY_MODEL",
+      "proposed_model": "qwen/qwen3.8-27b",
+      "reasoning_effort": "none",
+      "enabled": true,
+      "disabled_reason": null,
+      "quota": {
+        "bucket": "groq",
+        "requests_per_window": 30,
+        "tokens_per_window": 8000,
+        "window_seconds": 60.0,
+        "requests_per_day": 1000,
+        "tokens_per_day": 200000,
+        "day_seconds": 86400.0,
+        "scope": "model"
+      }
+    },
+    {
+      "id": "groq-fallback-1",
+      "protocol": "groq_json_schema",
+      "endpoint": "https://api.groq.com/openai/v1/chat/completions",
+      "key_setting": "GROQ_API_KEY",
+      "model_setting": "GROQ_FALLBACK_MODEL_1",
+      "proposed_model": "openai/gpt-oss-120b",
+      "reasoning_effort": "low",
+      "enabled": true,
+      "disabled_reason": null,
+      "quota": {
+        "bucket": "groq",
+        "requests_per_window": 30,
+        "tokens_per_window": 8000,
+        "window_seconds": 60.0,
+        "requests_per_day": 1000,
+        "tokens_per_day": 200000,
+        "day_seconds": 86400.0,
+        "scope": "model"
+      }
+    },
+    {
+      "id": "groq-fallback-2",
+      "protocol": "groq_json_schema",
+      "endpoint": "https://api.groq.com/openai/v1/chat/completions",
+      "key_setting": "GROQ_API_KEY",
+      "model_setting": "GROQ_FALLBACK_MODEL_2",
+      "proposed_model": "openai/gpt-oss-20b",
+      "reasoning_effort": "low",
+      "enabled": true,
+      "disabled_reason": null,
+      "quota": {
+        "bucket": "groq",
+        "requests_per_window": 30,
+        "tokens_per_window": 8000,
+        "window_seconds": 60.0,
+        "requests_per_day": 1000,
+        "tokens_per_day": 200000,
+        "day_seconds": 86400.0,
+        "scope": "model"
+      }
+    }
+  ],
+  "general": {
+    "target_seconds": 15.0,
+    "hard_deadline_seconds": 30.0,
+    "logical_calls": 2
+  },
+  "equipment": {
+    "target_seconds": 15.0,
+    "hard_deadline_seconds": 30.0,
+    "logical_calls": 3
+  },
+  "technical_hard_deadline_seconds": 30.0,
+  "max_failovers_per_logical_call": 1,
+  "load": {
+    "concurrent_requests": 5,
+    "batch_interval_seconds": 60,
+    "certification_batches_per_flow_per_round": 20,
+    "certification_rounds": 3,
+    "ui_requests_per_batch": 1,
+    "transport_requests_per_batch": 4
+  },
+  "limits": {
+    "messages": 16,
+    "characters": 24000,
+    "questions": 3,
+    "choices_per_question": 4,
+    "items": 3,
+    "output_tokens": 1200,
+    "temperature": 0.1,
+    "question_title_characters": 80,
+    "choice_label_characters": 80,
+    "generation_attempts": 2
+  },
+  "circuit_open_seconds": 60.0,
+  "quota_backoff_seconds": 60.0,
+  "http": {
+    "timeout_seconds": 30.0,
+    "logical_call_deadline_seconds": 30.0,
+    "max_connections": 5,
+    "max_keepalive_connections": 5,
+    "keepalive_expiry_seconds": 60.0,
+    "token_estimation_characters_per_token": 3.5,
+    "token_estimation_safety_factor": 1.1,
+    "telemetry_history": 500,
+    "quota_admission_wait_seconds": 0.05,
+    "permission_probe_prompt": "Acknowledge that this generation endpoint can respond. Return a brief acknowledgment.",
+    "permission_probe_output_tokens": 16
+  },
+  "stream": {
+    "heartbeat_seconds": 10.0,
+    "chunk_characters": 64
+  },
+  "quota_ledger": {
+    "path": ".state/llm_quota.json",
+    "lock_timeout_seconds": 0.25,
+    "poll_seconds": 0.005
+  },
+  "stages": {
+    "planning": {
+      "profiles": [
+        "gemini-primary",
+        "groq-primary",
+        "groq-fallback-1",
+        "groq-fallback-2"
+      ],
+      "p95_seconds": {}
+    },
+    "evidence": {
+      "profiles": [
+        "gemini-primary",
+        "groq-primary",
+        "groq-fallback-1",
+        "groq-fallback-2"
+      ],
+      "p95_seconds": {}
+    },
+    "review": {
+      "profiles": [
+        "gemini-primary",
+        "groq-primary",
+        "groq-fallback-1",
+        "groq-fallback-2"
+      ],
+      "p95_seconds": {}
+    },
+    "finalization_reserve_seconds": 0.15,
+    "minimum_attempt_seconds": 0.025,
+    "measurement_artifact": null
+  }
+}

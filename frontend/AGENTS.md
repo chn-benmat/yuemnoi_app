@@ -71,9 +71,9 @@
 To maintain security, data integrity, and scalability, follow the **Hybrid Architecture** guidelines:
 
 ### 5.1 Backend Responsibilities (Go Backend via REST API)
-- **Core CRUD & Business Logic**: All product/item feeds, item creation, updates, and rental transactions must route through Go backend APIs (`/api/v1/items`, `/api/v1/rentals`).
-- **AI Chatbot Gateway**: AI queries and streaming route through `/api/v1/chat-ai` and `/api/v1/chat-ai/stream`, which coordinates with the Python AI service.
-- **Sensitive User Data & Authorization**: Profile updates, contact phone number lookup (`/api/v1/chat/contact`), KYC verifications, and FCM token synchronization (`profile_tb`) must be processed and validated through the Go backend to enforce strict authorization and prevent direct client-side table leaks.
+- **Core CRUD & Business Logic**: All product/item feeds, item creation, updates, and rental transactions must route through Go backend APIs (`/api/items`, `/api/rentals`).
+- **AI Chatbot Gateway**: AI queries and streaming route through `/api/chat-ai` and `/api/chat-ai/stream`, which coordinates with the Python AI service.
+- **Sensitive User Data & Authorization**: Profile updates, contact phone number lookup (`/api/chat/contact`), KYC verifications, and FCM token synchronization (`profile_tb`) must be processed and validated through the Go backend to enforce strict authorization and prevent direct client-side table leaks.
 - **Server-Side Image & Data Validation**: Multi-table joins, pagination, input validation, search ranking, and media storage coordination should be handled by the backend rather than in-memory client joins.
 
 ### 5.2 Frontend Direct Supabase Usage (Realtime & Client SDK)

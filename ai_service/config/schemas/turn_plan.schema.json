@@ -1,0 +1,401 @@
+{
+  "$defs": {
+    "KnownFact": {
+      "additionalProperties": false,
+      "properties": {
+        "dimension": {
+          "minLength": 1,
+          "title": "Dimension",
+          "type": "string"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "source_message_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Message Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "dimension",
+        "value",
+        "source_message_ids"
+      ],
+      "title": "KnownFact",
+      "type": "object"
+    },
+    "PlannedQuestion": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "dimension": {
+          "minLength": 1,
+          "title": "Dimension",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/QuestionChoice"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Choices",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "dimension",
+        "title",
+        "choices"
+      ],
+      "title": "PlannedQuestion",
+      "type": "object"
+    },
+    "QuestionChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "supporting_item_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supporting Item Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "value",
+        "supporting_item_ids"
+      ],
+      "title": "QuestionChoice",
+      "type": "object"
+    },
+    "RequestUnderstanding": {
+      "additionalProperties": false,
+      "description": "Required semantic contract for live routing, independent of legacy scores.",
+      "properties": {
+        "intent": {
+          "description": "Communicative purpose, separate from whether clarification is needed.",
+          "enum": [
+            "bot_capabilities",
+            "item_inquiry",
+            "inventory_search",
+            "comparison",
+            "clarification_needed",
+            "platform_faq",
+            "general_greeting",
+            "general_information"
+          ],
+          "title": "Intent",
+          "type": "string"
+        },
+        "ambiguity_level": {
+          "description": "Unresolved meaning; not an action threshold.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Ambiguity Level",
+          "type": "number"
+        },
+        "confidence": {
+          "description": "Uncalibrated model self-assessment.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "target_items": {
+          "description": "Equipment actually requested or referred to; resolve only supported references.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Target Items",
+          "type": "array"
+        },
+        "categories": {
+          "description": "Conceptual equipment categories, without a fixed catalog taxonomy.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Categories",
+          "type": "array"
+        },
+        "budget_max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit maximum budget; null when absent or units cannot be interpreted.",
+          "title": "Budget Max"
+        },
+        "budget_unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Budget billing period explicitly established by the user; null when unknown, do not infer it from shop units.",
+          "title": "Budget Unit"
+        },
+        "intended_use": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Relevant user-stated workload, after corrections; null if unknown.",
+          "title": "Intended Use"
+        },
+        "missing_slots": {
+          "description": "Only material unknown requirements for the requested operation, not optional preferences.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Slots",
+          "type": "array"
+        },
+        "needs_external_search": {
+          "description": "Whether technical facts need external verification; shop prices, stock and policies need their authoritative source.",
+          "title": "Needs External Search",
+          "type": "boolean"
+        },
+        "search_query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Focused technical verification query, or null when unnecessary.",
+          "title": "Search Query"
+        },
+        "next_action": {
+          "enum": [
+            "answer",
+            "clarify"
+          ],
+          "title": "Next Action",
+          "type": "string"
+        },
+        "user_goal": {
+          "minLength": 1,
+          "title": "User Goal",
+          "type": "string"
+        },
+        "catalog_operation": {
+          "description": "Required catalog operation across all user goals, independent of the primary intent; none when no catalog evidence is needed.",
+          "enum": [
+            "none",
+            "selection",
+            "inspection",
+            "comparison"
+          ],
+          "title": "Catalog Operation",
+          "type": "string"
+        },
+        "additional_goals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Additional Goals",
+          "type": "array"
+        },
+        "request_scope": {
+          "enum": [
+            "broad",
+            "specific",
+            "not_applicable"
+          ],
+          "title": "Request Scope",
+          "type": "string"
+        },
+        "information_sufficient": {
+          "title": "Information Sufficient",
+          "type": "boolean"
+        },
+        "known_facts": {
+          "items": {
+            "$ref": "#/$defs/KnownFact"
+          },
+          "title": "Known Facts",
+          "type": "array"
+        },
+        "user_constraints": {
+          "items": {
+            "$ref": "#/$defs/KnownFact"
+          },
+          "title": "User Constraints",
+          "type": "array"
+        },
+        "excluded_items": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Excluded Items",
+          "type": "array"
+        },
+        "topic_changed": {
+          "title": "Topic Changed",
+          "type": "boolean"
+        },
+        "clarification_declined": {
+          "title": "Clarification Declined",
+          "type": "boolean"
+        },
+        "reference_resolution": {
+          "minLength": 1,
+          "title": "Reference Resolution",
+          "type": "string"
+        },
+        "decision_reason": {
+          "minLength": 1,
+          "title": "Decision Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "intent",
+        "ambiguity_level",
+        "confidence",
+        "target_items",
+        "categories",
+        "budget_max",
+        "budget_unit",
+        "intended_use",
+        "missing_slots",
+        "needs_external_search",
+        "search_query",
+        "next_action",
+        "user_goal",
+        "catalog_operation",
+        "additional_goals",
+        "request_scope",
+        "information_sufficient",
+        "known_facts",
+        "user_constraints",
+        "excluded_items",
+        "topic_changed",
+        "clarification_declined",
+        "reference_resolution",
+        "decision_reason"
+      ],
+      "title": "RequestUnderstanding",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "speaker_register": {
+      "const": "informal_ungendered",
+      "default": "informal_ungendered",
+      "description": "Use direct, conversational Thai with no gender attribution to the speaker. Express warmth through responsive wording rather than gender-associated pronouns or sentence-final honorifics. Apply this register to every generated text field.",
+      "title": "Speaker Register",
+      "type": "string",
+      "x-provider-description": true
+    },
+    "response_mode": {
+      "description": "Select the CURRENT response stage, independent of the eventual catalog operation: clarification whenever any material question is pending; conversation only for a nonfactual social reply with no questions; documents for approved app answers without questions; catalog_overview for unfiltered category browsing; equipment for a ready catalog answer; technical for ready external verification. Clarification includes a brief introduction and stops evidence synthesis, even when a selection/inspection/comparison operation remains requested.",
+      "enum": [
+        "clarification",
+        "documents",
+        "conversation",
+        "information",
+        "catalog_overview",
+        "equipment",
+        "technical"
+      ],
+      "title": "Response Mode",
+      "type": "string",
+      "x-provider-description": true
+    },
+    "overview_available_only": {
+      "default": false,
+      "title": "Overview Available Only",
+      "type": "boolean"
+    },
+    "understanding": {
+      "$ref": "#/$defs/RequestUnderstanding"
+    },
+    "knowledge_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Knowledge Ids",
+      "type": "array"
+    },
+    "unverified_topic_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unverified Topic Ids",
+      "type": "array"
+    },
+    "questions": {
+      "items": {
+        "$ref": "#/$defs/PlannedQuestion"
+      },
+      "maxItems": 3,
+      "title": "Questions",
+      "type": "array"
+    },
+    "message": {
+      "description": "Only a brief questionnaire introduction or nonfactual social reply, otherwise empty. Friendly natural Thai in a nongendered speaker voice: omit gender-associated first-person pronouns and sentence-final honorifics; express courtesy through helpful wording.",
+      "title": "Message",
+      "type": "string",
+      "x-provider-description": true
+    }
+  },
+  "required": [
+    "response_mode",
+    "understanding",
+    "knowledge_ids",
+    "unverified_topic_ids",
+    "questions",
+    "message"
+  ],
+  "title": "TurnPlan",
+  "type": "object"
+}

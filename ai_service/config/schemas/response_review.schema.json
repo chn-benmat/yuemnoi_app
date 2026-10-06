@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "ReviewAssessment": {
+      "additionalProperties": false,
+      "properties": {
+        "check": {
+          "enum": [
+            "relevance",
+            "completeness",
+            "neutral_voice",
+            "choice_equivalence",
+            "grounding",
+            "context",
+            "followups"
+          ],
+          "title": "Check",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Specific assessment against actual user evidence and original draft text; distinguish assistant authorship from quoted speech.",
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "field_paths": {
+          "description": "Relevant exact JSON pointers relative to restored draft root. Empty only when that check has no applicable draft field.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Field Paths",
+          "type": "array",
+          "x-provider-description": true
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "check",
+        "reason",
+        "field_paths",
+        "passed"
+      ],
+      "title": "ReviewAssessment",
+      "type": "object"
+    },
+    "ReviewIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "semantic",
+            "neutral_voice",
+            "grounding",
+            "context",
+            "choice",
+            "contract"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "field_path": {
+          "description": "Exact JSON pointer relative to the restored draft root, for example /response or /questions/0/title. Do not prefix /draft.",
+          "minLength": 1,
+          "title": "Field Path",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "quoted_text": {
+          "description": "Exact unchanged substring of the original string at field_path, without surrounding quotation marks or paraphrase.",
+          "minLength": 1,
+          "title": "Quoted Text",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "field_path",
+        "quoted_text",
+        "reason"
+      ],
+      "title": "ReviewIssue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A single model assessment per check, rather than contradictory verdict copies.",
+  "properties": {
+    "assessments": {
+      "items": {
+        "$ref": "#/$defs/ReviewAssessment"
+      },
+      "maxItems": 7,
+      "minItems": 7,
+      "title": "Assessments",
+      "type": "array"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/ReviewIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "reviewed_surface_groups": {
+      "items": {
+        "enum": [
+          "response",
+          "questions",
+          "clarification",
+          "items",
+          "suggested_replies",
+          "references",
+          "search_sources"
+        ],
+        "type": "string"
+      },
+      "title": "Reviewed Surface Groups",
+      "type": "array"
+    }
+  },
+  "required": [
+    "assessments",
+    "issues",
+    "reviewed_surface_groups"
+  ],
+  "title": "NativeResponseReview",
+  "type": "object"
+}

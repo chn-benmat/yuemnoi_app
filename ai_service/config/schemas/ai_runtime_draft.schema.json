@@ -1,0 +1,313 @@
+{
+  "$defs": {
+    "ContextLimits": {
+      "additionalProperties": false,
+      "properties": {
+        "messages": {
+          "exclusiveMinimum": 0,
+          "title": "Messages",
+          "type": "integer"
+        },
+        "characters": {
+          "exclusiveMinimum": 0,
+          "title": "Characters",
+          "type": "integer"
+        },
+        "questions": {
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Questions",
+          "type": "integer"
+        },
+        "choices_per_question": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Choices Per Question",
+          "type": "integer"
+        },
+        "items": {
+          "exclusiveMinimum": 0,
+          "title": "Items",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "exclusiveMinimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "temperature": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Temperature",
+          "type": "number"
+        }
+      },
+      "required": [
+        "messages",
+        "characters",
+        "questions",
+        "choices_per_question",
+        "items",
+        "output_tokens",
+        "temperature"
+      ],
+      "title": "ContextLimits",
+      "type": "object"
+    },
+    "FlowBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "target_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Target Seconds",
+          "type": "number"
+        },
+        "hard_deadline_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Hard Deadline Seconds",
+          "type": "number"
+        },
+        "logical_calls": {
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Logical Calls",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target_seconds",
+        "hard_deadline_seconds",
+        "logical_calls"
+      ],
+      "title": "FlowBudget",
+      "type": "object"
+    },
+    "LoadProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "concurrent_requests": {
+          "const": 5,
+          "title": "Concurrent Requests",
+          "type": "integer"
+        },
+        "batch_interval_seconds": {
+          "const": 60,
+          "title": "Batch Interval Seconds",
+          "type": "integer"
+        },
+        "certification_batches_per_flow_per_round": {
+          "const": 20,
+          "title": "Certification Batches Per Flow Per Round",
+          "type": "integer"
+        },
+        "certification_rounds": {
+          "const": 3,
+          "title": "Certification Rounds",
+          "type": "integer"
+        },
+        "ui_requests_per_batch": {
+          "const": 1,
+          "title": "Ui Requests Per Batch",
+          "type": "integer"
+        },
+        "transport_requests_per_batch": {
+          "const": 4,
+          "title": "Transport Requests Per Batch",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "concurrent_requests",
+        "batch_interval_seconds",
+        "certification_batches_per_flow_per_round",
+        "certification_rounds",
+        "ui_requests_per_batch",
+        "transport_requests_per_batch"
+      ],
+      "title": "LoadProfile",
+      "type": "object"
+    },
+    "ProviderProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "protocol": {
+          "enum": [
+            "groq_json_schema",
+            "gemini_json_schema"
+          ],
+          "title": "Protocol",
+          "type": "string"
+        },
+        "endpoint": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "key_setting": {
+          "enum": [
+            "GROQ_API_KEY",
+            "GEMINI_API_KEY"
+          ],
+          "title": "Key Setting",
+          "type": "string"
+        },
+        "model_setting": {
+          "enum": [
+            "GEMINI_PRIMARY_MODEL",
+            "GEMINI_FALLBACK_MODEL_1",
+            "GEMINI_FALLBACK_MODEL_2",
+            "GROQ_PRIMARY_MODEL",
+            "GROQ_FALLBACK_MODEL_1",
+            "GROQ_FALLBACK_MODEL_2"
+          ],
+          "title": "Model Setting",
+          "type": "string"
+        },
+        "proposed_model": {
+          "minLength": 1,
+          "title": "Proposed Model",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reasoning Effort"
+        }
+      },
+      "required": [
+        "id",
+        "protocol",
+        "endpoint",
+        "key_setting",
+        "model_setting",
+        "proposed_model",
+        "reasoning_effort"
+      ],
+      "title": "ProviderProfile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "version": {
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "draft_pending_owner_review",
+      "title": "Status",
+      "type": "string"
+    },
+    "production_enabled": {
+      "const": false,
+      "title": "Production Enabled",
+      "type": "boolean"
+    },
+    "knowledge_path": {
+      "minLength": 1,
+      "title": "Knowledge Path",
+      "type": "string"
+    },
+    "interpretation_policy_path": {
+      "minLength": 1,
+      "title": "Interpretation Policy Path",
+      "type": "string"
+    },
+    "settings_precedence": {
+      "const": "explicit_environment_then_dotenv_then_json",
+      "title": "Settings Precedence",
+      "type": "string"
+    },
+    "model_order_status": {
+      "const": "pending_development_measurement",
+      "title": "Model Order Status",
+      "type": "string"
+    },
+    "providers": {
+      "items": {
+        "$ref": "#/$defs/ProviderProfile"
+      },
+      "minItems": 1,
+      "title": "Providers",
+      "type": "array"
+    },
+    "general": {
+      "$ref": "#/$defs/FlowBudget"
+    },
+    "equipment": {
+      "$ref": "#/$defs/FlowBudget"
+    },
+    "technical_hard_deadline_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Technical Hard Deadline Seconds",
+      "type": "number"
+    },
+    "max_failovers_per_logical_call": {
+      "const": 1,
+      "title": "Max Failovers Per Logical Call",
+      "type": "integer"
+    },
+    "load": {
+      "$ref": "#/$defs/LoadProfile"
+    },
+    "limits": {
+      "$ref": "#/$defs/ContextLimits"
+    },
+    "circuit_open_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Circuit Open Seconds",
+      "type": "number"
+    },
+    "quota_backoff_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Quota Backoff Seconds",
+      "type": "number"
+    }
+  },
+  "required": [
+    "schema_version",
+    "version",
+    "status",
+    "production_enabled",
+    "knowledge_path",
+    "interpretation_policy_path",
+    "settings_precedence",
+    "model_order_status",
+    "providers",
+    "general",
+    "equipment",
+    "technical_hard_deadline_seconds",
+    "max_failovers_per_logical_call",
+    "load",
+    "limits",
+    "circuit_open_seconds",
+    "quota_backoff_seconds"
+  ],
+  "title": "RuntimeDraft",
+  "type": "object"
+}

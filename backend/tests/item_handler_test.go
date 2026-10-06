@@ -49,7 +49,7 @@ func TestCreateItemAcceptsMultipartImages(t *testing.T) {
 	repository := &itemHandlerRepository{}
 	handler := ports.NewItemHandler(repository, itemTokenVerifier{})
 	router := gin.New()
-	router.POST("/api/v1/items", handler.CreateItem)
+	router.POST("/api/items", handler.CreateItem)
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -76,7 +76,7 @@ func TestCreateItemAcceptsMultipartImages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/items", body)
+	request := httptest.NewRequest(http.MethodPost, "/api/items", body)
 	request.Header.Set("Content-Type", writer.FormDataContentType())
 	request.Header.Set("Authorization", "Bearer valid-token")
 	response := httptest.NewRecorder()
@@ -116,9 +116,9 @@ func TestGetAllItemsPreservesRankedOrderAndMetrics(t *testing.T) {
 	}
 	handler := ports.NewItemHandler(repository, itemTokenVerifier{})
 	router := gin.New()
-	router.GET("/api/v1/items", handler.GetAllItems)
+	router.GET("/api/items", handler.GetAllItems)
 
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/items", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/items", nil)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 
@@ -163,10 +163,10 @@ func TestGetAllItems_WithSearchFilter(t *testing.T) {
 	}
 	handler := ports.NewItemHandler(repository, itemTokenVerifier{})
 	router := gin.New()
-	router.GET("/api/v1/items", handler.GetAllItems)
+	router.GET("/api/items", handler.GetAllItems)
 
 	// ค้นหาด้วยชื่อภาษาไทย "กล้อง"
-	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/items?search=กล้อง", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/api/items?search=กล้อง", nil)
 	resp1 := httptest.NewRecorder()
 	router.ServeHTTP(resp1, req1)
 	if resp1.Code != http.StatusOK {
@@ -179,7 +179,7 @@ func TestGetAllItems_WithSearchFilter(t *testing.T) {
 	}
 
 	// ค้นหาด้วยคำอธิบาย "กันฝน"
-	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/items?search=กันฝน", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/items?search=กันฝน", nil)
 	resp2 := httptest.NewRecorder()
 	router.ServeHTTP(resp2, req2)
 	var res2 []map[string]any

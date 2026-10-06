@@ -1,0 +1,169 @@
+{
+  "$defs": {
+    "ProbeChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label"
+      ],
+      "title": "ProbeChoice",
+      "type": "object"
+    },
+    "ProbeFact": {
+      "additionalProperties": false,
+      "properties": {
+        "dimension": {
+          "title": "Dimension",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "source_message_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Message Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "dimension",
+        "value",
+        "source_message_ids"
+      ],
+      "title": "ProbeFact",
+      "type": "object"
+    },
+    "ProbeQuestion": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "dimension": {
+          "title": "Dimension",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/ProbeChoice"
+          },
+          "title": "Choices",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "dimension",
+        "title",
+        "choices"
+      ],
+      "title": "ProbeQuestion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Native-output feasibility DTO, not the production TurnPlan or a certification.",
+  "properties": {
+    "user_goal": {
+      "title": "User Goal",
+      "type": "string"
+    },
+    "request_scope": {
+      "enum": [
+        "broad",
+        "specific",
+        "not_applicable"
+      ],
+      "title": "Request Scope",
+      "type": "string"
+    },
+    "information_sufficient": {
+      "title": "Information Sufficient",
+      "type": "boolean"
+    },
+    "next_action": {
+      "enum": [
+        "answer",
+        "clarify"
+      ],
+      "title": "Next Action",
+      "type": "string"
+    },
+    "known_facts": {
+      "items": {
+        "$ref": "#/$defs/ProbeFact"
+      },
+      "title": "Known Facts",
+      "type": "array"
+    },
+    "missing_dimensions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing Dimensions",
+      "type": "array"
+    },
+    "reference_resolution": {
+      "title": "Reference Resolution",
+      "type": "string"
+    },
+    "topic_changed": {
+      "title": "Topic Changed",
+      "type": "boolean"
+    },
+    "approved_article_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Approved Article Ids",
+      "type": "array"
+    },
+    "unverified_article_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unverified Article Ids",
+      "type": "array"
+    },
+    "questions": {
+      "items": {
+        "$ref": "#/$defs/ProbeQuestion"
+      },
+      "title": "Questions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "user_goal",
+    "request_scope",
+    "information_sufficient",
+    "next_action",
+    "known_facts",
+    "missing_dimensions",
+    "reference_resolution",
+    "topic_changed",
+    "approved_article_ids",
+    "unverified_article_ids",
+    "questions"
+  ],
+  "title": "ProbeTurn",
+  "type": "object"
+}

@@ -76,7 +76,7 @@ func TestPushHandlerSendChatPush(t *testing.T) {
 	handler := ports.NewPushHandler(mockSender, mockAuth)
 
 	router := gin.New()
-	router.POST("/api/v1/push/chat", handler.SendChatPush)
+	router.POST("/api/push/chat", handler.SendChatPush)
 
 	t.Run("returns 200 queued and dispatches to sender", func(t *testing.T) {
 		payload := map[string]string{
@@ -89,7 +89,7 @@ func TestPushHandlerSendChatPush(t *testing.T) {
 		}
 		body, _ := json.Marshal(payload)
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/push/chat", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/api/push/chat", bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-token")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -130,7 +130,7 @@ func TestPushHandlerSendChatPush(t *testing.T) {
 		}
 		body, _ := json.Marshal(payload)
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/push/chat", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/api/push/chat", bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-token")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -150,7 +150,7 @@ func TestPushHandlerSendChatPush(t *testing.T) {
 		}
 		body, _ := json.Marshal(payload)
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/push/chat", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/api/push/chat", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
@@ -169,7 +169,7 @@ func TestPushHandlerSendChatPush(t *testing.T) {
 		}
 		body, _ := json.Marshal(payload)
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/push/chat", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/api/push/chat", bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-token")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()

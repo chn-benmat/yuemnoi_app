@@ -18,6 +18,11 @@ class _StreamingChatbotRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) {
     return controller.stream;
   }
@@ -26,6 +31,11 @@ class _StreamingChatbotRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) {
     throw UnimplementedError();
   }

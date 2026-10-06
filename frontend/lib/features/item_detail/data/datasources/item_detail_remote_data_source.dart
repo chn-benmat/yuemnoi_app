@@ -26,7 +26,7 @@ class ItemDetailRemoteDataSource {
 
   Future<ItemDetail> fetchById(int itemId) async {
     try {
-      final response = await _apiClient.get('/api/v1/items/$itemId');
+      final response = await _apiClient.get('/api/items/$itemId');
       if (response.statusCode == 200 && response.data is Map) {
         return ItemDetailModel.fromApiResponse(
           item: Map<String, dynamic>.from(response.data as Map),
@@ -132,7 +132,7 @@ class ItemDetailRemoteDataSource {
       }
 
       final response = await _apiClient.put(
-        '/api/v1/items/${draft.itemId}',
+        '/api/items/${draft.itemId}',
         headers: {'Authorization': 'Bearer ${session.accessToken}'},
         data: {
           'item_name': draft.name.trim(),

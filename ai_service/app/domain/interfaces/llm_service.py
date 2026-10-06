@@ -11,8 +11,8 @@ class LLMServiceInterface(Protocol):
         self,
         prompt: str,
         system_instruction: Optional[str] = None,
-        max_tokens: int = 1000,
-        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
     ) -> str:
         """Generate unstructured text completion."""
         ...
@@ -22,7 +22,7 @@ class LLMServiceInterface(Protocol):
         prompt: str,
         schema: Type[T],
         system_instruction: Optional[str] = None,
-        temperature: float = 0.2,
+        temperature: Optional[float] = None,
     ) -> T:
         """Generate typed structured output conforming to a Pydantic schema."""
         ...
@@ -31,8 +31,8 @@ class LLMServiceInterface(Protocol):
         self,
         prompt: str,
         system_instruction: Optional[str] = None,
-        max_tokens: int = 1500,
-        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
     ) -> AsyncGenerator[str, None]:
         """Stream generated text chunks asynchronously."""
         ...

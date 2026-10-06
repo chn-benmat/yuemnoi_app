@@ -74,7 +74,7 @@ type updateFCMTokenRequest struct {
 	FCMToken string `json:"fcm_token" binding:"required"`
 }
 
-// [POST] /api/v1/auth/login - เข้าสู่ระบบและรับ Access Token
+// [POST] /api/auth/login - เข้าสู่ระบบและรับ Access Token
 func (h *UserHandler) Login(c *gin.Context) {
 	var req userLoginRequest
 
@@ -97,7 +97,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 	})
 }
 
-// [POST] /api/v1/auth/google-profile - บันทึกรูปโปรไฟล์จาก Google Avatar
+// [POST] /api/auth/google-profile - บันทึกรูปโปรไฟล์จาก Google Avatar
 func (h *UserHandler) SyncGoogleProfileImage(c *gin.Context) {
 	userToken, ok := extractToken(c)
 	if !ok {
@@ -126,7 +126,7 @@ func (h *UserHandler) SyncGoogleProfileImage(c *gin.Context) {
 	})
 }
 
-// [POST] /api/v1/auth/register - สมัครสมาชิกผู้ใช้ใหม่
+// [POST] /api/auth/register - สมัครสมาชิกผู้ใช้ใหม่
 func (h *UserHandler) Register(c *gin.Context) {
 	var req userRegisterRequest
 
@@ -253,7 +253,7 @@ func readProfileImage(header *multipart.FileHeader) (*domain.ProfileImage, error
 	}, nil
 }
 
-// [POST] /api/v1/auth/change-password - เปลี่ยนรหัสผ่าน (ต้องมี Access Token)
+// [POST] /api/auth/change-password - เปลี่ยนรหัสผ่าน (ต้องมี Access Token)
 func (h *UserHandler) ChangePassword(c *gin.Context) {
 	var req userChangePasswordRequest
 
@@ -279,7 +279,7 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	})
 }
 
-// [POST] /api/v1/auth/send-otp - ส่งรหัส OTP เพื่อรีเซ็ตรหัสผ่าน (กรณีลืมรหัสผ่าน)
+// [POST] /api/auth/send-otp - ส่งรหัส OTP เพื่อรีเซ็ตรหัสผ่าน (กรณีลืมรหัสผ่าน)
 func (h *UserHandler) SendOTP(c *gin.Context) {
 	var req userSendOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -312,7 +312,7 @@ func (h *UserHandler) SendOTP(c *gin.Context) {
 	})
 }
 
-// [POST] /api/v1/auth/verify-otp - ตรวจสอบรหัส OTP
+// [POST] /api/auth/verify-otp - ตรวจสอบรหัส OTP
 func (h *UserHandler) VerifyResetOTP(c *gin.Context) {
 	var req userVerifyOTPResetRequest
 
@@ -335,7 +335,7 @@ func (h *UserHandler) VerifyResetOTP(c *gin.Context) {
 	})
 }
 
-// [GET] /api/v1/user/profile - ดึงข้อมูลโปรไฟล์ของผู้ใช้ที่ล็อกอินอยู่
+// [GET] /api/user/profile - ดึงข้อมูลโปรไฟล์ของผู้ใช้ที่ล็อกอินอยู่
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
@@ -351,7 +351,7 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, profile)
 }
 
-// [PUT] /api/v1/user/profile - อัปเดตข้อมูลโปรไฟล์ (ชื่อ, ไบโอ, รูปภาพ)
+// [PUT] /api/user/profile - อัปเดตข้อมูลโปรไฟล์ (ชื่อ, ไบโอ, รูปภาพ)
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
@@ -396,7 +396,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	})
 }
 
-// [PUT] /api/v1/user/contact - อัปเดตเบอร์โทรศัพท์ติดต่อ
+// [PUT] /api/user/contact - อัปเดตเบอร์โทรศัพท์ติดต่อ
 func (h *UserHandler) UpdateContact(c *gin.Context) {
 	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
@@ -427,7 +427,7 @@ func (h *UserHandler) UpdateContact(c *gin.Context) {
 	})
 }
 
-// [POST] /api/v1/user/fcm-token - อัปเดต FCM Push Token
+// [POST] /api/user/fcm-token - อัปเดต FCM Push Token
 func (h *UserHandler) UpdateFCMToken(c *gin.Context) {
 	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {

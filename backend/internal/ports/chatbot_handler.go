@@ -1,6 +1,7 @@
 package ports
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +10,23 @@ import (
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/gin-gonic/gin"
 )
+
+// รักษารหัสโควตาและเวลาลองใหม่ โดยไม่ส่งรายละเอียดจากระบบภายใน
+func writeAIError(c *gin.Context, err error) {
+	statusCode := http.StatusBadGateway
+	code := "service_unavailable"
+	var serviceErr *domain.AIServiceError
+	if errors.As(err, &serviceErr) {
+		code = serviceErr.Code
+		if serviceErr.StatusCode == http.StatusServiceUnavailable || serviceErr.StatusCode == http.StatusTooManyRequests {
+			statusCode = http.StatusServiceUnavailable
+		}
+		if serviceErr.RetryAfterSeconds != nil {
+			c.Header("Retry-After", fmt.Sprint(*serviceErr.RetryAfterSeconds))
+		}
+	}
+	c.JSON(statusCode, gin.H{"status": "error", "error_code": code, "error": "ผู้ช่วย AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง"})
+}
 
 // ChatbotHandler จัดการคำขอเกี่ยวกับ AI Chatbot จาก Flutter Client
 type ChatbotHandler struct {
@@ -44,11 +62,7 @@ func (h *ChatbotHandler) SendMessage(c *gin.Context) {
 	// เรียกใช้งาน Gateway ส่งคำขอไปยัง AI Service
 	resp, err := h.gateway.SendMessage(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"status": "error",
-			"error":  "ผู้ช่วย AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง",
-			"detail": err.Error(),
-		})
+		writeAIError(c, err)
 		return
 	}
 
@@ -72,11 +86,7 @@ func (h *ChatbotHandler) SendMessageStream(c *gin.Context) {
 	// เริ่มต้นการขอสตรีมจาก AI Service
 	streamBody, err := h.gateway.SendMessageStream(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"status":     "error",
-			"error_code": "service_unavailable",
-			"error":      "ไม่สามารถเชื่อมต่อผู้ช่วย AI ได้ในขณะนี้",
-		})
+		writeAIError(c, err)
 		return
 	}
 	defer streamBody.Close()

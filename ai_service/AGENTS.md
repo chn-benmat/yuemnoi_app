@@ -119,8 +119,8 @@ Infrastructure (Adapters: DB, LLM, Search, Cache) & Interface (FastAPI Controlle
 
 - **`app/interface/` (Presentation & Delivery)**:
   - `app/interface/api/v1/endpoints/`:
-    - `chat.py`: `POST /api/v1/chat` (Full JSON response) and `POST /api/v1/chat/stream` (SSE tokens).
-    - `items.py`: `GET /api/v1/items` (Catalog list).
+    - `chat.py`: `POST /api/chat` (Full JSON response) and `POST /api/chat/stream` (SSE tokens).
+    - `items.py`: `GET /api/items` (Catalog list).
     - `health.py`: `GET /health` (Cloud LLMs [Gemini / Groq], Supabase, and Tavily health checks).
   - `app/interface/schemas/`: Pydantic request and response schemas for web APIs.
 

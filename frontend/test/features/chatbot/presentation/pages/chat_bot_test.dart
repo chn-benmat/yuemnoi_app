@@ -21,6 +21,11 @@ class FakeChatbotRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async {
     callCount += 1;
     latestQuery = query;
@@ -46,6 +51,11 @@ class FakeChatbotRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async* {
     callCount += 1;
     latestQuery = query;
@@ -95,6 +105,11 @@ class PendingChatbotRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) {
     return response.future;
   }
@@ -103,6 +118,11 @@ class PendingChatbotRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) {
     return streamController.stream;
   }
@@ -124,6 +144,11 @@ class SequenceChatbotRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async {
     callCount += 1;
     return ChatResponse(answer: answerFor(callCount));
@@ -133,6 +158,11 @@ class SequenceChatbotRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async* {
     callCount += 1;
     yield ChatDeltaEvent(text: answerFor(callCount));
@@ -279,6 +309,8 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 51));
 
+    // รอแอนิเมชันตัวอักษรหลังการรวมข้อความจากสตรีม
+    await tester.pump(const Duration(seconds: 1));
     expect(find.text('กำลังแสดงคำตอบ'), findsOneWidget);
     expect(thinkingDots, findsNothing);
 
@@ -287,6 +319,8 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 51));
 
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
     expect(find.text(answer), findsOneWidget);
 
     repository.streamController.add(const ChatDoneEvent());
@@ -503,6 +537,16 @@ void main() {
         repository.latestQuery,
         'ทำงาน/ออฟฟิศ (โน้ตบุ๊ก/PC), เน้นพกพา (โน้ตบุ๊ก)',
       );
+      // รอจนการ์ดปรากฏจริงหลังข้อความและการเลื่อนหน้าจอ
+      for (
+        var frame = 0;
+        frame < 50 &&
+            find.byKey(const ValueKey('recommended-item-2')).evaluate().isEmpty;
+        frame++
+      ) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const ValueKey('recommended-item-2')), findsOneWidget);
       expect(find.text('Dell Latitude 5420'), findsWidgets);
 
       // 7. Verify both questions recap cards rendered in chat history
@@ -518,7 +562,7 @@ void main() {
   );
 
   testWidgets(
-    'allows typing custom answer into composer during active questionnaire and submits to advance step',
+    'sends typed text to AI immediately instead of locally advancing the questionnaire',
     (tester) async {
       tester.view.devicePixelRatio = 1.0;
       tester.view.physicalSize = const Size(400, 850);
@@ -550,7 +594,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.byKey(const Key('chatbot-questionnaire-card')), findsOneWidget);
+      expect(
+        find.byKey(const Key('chatbot-questionnaire-card')),
+        findsOneWidget,
+      );
       expect(find.text('1 of 2'), findsOneWidget);
 
       // Type custom answer in normal composer
@@ -562,22 +609,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pumpAndSettle();
 
-      // Advances to Step 2 locally!
-      expect(find.text('2 of 2'), findsOneWidget);
-
-      // Select option on Step 2
-      final option2 = find.byKey(
-        const Key('chatbot-questionnaire-option-เน้นพกพา (โน้ตบุ๊ก)'),
-      );
-      await tester.tap(option2);
-      await tester.pump(const Duration(milliseconds: 250));
-      await tester.pumpAndSettle();
-
       expect(repository.callCount, 2);
-      expect(
-        repository.latestQuery,
-        'ตัดต่อวิดีโอ 4K, เน้นพกพา (โน้ตบุ๊ก)',
-      );
+      expect(repository.latestQuery, 'ตัดต่อวิดีโอ 4K');
+      expect(find.text('2 of 2'), findsNothing);
     },
   );
 
@@ -741,6 +775,7 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 60));
 
+      await tester.pump(const Duration(seconds: 1));
       expect(find.text('นี่คือคำตอบช่วงแรกที่พิมพ์ออกมา'), findsOneWidget);
       expect(find.byKey(const Key('chatbot-stop-button')), findsOneWidget);
 
@@ -793,6 +828,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // Friendly stopped message shown, button restored to Send
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
       expect(find.text('หยุดการตอบกลับแล้ว'), findsOneWidget);
       expect(find.byKey(const Key('chatbot-send-button')), findsOneWidget);
       expect(find.byKey(const Key('chatbot-stop-button')), findsNothing);
@@ -887,7 +924,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.textContaining('ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ'),
+        find.textContaining(
+          'ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ',
+        ),
         findsOneWidget,
       );
       expect(find.text('Dyson V12 Detect Slim'), findsNothing);
@@ -903,6 +942,11 @@ class FakeDynamicQuestionnaireRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async {
     throw UnimplementedError();
   }
@@ -911,6 +955,11 @@ class FakeDynamicQuestionnaireRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async* {
     callCount += 1;
     latestQuery = query;
@@ -1024,6 +1073,11 @@ class FakeUnavailableItemRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async {
     return const ChatResponse(
       answer: 'ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ',
@@ -1035,6 +1089,11 @@ class FakeUnavailableItemRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async* {
     yield const ChatMetadataEvent(
       mode: 'recommendation',
@@ -1054,9 +1113,7 @@ class FakeUnavailableItemRepository implements ChatbotRepository {
     yield const ChatDeltaEvent(
       text: 'ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ',
     );
-    yield const ChatDoneEvent(
-      recommendedItems: [],
-    );
+    yield const ChatDoneEvent(recommendedItems: []);
   }
 
   @override

@@ -8,16 +8,23 @@ class InteractiveQuestionnaireCard extends StatefulWidget {
     required this.questions,
     required this.onCompleted,
     this.onCompletedWithAnswers,
+    this.onCompletedWithContext,
     required this.onDismiss,
     this.onCustomInput,
+    this.onRequestStarted,
+    this.onContentRendered,
     super.key,
   });
 
   final List<ClarificationQuestion> questions;
   final ValueChanged<String> onCompleted;
   final void Function(String, Map<String, String>)? onCompletedWithAnswers;
+  final void Function(String, List<QuestionnaireAnswer>, bool)?
+  onCompletedWithContext;
   final VoidCallback onDismiss;
   final VoidCallback? onCustomInput;
+  final VoidCallback? onRequestStarted;
+  final VoidCallback? onContentRendered;
 
   @override
   State<InteractiveQuestionnaireCard> createState() =>
@@ -29,7 +36,33 @@ class InteractiveQuestionnaireCardState
   late List<ClarificationQuestion> _questions;
   int _currentIndex = 0;
   final Map<int, String> _selectedAnswers = {};
+  final Map<int, String> _selectedChoiceIds = {};
   String? _tapFeedbackOption;
+  int _progressGeneration = 0;
+
+  String? get activeQuestionId =>
+      _questions.isEmpty ? null : _questions[_currentIndex].id;
+
+  List<QuestionnaireAnswer> get partialAnswers {
+    final answers = <QuestionnaireAnswer>[];
+    for (var i = 0; i < _questions.length; i++) {
+      final text = _selectedAnswers[i] ?? _questions[i].selectedOption;
+      final choiceId = _selectedChoiceIds[i] ?? _questions[i].selectedOptionId;
+      if (text != null) {
+        answers.add(
+          QuestionnaireAnswer(
+            questionId: _questions[i].id,
+            optionId: choiceId,
+            text: choiceId == null ? text : null,
+          ),
+        );
+      }
+    }
+    return List.unmodifiable(answers);
+  }
+
+  // ยกเลิกการเลื่อนข้อหรือส่งคำตอบที่รออยู่ เมื่อผู้ใช้ส่งข้อความแทรก
+  void suspendProgression() => _progressGeneration++;
 
   @override
   void initState() {
@@ -51,6 +84,10 @@ class InteractiveQuestionnaireCardState
   }
 
   void _initQuestions() {
+    _progressGeneration++;
+    _selectedAnswers.clear();
+    _selectedChoiceIds.clear();
+    _tapFeedbackOption = null;
     _questions = List<ClarificationQuestion>.from(widget.questions);
     final firstUnanswered = _questions.indexWhere(
       (q) => q.selectedOption == null,
@@ -58,13 +95,17 @@ class InteractiveQuestionnaireCardState
     _currentIndex = firstUnanswered != -1 ? firstUnanswered : 0;
   }
 
-  void _complete(String summary) {
+  void _complete(String summary, {bool skipped = false}) {
     final answers = <String, String>{};
     for (var i = 0; i < _questions.length; i++) {
       final selected = _selectedAnswers[i] ?? _questions[i].selectedOption;
       if (selected != null) {
         answers[_questions[i].id] = selected;
       }
+    }
+    if (widget.onCompletedWithContext != null) {
+      widget.onCompletedWithContext!(summary, partialAnswers, skipped);
+      return;
     }
     final callback = widget.onCompletedWithAnswers;
     if (callback != null) {
@@ -74,33 +115,41 @@ class InteractiveQuestionnaireCardState
     }
   }
 
-  void _selectOption(String optionText) {
+  void _selectOption(String optionText, String? optionId) {
     if (_tapFeedbackOption != null) {
       return; // ป้องกันการกดซ้ำระหว่างเปลี่ยนข้อ
     }
+    final generation = _progressGeneration;
     setState(() {
       _tapFeedbackOption = optionText;
       final prevChoice = _selectedAnswers[_currentIndex];
       _selectedAnswers[_currentIndex] = optionText;
+      if (optionId == null) {
+        _selectedChoiceIds.remove(_currentIndex);
+      } else {
+        _selectedChoiceIds[_currentIndex] = optionId;
+      }
       // If user changed their answer on a previous step, invalidate subsequent step answers
       if (prevChoice != null && prevChoice != optionText) {
         _selectedAnswers.removeWhere((step, _) => step > _currentIndex);
+        _selectedChoiceIds.removeWhere((step, _) => step > _currentIndex);
       }
     });
 
     if (_currentIndex < _questions.length - 1) {
       // Instant local progression to next question after tap feedback
       Future.delayed(const Duration(milliseconds: 160), () {
-        if (!mounted) return;
+        if (!mounted || generation != _progressGeneration) return;
         setState(() {
           _currentIndex++;
           _tapFeedbackOption = null;
         });
       });
     } else {
+      widget.onRequestStarted?.call();
       // All questions completed, compile combined answer and submit
       Future.delayed(const Duration(milliseconds: 180), () {
-        if (!mounted) return;
+        if (!mounted || generation != _progressGeneration) return;
         final answers = <String>[];
         for (var i = 0; i < _questions.length; i++) {
           final ans = _selectedAnswers[i] ?? _questions[i].selectedOption;
@@ -134,6 +183,7 @@ class InteractiveQuestionnaireCardState
   }
 
   void _skip() {
+    widget.onRequestStarted?.call();
     if (_selectedAnswers.isNotEmpty) {
       final answers = <String>[];
       for (var i = 0; i < _questions.length; i++) {
@@ -143,11 +193,11 @@ class InteractiveQuestionnaireCardState
         }
       }
       if (answers.isNotEmpty) {
-        _complete(answers.join(', '));
+        _complete(answers.join(', '), skipped: true);
         return;
       }
     }
-    _complete('ข้ามแบบสอบถาม');
+    _complete('ข้ามแบบสอบถาม', skipped: true);
   }
 
   void submitCustomAnswer(String text) {
@@ -157,12 +207,14 @@ class InteractiveQuestionnaireCardState
       return;
     }
     _selectedAnswers[_currentIndex] = trimmed;
+    _selectedChoiceIds.remove(_currentIndex);
     if (_currentIndex < _questions.length - 1) {
       setState(() {
         _currentIndex++;
         _tapFeedbackOption = null;
       });
     } else {
+      widget.onRequestStarted?.call();
       final answers = <String>[];
       for (var i = 0; i < _questions.length; i++) {
         final ans = _selectedAnswers[i] ?? _questions[i].selectedOption;
@@ -194,9 +246,11 @@ class InteractiveQuestionnaireCardState
       final previous = _selectedAnswers[safeIndex - 1];
       if (previous != null) {
         final prevTrim = previous.trim();
-        final branchTitle = currentQuestion.branchTitles?[previous] ??
+        final branchTitle =
+            currentQuestion.branchTitles?[previous] ??
             currentQuestion.branchTitles?[prevTrim];
-        final branchOpt = currentQuestion.branchOptions?[previous] ??
+        final branchOpt =
+            currentQuestion.branchOptions?[previous] ??
             currentQuestion.branchOptions?[prevTrim];
 
         if (branchTitle != null && branchTitle.isNotEmpty) {
@@ -212,6 +266,12 @@ class InteractiveQuestionnaireCardState
       effectiveOptions = effectiveOptions.take(4).toList();
     }
 
+    final renderedQuestions = widget.questions;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(renderedQuestions, widget.questions)) {
+        widget.onContentRendered?.call();
+      }
+    });
     final totalSteps = _questions.length;
     final currentStep = safeIndex + 1;
     final stepText = '$currentStep of $totalSteps';
@@ -300,7 +360,10 @@ class InteractiveQuestionnaireCardState
                   ),
                 ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4.5,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primaryColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
@@ -407,7 +470,13 @@ class InteractiveQuestionnaireCardState
               index: i,
               optionText: effectiveOptions[i],
               isSelected: selectedForCurrent == effectiveOptions[i],
-              onTap: () => _selectOption(effectiveOptions[i]),
+              onTap: () => _selectOption(
+                effectiveOptions[i],
+                i < currentQuestion.choices.length &&
+                        effectiveOptions == currentQuestion.options
+                    ? currentQuestion.choices[i].id
+                    : null,
+              ),
             ),
         ],
       ),
@@ -440,9 +509,7 @@ class _OptionTile extends StatelessWidget {
             : const Color(0xFFFAFAFC),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isSelected
-              ? AppColors.primaryColor
-              : const Color(0xFFE2E8F0),
+          color: isSelected ? AppColors.primaryColor : const Color(0xFFE2E8F0),
           width: isSelected ? 1.6 : 1.0,
         ),
       ),
@@ -473,7 +540,9 @@ class _OptionTile extends StatelessWidget {
                     '${index + 1}',
                     style: TextStyle(
                       fontFamily: 'Prompt',
-                      color: isSelected ? Colors.white : const Color(0xFF4B5563),
+                      color: isSelected
+                          ? Colors.white
+                          : const Color(0xFF4B5563),
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                     ),

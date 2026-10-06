@@ -62,7 +62,7 @@ func TestChatbotSendMessageSuccess(t *testing.T) {
 
 	handler := ports.NewChatbotHandler(mockGateway, nil)
 	router := gin.New()
-	router.POST("/api/v1/chat-ai", handler.SendMessage)
+	router.POST("/api/chat-ai", handler.SendMessage)
 
 	reqBody := domain.ChatbotRequest{
 		Query: "มีกล้อง Sony ไหม",
@@ -72,7 +72,7 @@ func TestChatbotSendMessageSuccess(t *testing.T) {
 		},
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/chat-ai", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest(http.MethodPost, "/api/chat-ai", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -93,14 +93,14 @@ func TestChatbotSendMessageEmptyValidation(t *testing.T) {
 
 	handler := ports.NewChatbotHandler(&mockAIChatbotGateway{}, nil)
 	router := gin.New()
-	router.POST("/api/v1/chat-ai", handler.SendMessage)
+	router.POST("/api/chat-ai", handler.SendMessage)
 
 	reqBody := domain.ChatbotRequest{
 		Query:   "   ",
 		Message: "",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/chat-ai", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest(http.MethodPost, "/api/chat-ai", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -121,11 +121,11 @@ func TestChatbotSendMessageGatewayError(t *testing.T) {
 
 	handler := ports.NewChatbotHandler(mockGateway, nil)
 	router := gin.New()
-	router.POST("/api/v1/chat-ai", handler.SendMessage)
+	router.POST("/api/chat-ai", handler.SendMessage)
 
 	reqBody := domain.ChatbotRequest{Query: "สอบถามสินค้า"}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/chat-ai", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest(http.MethodPost, "/api/chat-ai", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -148,11 +148,11 @@ func TestChatbotSendMessageStreamSuccess(t *testing.T) {
 
 	handler := ports.NewChatbotHandler(mockGateway, nil)
 	router := gin.New()
-	router.POST("/api/v1/chat-ai/stream", handler.SendMessageStream)
+	router.POST("/api/chat-ai/stream", handler.SendMessageStream)
 
 	reqBody := domain.ChatbotRequest{Query: "ทักทาย"}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/chat-ai/stream", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest(http.MethodPost, "/api/chat-ai/stream", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 

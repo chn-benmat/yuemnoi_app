@@ -76,7 +76,7 @@ func parseRentalID(c *gin.Context) (int64, bool) {
 	return id, true
 }
 
-// [POST] /api/v1/rentals/:id/handover - ยืนยันการส่งมอบอุปกรณ์ (เปลี่ยนสถานะเป็น active)
+// [POST] /api/rentals/:id/handover - ยืนยันการส่งมอบอุปกรณ์ (เปลี่ยนสถานะเป็น active)
 func (h *RentalHandler) HandoverRental(c *gin.Context) {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
@@ -100,7 +100,7 @@ func (h *RentalHandler) HandoverRental(c *gin.Context) {
 	})
 }
 
-// [POST] /api/v1/rentals/:id/return - ยืนยันการรับคืนอุปกรณ์ (เปลี่ยนสถานะเป็น completed)
+// [POST] /api/rentals/:id/return - ยืนยันการรับคืนอุปกรณ์ (เปลี่ยนสถานะเป็น completed)
 func (h *RentalHandler) ReturnRental(c *gin.Context) {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {

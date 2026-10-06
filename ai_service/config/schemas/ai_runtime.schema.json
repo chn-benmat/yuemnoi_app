@@ -1,0 +1,662 @@
+{
+  "$defs": {
+    "Approval": {
+      "additionalProperties": false,
+      "properties": {
+        "approved_by": {
+          "minLength": 1,
+          "title": "Approved By",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "authorization": {
+          "minLength": 1,
+          "title": "Authorization",
+          "type": "string"
+        },
+        "content_sha256": {
+          "minLength": 1,
+          "title": "Content Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approved_by",
+        "approved_at",
+        "authorization",
+        "content_sha256"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "FlowBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "target_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Target Seconds",
+          "type": "number"
+        },
+        "hard_deadline_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Hard Deadline Seconds",
+          "type": "number"
+        },
+        "logical_calls": {
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Logical Calls",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target_seconds",
+        "hard_deadline_seconds",
+        "logical_calls"
+      ],
+      "title": "FlowBudget",
+      "type": "object"
+    },
+    "HTTPPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "timeout_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Timeout Seconds",
+          "type": "number"
+        },
+        "logical_call_deadline_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Logical Call Deadline Seconds",
+          "type": "number"
+        },
+        "quota_admission_wait_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Quota Admission Wait Seconds",
+          "type": "number"
+        },
+        "permission_probe_prompt": {
+          "minLength": 1,
+          "title": "Permission Probe Prompt",
+          "type": "string"
+        },
+        "permission_probe_output_tokens": {
+          "exclusiveMinimum": 0,
+          "title": "Permission Probe Output Tokens",
+          "type": "integer"
+        },
+        "max_connections": {
+          "exclusiveMinimum": 0,
+          "title": "Max Connections",
+          "type": "integer"
+        },
+        "max_keepalive_connections": {
+          "minimum": 0,
+          "title": "Max Keepalive Connections",
+          "type": "integer"
+        },
+        "keepalive_expiry_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Keepalive Expiry Seconds",
+          "type": "number"
+        },
+        "token_estimation_characters_per_token": {
+          "exclusiveMinimum": 0,
+          "title": "Token Estimation Characters Per Token",
+          "type": "number"
+        },
+        "token_estimation_safety_factor": {
+          "minimum": 1,
+          "title": "Token Estimation Safety Factor",
+          "type": "number"
+        },
+        "telemetry_history": {
+          "exclusiveMinimum": 0,
+          "title": "Telemetry History",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "timeout_seconds",
+        "logical_call_deadline_seconds",
+        "quota_admission_wait_seconds",
+        "permission_probe_prompt",
+        "permission_probe_output_tokens",
+        "max_connections",
+        "max_keepalive_connections",
+        "keepalive_expiry_seconds",
+        "token_estimation_characters_per_token",
+        "token_estimation_safety_factor",
+        "telemetry_history"
+      ],
+      "title": "HTTPPolicy",
+      "type": "object"
+    },
+    "Limits": {
+      "additionalProperties": false,
+      "properties": {
+        "messages": {
+          "exclusiveMinimum": 0,
+          "title": "Messages",
+          "type": "integer"
+        },
+        "characters": {
+          "exclusiveMinimum": 0,
+          "title": "Characters",
+          "type": "integer"
+        },
+        "questions": {
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Questions",
+          "type": "integer"
+        },
+        "choices_per_question": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Choices Per Question",
+          "type": "integer"
+        },
+        "items": {
+          "exclusiveMinimum": 0,
+          "title": "Items",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "exclusiveMinimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "temperature": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "question_title_characters": {
+          "exclusiveMinimum": 0,
+          "title": "Question Title Characters",
+          "type": "integer"
+        },
+        "choice_label_characters": {
+          "exclusiveMinimum": 0,
+          "title": "Choice Label Characters",
+          "type": "integer"
+        },
+        "generation_attempts": {
+          "exclusiveMinimum": 0,
+          "title": "Generation Attempts",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "messages",
+        "characters",
+        "questions",
+        "choices_per_question",
+        "items",
+        "output_tokens",
+        "temperature",
+        "question_title_characters",
+        "choice_label_characters",
+        "generation_attempts"
+      ],
+      "title": "Limits",
+      "type": "object"
+    },
+    "LoadProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "concurrent_requests": {
+          "const": 5,
+          "title": "Concurrent Requests",
+          "type": "integer"
+        },
+        "batch_interval_seconds": {
+          "const": 60,
+          "title": "Batch Interval Seconds",
+          "type": "integer"
+        },
+        "certification_batches_per_flow_per_round": {
+          "const": 20,
+          "title": "Certification Batches Per Flow Per Round",
+          "type": "integer"
+        },
+        "certification_rounds": {
+          "const": 3,
+          "title": "Certification Rounds",
+          "type": "integer"
+        },
+        "ui_requests_per_batch": {
+          "const": 1,
+          "title": "Ui Requests Per Batch",
+          "type": "integer"
+        },
+        "transport_requests_per_batch": {
+          "const": 4,
+          "title": "Transport Requests Per Batch",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "concurrent_requests",
+        "batch_interval_seconds",
+        "certification_batches_per_flow_per_round",
+        "certification_rounds",
+        "ui_requests_per_batch",
+        "transport_requests_per_batch"
+      ],
+      "title": "LoadProfile",
+      "type": "object"
+    },
+    "ProviderProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "protocol": {
+          "enum": [
+            "groq_json_schema",
+            "gemini_json_schema"
+          ],
+          "title": "Protocol",
+          "type": "string"
+        },
+        "endpoint": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "key_setting": {
+          "enum": [
+            "GROQ_API_KEY",
+            "GEMINI_API_KEY"
+          ],
+          "title": "Key Setting",
+          "type": "string"
+        },
+        "model_setting": {
+          "enum": [
+            "GEMINI_PRIMARY_MODEL",
+            "GEMINI_FALLBACK_MODEL_1",
+            "GEMINI_FALLBACK_MODEL_2",
+            "GROQ_PRIMARY_MODEL",
+            "GROQ_FALLBACK_MODEL_1",
+            "GROQ_FALLBACK_MODEL_2"
+          ],
+          "title": "Model Setting",
+          "type": "string"
+        },
+        "proposed_model": {
+          "minLength": 1,
+          "title": "Proposed Model",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reasoning Effort"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "disabled_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Disabled Reason"
+        },
+        "quota": {
+          "$ref": "#/$defs/QuotaPolicy"
+        }
+      },
+      "required": [
+        "id",
+        "protocol",
+        "endpoint",
+        "key_setting",
+        "model_setting",
+        "proposed_model",
+        "reasoning_effort",
+        "enabled",
+        "disabled_reason",
+        "quota"
+      ],
+      "title": "ProviderProfile",
+      "type": "object"
+    },
+    "QuotaLedgerPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "lock_timeout_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Lock Timeout Seconds",
+          "type": "number"
+        },
+        "poll_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Poll Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "path",
+        "lock_timeout_seconds",
+        "poll_seconds"
+      ],
+      "title": "QuotaLedgerPolicy",
+      "type": "object"
+    },
+    "QuotaPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "bucket": {
+          "minLength": 1,
+          "title": "Bucket",
+          "type": "string"
+        },
+        "scope": {
+          "default": "provider",
+          "enum": [
+            "provider",
+            "model"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "requests_per_window": {
+          "exclusiveMinimum": 0,
+          "title": "Requests Per Window",
+          "type": "integer"
+        },
+        "tokens_per_window": {
+          "exclusiveMinimum": 0,
+          "title": "Tokens Per Window",
+          "type": "integer"
+        },
+        "window_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Window Seconds",
+          "type": "number"
+        },
+        "requests_per_day": {
+          "exclusiveMinimum": 0,
+          "title": "Requests Per Day",
+          "type": "integer"
+        },
+        "tokens_per_day": {
+          "exclusiveMinimum": 0,
+          "title": "Tokens Per Day",
+          "type": "integer"
+        },
+        "day_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Day Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "bucket",
+        "requests_per_window",
+        "tokens_per_window",
+        "window_seconds",
+        "requests_per_day",
+        "tokens_per_day",
+        "day_seconds"
+      ],
+      "title": "QuotaPolicy",
+      "type": "object"
+    },
+    "StageRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "profiles": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Profiles",
+          "type": "array"
+        },
+        "p95_seconds": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "P95 Seconds",
+          "type": "object"
+        }
+      },
+      "required": [
+        "profiles"
+      ],
+      "title": "StageRoute",
+      "type": "object"
+    },
+    "StageRouting": {
+      "additionalProperties": false,
+      "properties": {
+        "planning": {
+          "$ref": "#/$defs/StageRoute"
+        },
+        "evidence": {
+          "$ref": "#/$defs/StageRoute"
+        },
+        "review": {
+          "$ref": "#/$defs/StageRoute"
+        },
+        "finalization_reserve_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Finalization Reserve Seconds",
+          "type": "number"
+        },
+        "minimum_attempt_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Minimum Attempt Seconds",
+          "type": "number"
+        },
+        "measurement_artifact": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Measurement Artifact"
+        }
+      },
+      "required": [
+        "planning",
+        "evidence",
+        "review",
+        "finalization_reserve_seconds",
+        "minimum_attempt_seconds",
+        "measurement_artifact"
+      ],
+      "title": "StageRouting",
+      "type": "object"
+    },
+    "StreamPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "heartbeat_seconds": {
+          "exclusiveMinimum": 0,
+          "maximum": 30,
+          "title": "Heartbeat Seconds",
+          "type": "number"
+        },
+        "chunk_characters": {
+          "exclusiveMinimum": 0,
+          "title": "Chunk Characters",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "heartbeat_seconds",
+        "chunk_characters"
+      ],
+      "title": "StreamPolicy",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "version": {
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "approved",
+      "title": "Status",
+      "type": "string"
+    },
+    "production_enabled": {
+      "const": true,
+      "title": "Production Enabled",
+      "type": "boolean"
+    },
+    "approval": {
+      "$ref": "#/$defs/Approval"
+    },
+    "knowledge_path": {
+      "minLength": 1,
+      "title": "Knowledge Path",
+      "type": "string"
+    },
+    "interpretation_policy_path": {
+      "minLength": 1,
+      "title": "Interpretation Policy Path",
+      "type": "string"
+    },
+    "settings_precedence": {
+      "const": "explicit_environment_then_dotenv_then_json",
+      "title": "Settings Precedence",
+      "type": "string"
+    },
+    "model_order_status": {
+      "enum": [
+        "pending_development_measurement",
+        "measured_development"
+      ],
+      "title": "Model Order Status",
+      "type": "string"
+    },
+    "providers": {
+      "items": {
+        "$ref": "#/$defs/ProviderProfile"
+      },
+      "minItems": 1,
+      "title": "Providers",
+      "type": "array"
+    },
+    "general": {
+      "$ref": "#/$defs/FlowBudget"
+    },
+    "equipment": {
+      "$ref": "#/$defs/FlowBudget"
+    },
+    "technical_hard_deadline_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Technical Hard Deadline Seconds",
+      "type": "number"
+    },
+    "max_failovers_per_logical_call": {
+      "const": 1,
+      "title": "Max Failovers Per Logical Call",
+      "type": "integer"
+    },
+    "load": {
+      "$ref": "#/$defs/LoadProfile"
+    },
+    "limits": {
+      "$ref": "#/$defs/Limits"
+    },
+    "circuit_open_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Circuit Open Seconds",
+      "type": "number"
+    },
+    "quota_backoff_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Quota Backoff Seconds",
+      "type": "number"
+    },
+    "http": {
+      "$ref": "#/$defs/HTTPPolicy"
+    },
+    "stream": {
+      "$ref": "#/$defs/StreamPolicy"
+    },
+    "quota_ledger": {
+      "$ref": "#/$defs/QuotaLedgerPolicy"
+    },
+    "stages": {
+      "$ref": "#/$defs/StageRouting"
+    }
+  },
+  "required": [
+    "schema_version",
+    "version",
+    "status",
+    "production_enabled",
+    "approval",
+    "knowledge_path",
+    "interpretation_policy_path",
+    "settings_precedence",
+    "model_order_status",
+    "providers",
+    "general",
+    "equipment",
+    "technical_hard_deadline_seconds",
+    "max_failovers_per_logical_call",
+    "load",
+    "limits",
+    "circuit_open_seconds",
+    "quota_backoff_seconds",
+    "http",
+    "stream",
+    "quota_ledger",
+    "stages"
+  ],
+  "title": "RuntimeDocument",
+  "type": "object"
+}

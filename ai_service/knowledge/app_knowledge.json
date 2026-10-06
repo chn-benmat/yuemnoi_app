@@ -1,0 +1,455 @@
+{
+  "schema_version": "1",
+  "document_id": "yuemnoi.application_knowledge",
+  "version": "2",
+  "articles": [
+    {
+      "id": "platform.overview",
+      "title": "ภาพรวมบริการในแอป",
+      "content": "แอปมีหน้าค้นหาอุปกรณ์ รายละเอียดอุปกรณ์ ลงประกาศปล่อยเช่า สนทนากับผู้ให้เช่า ส่งคำขอเช่า และดูสถานะหรือประวัติการเช่า ฟีเจอร์ที่พบในโค้ดไม่ใช่หลักฐานว่าระบบออนไลน์พร้อมใช้งานตลอดเวลา",
+      "sources": [
+        {
+          "title": "หน้าค้นหาและรายละเอียด",
+          "reference": "frontend/lib/features/home/presentation/pages/home_feed_view.dart",
+          "locator": "_onItemTap; _buildSearchAndFilterSection",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "รายการเมนูโปรไฟล์",
+          "reference": "frontend/lib/features/profile/presentation/pages/profile/profile.dart",
+          "locator": "ProfileQuickActionsRow",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "คำขอเช่าผ่านแชท",
+          "reference": "frontend/lib/features/booking/presentation/pages/booking_request_page.dart",
+          "locator": "_submitBookingRequestToChat",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "3682e8f78de5198ed344e162db5e0d9b08d035b1da92aef28d8c1ddcb532660a"
+      }
+    },
+    {
+      "id": "account.registration",
+      "title": "การสมัครบัญชี",
+      "content": "หน้าสมัครสมาชิกส่งชื่อที่แสดง อีเมล เบอร์โทร รหัสผ่าน และยืนยันรหัสผ่าน พร้อมรองรับรูปโปรไฟล์ ข้อมูลที่ตรวจนี้ไม่ได้ยืนยันว่าได้ผ่าน KYC หรือว่าต้องยืนยันอีเมลก่อนใช้ทุกฟีเจอร์",
+      "sources": [
+        {
+          "title": "แบบฟอร์มสมัครสมาชิก",
+          "reference": "frontend/lib/features/auth/presentation/pages/register.dart",
+          "locator": "RegisterScreen; RegisterSuccess",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "ข้อมูลที่ส่งเพื่อสมัคร",
+          "reference": "frontend/lib/features/auth/data/datasources/auth_remote_data_source.dart",
+          "locator": "AuthRemoteDataSource.register",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "b1037ca9feeef45d1770c4e111efd6b6f194c2db9f0404b32a07e5a8381420d9"
+      }
+    },
+    {
+      "id": "account.sign_in",
+      "title": "การเข้าสู่ระบบ",
+      "content": "แอปมี flow เข้าสู่ระบบด้วยอีเมลและรหัสผ่าน และ flow Google OAuth การเข้าใช้งาน Google ขึ้นกับ configuration ของบริการยืนยันตัวตน ไม่ใช่การรับประกันว่า provider พร้อมใช้งานในทุกสภาพแวดล้อม",
+      "sources": [
+        {
+          "title": "เข้าสู่ระบบด้วยอีเมล",
+          "reference": "frontend/lib/features/auth/data/datasources/auth_remote_data_source.dart",
+          "locator": "AuthRemoteDataSource.login",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "เข้าสู่ระบบ Google",
+          "reference": "frontend/lib/features/auth/presentation/bloc/auth_bloc.dart",
+          "locator": "_onGoogleLoginRequested",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "148f741a37952b27e2fa4407b4011257c3b52654bbfc55cbfa780b741a3b558e"
+      }
+    },
+    {
+      "id": "catalog.discovery",
+      "title": "การค้นหาและเปิดรายละเอียดอุปกรณ์",
+      "content": "หน้าหลักมีช่องเปิดหน้าค้นหาและตัวเลือกหมวดหมู่ การแตะรายการอุปกรณ์เปิดหน้ารายละเอียดของรายการนั้น ราคา หน่วยเช่า และความพร้อมของอุปกรณ์ต้องอ่านจากข้อมูลรายการปัจจุบัน ไม่ใช่เก็บเป็นค่าคงที่ในเอกสารความรู้นี้",
+      "sources": [
+        {
+          "title": "การค้นหา หมวดหมู่ และแตะรายการ",
+          "reference": "frontend/lib/features/home/presentation/pages/home_feed_view.dart",
+          "locator": "_onItemTap; _buildSearchAndFilterSection; onCategorySelected",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "เส้นทางหน้ารายละเอียด",
+          "reference": "frontend/lib/core/navigation/app_routes.dart",
+          "locator": "itemDetail; openItemDetail",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "3a4550042e10d16a46d21cc71cb5e9e94fc7554a63d892da6df211428eb01ff1"
+      }
+    },
+    {
+      "id": "listing.create",
+      "title": "การลงประกาศปล่อยเช่า",
+      "content": "หน้าลงประกาศตรวจการเข้าสู่ระบบก่อนเพิ่มอุปกรณ์ แบบฟอร์มใช้ชื่อ หมวดหมู่ คำอธิบาย ประเภทหรือหน่วยการเช่า ราคา และรูปภาพ แล้วส่งข้อมูลผ่าน backend ไม่ยืนยันข้อกำหนด KYC หรือคุณสมบัติทางกฎหมายของผู้ให้เช่าจากการมีแบบฟอร์มนี้",
+      "sources": [
+        {
+          "title": "หน้าลงประกาศและการเข้าสู่ระบบ",
+          "reference": "frontend/lib/features/rental_item/presentation/pages/add_rental_item.dart",
+          "locator": "initState; _submit; fields",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "การส่งประกาศ",
+          "reference": "frontend/lib/features/rental_item/data/datasources/rental_item_remote_data_source.dart",
+          "locator": "RentalItemRemoteDataSource.create",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "9e928c944348df03f42381e4fef62972b17d5509cf4094cbc4bf26ae6389c229"
+      }
+    },
+    {
+      "id": "messaging.owner",
+      "title": "การติดต่อผู้ให้เช่าจากรายการอุปกรณ์",
+      "content": "หน้ารายละเอียดอุปกรณ์มีการเริ่มสนทนากับผู้ให้เช่าและตรวจการเข้าสู่ระบบก่อนเปิดการสนทนา ห้องสนทนาเกี่ยวข้องกับรายการอุปกรณ์และผู้ให้เช่าที่เลือก ไม่ใช่การสนทนากับผู้ช่วย AI",
+      "sources": [
+        {
+          "title": "เริ่มแชทจากรายละเอียดอุปกรณ์",
+          "reference": "frontend/lib/features/item_detail/presentation/pages/item_detail.dart",
+          "locator": "AuthGuard.requireAuth; getOrCreateConversation; openConversation",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "fd3cb2561f5514620de3aabca0c965eb2a547e715b1d8ae0d28cff390ba8a243"
+      }
+    },
+    {
+      "id": "rental.request_in_chat",
+      "title": "การส่งคำขอเช่าเข้าแชท",
+      "content": "flow คำขอเช่าจากแชทใช้รายละเอียดอุปกรณ์ ประเภทการเช่า ช่วงวันหรือเวลา และสถานที่นัดพบ มีหน้าสรุปให้ตรวจรายละเอียดก่อนส่งการ์ดคำขอเข้าแชท การส่งการ์ดนี้เพียงอย่างเดียวไม่ใช่หลักฐานว่าเกิดการชำระเงินจริงหรือยืนยันจองสำเร็จแล้ว",
+      "sources": [
+        {
+          "title": "เปิดคำขอเช่าจากแชท",
+          "reference": "frontend/lib/features/chat/presentation/pages/chat_detail.dart",
+          "locator": "_openBookingRequest",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "รายละเอียดและการส่งการ์ดคำขอ",
+          "reference": "frontend/lib/features/booking/presentation/pages/booking_request_page.dart",
+          "locator": "_submitBookingRequestToChat; confirmation sheet",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "เส้นทางคำขอเช่า",
+          "reference": "frontend/lib/core/navigation/app_routes.dart",
+          "locator": "booking route constructs BookingRequestPage",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36"
+      }
+    },
+    {
+      "id": "rental.confirmation",
+      "title": "การตรวจรายละเอียดนัดรับและส่งรายการเช่า",
+      "content": "แอปมีหน้าตรวจยืนยันรายละเอียดการนัดรับ เช่น วันเวลาและสถานที่ โดยสร้างข้อมูลคำขอจากรายการที่เลือก เมื่อส่งสร้างรายการเช่าผ่าน backend ระบบตรวจการเข้าสู่ระบบและตรวจว่าเวลาสิ้นสุดอยู่หลังเวลาเริ่ม การคำนวณราคาและความพร้อมต้องพิจารณาผลจากระบบจริง ไม่อ้างยอดจากเอกสารความรู้นี้",
+      "sources": [
+        {
+          "title": "หน้าตรวจรายละเอียดและสร้างข้อมูลคำขอ",
+          "reference": "frontend/lib/features/booking/presentation/pages/booking_confirmation_page.dart",
+          "locator": "_buildRentalDraft; _showSuccess",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "การส่งรายการเช่า",
+          "reference": "frontend/lib/features/booking/data/datasources/rental_request_remote_data_source.dart",
+          "locator": "RentalRequestRemoteDataSource.submit",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "ตรวจสิทธิ์และช่วงเวลา",
+          "reference": "backend/internal/ports/rental_handler.go",
+          "locator": "CreateRentalOrder",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "369ae60e0f3997ae1f8c241c2cd980779d0f782db78e65dd54b24d053831e0f0"
+      }
+    },
+    {
+      "id": "rental.handover_return",
+      "title": "การยืนยันส่งมอบและรับคืน",
+      "content": "backend มีการยืนยันส่งมอบและยืนยันรับคืนของรายการเช่า โดยตรวจตัวตน สิทธิ์ที่เกี่ยวข้องกับรายการ และการเปลี่ยนสถานะที่อนุญาต การมี flow รับคืนไม่ได้กำหนดค่าปรับ ความรับผิดชอบเมื่อของเสีย หรือเงื่อนไขคืนเงิน",
+      "sources": [
+        {
+          "title": "คำสั่งส่งมอบและคืน",
+          "reference": "backend/internal/ports/rental_handler.go",
+          "locator": "HandoverRental; ReturnRental",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "ตรวจสิทธิ์และสถานะรายการ",
+          "reference": "backend/internal/adapters/supabase/rental_repository.go",
+          "locator": "UpdateRentalStatus",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "5d9fcaed5c647cf84e1ed0dbd1382dc73a73c932f805ac038dd4da4c6f053b00"
+      }
+    },
+    {
+      "id": "profile.rental_management",
+      "title": "เมนูจัดการรายการของผู้ใช้",
+      "content": "หน้าโปรไฟล์มีเมนูอุปกรณ์ของฉัน รายได้ สถานะการเช่า รายการถูกใจ และประวัติการเช่า เมนูเหล่านี้เป็นจุดเปิดหน้าที่เกี่ยวข้อง ไม่ใช่หลักฐานยืนยันยอดเงินจริงหรือสถานะปัจจุบันของรายการใด",
+      "sources": [
+        {
+          "title": "เมนูรายการในโปรไฟล์",
+          "reference": "frontend/lib/features/profile/presentation/pages/profile/profile.dart",
+          "locator": "ProfileQuickActionsRow",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "7a6206c67645e4fc3f6b8997aba960733e6fdd19029327428bdf221fd2841e6c"
+      }
+    },
+    {
+      "id": "support.navigation_and_ai",
+      "title": "หน้าช่วยเหลือและแชท AI",
+      "content": "หน้าโปรไฟล์มีเมนูติดต่อและคำถามที่พบบ่อย แอปมีหน้าแชทผู้ช่วย AI แยกจากหน้าแชทกับผู้ให้เช่า ข้อมูลติดต่อเจ้าหน้าที่และเวลาบริการต้องได้รับการยืนยันจากเจ้าของแอปก่อนใช้เป็นข้อมูลอ้างอิง",
+      "sources": [
+        {
+          "title": "เมนูช่วยเหลือ",
+          "reference": "frontend/lib/features/profile/presentation/pages/profile/profile.dart",
+          "locator": "openContact; openFaq",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "หน้า AI และหน้าสนทนา",
+          "reference": "frontend/lib/core/navigation/app_routes.dart",
+          "locator": "chatbot; chatDetail",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "a7ef965c6f2822be5aa6986be326aadf12abe8714f64e57f6915b10f16739f55"
+      }
+    },
+    {
+      "id": "wallet.current_implementation",
+      "title": "ข้อจำกัดของกระเป๋าเงินที่ตรวจพบ",
+      "content": "กระเป๋าเงินในโค้ดที่ตรวจใช้สถานะในแอปและมีการเติมเงินจำลอง ฟังก์ชัน fetchWallet ไม่เรียกเครือข่าย และ topUp สร้างรายการจำลองแล้วเพิ่มยอดใน state จึงไม่สามารถใช้หน้านี้เป็นหลักฐานว่ารับหรือเติมเงินจริงได้",
+      "sources": [
+        {
+          "title": "กระเป๋าเงินและการเติมเงินจำลอง",
+          "reference": "frontend/lib/features/wallet/presentation/bloc/wallet_cubit.dart",
+          "locator": "fetchWallet; topUp",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "approved",
+      "approval": {
+        "approved_by": "project_owner",
+        "approved_at": "2026-10-03T10:38:04+00:00",
+        "content_sha256": "5d6e7b87fe17687626269338e7fceb9a9c7671ea830ccbc6b542a45ccea437c1"
+      }
+    },
+    {
+      "id": "policy.deposit",
+      "title": "มัดจำ",
+      "content": "ยังไม่มีเอกสารที่เจ้าของอนุมัติเรื่องจำนวนมัดจำ วิธีเรียกเก็บ การยกเว้น หรือคืนมัดจำ ไม่อนุมานอัตราจากราคาเช่าหรือจากรายการตัวอย่าง",
+      "sources": [],
+      "reviewed_at": "2026-10-03",
+      "status": "unverified",
+      "approval": null
+    },
+    {
+      "id": "policy.fees",
+      "title": "ค่าธรรมเนียม",
+      "content": "ยังไม่มีเอกสารที่เจ้าของอนุมัติเรื่องค่าธรรมเนียมแพลตฟอร์ม ค่าบริการ หรือฐานการคำนวณยอดรวม ไม่อนุมานจากราคาใน UI",
+      "sources": [],
+      "reviewed_at": "2026-10-03",
+      "status": "unverified",
+      "approval": null
+    },
+    {
+      "id": "policy.cancellation_refund",
+      "title": "ยกเลิกและคืนเงิน",
+      "content": "ยังไม่มีเอกสารที่เจ้าของอนุมัติเรื่องระยะเวลายกเลิก ผู้มีสิทธิ์ยกเลิก และอัตราหรือระยะเวลาคืนเงิน การมีสถานะ cancelled ในโค้ดไม่ใช่นโยบายคืนเงิน",
+      "sources": [],
+      "reviewed_at": "2026-10-03",
+      "status": "unverified",
+      "approval": null
+    },
+    {
+      "id": "policy.damage",
+      "title": "ความเสียหายและข้อพิพาท",
+      "content": "ยังไม่มีเอกสารที่เจ้าของอนุมัติเรื่องผู้รับผิดชอบความเสียหาย หลักฐานตรวจสภาพ วงเงินชดใช้ หรือขั้นตอนข้อพิพาท",
+      "sources": [],
+      "reviewed_at": "2026-10-03",
+      "status": "unverified",
+      "approval": null
+    },
+    {
+      "id": "policy.late_return",
+      "title": "การคืนล่าช้า",
+      "content": "ยังไม่มีเอกสารที่เจ้าของอนุมัติเรื่องช่วงผ่อนผัน ค่าปรับ หรือการขยายระยะเวลาเช่า",
+      "sources": [],
+      "reviewed_at": "2026-10-03",
+      "status": "unverified",
+      "approval": null
+    },
+    {
+      "id": "policy.delivery",
+      "title": "รับส่งอุปกรณ์",
+      "content": "ยังไม่มีเอกสารที่เจ้าของอนุมัติว่ามีบริการขนส่ง พื้นที่ให้บริการ ผู้รับผิดชอบ และค่าบริการ การเลือกจุดนัดพบไม่ใช่หลักฐานของบริการขนส่ง",
+      "sources": [],
+      "reviewed_at": "2026-10-03",
+      "status": "unverified",
+      "approval": null
+    },
+    {
+      "id": "policy.identity_and_eligibility",
+      "title": "ยืนยันตัวตนและคุณสมบัติผู้ใช้งาน",
+      "content": "ยังไม่มีเอกสารที่เจ้าของอนุมัติเรื่อง KYC เอกสารที่ต้องใช้ อายุผู้เช่า หรือข้อจำกัดบทบาท การสมัครบัญชี เข้าสู่ระบบ และ OTP ไม่ใช่หลักฐานว่าผ่าน KYC",
+      "sources": [
+        {
+          "title": "FAQ ที่ยังต้องตรวจนโยบาย",
+          "reference": "frontend/lib/features/profile/presentation/pages/support/faq_screen.dart",
+          "locator": "registration; renter/lender requirements",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "unverified",
+      "approval": null
+    },
+    {
+      "id": "policy.terms_and_privacy",
+      "title": "เงื่อนไขบริการและความเป็นส่วนตัว",
+      "content": "หน้าเงื่อนไขและความเป็นส่วนตัวที่ตรวจมีข้อความ placeholder จึงยังไม่มีเนื้อหาที่ใช้ยืนยันข้อตกลงหรือการจัดการข้อมูลส่วนบุคคลได้ ต้องได้รับเอกสารฉบับใช้งานจริงที่เจ้าของอนุมัติ",
+      "sources": [
+        {
+          "title": "หน้าเงื่อนไขที่เป็น placeholder",
+          "reference": "frontend/lib/features/profile/presentation/pages/legal/terms_of_service_screen.dart",
+          "locator": "Lorem Ipsum body",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "หน้าความเป็นส่วนตัวที่เป็น placeholder",
+          "reference": "frontend/lib/features/profile/presentation/pages/legal/privacy_policy_screen.dart",
+          "locator": "Lorem Ipsum body",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "unverified",
+      "approval": null
+    },
+    {
+      "id": "operations.support_and_availability",
+      "title": "ช่องทางติดต่อ เวลาบริการ และสถานะระบบ",
+      "content": "ยังไม่ได้รับการยืนยันข้อมูลติดต่อเจ้าหน้าที่ เวลาบริการ หรือสถานะระบบจริง ไม่ใช้หมายเลขหรืออีเมลที่ฝังใน UI เป็นข้อมูลอนุมัติ และไม่อ้างว่าระบบเปิดให้บริการตลอดเวลา",
+      "sources": [
+        {
+          "title": "ข้อมูลติดต่อใน UI",
+          "reference": "frontend/lib/features/profile/presentation/pages/support/contact_screen.dart",
+          "locator": "supportEmail; supportPhone",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "ข้อความสถานะใน FAQ",
+          "reference": "frontend/lib/features/profile/presentation/pages/support/faq_screen.dart",
+          "locator": "application status entry",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "unverified",
+      "approval": null
+    },
+    {
+      "id": "payment.production_methods",
+      "title": "การชำระและเติมเงินจริง",
+      "content": "ยังไม่มีเอกสารที่เจ้าของอนุมัติเรื่อง payment provider วิธีรับเงินจริง วิธีตรวจชำระ หรือการเติม/ถอนเงินจริง มีข้อความและ UI เกี่ยวกับการชำระแต่ไม่พอรับรองนโยบายหรือการทำธุรกรรมเงินจริง",
+      "sources": [
+        {
+          "title": "กระเป๋าเงินจำลอง",
+          "reference": "frontend/lib/features/wallet/presentation/bloc/wallet_cubit.dart",
+          "locator": "fetchWallet; topUp",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        },
+        {
+          "title": "ข้อความและตัวเลือกการชำระในหน้าจอง",
+          "reference": "frontend/lib/features/booking/presentation/pages/booking_confirmation_page.dart",
+          "locator": "payment method UI",
+          "revision": "a7e6c1e00659cea94065c23fee6b34280e8d71cb"
+        }
+      ],
+      "reviewed_at": "2026-10-03",
+      "status": "unverified",
+      "approval": null
+    }
+  ]
+}

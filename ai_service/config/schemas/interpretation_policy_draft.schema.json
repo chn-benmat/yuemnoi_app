@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "ScopeDefinitions": {
+      "additionalProperties": false,
+      "properties": {
+        "broad": {
+          "minLength": 1,
+          "title": "Broad",
+          "type": "string"
+        },
+        "specific": {
+          "minLength": 1,
+          "title": "Specific",
+          "type": "string"
+        },
+        "not_applicable": {
+          "minLength": 1,
+          "title": "Not Applicable",
+          "type": "string"
+        },
+        "independence": {
+          "minLength": 1,
+          "title": "Independence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "broad",
+        "specific",
+        "not_applicable",
+        "independence"
+      ],
+      "title": "ScopeDefinitions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "version": {
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "draft_pending_owner_review",
+      "title": "Status",
+      "type": "string"
+    },
+    "production_enabled": {
+      "const": false,
+      "title": "Production Enabled",
+      "type": "boolean"
+    },
+    "scope": {
+      "$ref": "#/$defs/ScopeDefinitions"
+    },
+    "information_sufficiency": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Information Sufficiency",
+      "type": "array"
+    },
+    "action": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Action",
+      "type": "array"
+    },
+    "context": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Context",
+      "type": "array"
+    },
+    "evidence": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "neutrality": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Neutrality",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "version",
+    "status",
+    "production_enabled",
+    "scope",
+    "information_sufficiency",
+    "action",
+    "context",
+    "evidence",
+    "neutrality"
+  ],
+  "title": "InterpretationPolicy",
+  "type": "object"
+}

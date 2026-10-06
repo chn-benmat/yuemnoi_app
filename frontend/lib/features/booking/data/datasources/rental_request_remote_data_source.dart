@@ -24,7 +24,7 @@ class RentalRequestRemoteDataSource {
 
     try {
       final response = await _client.post(
-        '/api/v1/rentals',
+        '/api/rentals',
         data: {
           'item_id': draft.itemId,
           'start_at': draft.startAt.toUtc().toIso8601String(),

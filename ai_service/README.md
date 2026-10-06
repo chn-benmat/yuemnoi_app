@@ -1,256 +1,413 @@
-# 🤖 AI Service: ยืมหน่อย AI Rental Consultant (FastAPI)
+<div align="center">
 
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Google Gemini](https://img.shields.io/badge/Gemini-Primary%20Cloud-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
-[![Groq](https://img.shields.io/badge/Groq-Fallback%20Cloud-F55036?style=for-the-badge&logo=fastapi&logoColor=white)](https://groq.com)
-[![Tavily](https://img.shields.io/badge/Tavily-Fact%20Verification-4A90E2?style=for-the-badge)](https://tavily.com)
+<img src="../frontend/assets/images/yuemnoi.png" width="88" alt="Yuemnoi logo">
 
-ไมโครเซอร์วิสผู้ช่วยอัจฉริยะ **ยืมหน่อย AI (Rental Consultant)** พัฒนาด้วย **Python 3.12** และ **FastAPI** ภายใต้สถาปัตยกรรม **Clean Architecture** ทำหน้าที่ให้คำปรึกษา แนะนำอุปกรณ์ เปรียบเทียบสเปก และตอบข้อซักถามของผู้ใช้งาน โดยเชื่อมต่อกับคลังสินค้าจริงใน Supabase (`item_tb`) และตรวจสอบข้อมูลทางเทคนิคภายนอกผ่าน Tavily Search API
+# ยืมหน่อย · AI Service
 
----
+**ผู้ช่วยคุยเรื่องอุปกรณ์ โดยอิงคลังจริงและหลักฐานที่ตรวจได้**
 
-## 📑 สารบัญ (Table of Contents)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Transport](https://img.shields.io/badge/Transport-JSON%20%2F%20SSE-111827?style=flat-square)
+![Architecture](https://img.shields.io/badge/Architecture-Clean-9251D0?style=flat-square)
 
-1. [สถาปัตยกรรม Clean Architecture](#-สถาปัตยกรรม-clean-architecture)
-2. [หลักการและข้อกำหนดเข้มงวด (Strict Architectural Policies)](#-หลักการและข้อกำหนดเข้มงวด-strict-architectural-policies)
-3. [กลไก Dual-Cloud Cascade Failover](#-กลไก-dual-cloud-cascade-failover)
-4. [โครงสร้างไดเรกทอรี (Directory Structure)](#-โครงสร้างไดเรกทอรี-directory-structure)
-5. [โฟลว์การทำงานสำคัญ (Core Workflows)](#-โฟลว์การทำงานสำคัญ-core-workflows)
-6. [ข้อกำหนดเบื้องต้นและการติดตั้ง (Getting Started)](#-ข้อกำหนดเบื้องต้นและการติดตั้ง-getting-started)
-7. [การตั้งค่า Environment Variables](#-การตั้งค่า-environment-variables)
-8. [API Endpoints Reference](#-api-endpoints-reference)
-9. [การทดสอบ (Testing)](#-การทดสอบ-testing)
+[ภาพรวม](#overview) · [Tech stack](#stack) · [ตั้งค่า](#setup) · [เริ่มรัน](#run) · [API](#api) · [Runtime](#runtime) · [ตรวจงาน](#development) · [แก้ปัญหา](#troubleshooting)
+
+[Project](../README.md) / [Frontend](../frontend/README.md) / [Backend](../backend/README.md) / **AI Service**
+
+</div>
 
 ---
 
-## 🏛️ สถาปัตยกรรม Clean Architecture
+<a id="overview"></a>
 
-โค้ดทั้งหมดปฏิบัติตามหลัก Clean Architecture โดยความสัมพันธ์ของการเรียกใช้งานจะชี้ **เข้าสู่ด้านใน (Inward Only)** เท่านั้น:
+## ✨ ส่วนนี้ทำอะไร
 
-```text
-Domain (Pure Python)
-  ▲
-  │
-Application (Use Cases, Domain Services, DTOs)
-  ▲
-  │
-Infrastructure (Adapters: LLM, Tavily, Supabase, Cache) & Interface (FastAPI Controllers)
-```
+Python service ของ **Yuemnoi** ใช้ FastAPI เป็น API ให้ Go Backend เรียก ค้นข้อมูลอุปกรณ์จาก Supabase สร้างคำตอบผ่าน Gemini / Groq และใช้ Tavily เมื่อ flow ต้องการหลักฐานทางเทคนิคจากภายนอก
 
-- **`app/domain/`**: แกนกลางธุรกิจ (Pure Python Entities) ปราศจากการพึ่งพา Framework เช่น `Item`, `ChatMessage`, `IntentDecision`, `ComparisonMatrix`, `ClarificationQuestion` และ Interface Ports (`LLMServiceInterface`, `ItemRepositoryInterface`, `SearchServiceInterface`, `CacheServiceInterface`)
-- **`app/application/`**: Use Cases ตามหลัก Single Responsibility Principle (SRP):
-  - `RouteIntentUseCase`: จำแนกเจตนาและความคลุมเครือของผู้ใช้โดยไม่ใช้ Keyword
-  - `QueryItemsUseCase`: ค้นหาและจับคู่อุปกรณ์จากคลังสินค้าด้วยความหมายเชิงบริบท
-  - `CompareItemsUseCase`: ประสานงานเปรียบเทียบอุปกรณ์ ตรวจสอบข้อเท็จจริง และสังเคราะห์ผลลัพธ์
-  - `GenerateClarificationUseCase`: สร้างคำถามเจาะจงและปุ่มตัวเลือกตอบ (Actionable Choices)
-  - `ProcessChatMessageUseCase`: ตัวควบคุมลำดับงานหลัก (Master Orchestrator)
-- **`app/infrastructure/`**: จัดการเชื่อมต่อกับระบบภายนอก:
-  - `llm/`: จัดการสลับโมเดล Dual-Cloud ระหว่าง Google Gemini และ Groq Cloud
-  - `search/`: ดึงข้อมูลเปรียบเทียบผ่าน Tavily Search API
-  - `database/`: เชื่อมต่อ Supabase เพื่ออ่านรายการสินค้า
-  - `cache/`: In-Memory Catalog Cache (TTL 300 วินาที) ลดโหลดฐานข้อมูล
-- **`app/interface/`**: รับคำขอผ่าน REST API และ SSE Streaming
+| ความสามารถ         | สิ่งที่ service ทำ                                                 |
+| ------------------ | ------------------------------------------------------------------ |
+| 💬 Conversation    | ตอบบทสนทนาและรักษาบริบทเฉพาะ session ปัจจุบัน                      |
+| 📚 App information | ใช้ข้อเท็จจริงเกี่ยวกับแอปจาก knowledge ที่มีสถานะอนุมัติ          |
+| 🔎 Catalog         | อ่านคลังจริง, แสดงภาพรวม, รายละเอียด และแนะนำอุปกรณ์ตามความต้องการ |
+| 📝 Clarification   | สร้างแบบสอบถามเมื่อข้อมูลยังไม่ครบ พร้อม question / option IDs     |
+| ⚖️ Comparison      | จัดคำตอบเปรียบเทียบและข้อมูลเทคนิค พร้อม evidence เมื่อมี          |
+| ✅ Response review | ให้ actual model คนละตัวตรวจคำตอบก่อนเผยแพร่                       |
+| ⚡ JSON / SSE      | ส่งผลที่ผ่านการตรวจเป็น JSON หรือ SSE พร้อมการ์ดและ references     |
 
----
+Service ใช้ **Cloud APIs** ไม่มี local model / Ollama / GPU เป็น dependency ของการติดตั้ง และใช้ HTTPX adapters โดยตรง จึงไม่ต้องติดตั้ง SDK ของ Gemini, Groq, Tavily หรือ Supabase เพิ่มนอก requirements
 
-## 🚫 หลักการและข้อกำหนดเข้มงวด (Strict Architectural Policies)
-
-### 1. นโยบายไร้คีย์เวิร์ด ไร้ Regex ไร้การฮาร์ดโค้ด (Zero-Regex, Zero-Keyword, Zero-Hardcode)
-- **ห้ามจับคู่คีย์เวิร์ด (Zero-Keyword Policy)**: ไม่ใช้คำสั่ง `if "กล้อง" in text:` หรือ `if "compare" in text:` ในโค้ด และไม่ฮาร์ดโค้ดลิสต์ประโยคตัวอย่างลงใน System Prompt ทุกอย่างต้องวิเคราะห์ด้วย AI Semantic Intent และ Pydantic Schema
-- **ห้ามใช้ Regular Expressions (No Regex)**: ไม่ใช้ `re.search()` หรือ Pattern ใดๆ ในการสกัด Entities หรือความคลุมเครือ
-- **ห้ามฮาร์ดโค้ดข้อมูล (Strictly Zero-Hardcode Policy)**: ห้ามใส่ค่าคงที่ แคตตาล็อกสินค้า หรือคำตอบสำเร็จรูป (Canned Responses) ลงในโค้ด ข้อมูลสินค้าต้องดึงสดจาก Supabase และคำตอบต้องสร้างขึ้นตามบริบทจริง
-
-### 2. นโยบายความเป็นกลาง 100% (Strict Neutrality & Zero-Bias)
-- **ไม่เอนเอียงตามแบรนด์หรือร้านค้า**: แนะนำสินค้าตามความสอดคล้องกับความต้องการของผู้ใช้และงบประมาณอย่างเป็นกลาง
-- **ระบุข้อดี-ข้อเสียตามจริง**: แสดงจุดเด่นและข้อจำกัดของอุปกรณ์ตามสเปกทางเทคนิคที่ผ่านการตรวจสอบแล้ว โดยไม่มีการโฆษณาเกินจริง
-- **การเปรียบเทียบกับภายนอก**: หากอุปกรณ์นอกร้านมีความเหมาะสมกับงานของผู้ใช้มากกว่า ให้ระบุตามจริงอย่างสุภาพโดยไม่กดดันให้เช่าสินค้าในร้าน
-
-### 3. ระบบคลาวด์ฟรี 100% (100% Free Cloud API Policy)
-- ไม่พึ่งพา Local Ollama หรือ GPU ในเครื่องของผู้ใช้
-- ใช้บริการคลาวด์ระดับฟรีโดยไม่ต้องผูกบัตรเครดิต (Google Gemini Free Tier & Groq Cloud Free Tier)
-
----
-
-## ⚡ กลไก Dual-Cloud Cascade Failover
-
-ระบบมีระบบสำรองคู่ขนาน (Cascade Failover) รับประกันความพร้อมใช้งานสูง (High Availability):
+### คำตอบเดินทางอย่างไร
 
 ```mermaid
-flowchart TD
-    Request["คำขอจากผู้ใช้"] --> GeminiPrimary["Google Gemini Primary<br/>(gemini-3.5-flash-lite)"]
-    GeminiPrimary -->|สำเร็จ| Success["ส่งคำตอบ"]
-    GeminiPrimary -->|Rate Limit / ข้อผิดพลาด| GeminiFallback1["Gemini Fallback 1<br/>(gemini-3.1-flash-lite)"]
-    GeminiFallback1 -->|สำเร็จ| Success
-    GeminiFallback1 -->|ข้อผิดพลาด| GeminiFallback2["Gemini Fallback 2<br/>(gemini-flash-lite-latest)"]
-    GeminiFallback2 -->|สำเร็จ| Success
-    GeminiFallback2 -->|Gemini ล่มทั้งหมด| GroqPrimary["Groq Cloud Primary<br/>(qwen/qwen3.8-27b)"]
-    GroqPrimary -->|สำเร็จ| Success
-    GroqPrimary -->|ข้อผิดพลาด| GroqFallback1["Groq Fallback 1<br/>(openai/gpt-oss-120b)"]
-    GroqFallback1 -->|สำเร็จ| Success
-    GroqFallback1 -->|ข้อผิดพลาด| GroqFallback2["Groq Fallback 2<br/>(openai/gpt-oss-20b)"]
-    GroqFallback2 -->|สำเร็จ| Success
-    GroqFallback2 -->|ล้มเหลวทั้งหมด| ErrorResponse["ตอบกลับข้อผิดพลาดอย่างปลอดภัย"]
+flowchart LR
+    Flutter["Flutter"] --> Go["Go Gateway"]
+    Go --> Plan["AI Planning"]
+    Plan --> Evidence["Evidence เมื่อจำเป็น"]
+    Evidence --> Review["Review โดย model คนละตัว"]
+    Review --> Check["ตรวจ catalog / knowledge ล่าสุด"]
+    Check --> Reply["Validated JSON / SSE ready"]
+    Catalog["Supabase catalog / approved knowledge"] --> Plan
+    Search["Tavily"] --> Evidence
 ```
 
----
+คำตอบ, แบบสอบถาม, ตัวเลือก, การ์ด, suggested replies และ references ต้องผ่าน review หากถูกปฏิเสธจะคืน error และยังไม่เผยแพร่ draft ไม่มี rewrite loop เพิ่มหลัง rejection
 
-## 📁 โครงสร้างไดเรกทอรี (Directory Structure)
+SSE ส่งคำตอบฉบับครบใน event `ready` แล้วจึงส่ง `metadata`, `delta` และ `done` การทยอยแสดงข้อความจึงเกิดหลังตรวจคำตอบครบแล้ว ส่วน session context ไม่ใช่ระบบเก็บความทรงจำระยะยาวตามบัญชี
+
+<a id="stack"></a>
+
+## 🧰 Tech stack & versions
+
+[requirements.txt](requirements.txt) ระบุ **เวอร์ชันขั้นต่ำแบบ `>=`** และไม่มี dependency lockfile จึงอาจติดตั้งได้คนละ patch / minor version ในแต่ละเครื่อง
+
+| เครื่องมือ         | ข้อกำหนดในโปรเจกต์     | Snapshot metadata ในเครื่องที่ตรวจ\* | หน้าที่                       |
+| ------------------ | ---------------------- | ------------------------------------ | ----------------------------- |
+| Python             | **3.12** ตาม AGENTS.md | 3.12.0                               | Runtime                       |
+| FastAPI            | ≥ 0.115.0              | 0.142.2                              | API / OpenAPI                 |
+| Uvicorn [standard] | ≥ 0.30.0               | 0.54.0                               | ASGI server                   |
+| Pydantic           | ≥ 2.8.0                | 2.13.5                               | Structured output validation  |
+| pydantic-settings  | ≥ 2.4.0                | 2.15.0                               | Typed env configuration       |
+| HTTPX              | ≥ 0.27.0               | 0.28.1                               | Async HTTP / connection pools |
+| pytest             | ≥ 8.3.0                | 9.1.1                                | Tests                         |
+| pytest-asyncio     | ≥ 0.24.0               | 1.4.0                                | Async tests                   |
+
+<a id="setup"></a>
+
+## ⚙️ เตรียมเครื่อง & configuration
+
+### 1. สิ่งที่ต้องมี
+
+- Git และ Python **3.12** พร้อม `venv` / pip ดู [Python venv guide](https://docs.python.org/3.12/library/venv.html)
+- Supabase project และ credential ที่อ่าน catalog ผ่าน PostgREST ได้
+- API keys ของ [Gemini](https://ai.google.dev/gemini-api/docs/api-key) และ [Groq](https://console.groq.com/docs/quickstart) สำหรับ profiles ที่เปิดใช้
+- [Tavily API key](https://docs.tavily.com/documentation/quickstart) เมื่อต้องค้นหลักฐานภายนอก
+- อินเทอร์เน็ตออกไปยัง APIs และพื้นที่เขียน state / lock files ของ service
+- Go Backend สำหรับ flow จากแอป; สามารถตรวจ AI API โดยตรงระหว่างพัฒนาได้
+
+การ review ต้องมี **actual model อย่างน้อยสองตัวที่ใช้งานได้และต่างกัน** การมี key หรือ health flag ว่า configured ยังไม่ยืนยันสิทธิ์เรียก model / structured output ทุกตัว
+
+### 2. เตรียม catalog
+
+AI อ่าน `item_tb` ผ่าน Supabase REST โดยใช้ columns:
 
 ```text
-ai_service/
-├── app/
-│   ├── application/
-│   │   ├── dtos/                # Data Transfer Objects (chat, item, clarification)
-│   │   ├── services/            # FactVerificationService (กรองสแปม ตรวจสอบสเปก)
-│   │   └── use_cases/           # Intent Routing, Item Querying, Comparison, Clarification
-│   ├── core/
-│   │   ├── config.py            # การอ่าน Environment Variables ผ่าน Pydantic Settings
-│   │   ├── container.py         # Dependency Injection Container เชื่อม Port กับ Adapter
-│   │   ├── exceptions.py        # Custom Domain Exceptions
-│   │   └── logging.py           # Structured Logging Setup
-│   ├── domain/
-│   │   ├── entities/            # Pydantic Domain Models
-│   │   └── interfaces/          # Protocol / ABC Interfaces
-│   ├── infrastructure/
-│   │   ├── cache/               # In-memory TTL Cache Service
-│   │   ├── database/            # Supabase PostgREST Client Adapter
-│   │   ├── llm/                 # GeminiClient, GroqClient, MultiProviderLLMService
-│   │   ├── prompts/             # Prompt Templates ภาษาไทย
-│   │   └── search/              # TavilyClient Adapter
-│   └── interface/
-│       ├── api/v1/
-│       │   ├── endpoints/       # chat.py, items.py, health.py
-│       │   └── router.py        # API Router Grouping
-│       └── schemas/             # Pydantic Request & Response Schemas
-├── tests/                       # Unit & Integration Tests (pytest, pytest-asyncio)
-├── requirements.txt             # Python Package Dependencies
-└── main.py                      # จุดเริ่มต้นรันเซิร์ฟเวอร์ FastAPI (Port 8000)
+id, item_name, category, price, type, status, item_image_url, description
 ```
 
----
+ราคาเป็นตัวเลข finite ที่ไม่ติดลบ, `type` ต้องไม่ว่าง และสถานะพร้อมเช่าที่ domain ใช้คือ `available` เมื่อเทียบแบบ lowercase รูปอาจเป็น URL เดี่ยว, list หรือ JSON-encoded list จำนวนสินค้าขึ้นกับฐานข้อมูลจริง
 
-## 🔄 โฟลว์การทำงานสำคัญ (Core Workflows)
+Service นี้อ่าน URL รูปที่มีอยู่แล้ว ไม่มีการอัปโหลด Storage, ไม่ใช้ Firebase service account และไม่ต้องใช้ direct PostgreSQL connection ขอ schema / permissions ของ environment ตาม [Backend setup](../backend/README.md#setup) เพราะไม่มี SQL bootstrap ในส่วน AI
 
-### 1. โฟลว์การเปรียบเทียบอุปกรณ์และตรวจสเปก (Fact-Checking & Comparison)
-1. **Catalog Retrieval**: ค้นหาอุปกรณ์ที่เกี่ยวข้องจาก `item_tb`
-2. **Search Query Generation**: สร้างข้อความค้นหาสเปกเชิงลึกอัตโนมัติ
-3. **Web Search**: ค้นหาผลลัพธ์ผ่าน Tavily Search API
-4. **Fact Verification Engine**: LLM ตรวจสอบและตัดโฆษณาแฝง สกัดสเปกจริง (เช่น เซนเซอร์, ความละเอียด, พอร์ตเชื่อมต่อ, น้ำหนัก)
-5. **Grounded Synthesis**: เรียบเรียงคำตอบเป็นภาษาไทย เปรียบเทียบราคาเช่าในร้านกับความคุ้มค่า
+### 3. สร้างไฟล์ `.env`
 
-### 2. โฟลว์ถามกลับเมื่อข้อมูลไม่ชัดเจน (Interactive Clarification)
-1. ตรวจพบว่าคำถามคลุมเครือ (`ambiguity_level >= 0.5`)
-2. ดึงหมวดหมู่สินค้าจริงในร้านจาก Cache
-3. สังเคราะห์คำถามเจาะจง พร้อมตัวเลือก 3-4 ข้อ (`ChoiceOption` ที่มี `id`, `label`, `description`, `action_value`)
-4. ฝั่ง Flutter นำตัวเลือกไปแสดงเป็นปุ่มกด Interactive Chips ให้ผู้ใช้แตะเลือกได้ทันที
+สร้างใน `ai_service/` ไม่มีไฟล์ `.env.example` ใน checkout นี้ แทนค่า placeholder ด้วยค่าจริง และใช้ internal key เดียวกับ Backend
 
----
-
-## 📋 ข้อกำหนดเบื้องต้นและการติดตั้ง (Getting Started)
-
-### ข้อกำหนด
-- **Python**: เวอร์ชัน `3.12`
-- API Key สำหรับ **Google Gemini** (Google AI Studio)
-- API Key สำหรับ **Groq Cloud**
-- API Key สำหรับ **Tavily Search**
-
-### ขั้นตอนการติดตั้งและรันเซิร์ฟเวอร์
-
-```bash
-cd ai_service
-
-# 1. สร้าง Virtual Environment
-python -m venv .venv
-
-# 2. เปิดใช้งาน Virtual Environment
-# Windows:
-.\.venv\Scripts\activate
-# macOS / Linux:
-# source .venv/bin/activate
-
-# 3. ติดตั้ง Dependencies
-pip install -r requirements.txt
-
-# 4. เริ่มต้นรันเซิร์ฟเวอร์
-python main.py
-```
-> เซิร์ฟเวอร์จะรันที่ `http://localhost:8000` (เข้าดูเอกสาร API ได้ที่ `http://localhost:8000/docs`)
-
----
-
-## ⚙️ การตั้งค่า Environment Variables
-
-สร้างไฟล์ `.env` ในโฟลเดอร์ `ai_service/`:
-
-```env
-# แอปพลิเคชัน
+```dotenv
 APP_NAME="Yuemnoi AI Service"
-APP_ENV=production
+APP_ENV=development
 LOG_LEVEL=INFO
 CACHE_TTL_SECONDS=300
-HTTP_TIMEOUT_SECONDS=30.0
 
-# ฐานข้อมูลและการยืนยันสิทธิ์ภายในระบบ
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-supabase-service-role-or-anon-key
-INTERNAL_SERVICE_KEY=your-internal-shared-service-key-32chars
+SUPABASE_KEY=replace-with-server-catalog-access-key
+GEMINI_API_KEY=replace-with-gemini-api-key
+GROQ_API_KEY=replace-with-groq-api-key
+TAVILY_API_KEY=replace-with-tavily-api-key
+INTERNAL_SERVICE_KEY=replace-with-shared-internal-key-at-least-32-chars
+```
 
-# กุญแจ API ผู้ให้บริการ AI (ฟรี 100%)
-GEMINI_API_KEY=your-google-gemini-api-key
-GROQ_API_KEY=your-groq-cloud-api-key
-TAVILY_API_KEY=your-tavily-search-api-key
+| ตัวแปรหลัก             | Default              | ต้องตั้งเมื่อ / ความหมาย                                              |
+| ---------------------- | -------------------- | --------------------------------------------------------------------- |
+| `SUPABASE_URL`         | ว่าง                 | อ่าน catalog; project base URL                                        |
+| `SUPABASE_KEY`         | ว่าง                 | อ่าน `item_tb` ผ่าน PostgREST; ต้องมีสิทธิ์ตรงกับ integration         |
+| `GEMINI_API_KEY`       | ว่าง                 | ใช้ Gemini profiles ที่เปิดไว้                                        |
+| `GROQ_API_KEY`         | ว่าง                 | ใช้ Groq profiles ที่เปิดไว้                                          |
+| `TAVILY_API_KEY`       | ว่าง                 | ค้นข้อมูลเทคนิค; หากไม่ตั้งจะไม่มี search sources จาก adapter         |
+| `INTERNAL_SERVICE_KEY` | ว่าง                 | ถ้าตั้ง จะบังคับ header บน chat routes; ต้องตรงกับ Go                 |
+| `APP_NAME`             | `Yuemnoi AI Service` | ชื่อ API / logs                                                       |
+| `APP_ENV`              | `production`         | ป้าย environment ใน logs                                              |
+| `LOG_LEVEL`            | `INFO`               | ระดับ logging                                                         |
+| `CACHE_TTL_SECONDS`    | `300`                | อายุ catalog cache                                                    |
+| `HTTP_TIMEOUT_SECONDS` | `30.0`               | Settings มีฟิลด์นี้ แต่ adapters ปัจจุบันใช้ timeout จาก runtime JSON |
 
-# ลำดับโมเดลสำรอง (Cascade Models)
+ชื่อคีย์ Supabase ฝั่งนี้คือ `SUPABASE_KEY` ส่วน Go ใช้ `SUPABASE_SERVICE_ROLE_KEY` และ Flutter ใช้ `SUPABASE_PUBLISHABLE_KEY` เลือก credential ตามสิทธิ์ที่จำเป็นและตรวจ [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys) เก็บ server credentials และคีย์ providers ฝั่ง service
+
+### Paths และ configuration precedence
+
+| ตัวแปร                       | Default ที่ใช้กับ runtime ปัจจุบัน                      | หมายเหตุ                                                       |
+| ---------------------------- | ------------------------------------------------------- | -------------------------------------------------------------- |
+| `AI_RUNTIME_PATH`            | `config/ai_runtime.json` ใต้ service root               | เปลี่ยน path ของ runtime document                              |
+| `APP_KNOWLEDGE_PATH`         | `knowledge/app_knowledge.json` ใต้ service root         | JSON เติมค่าให้; explicit relative path อิง working directory  |
+| `INTERPRETATION_POLICY_PATH` | `knowledge/interpretation_policy.json` ใต้ service root | JSON เติมค่าให้                                                |
+| `AI_QUOTA_LEDGER_PATH`       | `.state/llm_quota.json` ใต้ service root                | ต้องเขียนได้; ทุก process บน host เดียวกันควรใช้ path เดียวกัน |
+
+ลำดับค่าของ [Settings](app/core/config.py) คือ **explicit Settings values → process env → .env → secret files → runtime JSON → field defaults** คำสั่งในคู่มือนี้รันจาก `ai_service/` เพื่อให้ dotenv และ relative paths ชัดเจน
+
+<details>
+<summary>ตัวแปรขั้นสูงและ model overrides ทั้งหมด</summary>
+
+ค่าต่อไปนี้เป็น effective defaults จาก runtime JSON ไม่จำเป็นต้องคัดลอกลง `.env` หากใช้ configuration เดิม
+
+| ตัวแปร                           | Effective default | ใช้ควบคุม                                                  |
+| -------------------------------- | ----------------- | ---------------------------------------------------------- |
+| `INTENT_CONTEXT_MAX_MESSAGES`    | 16                | จำนวนข้อความบริบท                                          |
+| `INTENT_CONTEXT_MAX_CHARACTERS`  | 24000             | ขนาดบริบท                                                  |
+| `INTENT_TEMPERATURE`             | 0.1               | Intent generation                                          |
+| `GUIDANCE_MAX_QUESTIONS`         | 3                 | จำนวนคำถาม                                                 |
+| `GUIDANCE_MAX_OPTIONS`           | 4                 | ตัวเลือกต่อคำถาม                                           |
+| `GUIDANCE_TITLE_MAX_CHARACTERS`  | 80                | ความยาวชื่อคำถาม                                           |
+| `GUIDANCE_OPTION_MAX_CHARACTERS` | 80                | ความยาว option label                                       |
+| `GUIDANCE_MAX_ITEMS`             | 3                 | จำนวนการ์ดสินค้า                                           |
+| `GUIDANCE_GENERATION_ATTEMPTS`   | 2                 | Attempts ของ guidance                                      |
+| `GUIDANCE_TEMPERATURE`           | 0.1               | Guidance generation                                        |
+| `STRUCTURED_MAX_OUTPUT_TOKENS`   | 1200              | Output limit; field fallback คือ 3000 แต่ JSON มีลำดับก่อน |
+| `CHAT_STREAM_HEARTBEAT_SECONDS`  | 10.0              | จังหวะ heartbeat                                           |
+| `CHAT_STREAM_CHUNK_CHARACTERS`   | 64                | ขนาดข้อความใน delta                                        |
+
+Model setting names ที่ env override ได้:
+
+```dotenv
 GEMINI_PRIMARY_MODEL=gemini-3.5-flash-lite
 GEMINI_FALLBACK_MODEL_1=gemini-3.1-flash-lite
 GEMINI_FALLBACK_MODEL_2=gemini-flash-lite-latest
-
 GROQ_PRIMARY_MODEL=qwen/qwen3.8-27b
 GROQ_FALLBACK_MODEL_1=openai/gpt-oss-120b
 GROQ_FALLBACK_MODEL_2=openai/gpt-oss-20b
 ```
 
----
+นี่คือ **ค่าที่ repository ตั้งไว้** ไม่ใช่รายการรับรอง model availability การ override ชื่อ model ไม่ได้เปิด profile ที่ runtime ปิดไว้ และอาจทำให้ assumptions ของการประเมินเดิมเปลี่ยน
 
-## 🌐 API Endpoints Reference
+</details>
 
-### `GET /health`
-ตรวจสอบสถานะของระบบย่อยทั้งหมด (Gemini, Groq, Supabase, Tavily):
-```json
-{
-  "status": "healthy",
-  "gemini": "ok",
-  "groq": "ok",
-  "supabase": "ok",
-  "tavily": "ok"
-}
+<a id="run"></a>
+
+## 🚀 ติดตั้ง & เริ่มรัน
+
+หลังเตรียม `.env` และบริการข้างต้นแล้ว เปิด terminal จาก root ของ repository เลือกคำสั่งตาม OS ใช้ Python ใน venv โดยตรงเพื่อไม่ต้อง activate shell
+
+**Windows PowerShell**
+
+```powershell
+cd ai_service
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe main.py
 ```
 
-### `GET /api/v1/items`
-ดึงรายการอุปกรณ์ให้เช่าทั้งหมดที่บันทึกอยู่ใน In-Memory Cache
+หากไม่มี Python Launcher (`py`) แต่ `python --version` เป็น 3.12 ให้ใช้ `python -m venv .venv` แทนคำสั่งสร้าง venv
 
-### `POST /api/v1/chat`
-ส่งข้อความสนทนาและรับผลลัพธ์เป็น JSON สมบูรณ์ (รวมถึงข้อความตอบกลับ, รายการสินค้าที่แนะนำ และตัวเลือก Clarification)
-
-### `POST /api/v1/chat/stream`
-สตรีมคำตอบของ AI แบบ Server-Sent Events (SSE) เหมาะสำหรับแอปพลิเคชันมือถือที่ต้องการแสดงผลข้อความพิมพ์สดแบบเรียลไทม์
-
----
-
-## 🧪 การทดสอบ (Testing)
-
-รันชุดการทดสอบทั้งหมดผ่าน `pytest`:
+**macOS / Linux**
 
 ```bash
-# Windows
-.\.venv\Scripts\python.exe -m pytest tests/ -v
-
-# macOS / Linux
-pytest tests/ -v
+cd ai_service
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python main.py
 ```
 
-ชุดการทดสอบครอบคลุม:
-- `test_use_cases.py`: ทดสอบการจำแนกเจตนา (Intent Routing), การจับคู่อุปกรณ์ และการสร้างตัวเลือก Clarification
-- `test_model_cascade.py`: ทดสอบกลไกการสลับผู้ให้บริการเมื่อ Primary Provider ไม่พร้อมใช้งาน
-- `test_api_endpoints.py`: ทดสอบ Integration ระดับ API Endpoint ผ่าน TestClient
+หาก Linux ไม่มีโมดูล venv ให้ติดตั้งแพ็กเกจ Python 3.12 / venv ตาม distribution ก่อน และสร้าง venv ใหม่บนเครื่องปลายทางแทนการ copy จากเครื่องอื่น
+
+`main.py` เปิด development server ที่ **0.0.0.0:8000** พร้อม `reload=True` ค่า `APP_ENV=production` เพียงอย่างเดียวไม่ปิด reload และไม่มี Settings env ชื่อ `PORT`
+
+| เปิดใน browser                                     | ใช้ทำอะไร                              |
+| -------------------------------------------------- | -------------------------------------- |
+| [Swagger UI](http://localhost:8000/docs)           | ดู schema / ทดลอง API                  |
+| [ReDoc](http://localhost:8000/redoc)               | อ่าน API reference                     |
+| [OpenAPI JSON](http://localhost:8000/openapi.json) | Machine-readable contract              |
+| [Health](http://localhost:8000/health)             | ดู dependency / provider configuration |
+
+ตอน startup มีการ pre-warm catalog และ permission probes ของ providers ที่ตั้งไว้ ซึ่งเป็น **API calls จริง** และใช้ shared quota
+
+<details>
+<summary>รันโดยไม่เปิด development reload</summary>
+
+ใช้ Uvicorn CLI โดยไม่ใส่ `--reload` ดู [FastAPI server guide](https://fastapi.tiangolo.com/deployment/manually/)
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+```bash
+.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+เลือกพอร์ตด้วย CLI แล้วปรับ `AI_SERVICE_URL` ของ Go ให้ตรงกัน
+
+</details>
+
+### ต่อกับ Go Backend
+
+ตั้งค่าฝั่ง `backend/.env` จาก working directory `backend/`:
+
+```dotenv
+AI_SERVICE_URL=http://localhost:8000
+AI_CLIENT_RUNTIME_PATH=../ai_service/config/chat_client_runtime.json
+INTERNAL_SERVICE_KEY=replace-with-shared-internal-key-at-least-32-chars
+```
+
+Go ใช้ gateway timeout 45s จาก shared JSON หรือ `AI_SERVICE_TIMEOUT` ที่ระบุชัดเจน Base URL ไม่ต่อ `/api` และ internal key ควรเป็น **ค่าเดียวกันแบบ single key** ทั้งสองฝั่ง เพราะ Python เปรียบเทียบ header กับทั้ง string; ไม่ได้ parse comma-separated keys แบบ Go
+
+<a id="api"></a>
+
+## 🌐 API & smoke checks
+
+| Method / route             | หน้าที่                           | Authentication                                  |
+| -------------------------- | --------------------------------- | ----------------------------------------------- |
+| `GET /health`              | Configuration / dependency status | Public                                          |
+| `GET /api/items`        | Catalog list                      | Public                                          |
+| `POST /api/chat`        | Validated JSON response           | `X-Internal-Service-Key` เมื่อมี key configured |
+| `POST /api/chat/stream` | SSE response                      | เงื่อนไขเดียวกับ JSON                           |
+
+**Windows PowerShell**
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8000/api/items
+```
+
+**macOS / Linux**
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/api/items
+```
+
+Health response มี top-level `status: healthy` และ HTTP 200 แม้ Supabase อาจรายงาน error ให้ตรวจ `dependencies.supabase.status`, enabled profiles และ dependency details ด้วย ค่า `configured` บอกว่ามี key; ไม่ใช่ผล live generation test ส่วน `hot_reload` ใน response เป็นค่าที่ hardcode ไว้
+
+### ทดลอง chat หนึ่งข้อความ
+
+ใช้ Swagger UI หรือคำสั่งด้านล่าง โดยแทน placeholder key ให้ตรงกับ `.env` การส่งข้อความเรียก providers จริง
+
+```powershell
+$yuemnoiBody = @{ message = 'ช่วยอธิบายว่าแอปนี้ทำอะไรได้บ้าง' } | ConvertTo-Json
+$yuemnoiHeaders = @{ 'X-Internal-Service-Key' = 'replace-with-shared-internal-key-at-least-32-chars' }
+Invoke-RestMethod 'http://localhost:8000/api/chat' -Method Post -ContentType 'application/json; charset=utf-8' -Headers $yuemnoiHeaders -Body ([System.Text.Encoding]::UTF8.GetBytes($yuemnoiBody))
+```
+
+```bash
+curl http://localhost:8000/api/chat \
+  -H 'Content-Type: application/json' \
+  -H 'X-Internal-Service-Key: replace-with-shared-internal-key-at-least-32-chars' \
+  -d '{"message":"ช่วยอธิบายว่าแอปนี้ทำอะไรได้บ้าง"}'
+```
+
+สำหรับ SSE ใช้ route `/api/chat/stream` และเพิ่ม `-N` ใน curl คำขอรองรับ `message` หรือ legacy `query` รวมถึง optional session / history / context / questionnaire fields ตาม Swagger schema
+
+`questionnaire_answers` ใช้ `question_id` และ `option_id` หรือ `text` ที่ตรงกับ context `active_question_id` ระบุคำถามที่แสดงอยู่ โดยยังส่ง raw message ให้ semantic planner วิเคราะห์เอง
+
+<a id="runtime"></a>
+
+## 🧠 Runtime, knowledge & quota
+
+| ไฟล์                                                               | หน้าที่                                                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| [ai_runtime.json](config/ai_runtime.json)                          | Provider profiles, stage routing, quota, deadlines, HTTP pool และ output limits |
+| [interpretation_policy.json](knowledge/interpretation_policy.json) | Semantic interpretation / evidence / review policy                              |
+| [app_knowledge.json](knowledge/app_knowledge.json)                 | ข้อเท็จจริงของแอป, หลักฐาน และ approval metadata                                |
+| [chat_client_runtime.json](config/chat_client_runtime.json)        | History / transport / response-ready configuration ร่วมของ Flutter และ Go       |
+| [config/schemas](config/schemas/)                                  | JSON schemas ของ contracts                                                      |
+
+Runtime version ปัจจุบันคือ `2026-10-05-response-ready-30s` และ interpretation policy version คือ `2026-10-06-natural-emulator-v20` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
+
+### Provider profiles ใน configuration ปัจจุบัน
+
+| Profile           | Model ที่ตั้งไว้           | เปิดใช้งาน |
+| ----------------- | -------------------------- | ---------- |
+| Gemini primary    | `gemini-3.5-flash-lite`    | เปิด       |
+| Gemini fallback 1 | `gemini-3.1-flash-lite`    | ปิด        |
+| Gemini fallback 2 | `gemini-flash-lite-latest` | ปิด        |
+| Groq primary      | `qwen/qwen3.8-27b`         | เปิด       |
+| Groq fallback 1   | `openai/gpt-oss-120b`      | เปิด       |
+| Groq fallback 2   | `openai/gpt-oss-20b`       | เปิด       |
+
+รายการนี้อ้างอิง JSON ใน checkout; ไม่ได้ยืนยันสิทธิ์หรือความพร้อมของผู้ให้บริการ ณ เวลาที่ติดตั้ง รายละเอียดเหตุผลการปิดอยู่ใน `disabled_reason` ลำดับ model ยังมีสถานะ `pending_development_measurement` และไม่มี measurement artifact ใน runtime
+
+- ทุก flow ใช้ validated-answer deadline **30s**, target **15s**; คำตอบพร้อมก่อนส่งได้ทันที
+- General ใช้ได้สูงสุด **2 logical calls**; equipment / technical สูงสุด **3** แต่ละ logical call มี failover ได้ไม่เกิน **1**
+- Quota ledger ใช้ OS lock และ atomic writes ร่วมกัน เก็บ `.state/llm_quota.json` ข้ามการ restart และตรวจสิทธิ์เขียนของทุก process
+- Quota / deadline เป็นการควบคุมงบการทำงาน ไม่ใช่ผลรับรองความเร็วหรือความแม่นยำ
+- Knowledge มีทั้ง approved articles และ unverified topics; นโยบายเงินมัดจำ / คืนเงิน / ค่าปรับ / ความเสียหายและการชำระเงินจริงที่ยังไม่มีหลักฐานอนุมัติ ไม่ควรถูกอ้างเป็นกติกายืนยันของแอป
+
+<a id="development"></a>
+
+## 🧪 ตรวจงาน & ข้อจำกัดของชุดทดสอบ
+
+ตัวอย่างชุดทดสอบที่ใช้ mocks / temporary files สำหรับ knowledge, cascade, shared quota, catalog pool และ response-ready deadline:
+
+**Windows PowerShell**
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/test_app_knowledge.py tests/test_model_cascade.py tests/test_shared_quota.py tests/test_catalog_pool.py tests/test_response_ready_deadline.py -v
+```
+
+**macOS / Linux**
+
+```bash
+.venv/bin/python -m pytest tests/test_app_knowledge.py tests/test_model_cascade.py tests/test_shared_quota.py tests/test_catalog_pool.py tests/test_response_ready_deadline.py -v
+```
+
+ชุดเต็มเรียกด้วย `python -m pytest tests/ -v` จาก venv แต่ **checkout นี้ขาด modules / fixtures ภายใต้ `evaluation` ที่ tests หลายไฟล์ import** จึงต้องคืนไฟล์เหล่านั้นก่อนคาดหวังให้ทั้งชุด collect / run ได้ครบ นอกจากนี้ API health test บางตัวเรียก Supabase จริง อย่าใช้ full suite เป็น offline check โดยไม่ตรวจ prerequisites
+
+ชุดประเมินและ reports ที่ README เดิมอ้างถึง เช่น `evaluation/CURRENT.md`, Step reports และ acceptance scripts ไม่มีใน checkout นี้ จึงไม่ใส่ลิงก์หรือคำสั่งที่ชี้ไปไฟล์เหล่านั้น การผ่านชุด mocks ข้างบนยังไม่ยืนยันผลการประเมินกับ models จริง
+
+ตรวจ knowledge document โดยไม่อนุมัติเนื้อหาเพิ่ม:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.infrastructure.knowledge.inspect_document --path knowledge/app_knowledge.json
+```
+
+```bash
+.venv/bin/python -m app.infrastructure.knowledge.inspect_document --path knowledge/app_knowledge.json
+```
+
+### โครงสร้างที่ควรรู้
+
+```text
+ai_service/
+├── app/
+│   ├── core/                 # Settings, DI, logging, exceptions
+│   ├── domain/               # Entities และ interfaces
+│   ├── application/          # DTOs, prompts, services, use cases
+│   ├── infrastructure/
+│   │   ├── cache/            # Catalog cache
+│   │   ├── knowledge/        # Approved knowledge reader
+│   │   ├── llm/              # Provider clients, cascade, quota
+│   │   ├── runtime/          # Validated configuration / execution budgets
+│   │   ├── search/           # Tavily adapter
+│   │   └── supabase/         # PostgREST catalog adapter
+│   └── interface/api/v1/     # FastAPI endpoints / router
+├── config/                   # Runtime JSON และ schemas
+├── knowledge/                # Knowledge / interpretation policy JSON
+├── tests/
+├── .state/                   # Local quota / locks — ignored by Git
+├── .env                      # Secrets / configuration — สร้างเอง
+├── main.py
+└── requirements.txt
+```
+
+ใช้ Clean Architecture และ semantic reasoning ตาม [AGENTS.md](AGENTS.md): ไม่ใช้ keyword / regex routing สำหรับ intent, ไม่ฝัง catalog หรือบทสนทนาสำเร็จรูปลงใน production logic และแนะนำโดยอิงความต้องการกับหลักฐานของอุปกรณ์
+
+<a id="troubleshooting"></a>
+
+## 🛠️ ติดตรงไหน ลองเช็กตรงนี้
+
+| อาการ / error                                   | เช็กอะไร                                                                                |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Python / venv path ใช้ไม่ได้                    | ใช้ Python 3.12 และสร้าง venv ใหม่บนเครื่องนี้                                          |
+| `.env` ไม่ถูกโหลด                               | รันจาก `ai_service/` และตรวจ process env ที่อาจ override                                |
+| Catalog unavailable                             | URL / key / PostgREST permissions, columns, price และ type                              |
+| Health healthy แต่ chat ล้มเหลว                 | อ่าน dependency details และ model access; top-level status ไม่ใช่ readiness certificate |
+| 401                                             | `X-Internal-Service-Key` ต้องตรงกับ single key ของ AI                                   |
+| 422                                             | ข้อความต้องไม่ว่าง; session / context / question / option IDs ต้องตรง                   |
+| `providers_exhausted`                           | ตรวจ keys, enabled profiles, model access และ candidate ที่ใช้ review คนละ model        |
+| `providers_rate_limited`                        | รอตาม `Retry-After` / `retry_after_seconds` และเก็บ quota ledger ไว้                    |
+| `deadline_exceeded` / `request_budget_exceeded` | ตรวจ context, output และ budgets ของ runtime                                            |
+| `response_quality_rejected`                     | คำตอบไม่ผ่าน independent model review จึงยังไม่ส่ง draft                                |
+| `catalog_changed` / `knowledge_changed`         | หลักฐานเปลี่ยนระหว่างสร้างคำตอบ; เริ่มคำขอใหม่กับข้อมูลล่าสุด                           |
+| `runtime_document_invalid`                      | ใช้ approved document ที่ schema / digest ตรงกัน                                        |
+| `runtime_changed_restart_required`              | Restart หลังใช้ runtime / policy ฉบับอนุมัติใหม่                                        |
+| `quota_ledger_invalid` / lock failure           | ตรวจ shared path, permissions และ state เสียหาย; แก้สาเหตุก่อนเปลี่ยน state             |
+| pytest หา `evaluation.*` ไม่พบ                  | คืน evaluation package / fixtures หรือรันชุด mocks ที่ระบุด้านบน                        |
+
+---
