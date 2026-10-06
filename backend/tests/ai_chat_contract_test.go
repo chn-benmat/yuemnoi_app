@@ -70,11 +70,11 @@ func TestAIChatSharedContractThroughHandlerAndAdapter(t *testing.T) {
 					require.Equal(t, req.SessionID, forwarded.SessionID)
 					require.Equal(t, req.ActiveQuestionID, forwarded.ActiveQuestionID)
 					if stream {
-						require.Equal(t, "/api/v1/chat/stream", r.URL.Path)
+						require.Equal(t, "/api/chat/stream", r.URL.Path)
 						w.Header().Set("Content-Type", "text/event-stream")
 						_, _ = io.WriteString(w, fixture.SSE)
 					} else {
-						require.Equal(t, "/api/v1/chat", r.URL.Path)
+						require.Equal(t, "/api/chat", r.URL.Path)
 						w.Header().Set("Content-Type", "application/json")
 						_, _ = w.Write(fixture.Response)
 					}
@@ -83,7 +83,7 @@ func TestAIChatSharedContractThroughHandlerAndAdapter(t *testing.T) {
 				client := aiservice.NewClient(upstream.URL, "fixture-key", time.Second)
 				handler := ports.NewChatbotHandler(client, nil)
 				router := gin.New()
-				path := "/api/v1/chat-ai"
+				path := "/api/chat-ai"
 				if stream {
 					path += "/stream"
 					router.POST(path, handler.SendMessageStream)

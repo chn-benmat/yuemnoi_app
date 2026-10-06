@@ -170,7 +170,7 @@ func (c *Client) SendMessage(ctx context.Context, req domain.ChatbotRequest) (*d
 		return nil, fmt.Errorf("marshal request error: %w", err)
 	}
 
-	targetURL := fmt.Sprintf("%s/api/v1/chat", c.baseURL)
+	targetURL := fmt.Sprintf("%s/api/chat", c.baseURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("create http request error: %w", err)
@@ -325,7 +325,7 @@ func (c *Client) SendMessageStream(ctx context.Context, req domain.ChatbotReques
 		return nil, fmt.Errorf("marshal stream request error: %w", err)
 	}
 
-	targetURL := fmt.Sprintf("%s/api/v1/chat/stream", c.baseURL)
+	targetURL := fmt.Sprintf("%s/api/chat/stream", c.baseURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("create stream http request error: %w", err)

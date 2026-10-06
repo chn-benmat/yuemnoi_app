@@ -41,8 +41,8 @@ class ChatbotRemoteDataSource {
              ),
            );
 
-  static const _chatPath = '/api/v1/chat-ai';
-  static const _chatStreamPath = '/api/v1/chat-ai/stream';
+  static const _chatPath = '/api/chat-ai';
+  static const _chatStreamPath = '/api/chat-ai/stream';
 
   final ApiClient _client;
   final int historyMaxMessages;

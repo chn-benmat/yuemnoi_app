@@ -11,7 +11,7 @@ import '../models/feed_category_model.dart';
 import '../models/feed_item_model.dart';
 import 'home_mock_data_source.dart';
 
-/// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงจาก Supabase และ Go Backend REST API (`/api/v1/items`)
+/// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงจาก Supabase และ Go Backend REST API (`/api/items`)
 /// พร้อม fallback ไปยัง Local Cache
 class HomeSupabaseDataSource {
   HomeSupabaseDataSource({
@@ -427,7 +427,7 @@ class HomeSupabaseDataSource {
     return _mapRawListToFeedItems(rawList, profilesMap: profilesMap);
   }
 
-  /// ดึงข้อมูลทั้งหมดผ่าน Supabase Direct, Go Backend API (`/api/v1/items`) หรือ Local Cache
+  /// ดึงข้อมูลทั้งหมดผ่าน Supabase Direct, Go Backend API (`/api/items`) หรือ Local Cache
   Future<List<FeedItemModel>> _fetchAllSupabaseItems({
     bool forceRefresh = false,
   }) async {
@@ -455,7 +455,7 @@ class HomeSupabaseDataSource {
 
     // Tier 2: Try Go Backend API
     try {
-      final response = await _apiClient.get('/api/v1/items');
+      final response = await _apiClient.get('/api/items');
       if (response.statusCode == 200 && response.data is List) {
         final rawItems = response.data as List;
         final items = _mapRawListToFeedItems(rawItems);

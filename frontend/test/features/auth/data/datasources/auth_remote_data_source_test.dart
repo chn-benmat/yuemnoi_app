@@ -114,7 +114,7 @@ void main() {
 
     final captured = verify(
       () => client.post(
-        '/api/v1/auth/change-password',
+        '/api/auth/change-password',
         data: captureAny(named: 'data'),
         headers: captureAny(named: 'headers'),
       ),
@@ -168,7 +168,7 @@ void main() {
 
     final capturedHeaders = verify(
       () => client.post(
-        '/api/v1/auth/google-profile',
+        '/api/auth/google-profile',
         data: any(named: 'data'),
         headers: captureAny(named: 'headers'),
       ),

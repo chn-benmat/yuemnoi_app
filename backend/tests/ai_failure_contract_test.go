@@ -23,11 +23,11 @@ func TestAIRateLimitContract(t *testing.T) {
 		_, _ = io.WriteString(w, `{"detail":{"error_code":"providers_rate_limited","private":"private-detail"}}`)
 	}))
 	defer upstream.Close()
-	for _, path := range []string{"/api/v1/chat-ai", "/api/v1/chat-ai/stream"} {
+	for _, path := range []string{"/api/chat-ai", "/api/chat-ai/stream"} {
 		router := gin.New()
 		handler := ports.NewChatbotHandler(aiservice.NewClient(upstream.URL, "", time.Second), nil)
-		router.POST("/api/v1/chat-ai", handler.SendMessage)
-		router.POST("/api/v1/chat-ai/stream", handler.SendMessageStream)
+		router.POST("/api/chat-ai", handler.SendMessage)
+		router.POST("/api/chat-ai/stream", handler.SendMessageStream)
 		request := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(`{"query":"ถาม"}`))
 		request.Header.Set("Content-Type", "application/json")
 		response := httptest.NewRecorder()

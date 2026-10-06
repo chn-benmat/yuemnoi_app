@@ -18,7 +18,7 @@ void main() {
       final client = DioApiClient(dio: dio, appSecret: 'test');
       addTearDown(client.close);
       await expectLater(
-        await client.postStream('/api/v1/chat-ai/stream'),
+        await client.postStream('/api/chat-ai/stream'),
         emitsError(
           isA<ApiClientException>()
               .having((e) => e.statusCode, 'status', 503)
@@ -39,7 +39,7 @@ void main() {
       appSecret: '',
     );
     addTearDown(client.close);
-    final result = await client.post('/api/v1/chat-ai');
+    final result = await client.post('/api/chat-ai');
     expect(result.statusCode, 503);
     expect(result.retryAfterSeconds, 60);
   });

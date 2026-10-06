@@ -45,7 +45,7 @@ app.add_middleware(
 
 # Route registration
 app.include_router(health_router, prefix="", tags=["Health"])
-app.include_router(api_v1_router, prefix="/api/v1")
+app.include_router(api_v1_router, prefix="/api")
 
 
 if __name__ == "__main__":

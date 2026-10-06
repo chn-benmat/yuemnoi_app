@@ -41,8 +41,8 @@ func TestAILiveEvaluationGateway(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	handler := ports.NewChatbotHandler(aiservice.NewClient(run.AIURL, cfg.GetPrimaryInternalServiceKey(), cfg.AIServiceTimeout), nil)
-	router.POST("/api/v1/chat-ai", handler.SendMessage)
-	router.POST("/api/v1/chat-ai/stream", handler.SendMessageStream)
+	router.POST("/api/chat-ai", handler.SendMessage)
+	router.POST("/api/chat-ai/stream", handler.SendMessageStream)
 	listener, err := net.Listen("tcp", run.Bind)
 	if err != nil {
 		t.Fatal("cannot listen for smoke")

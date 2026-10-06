@@ -73,7 +73,7 @@ func writeItemError(c *gin.Context, err error) {
 	}
 }
 
-// [GET] /api/v1/items - ดึงข้อมูลอุปกรณ์เช่าทั้งหมด (รองรับ query params: search, category)
+// [GET] /api/items - ดึงข้อมูลอุปกรณ์เช่าทั้งหมด (รองรับ query params: search, category)
 func (h *ItemHandler) GetAllItems(c *gin.Context) {
 	items, err := h.repo.FindAll(c.Request.Context())
 	if err != nil {
@@ -113,7 +113,7 @@ func (h *ItemHandler) GetAllItems(c *gin.Context) {
 	c.JSON(http.StatusOK, items)
 }
 
-// [GET] /api/v1/items/:id - ดึงข้อมูลอุปกรณ์เช่าตาม ID
+// [GET] /api/items/:id - ดึงข้อมูลอุปกรณ์เช่าตาม ID
 func (h *ItemHandler) GetItemByID(c *gin.Context) {
 	id, ok := parseItemID(c)
 	if !ok {
@@ -129,7 +129,7 @@ func (h *ItemHandler) GetItemByID(c *gin.Context) {
 	c.JSON(http.StatusOK, item)
 }
 
-// [POST] /api/v1/items - เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
+// [POST] /api/items - เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
 func (h *ItemHandler) CreateItem(c *gin.Context) {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
@@ -227,7 +227,7 @@ func readItemImage(header *multipart.FileHeader) (*domain.ItemImage, error) {
 	return &domain.ItemImage{Data: data, ContentType: contentType, Extension: extension}, nil
 }
 
-// [PUT] /api/v1/items/:id - แก้ไขอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
+// [PUT] /api/items/:id - แก้ไขอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
 func (h *ItemHandler) UpdateItem(c *gin.Context) {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
@@ -281,7 +281,7 @@ func (h *ItemHandler) UpdateItem(c *gin.Context) {
 	c.JSON(http.StatusOK, item)
 }
 
-// [DELETE] /api/v1/items/:id - ลบอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
+// [DELETE] /api/items/:id - ลบอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
 func (h *ItemHandler) DeleteItem(c *gin.Context) {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {

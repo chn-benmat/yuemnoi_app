@@ -68,9 +68,9 @@ func newRentalRouter(repository *rentalRepositoryMock, verifier rentalTokenVerif
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := ports.NewRentalHandler(repository, verifier)
-	router.POST("/api/v1/rentals", handler.CreateRentalOrder)
-	router.POST("/api/v1/rentals/:id/handover", handler.HandoverRental)
-	router.POST("/api/v1/rentals/:id/return", handler.ReturnRental)
+	router.POST("/api/rentals", handler.CreateRentalOrder)
+	router.POST("/api/rentals/:id/handover", handler.HandoverRental)
+	router.POST("/api/rentals/:id/return", handler.ReturnRental)
 	return router
 }
 
@@ -79,7 +79,7 @@ func validRentalRequest() []byte {
 }
 
 func performRentalRequest(router *gin.Engine, body []byte, withToken bool) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/rentals", bytes.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/api/rentals", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	if withToken {
 		request.Header.Set("Authorization", "Bearer valid-token")
@@ -163,7 +163,7 @@ func TestHandoverRentalUpdatesStatusToActive(t *testing.T) {
 	}}
 	router := newRentalRouter(repository, rentalTokenVerifier{})
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/rentals/21/handover", nil)
+	request := httptest.NewRequest(http.MethodPost, "/api/rentals/21/handover", nil)
 	request.Header.Set("Authorization", "Bearer valid-token")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -182,7 +182,7 @@ func TestReturnRentalUpdatesStatusToCompleted(t *testing.T) {
 	}}
 	router := newRentalRouter(repository, rentalTokenVerifier{})
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/rentals/21/return", nil)
+	request := httptest.NewRequest(http.MethodPost, "/api/rentals/21/return", nil)
 	request.Header.Set("Authorization", "Bearer valid-token")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -212,7 +212,7 @@ func TestUpdateRentalStatusErrorMappings(t *testing.T) {
 			repository := &rentalRepositoryMock{err: tc.repoErr}
 			router := newRentalRouter(repository, rentalTokenVerifier{})
 
-			request := httptest.NewRequest(http.MethodPost, "/api/v1/rentals/21/handover", nil)
+			request := httptest.NewRequest(http.MethodPost, "/api/rentals/21/handover", nil)
 			request.Header.Set("Authorization", "Bearer valid-token")
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, request)

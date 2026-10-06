@@ -28,7 +28,7 @@ func TestAIResponseKindAndCanonicalDisplaySurviveGateway(t *testing.T) {
 			require.NoError(t, err)
 			wire := "event: ready\ndata: " + string(raw) + "\n\nevent: metadata\ndata: " + string(raw) + "\n\nevent: done\ndata: " + string(raw) + "\n\n"
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/api/v1/chat/stream" {
+				if r.URL.Path == "/api/chat/stream" {
 					w.Header().Set("Content-Type", "text/event-stream")
 					_, _ = io.WriteString(w, wire)
 				} else {

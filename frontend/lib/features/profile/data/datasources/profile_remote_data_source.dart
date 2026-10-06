@@ -31,7 +31,7 @@ class ProfileRemoteDataSource {
     if (accessToken != null && accessToken.isNotEmpty) {
       try {
         final response = await _client.get(
-          '/api/v1/user/profile',
+          '/api/user/profile',
           headers: {'Authorization': 'Bearer $accessToken'},
         );
         if (response.statusCode == 200 && response.data is Map) {
@@ -113,7 +113,7 @@ class ProfileRemoteDataSource {
 
       if (imageBytes != null && imageName != null) {
         response = await _client.putMultipart(
-          '/api/v1/user/profile',
+          '/api/user/profile',
           headers: headers,
           fields: fields,
           files: [
@@ -126,7 +126,7 @@ class ProfileRemoteDataSource {
         );
       } else {
         response = await _client.put(
-          '/api/v1/user/profile',
+          '/api/user/profile',
           headers: headers,
           data: fields,
         );
@@ -172,7 +172,7 @@ class ProfileRemoteDataSource {
     final headers = {'Authorization': 'Bearer $accessToken'};
     try {
       final response = await _client.put(
-        '/api/v1/user/contact',
+        '/api/user/contact',
         headers: headers,
         data: {'phone': phone},
       );
@@ -206,7 +206,7 @@ class ProfileRemoteDataSource {
     final headers = {'Authorization': 'Bearer $accessToken'};
     try {
       final response = await _client.post(
-        '/api/v1/auth/change-password',
+        '/api/auth/change-password',
         headers: headers,
         data: {'new_password': newPassword},
       );

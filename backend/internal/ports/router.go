@@ -77,55 +77,55 @@ func SetupRouter(
 	chatbotController := NewChatbotHandler(aiGateway, authGateway)
 
 	// จัดการกลุ่มเส้นทาง API
-	v1 := router.Group("/api/v1")
+	api := router.Group("/api")
 	{
 		// ทุกอย่างเกี่ยวกับการยืนยันตัวตน (Authentication) - มี Rate Limit ป้องกัน Brute-force
-		user := v1.Group("/auth")
+		user := api.Group("/auth")
 		user.Use(RateLimitMiddleware(authRateLimiter, "คุณส่งคำขอยืนยันตัวตนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่"))
 		{
-			// POST /api/v1/auth/register
+			// POST /api/auth/register
 			user.POST("/register", userController.Register)
-			// POST /api/v1/auth/login
+			// POST /api/auth/login
 			user.POST("/login", userController.Login)
-			// POST /api/v1/auth/google-profile
+			// POST /api/auth/google-profile
 			user.POST("/google-profile", userController.SyncGoogleProfileImage)
-			// POST /api/v1/auth/change-password
+			// POST /api/auth/change-password
 			user.POST("/change-password", userController.ChangePassword)
-			// POST /api/v1/auth/send-otp
+			// POST /api/auth/send-otp
 			user.POST("/send-otp", userController.SendOTP)
-			// POST /api/v1/auth/verify-otp
+			// POST /api/auth/verify-otp
 			user.POST("/verify-otp", userController.VerifyResetOTP)
 		}
 
 		// จัดการโปรไฟล์และข้อมูลผู้ใช้ (User Profile & Settings)
-		profile := v1.Group("/user")
+		profile := api.Group("/user")
 		{
-			// GET /api/v1/user/profile
+			// GET /api/user/profile
 			profile.GET("/profile", userController.GetProfile)
-			// PUT /api/v1/user/profile
+			// PUT /api/user/profile
 			profile.PUT("/profile", userController.UpdateProfile)
-			// PUT /api/v1/user/contact
+			// PUT /api/user/contact
 			profile.PUT("/contact", userController.UpdateContact)
-			// POST /api/v1/user/fcm-token
+			// POST /api/user/fcm-token
 			profile.POST("/fcm-token", userController.UpdateFCMToken)
 		}
 		// ทุกอย่างเกี่ยวกับ Items ปล่อยเช่า
-		items := v1.Group("/items")
+		items := api.Group("/items")
 		{
-			// GET /api/v1/items
+			// GET /api/items
 			items.GET("", itemController.GetAllItems)
-			// POST /api/v1/items
+			// POST /api/items
 			items.POST("", itemController.CreateItem)
-			// GET /api/v1/items/:id
+			// GET /api/items/:id
 			items.GET("/:id", itemController.GetItemByID)
-			// PUT /api/v1/items/:id
+			// PUT /api/items/:id
 			items.PUT("/:id", itemController.UpdateItem)
-			// DELETE /api/v1/items/:id
+			// DELETE /api/items/:id
 			items.DELETE("/:id", itemController.DeleteItem)
 		}
 
 		// ทุกอย่างเกี่ยวกับการจอง (Rentals)
-		rentals := v1.Group("/rentals")
+		rentals := api.Group("/rentals")
 		{
 			rentals.POST("", rentalController.CreateRentalOrder)
 			rentals.POST("/:id/handover", rentalController.HandoverRental)
@@ -133,24 +133,24 @@ func SetupRouter(
 		}
 
 		// Push Notification - ป้องกันด้วย Authentication ภายใน Handler
-		push := v1.Group("/push")
+		push := api.Group("/push")
 		{
 			push.POST("/chat", pushController.SendChatPush)
 		}
 
-		chat := v1.Group("/chat")
+		chat := api.Group("/chat")
 		{
-			// POST /api/v1/chat/contact
+			// POST /api/chat/contact
 			chat.POST("/contact", chatContactController.GetConversationContact)
 		}
 
 		// ระบบแชทสนทนากับ AI Chatbot (Stateless AI Gateway) - มี Rate Limit ป้องกัน GPU DoS
-		chatAI := v1.Group("/chat-ai")
+		chatAI := api.Group("/chat-ai")
 		chatAI.Use(RateLimitMiddleware(aiRateLimiter, "คำขอสนทนากับ AI ถี่เกินไป กรุณารอสักครู่แล้วลองใหม่"))
 		{
-			// POST /api/v1/chat-ai (Non-Streaming)
+			// POST /api/chat-ai (Non-Streaming)
 			chatAI.POST("", chatbotController.SendMessage)
-			// POST /api/v1/chat-ai/stream (SSE Streaming)
+			// POST /api/chat-ai/stream (SSE Streaming)
 			chatAI.POST("/stream", chatbotController.SendMessageStream)
 		}
 	}
