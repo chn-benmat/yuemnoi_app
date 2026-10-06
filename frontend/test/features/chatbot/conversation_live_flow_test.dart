@@ -115,8 +115,9 @@ void main() {
                   .toList(),
             });
             await save();
-            if (bloc.state.errorMessage != null)
+            if (bloc.state.errorMessage != null) {
               throw StateError('service_error');
+            }
             return;
           }
         }

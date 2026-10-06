@@ -65,7 +65,7 @@ class ChatbotRemoteDataSource {
         data: {
           'query': query.trim(),
           'session_id': sessionId ?? context?.sessionId,
-          if (activeQuestionId != null) 'active_question_id': activeQuestionId,
+          'active_question_id': ?activeQuestionId,
           if (context != null) 'context': ChatContextModel.toJson(context),
           'questionnaire_answers': questionnaireAnswers
               .map(ChatContextModel.answerJson)
@@ -274,7 +274,7 @@ class ChatbotRemoteDataSource {
         data: {
           'query': query.trim(),
           'session_id': sessionId ?? context?.sessionId,
-          if (activeQuestionId != null) 'active_question_id': activeQuestionId,
+          'active_question_id': ?activeQuestionId,
           if (context != null) 'context': ChatContextModel.toJson(context),
           'questionnaire_answers': questionnaireAnswers
               .map(ChatContextModel.answerJson)

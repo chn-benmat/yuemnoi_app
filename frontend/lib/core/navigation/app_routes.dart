@@ -911,21 +911,6 @@ abstract final class AppRoutes {
   }) {
     final route = rentalId != null ? '/rental/return/$rentalId' : rentalReturnDemo;
     return context.push<void>(route, extra: isLender);
-    try {
-      return context.push<void>(route);
-    } catch (_) {
-      final navigator = Navigator.maybeOf(context, rootNavigator: true) ??
-          Navigator.maybeOf(context);
-      if (navigator != null) {
-        return navigator.push<void>(
-          MaterialPageRoute<void>(
-            settings: RouteSettings(name: route),
-            builder: (_) => RentalReturnPage(rentalId: rentalId),
-          ),
-        );
-      }
-      return Future.value();
-    }
   }
 
   static Future<void> openRentalPaymentSuccess(BuildContext context) {
