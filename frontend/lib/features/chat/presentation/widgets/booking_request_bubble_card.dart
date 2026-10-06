@@ -49,6 +49,27 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   DateTime? _endDateTime;
   Timer? _countdownTimer;
 
+  bool get _isRentalActive => _rentalStatus == 'active';
+
+  /// คำนวณกำหนดคืนจากเวลาเริ่มส่งมอบจริงและระยะเวลาเช่าที่ตกลงไว้
+  DateTime get _effectiveEndDateTime {
+    final handoverStart =
+        BookingConfirmationTracker.getHandoverStartTimeSync(
+      bookingId: _bookingId,
+      messageId: widget.message.id,
+    );
+    var agreedDuration = widget.bookingData.endDateTime
+        .difference(widget.bookingData.startDateTime);
+    if (agreedDuration <= Duration.zero) {
+      final duration = widget.bookingData.duration > 0
+          ? widget.bookingData.duration
+          : 1;
+      agreedDuration =
+          widget.bookingData.rentalType == BookingRentalType.hourly
+              ? Duration(hours: duration)
+              : Duration(days: duration);
+    }
+
     final initialEnd = _endDateTime ?? widget.bookingData.endDateTime;
     final now = DateTime.now();
 
@@ -70,7 +91,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   void initState() {
     super.initState();
     if (widget.initialStatus != null) {
-      _bookingStatus = widget.initialStatus;
+      _rentalStatus = widget.initialStatus!;
       if (widget.initialStatus == 'active' ||
           widget.initialStatus == 'confirmed') {
         _isConfirmed = true;
@@ -103,9 +124,6 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
       }
     });
   }
-
-  DateTime get _effectiveEndDateTime =>
-      _endDateTime ?? widget.bookingData.endDateTime;
 
   bool get _isExpired => DateTime.now().isAfter(_effectiveEndDateTime);
 
@@ -509,7 +527,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   const SizedBox(height: 2),
                   Text(
                     _getCardSubtitle(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -536,6 +554,13 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                 ),
                 child: Column(
                   children: [
+                    if (_bookingId != null && _bookingId! > 0) ...[
+                      _buildMiniInfoRow(
+                        label: 'เลขออเดอร์',
+                        value: '#${BookingConfirmationTracker.formatOrderNumber(_bookingId)}',
+                      ),
+                      const SizedBox(height: 7),
+                    ],
                     _buildMiniInfoRow(
                       label: 'เวลาเช่า',
                       value: widget.bookingData.formattedDetailedRentalPeriod,
@@ -575,54 +600,6 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                   ],
                 ),
-              ),
-              child: Column(
-                children: [
-                  if (_bookingId != null && _bookingId! > 0) ...[
-                    _buildMiniInfoRow(
-                      label: 'เลขออเดอร์',
-                      value: '#${BookingConfirmationTracker.formatOrderNumber(_bookingId)}',
-                    ),
-                    const SizedBox(height: 7),
-                  ],
-                  _buildMiniInfoRow(
-                    label: 'เวลาเช่า',
-                    value: widget.bookingData.formattedPeriodSummary,
-                  ),
-                  const SizedBox(height: 7),
-                  _buildMiniInfoRow(
-                    label: 'จุดนัดพบ',
-                    value: widget.bookingData.location,
-                    showLinkIcon: true,
-                    onTap: () {
-                      final coordinates = LocationService.resolveCoordinates(
-                        locationName: widget.bookingData.location,
-                        latitude: widget.bookingData.latitude,
-                        longitude: widget.bookingData.longitude,
-                      );
-                      LocationService.openInExternalMaps(
-                        coordinates.latitude,
-                        coordinates.longitude,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 7),
-                  _buildMiniInfoRow(
-                    label: 'การชำระเงิน',
-                    value: widget.bookingData.paymentMethod == 'promptpay'
-                        ? 'พร้อมเพย์ (ชำระเมื่อรับของ)'
-                        : 'เงินสด (ชำระเมื่อรับของ)',
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 7),
-                    child: Divider(height: 1, color: Color(0xFFE2E8F0)),
-                  ),
-                  _buildMiniInfoRow(
-                    label: 'ยอดรวม',
-                    value: _formatPrice(widget.bookingData.totalPrice),
-                    isPrice: true,
-                  ),
-                ],
               ),
             ],
 
