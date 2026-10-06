@@ -1,9 +1,17 @@
 import '../entities/chat_message.dart';
 
 class ChatbotException implements Exception {
-  const ChatbotException(this.message);
+  const ChatbotException(
+    this.message, {
+    this.errorCode,
+    this.statusCode,
+    this.retryAfterSeconds,
+  });
 
   final String message;
+  final String? errorCode;
+  final int? statusCode;
+  final int? retryAfterSeconds;
 
   @override
   String toString() => message;

@@ -195,6 +195,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 3));
 
+    await tester.drag(
+      find.byKey(const Key('chatbot-conversation')),
+      const Offset(0, 1000),
+    );
+    await tester.pumpAndSettle();
     await tester.longPress(find.byKey(const ValueKey('chat-user-ข้อความเดิม')));
     await tester.pumpAndSettle();
 
@@ -266,7 +271,7 @@ void main() {
     );
     expect(composerRect.left, greaterThan(0));
     expect(composerRect.right, lessThan(tester.view.physicalSize.width));
-    expect(find.byType(Image), findsNothing);
+    expect(find.byType(RecommendedItemCard), findsNothing);
     expect(find.byIcon(Icons.person_rounded), findsNothing);
     expect(
       find.byKey(const Key('chatbot-add-rental-item-button')),
@@ -278,13 +283,7 @@ void main() {
     );
     final sendButtonDecoration =
         sendButtonContainer.decoration! as BoxDecoration;
-    final sendButtonGradient = sendButtonDecoration.gradient! as LinearGradient;
-    expect(sendButtonGradient.begin, Alignment.topLeft);
-    expect(sendButtonGradient.end, Alignment.bottomRight);
-    expect(sendButtonGradient.colors, const [
-      AppColors.gradient1,
-      AppColors.gradient2,
-    ]);
+    expect(sendButtonDecoration.color, AppColors.primaryColor);
 
     await tester.enterText(
       find.byKey(const Key('chatbot-message-field')),
@@ -405,7 +404,7 @@ void main() {
 
     expect(repository.latestQuery, 'ควรเช่ากล้องรุ่นไหนดี');
     expect(repository.latestHistory, isEmpty);
-    expect(find.text('ควรเช่ากล้องรุ่นไหนดี'), findsOneWidget);
+    expect(bloc.state.messages.first.content, 'ควรเช่ากล้องรุ่นไหนดี');
     expect(find.text('แนะนำ Canon EOS R5 สำหรับงานนี้ค่ะ'), findsOneWidget);
     expect(find.text('Canon EOS R5'), findsOneWidget);
     expect(find.textContaining('500 ฿'), findsOneWidget);
@@ -492,7 +491,7 @@ void main() {
       );
       expect(find.text('ทำงาน/ออฟฟิศ (โน้ตบุ๊ก/PC)'), findsWidgets);
       expect(find.text('ตอบเอง'), findsNothing);
-      expect(find.text('Skip'), findsOneWidget);
+      expect(find.text('ข้าม'), findsOneWidget);
       expect(find.byKey(const Key('chatbot-composer')), findsOneWidget);
       expect(find.byKey(const Key('chatbot-message-field')), findsOneWidget);
       expect(repository.callCount, 1);
@@ -512,7 +511,7 @@ void main() {
         find.byKey(const Key('chatbot-questionnaire-card')),
         findsOneWidget,
       );
-      expect(find.text('2 of 2'), findsOneWidget);
+      expect(find.text('ข้อ 2 จาก 2'), findsOneWidget);
       expect(
         find.descendant(
           of: find.byKey(const Key('chatbot-questionnaire-card')),
@@ -598,7 +597,7 @@ void main() {
         find.byKey(const Key('chatbot-questionnaire-card')),
         findsOneWidget,
       );
-      expect(find.text('1 of 2'), findsOneWidget);
+      expect(find.text('ข้อ 1 จาก 2'), findsOneWidget);
 
       // Type custom answer in normal composer
       await tester.enterText(
@@ -611,52 +610,42 @@ void main() {
 
       expect(repository.callCount, 2);
       expect(repository.latestQuery, 'ตัดต่อวิดีโอ 4K');
-      expect(find.text('2 of 2'), findsNothing);
+      expect(find.text('ข้อ 2 จาก 2'), findsNothing);
     },
   );
 
-  testWidgets(
-    'renders initial quick replies bar on entering chat and submits on tap',
-    (tester) async {
-      final repository = FakeChatbotRepository();
-      final bloc = ChatbotBloc(sendMessage: SendChatMessageUseCase(repository));
-      addTearDown(bloc.close);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(fontFamily: 'Prompt'),
-          home: BlocProvider.value(value: bloc, child: const ChatBotScreen()),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // 1. Verify quick replies bar is present on entering chat
-      expect(
-        find.byKey(const Key('chatbot-quick-replies-bar')),
-        findsOneWidget,
-      );
-      expect(find.text('แนะนำอุปกรณ์เช่าหน่อย'), findsOneWidget);
-      expect(
-        find.text('วิธีการเช่าอุปกรณ์', skipOffstage: false),
-        findsOneWidget,
-      );
-      expect(
-        find.text('วิธีปล่อยเช่าอุปกรณ์', skipOffstage: false),
-        findsOneWidget,
-      );
-
-      // 2. Tap 'แนะนำอุปกรณ์เช่าหน่อย'
-      await tester.tap(find.text('แนะนำอุปกรณ์เช่าหน่อย'));
-      await tester.pump();
-      await tester.pumpAndSettle();
-
-      expect(repository.callCount, 1);
-      expect(repository.latestQuery, 'แนะนำอุปกรณ์เช่าหน่อย');
-
-      // 3. Verify quick replies bar disappears after message is sent (except on entering chat)
-      expect(find.byKey(const Key('chatbot-quick-replies-bar')), findsNothing);
-    },
-  );
+  testWidgets('starter fills an editable draft before sending', (tester) async {
+    final repository = FakeChatbotRepository();
+    final bloc = ChatbotBloc(sendMessage: SendChatMessageUseCase(repository));
+    addTearDown(bloc.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(fontFamily: 'Prompt'),
+        home: BlocProvider.value(value: bloc, child: const ChatBotScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chatbot-welcome')), findsOneWidget);
+    await tester.tap(find.text('กล้องสำหรับถ่ายงาน'));
+    await tester.pumpAndSettle();
+    expect(repository.callCount, 0);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('chatbot-message-field')))
+          .controller!
+          .text,
+      'ช่วยหากล้องสำหรับถ่ายงานให้หน่อย',
+    );
+    await tester.enterText(
+      find.byKey(const Key('chatbot-message-field')),
+      'ช่วยหากล้องถ่ายงานในห้อง งบ 500 บาท',
+    );
+    await tester.tap(find.byKey(const Key('chatbot-send-button')));
+    await tester.pumpAndSettle();
+    expect(repository.callCount, 1);
+    expect(repository.latestQuery, 'ช่วยหากล้องถ่ายงานในห้อง งบ 500 บาท');
+    expect(find.byKey(const Key('chatbot-welcome')), findsNothing);
+  });
 
   testWidgets(
     'shows real-time ChatStatusEvent in typing indicator and maintains continuous timer without reset',

@@ -59,6 +59,16 @@ class ChatbotStreamStopped extends ChatbotEvent {
   const ChatbotStreamStopped();
 }
 
+class ChatbotRetryRequested extends ChatbotEvent {
+  const ChatbotRetryRequested(this.messageId, {this.timing});
+
+  final String messageId;
+  final ChatTurnTiming? timing;
+
+  @override
+  List<Object?> get props => [messageId, timing];
+}
+
 class ChatbotResponseRendered extends ChatbotEvent {
   const ChatbotResponseRendered(this.messageId);
   final String messageId;

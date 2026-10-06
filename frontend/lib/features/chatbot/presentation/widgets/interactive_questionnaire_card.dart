@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../domain/entities/chat_message.dart';
+import 'chatbot_design.dart';
 
 class InteractiveQuestionnaireCard extends StatefulWidget {
   const InteractiveQuestionnaireCard({
@@ -231,7 +232,7 @@ class InteractiveQuestionnaireCardState
   Widget build(BuildContext context) {
     if (_questions.isEmpty) return const SizedBox.shrink();
 
-    // If all questions are already answered, show recap card for all of them
+    // แสดงสรุปเมื่อคำถามทุกข้อมีคำตอบแล้ว
     if (_questions.every((q) => q.selectedOption != null)) {
       return QuestionnaireRecapCard(questions: _questions);
     }
@@ -262,10 +263,6 @@ class InteractiveQuestionnaireCardState
       }
     }
 
-    if (effectiveOptions.length > 4) {
-      effectiveOptions = effectiveOptions.take(4).toList();
-    }
-
     final renderedQuestions = widget.questions;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && identical(renderedQuestions, widget.questions)) {
@@ -273,209 +270,127 @@ class InteractiveQuestionnaireCardState
       }
     });
     final totalSteps = _questions.length;
-    final currentStep = safeIndex + 1;
-    final stepText = '$currentStep of $totalSteps';
-    final hasMultipleSteps = totalSteps > 1;
-    final canGoBack = hasMultipleSteps && safeIndex > 0;
-    final canGoForward =
-        hasMultipleSteps &&
-        safeIndex < _questions.length - 1 &&
-        _selectedAnswers.containsKey(safeIndex);
-
-    final selectedForCurrent =
+    final selected =
         _tapFeedbackOption ??
         _selectedAnswers[safeIndex] ??
         currentQuestion.selectedOption;
-
     return Container(
       key: const Key('chatbot-questionnaire-card'),
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1.2),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12000000),
-            blurRadius: 20,
-            offset: Offset(0, 4),
-          ),
-          BoxShadow(
-            color: Color(0x087400C9),
-            blurRadius: 10,
-            offset: Offset(0, 1),
-          ),
-        ],
+        color: ChatbotDesign.tint,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ChatbotDesign.border),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Segmented Progress Bar
-          if (hasMultipleSteps)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: List.generate(totalSteps, (i) {
-                  final isPassedOrCurrent = i <= safeIndex;
-                  return Expanded(
-                    child: Container(
-                      height: 4,
-                      margin: EdgeInsets.only(
-                        right: i < totalSteps - 1 ? 6 : 0,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isPassedOrCurrent
-                            ? AppColors.primaryColor
-                            : const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-
-          // Header: Step count badge + Skip + Close Button
           Row(
             children: [
-              if (hasMultipleSteps)
-                InkWell(
-                  key: const Key('chatbot-questionnaire-prev'),
-                  onTap: canGoBack ? _goToPrevious : null,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 2,
-                      vertical: 2,
-                    ),
-                    child: Icon(
-                      Icons.chevron_left_rounded,
-                      size: 20,
-                      color: canGoBack
-                          ? const Color(0xFF4B5563)
-                          : const Color(0xFFD1D5DB),
-                    ),
-                  ),
-                ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4.5,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryColor.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.primaryColor.withValues(alpha: 0.15),
-                    width: 0.8,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.tune_rounded,
-                      size: 13,
-                      color: AppColors.primaryColor,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      stepText,
-                      style: const TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (hasMultipleSteps)
-                InkWell(
-                  key: const Key('chatbot-questionnaire-next'),
-                  onTap: canGoForward ? _goToNext : null,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 2,
-                      vertical: 2,
-                    ),
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      size: 20,
-                      color: canGoForward
-                          ? const Color(0xFF4B5563)
-                          : const Color(0xFFD1D5DB),
-                    ),
-                  ),
-                ),
-              const Spacer(),
-              TextButton(
-                key: const Key('chatbot-questionnaire-skip'),
-                onPressed: _skip,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text(
-                  'Skip',
-                  style: TextStyle(
-                    fontFamily: 'Prompt',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF9CA3AF),
+              Expanded(
+                child: Text(
+                  'ข้อ ${safeIndex + 1} จาก $totalSteps',
+                  style: ChatbotDesign.body.copyWith(
+                    color: ChatbotDesign.primary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
               IconButton(
                 key: const Key('chatbot-questionnaire-close'),
-                tooltip: 'ปิด',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                tooltip: 'ปิดคำถาม',
+                onPressed: widget.onDismiss,
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                 icon: const Icon(
                   Icons.close_rounded,
-                  size: 20,
-                  color: Color(0xFF9CA3AF),
+                  color: ChatbotDesign.muted,
                 ),
-                onPressed: widget.onDismiss,
               ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          // Question Title
+          if (totalSteps > 1) ...[
+            LinearProgressIndicator(
+              value: (safeIndex + 1) / totalSteps,
+              color: ChatbotDesign.primary,
+              backgroundColor: ChatbotDesign.border,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            const SizedBox(height: 16),
+          ],
           Text(
             effectiveTitle,
-            style: const TextStyle(
-              fontSize: 16.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF0F172A),
-              fontFamily: 'Prompt',
-              height: 1.35,
+            style: ChatbotDesign.body.copyWith(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
-
-          // Options List as Interactive Selectable Cards
+          const SizedBox(height: 16),
           for (var i = 0; i < effectiveOptions.length; i++)
             _OptionTile(
               index: i,
               optionText: effectiveOptions[i],
-              isSelected: selectedForCurrent == effectiveOptions[i],
+              isSelected: selected == effectiveOptions[i],
               onTap: () => _selectOption(
                 effectiveOptions[i],
                 i < currentQuestion.choices.length &&
                         effectiveOptions == currentQuestion.options
                     ? currentQuestion.choices[i].id
                     : null,
+              ),
+            ),
+          const SizedBox(height: 8),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              if (totalSteps > 1)
+                IconButton(
+                  key: const Key('chatbot-questionnaire-prev'),
+                  tooltip: 'ข้อก่อนหน้า',
+                  onPressed: safeIndex > 0 ? _goToPrevious : null,
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  icon: const Icon(Icons.chevron_left_rounded),
+                ),
+              TextButton(
+                key: const Key('chatbot-questionnaire-skip'),
+                onPressed: _skip,
+                style: TextButton.styleFrom(minimumSize: ChatbotDesign.button),
+                child: const Text('ข้าม'),
+              ),
+              if (totalSteps > 1)
+                IconButton(
+                  key: const Key('chatbot-questionnaire-next'),
+                  tooltip: 'ข้อถัดไป',
+                  onPressed:
+                      safeIndex < totalSteps - 1 &&
+                          _selectedAnswers.containsKey(safeIndex)
+                      ? _goToNext
+                      : null,
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+            ],
+          ),
+          if (widget.onCustomInput != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const Key('chatbot-questionnaire-custom-input'),
+                style: TextButton.styleFrom(minimumSize: ChatbotDesign.button),
+                onPressed: () {
+                  suspendProgression();
+                  widget.onCustomInput!();
+                },
+                child: const Text('พิมพ์ตอบเอง'),
               ),
             ),
         ],
@@ -523,58 +438,61 @@ class _OptionTile extends StatelessWidget {
           highlightColor: AppColors.primaryColor.withValues(alpha: 0.06),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primaryColor
-                        : const Color(0xFFEDF0F3),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${index + 1}',
-                    style: TextStyle(
-                      fontFamily: 'Prompt',
-                      color: isSelected
-                          ? Colors.white
-                          : const Color(0xFF4B5563),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    optionText,
-                    style: TextStyle(
-                      fontFamily: 'Prompt',
-                      fontSize: 15,
-                      fontWeight: isSelected
-                          ? FontWeight.w700
-                          : FontWeight.w500,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 24),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
                       color: isSelected
                           ? AppColors.primaryColor
-                          : const Color(0xFF1E293B),
-                      height: 1.35,
+                          : const Color(0xFFEDF0F3),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                        fontFamily: 'Prompt',
+                        color: isSelected
+                            ? Colors.white
+                            : const Color(0xFF4B5563),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
-                ),
-                if (isSelected)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 6),
-                    child: Icon(
-                      Icons.check_circle_rounded,
-                      size: 20,
-                      color: AppColors.primaryColor,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      optionText,
+                      style: TextStyle(
+                        fontFamily: 'Prompt',
+                        fontSize: 15,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: isSelected
+                            ? AppColors.primaryColor
+                            : const Color(0xFF1E293B),
+                        height: 1.35,
+                      ),
                     ),
                   ),
-              ],
+                  if (isSelected)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 6),
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        size: 20,
+                        color: AppColors.primaryColor,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
