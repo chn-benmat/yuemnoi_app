@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 
 from app.core.config import settings
 from app.core.container import container
 from app.core.logging import logger
+from app.infrastructure.server import run_server
 from app.interface.api.v1.endpoints.health import router as health_router
 from app.interface.api.v1.router import api_v1_router
 
@@ -49,7 +49,7 @@ app.include_router(api_v1_router, prefix="/api/v1")
 
 
 if __name__ == "__main__":
-    uvicorn.run(
+    run_server(
         "main:app",
         host="0.0.0.0",
         port=8000,
