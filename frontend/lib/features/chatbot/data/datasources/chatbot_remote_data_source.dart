@@ -8,9 +8,17 @@ import '../models/chat_context_model.dart';
 import '../models/chat_understanding_model.dart';
 
 class ChatbotRemoteException implements Exception {
-  const ChatbotRemoteException(this.message);
+  const ChatbotRemoteException(
+    this.message, {
+    this.errorCode,
+    this.statusCode,
+    this.retryAfterSeconds,
+  });
 
   final String message;
+  final String? errorCode;
+  final int? statusCode;
+  final int? retryAfterSeconds;
 }
 
 class ChatbotRemoteDataSource {
@@ -75,7 +83,7 @@ class ChatbotRemoteDataSource {
         },
       );
     } on ApiClientException catch (error) {
-      throw ChatbotRemoteException(_apiErrorMessage(error));
+      throw _apiException(error);
     } catch (_) {
       throw const ChatbotRemoteException(
         'ส่งข้อความไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
@@ -119,6 +127,10 @@ class ChatbotRemoteDataSource {
                 _modelError(
                   decoded['error_code'] as String?,
                   retryAfterSeconds: decoded['retry_after_seconds'],
+                ),
+                errorCode: decoded['error_code'] as String?,
+                retryAfterSeconds: _retrySeconds(
+                  decoded['retry_after_seconds'],
                 ),
               );
             }
@@ -252,7 +264,7 @@ class ChatbotRemoteDataSource {
         'ผู้ช่วย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง',
       );
     } on ApiClientException catch (error) {
-      throw ChatbotRemoteException(_apiErrorMessage(error));
+      throw _apiException(error);
     }
     if (!completed) {
       throw const ChatbotRemoteException('การตอบกลับไม่สมบูรณ์ กรุณาลองใหม่');
@@ -293,6 +305,11 @@ class ChatbotRemoteDataSource {
                   response.data['retry_after_seconds'] ??
                   response.retryAfterSeconds,
             ),
+            errorCode: response.data['error_code'] as String?,
+            retryAfterSeconds: _retrySeconds(
+              response.data['retry_after_seconds'] ??
+                  response.retryAfterSeconds,
+            ),
           );
         }
         try {
@@ -313,9 +330,19 @@ class ChatbotRemoteDataSource {
                     response.retryAfterSeconds,
               )
             : _errorMessage(response.statusCode),
+        statusCode: response.statusCode,
+        errorCode: response.data is Map
+            ? response.data['error_code'] as String?
+            : null,
+        retryAfterSeconds: _retrySeconds(
+          response.data is Map
+              ? response.data['retry_after_seconds'] ??
+                    response.retryAfterSeconds
+              : response.retryAfterSeconds,
+        ),
       );
     } on ApiClientException catch (error) {
-      throw ChatbotRemoteException(_apiErrorMessage(error));
+      throw _apiException(error);
     }
   }
 
@@ -389,6 +416,18 @@ class ChatbotRemoteDataSource {
     if (error.statusCode != null) return _errorMessage(error.statusCode!);
     return _requestErrorMessage(error.type);
   }
+
+  ChatbotRemoteException _apiException(ApiClientException error) =>
+      ChatbotRemoteException(
+        _apiErrorMessage(error),
+        errorCode: error.errorCode,
+        statusCode: error.statusCode,
+        retryAfterSeconds: _retrySeconds(error.retryAfterSeconds),
+      );
+
+  // รับเฉพาะเวลาบวกที่เซิร์ฟเวอร์ส่งมา และปัดขึ้นเพื่อไม่ส่งก่อนกำหนด
+  static int? _retrySeconds(Object? value) =>
+      value is num && value.isFinite && value > 0 ? value.ceil() : null;
 
   String _errorMessage(int statusCode) {
     if (statusCode == 400 || statusCode == 422) {

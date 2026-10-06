@@ -28,7 +28,7 @@ class ChatbotRepositoryImpl implements ChatbotRepository {
         activeQuestionId: activeQuestionId,
       );
     } on ChatbotRemoteException catch (error) {
-      throw ChatbotException(error.message);
+      throw _domainException(error);
     }
   }
 
@@ -54,7 +54,7 @@ class ChatbotRepositoryImpl implements ChatbotRepository {
         )
         .handleError((error) {
           if (error is ChatbotRemoteException) {
-            throw ChatbotException(error.message);
+            throw _domainException(error);
           }
           throw error;
         });
@@ -64,4 +64,12 @@ class ChatbotRepositoryImpl implements ChatbotRepository {
   void close() {
     remoteDataSource.close();
   }
+
+  static ChatbotException _domainException(ChatbotRemoteException error) =>
+      ChatbotException(
+        error.message,
+        errorCode: error.errorCode,
+        statusCode: error.statusCode,
+        retryAfterSeconds: error.retryAfterSeconds,
+      );
 }

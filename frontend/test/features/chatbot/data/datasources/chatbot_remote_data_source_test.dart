@@ -125,16 +125,18 @@ void main() {
       ]),
     );
 
-    final events = await dataSource.sendMessageStream(
-      query: 'แนะนำกล้อง',
-      history: const [],
-    ).toList();
+    final events = await dataSource
+        .sendMessageStream(query: 'แนะนำกล้อง', history: const [])
+        .toList();
 
     expect(events.length, 5);
     expect(events[0], isA<ChatStatusEvent>());
     expect((events[0] as ChatStatusEvent).step, 'searching');
     expect(events[1], isA<ChatMetadataEvent>());
-    expect((events[1] as ChatMetadataEvent).recommendedItems.single.name, 'Canon EOS R5');
+    expect(
+      (events[1] as ChatMetadataEvent).recommendedItems.single.name,
+      'Canon EOS R5',
+    );
     expect(events[2], isA<ChatDeltaEvent>());
     expect((events[2] as ChatDeltaEvent).text, 'แนะนำกล้อง ');
     expect(events[3], isA<ChatDeltaEvent>());
@@ -143,7 +145,42 @@ void main() {
     expect((events[4] as ChatDoneEvent).suggestedReplies, ['ขอบคุณค่ะ']);
   });
 
-  test('streams SSE events and maps search_sources, search_query, and activities', () async {
+  test(
+    'streams SSE events and maps search_sources, search_query, and activities',
+    () async {
+      when(
+        () => client.postStream(
+          any(),
+          data: any(named: 'data'),
+          headers: any(named: 'headers'),
+        ),
+      ).thenAnswer(
+        (_) async => Stream.fromIterable([
+          'event: status\n',
+          'data: {"step": "searching_web", "message": "กำลังค้นหา..."}\n',
+          '\n',
+          'event: done\n',
+          'data: {"answer": "สรุปเปรียบเทียบ", "search_query": "A7 IV vs FX3", "activities": ["วิเคราะห์คำถาม", "ค้นหา Google"], "search_sources": [{"title": "Review", "url": "https://example.com", "domain": "example.com", "snippet": "Sample"}]}\n',
+        ]),
+      );
+
+      final events = await dataSource
+          .sendMessageStream(query: 'เปรียบเทียบ', history: const [])
+          .toList();
+
+      expect(events.length, 2);
+      expect(events[1], isA<ChatDoneEvent>());
+      final done = events[1] as ChatDoneEvent;
+      expect(done.answer, 'สรุปเปรียบเทียบ');
+      expect(done.searchQuery, 'A7 IV vs FX3');
+      expect(done.activities, ['วิเคราะห์คำถาม', 'ค้นหา Google']);
+      expect(done.searchSources.length, 1);
+      expect(done.searchSources.first.title, 'Review');
+      expect(done.searchSources.first.domain, 'example.com');
+    },
+  );
+
+  test('SSE timeout error propagates and never becomes a done event', () async {
     when(
       () => client.postStream(
         any(),
@@ -152,54 +189,53 @@ void main() {
       ),
     ).thenAnswer(
       (_) async => Stream.fromIterable([
-        'event: status\n',
-        'data: {"step": "searching_web", "message": "กำลังค้นหา..."}\n',
-        '\n',
-        'event: done\n',
-        'data: {"answer": "สรุปเปรียบเทียบ", "search_query": "A7 IV vs FX3", "activities": ["วิเคราะห์คำถาม", "ค้นหา Google"], "search_sources": [{"title": "Review", "url": "https://example.com", "domain": "example.com", "snippet": "Sample"}]}\n',
-      ]),
-    );
-
-    final events = await dataSource.sendMessageStream(
-      query: 'เปรียบเทียบ',
-      history: const [],
-    ).toList();
-
-    expect(events.length, 2);
-    expect(events[1], isA<ChatDoneEvent>());
-    final done = events[1] as ChatDoneEvent;
-    expect(done.answer, 'สรุปเปรียบเทียบ');
-    expect(done.searchQuery, 'A7 IV vs FX3');
-    expect(done.activities, ['วิเคราะห์คำถาม', 'ค้นหา Google']);
-    expect(done.searchSources.length, 1);
-    expect(done.searchSources.first.title, 'Review');
-    expect(done.searchSources.first.domain, 'example.com');
-  });
-
-  test('SSE timeout error propagates and never becomes a done event', () async {
-    when(() => client.postStream(any(), data: any(named: 'data'),
-      headers: any(named: 'headers'))).thenAnswer((_) async => Stream.fromIterable([
         'event: error',
         'data: {"status":"error","error_code":"timeout","answer":""}',
-      ]));
-    await expectLater(dataSource.sendMessageStream(query: 'hello', history: []).toList(),
-      throwsA(isA<ChatbotRemoteException>()));
+      ]),
+    );
+    await expectLater(
+      dataSource.sendMessageStream(query: 'hello', history: []).toList(),
+      throwsA(isA<ChatbotRemoteException>()),
+    );
   });
 
   test('non-stream error envelope is not a successful answer', () async {
-    when(() => client.post(any(), data: any(named: 'data'),
-      headers: any(named: 'headers'))).thenAnswer((_) async => const ApiResponse(
-        statusCode: 200, data: {'status':'error','error_code':'ungrounded_response','answer':''}));
-    await expectLater(dataSource.sendMessage(query: 'hello', history: []),
-      throwsA(isA<ChatbotRemoteException>()));
+    when(
+      () => client.post(
+        any(),
+        data: any(named: 'data'),
+        headers: any(named: 'headers'),
+      ),
+    ).thenAnswer(
+      (_) async => const ApiResponse(
+        statusCode: 200,
+        data: {
+          'status': 'error',
+          'error_code': 'ungrounded_response',
+          'answer': '',
+        },
+      ),
+    );
+    await expectLater(
+      dataSource.sendMessage(query: 'hello', history: []),
+      throwsA(isA<ChatbotRemoteException>()),
+    );
   });
 
   test('incomplete SSE does not silently finish', () async {
-    when(() => client.postStream(any(), data: any(named: 'data'),
-      headers: any(named: 'headers'))).thenAnswer((_) async => Stream.fromIterable([
-        'event: status', 'data: {"step":"processing"}',
-      ]));
-    await expectLater(dataSource.sendMessageStream(query: 'hello', history: []).toList(),
-      throwsA(isA<ChatbotRemoteException>()));
+    when(
+      () => client.postStream(
+        any(),
+        data: any(named: 'data'),
+        headers: any(named: 'headers'),
+      ),
+    ).thenAnswer(
+      (_) async =>
+          Stream.fromIterable(['event: status', 'data: {"step":"processing"}']),
+    );
+    await expectLater(
+      dataSource.sendMessageStream(query: 'hello', history: []).toList(),
+      throwsA(isA<ChatbotRemoteException>()),
+    );
   });
 }

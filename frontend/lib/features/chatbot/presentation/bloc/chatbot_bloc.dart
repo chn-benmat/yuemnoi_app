@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/chatbot_failure.dart';
 import '../../domain/entities/chat_turn_timing.dart';
 import '../../domain/repositories/chatbot_repository.dart';
 import '../../domain/usecases/send_chat_message_usecase.dart';
@@ -23,6 +24,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
 
   ChatbotBloc({
     required SendChatMessageUseCase sendMessage,
+    DateTime Function()? now,
     this.onTimingMeasured,
     this.timingDiagnostics = const bool.fromEnvironment(
       'AI_CHAT_TIMING_DIAGNOSTICS',
@@ -34,14 +36,19 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
       ),
     ),
   }) : _sendMessage = sendMessage,
+       _now = now ?? DateTime.now,
        super(ChatbotState.initial()) {
     on<ChatbotMessageSubmitted>(_onMessageSubmitted);
     on<ChatbotMessageEdited>(_onMessageEdited);
+    on<ChatbotRetryRequested>(_onRetryRequested);
     on<ChatbotStreamStopped>(_onStreamStopped);
     on<ChatbotResponseRendered>(_onResponseRendered);
   }
 
   final SendChatMessageUseCase _sendMessage;
+  final DateTime Function() _now;
+  _ChatbotRequestSnapshot? _retrySnapshot;
+  int _attemptId = 0;
   final void Function(ChatTimingMeasurement)? onTimingMeasured;
   final bool timingDiagnostics;
   final Duration responseReadyTimeout;
@@ -96,7 +103,11 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
     _activeStreamCanceller = null;
   }
 
-  Stream<ChatStreamEvent> _bufferChatDeltas(Stream<ChatStreamEvent> source) {
+  Stream<ChatStreamEvent> _bufferChatDeltas(
+    Stream<ChatStreamEvent> source,
+    int attempt,
+  ) {
+    final turnTiming = _turnTiming;
     late final StreamController<ChatStreamEvent> controller;
     StreamSubscription<ChatStreamEvent>? subscription;
     Timer? flushTimer;
@@ -122,7 +133,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
     }
 
     void failReadyDeadline() {
-      if (sourceFinished) return;
+      if (sourceFinished || attempt != _attemptId) return;
       sourceFinished = true;
       stopTimer();
       stopReadyTimer();
@@ -137,7 +148,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
     }
 
     void cancelActiveStream() {
-      if (sourceFinished) return;
+      if (sourceFinished || attempt != _attemptId) return;
       sourceFinished = true;
       stopTimer();
       stopReadyTimer();
@@ -153,7 +164,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
         _activeStreamCanceller = cancelActiveStream;
         // นับจาก interaction ที่ส่งคำขอ รวมเวลารอเครือข่ายก่อน headers
         final remaining =
-            responseReadyTimeout - (_turnTiming?.elapsed ?? Duration.zero);
+            responseReadyTimeout - (turnTiming?.elapsed ?? Duration.zero);
         readyTimer = Timer(
           remaining.isNegative ? Duration.zero : remaining,
           failReadyDeadline,
@@ -164,15 +175,15 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
         );
         subscription = source.listen(
           (event) {
-            if (sourceFinished) return;
+            if (sourceFinished || attempt != _attemptId) return;
             if (event is ChatReadyEvent || event is ChatDoneEvent) {
-              if (_turnTiming?.responseReady == null &&
-                  (_turnTiming?.elapsed ?? Duration.zero) >
+              if (turnTiming?.responseReady == null &&
+                  (turnTiming?.elapsed ?? Duration.zero) >
                       responseReadyTimeout) {
                 failReadyDeadline();
                 return;
               }
-              _turnTiming?.markResponseReady();
+              turnTiming?.markResponseReady();
               stopReadyTimer();
             }
             if (event case ChatDeltaEvent(:final text)) {
@@ -185,22 +196,22 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
             controller.add(event);
           },
           onError: (Object error, StackTrace stackTrace) {
-            if (sourceFinished) return;
+            if (sourceFinished || attempt != _attemptId) return;
             sourceFinished = true;
             stopTimer();
             stopReadyTimer();
             flushDeltas();
-            _activeStreamCanceller = null;
+            if (attempt == _attemptId) _activeStreamCanceller = null;
             controller.addError(error, stackTrace);
             controller.close();
           },
           onDone: () {
-            if (sourceFinished) return;
+            if (sourceFinished || attempt != _attemptId) return;
             sourceFinished = true;
             stopTimer();
             stopReadyTimer();
             flushDeltas();
-            _activeStreamCanceller = null;
+            if (attempt == _attemptId) _activeStreamCanceller = null;
             controller.close();
           },
           cancelOnError: true,
@@ -209,7 +220,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
       onCancel: () async {
         stopTimer();
         stopReadyTimer();
-        _activeStreamCanceller = null;
+        if (attempt == _attemptId) _activeStreamCanceller = null;
         if (!sourceFinished) {
           await subscription?.cancel();
         }
@@ -228,67 +239,87 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
     bool questionnaireSkipped = false,
     String? activeQuestionId,
     ChatTurnTiming? timing,
+    _ChatbotRequestSnapshot? snapshotOverride,
   }) async {
+    _activeStreamCanceller?.call();
     _activeStreamCanceller = null;
     _isStoppedByUser = false;
-
+    final attempt = ++_attemptId;
     _finishTiming('render_not_observed');
     _turnTiming = timing ?? ChatTurnTiming(origin: 'bloc_submission');
-    final startTime = DateTime.now();
-    final messageId =
-        'msg_${startTime.millisecondsSinceEpoch}_${query.hashCode.abs()}';
+    final startTime = _now();
+    final messageId = 'msg_${startTime.microsecondsSinceEpoch}_$attempt';
     _timingMessageId = messageId;
-    final placeholder = ChatMessage(
-      id: messageId,
-      role: ChatMessageRole.assistant,
-      content: '',
-      userQuery: query,
-      isStreaming: true,
-      createdAt: startTime,
-      statusMessage: 'กำลังวิเคราะห์คำถาม...',
-    );
-
-    emit(
-      state.copyWith(
-        messages: [...messagesWithUser, placeholder],
-        isSending: true,
-        clearError: true,
-        requestStartTime: startTime,
-        currentStatusMessage: 'กำลังวิเคราะห์คำถาม...',
-      ),
-    );
-
-    final stopwatch = Stopwatch()..start();
-    // ย้อนบริบทตามประวัติที่ยังเหลืออยู่ เมื่อแก้ข้อความจะไม่ใช้ผลลัพธ์ในอนาคต
     final contexts = history.reversed.where(
       (m) => m.role == ChatMessageRole.assistant && m.context != null,
     );
     final chatContext = contexts.isEmpty ? null : contexts.first.context;
+    // เก็บคำขอที่จัดบริบทเรียบร้อยแล้ว เพื่อส่งซ้ำโดยไม่สร้างข้อความผู้ใช้ใหม่
+    final request =
+        snapshotOverride ??
+        _ChatbotRequestSnapshot(
+          query: query,
+          history: List.unmodifiable(history),
+          messagesWithUser: List.unmodifiable(messagesWithUser),
+          sessionId: chatContext?.sessionId ?? _sessionId,
+          context: chatContext,
+          questionnaireAnswers: List.unmodifiable(
+            chatContext == null
+                ? const <QuestionnaireAnswer>[]
+                : questionnaireAnswers,
+          ),
+          questionnaireSkipped: questionnaireSkipped,
+          activeQuestionId:
+              chatContext?.questions.any((q) => q.id == activeQuestionId) ==
+                  true
+              ? activeQuestionId
+              : null,
+        );
+    _retrySnapshot = request;
+    emit(
+      state.copyWith(
+        messages: [
+          ...request.messagesWithUser,
+          ChatMessage(
+            id: messageId,
+            role: ChatMessageRole.assistant,
+            content: '',
+            userQuery: request.query,
+            isStreaming: true,
+            createdAt: startTime,
+            statusMessage: 'กำลังวิเคราะห์คำถาม...',
+          ),
+        ],
+        isSending: true,
+        clearError: true,
+        clearFailure: true,
+        requestStartTime: startTime,
+        currentStatusMessage: 'กำลังวิเคราะห์คำถาม...',
+      ),
+    );
+    final stopwatch = Stopwatch()..start();
     try {
       await emit.forEach<ChatStreamEvent>(
         _bufferChatDeltas(
           _sendMessage.executeStream(
-            query: query,
-            history: history,
-            sessionId: chatContext?.sessionId ?? _sessionId,
-            context: chatContext,
-            questionnaireAnswers: chatContext == null
-                ? const []
-                : questionnaireAnswers,
-            questionnaireSkipped: questionnaireSkipped,
-            activeQuestionId:
-                chatContext?.questions.any((q) => q.id == activeQuestionId) ==
-                    true
-                ? activeQuestionId
-                : null,
+            query: request.query,
+            history: request.history,
+            sessionId: request.sessionId,
+            context: request.context,
+            questionnaireAnswers: request.questionnaireAnswers,
+            questionnaireSkipped: request.questionnaireSkipped,
+            activeQuestionId: request.activeQuestionId,
           ),
+          attempt,
         ),
         onData: (event) {
+          if (attempt != _attemptId || isClosed) return state;
           final currentMessages = List<ChatMessage>.from(state.messages);
           if (currentMessages.isEmpty) return state;
           final lastIndex = currentMessages.length - 1;
           final last = currentMessages[lastIndex];
-          if (last.role != ChatMessageRole.assistant) return state;
+          if (last.role != ChatMessageRole.assistant || last.id != messageId)
+            return state;
 
           switch (event) {
             case ChatReadyEvent():
@@ -362,6 +393,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
               :final understanding,
             ):
               stopwatch.stop();
+              _retrySnapshot = null;
               _turnTiming?.markTransportComplete();
               final effectiveQuestions = understanding != null
                   ? questions
@@ -404,171 +436,133 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
                 messages: currentMessages,
                 isSending: false,
                 clearError: true,
+                clearFailure: true,
                 clearStatus: true,
                 clearStartTime: true,
               );
           }
         },
         onError: (Object error, StackTrace stackTrace) {
+          if (attempt != _attemptId || isClosed) return state;
           stopwatch.stop();
-          _finishTiming(_isStoppedByUser ? 'cancelled' : 'error');
-          if (_isStoppedByUser) {
-            final currentMessages = List<ChatMessage>.from(state.messages);
-            if (currentMessages.isNotEmpty &&
-                currentMessages.last.role == ChatMessageRole.assistant) {
-              final last = currentMessages.last;
-              final duration =
-                  last.responseDuration ??
-                  (stopwatch.elapsed.inMilliseconds > 0
-                      ? stopwatch.elapsed
-                      : const Duration(seconds: 1));
-              currentMessages[currentMessages.length - 1] = last.copyWith(
-                content: last.content.isEmpty
-                    ? 'หยุดการตอบกลับแล้ว'
-                    : last.content,
-                isStreaming: false,
-                responseDuration: duration,
-                statusMessage: 'สรุปคำแนะนำ',
-              );
-            }
-            return state.copyWith(
-              messages: currentMessages,
-              isSending: false,
-              clearError: true,
-              clearStatus: true,
-              clearStartTime: true,
-            );
-          }
-          final errorMessage = error is ChatbotException
-              ? error.message
-              : 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
-          final currentMessages = List<ChatMessage>.from(state.messages);
-          if (currentMessages.isNotEmpty &&
-              currentMessages.last.role == ChatMessageRole.assistant) {
-            currentMessages[currentMessages.length - 1] = currentMessages.last
-                .copyWith(
-                  content: errorMessage,
-                  isStreaming: false,
-                  responseDuration: stopwatch.elapsed,
-                  statusMessage: 'คำขอไม่สำเร็จ',
-                );
-          }
-          return state.copyWith(
-            messages: currentMessages,
-            isSending: false,
-            errorMessage: errorMessage,
-            clearStatus: true,
-            clearStartTime: true,
-          );
+          if (_isStoppedByUser) return _stoppedState(stopwatch.elapsed);
+          return _failedState(error, stopwatch.elapsed, messageId);
         },
       );
-      if (_isStoppedByUser) {
-        stopwatch.stop();
-        final currentMessages = List<ChatMessage>.from(state.messages);
-        if (currentMessages.isNotEmpty &&
-            currentMessages.last.role == ChatMessageRole.assistant) {
-          final last = currentMessages.last;
-          final duration =
-              last.responseDuration ??
-              (stopwatch.elapsed.inMilliseconds > 0
-                  ? stopwatch.elapsed
-                  : const Duration(seconds: 1));
-          currentMessages[currentMessages.length - 1] = last.copyWith(
-            content: last.content.isEmpty ? 'หยุดการตอบกลับแล้ว' : last.content,
-            isStreaming: false,
-            responseDuration: duration,
-            statusMessage: 'สรุปคำแนะนำ',
-          );
-        }
-        emit(
-          state.copyWith(
-            messages: currentMessages,
-            isSending: false,
-            clearError: true,
-            clearStatus: true,
-            clearStartTime: true,
-          ),
-        );
-        return;
-      }
-      if (state.isSending) {
-        stopwatch.stop();
-        _finishTiming('incomplete');
-        final currentMessages = List<ChatMessage>.from(state.messages);
-        const errorMessage = 'การตอบกลับไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง';
-        if (currentMessages.isNotEmpty &&
-            currentMessages.last.role == ChatMessageRole.assistant) {
-          currentMessages[currentMessages.length - 1] = currentMessages.last
-              .copyWith(
-                content: errorMessage,
-                isStreaming: false,
-                responseDuration: stopwatch.elapsed,
-                statusMessage: 'คำขอไม่สำเร็จ',
-              );
-        }
-        emit(
-          state.copyWith(
-            messages: currentMessages,
-            isSending: false,
-            errorMessage: errorMessage,
-            clearStatus: true,
-            clearStartTime: true,
-          ),
-        );
-      }
-    } catch (_) {
+      if (attempt != _attemptId || isClosed || emit.isDone) return;
       stopwatch.stop();
-      _finishTiming(_isStoppedByUser ? 'cancelled' : 'error');
       if (_isStoppedByUser) {
-        final currentMessages = List<ChatMessage>.from(state.messages);
-        if (currentMessages.isNotEmpty &&
-            currentMessages.last.role == ChatMessageRole.assistant) {
-          final last = currentMessages.last;
-          final duration =
-              last.responseDuration ??
-              (stopwatch.elapsed.inMilliseconds > 0
-                  ? stopwatch.elapsed
-                  : const Duration(seconds: 1));
-          currentMessages[currentMessages.length - 1] = last.copyWith(
-            content: last.content.isEmpty ? 'หยุดการตอบกลับแล้ว' : last.content,
-            isStreaming: false,
-            responseDuration: duration,
-            statusMessage: 'สรุปคำแนะนำ',
-          );
-        }
+        emit(_stoppedState(stopwatch.elapsed));
+      } else if (state.isSending) {
         emit(
-          state.copyWith(
-            messages: currentMessages,
-            isSending: false,
-            clearError: true,
-            clearStatus: true,
-            clearStartTime: true,
+          _failedState(
+            const ChatbotException('การตอบกลับไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง'),
+            stopwatch.elapsed,
+            messageId,
           ),
         );
-        return;
       }
-      final currentMessages = List<ChatMessage>.from(state.messages);
-      const errorMessage = 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
-      if (currentMessages.isNotEmpty &&
-          currentMessages.last.role == ChatMessageRole.assistant) {
-        currentMessages[currentMessages.length - 1] = currentMessages.last
-            .copyWith(
-              content: errorMessage,
-              isStreaming: false,
-              responseDuration: stopwatch.elapsed,
-              statusMessage: 'คำขอไม่สำเร็จ',
-            );
-      }
+    } catch (error) {
+      if (attempt != _attemptId || isClosed || emit.isDone) return;
+      stopwatch.stop();
       emit(
-        state.copyWith(
-          messages: currentMessages,
-          isSending: false,
-          errorMessage: errorMessage,
-          clearStatus: true,
-          clearStartTime: true,
-        ),
+        _isStoppedByUser
+            ? _stoppedState(stopwatch.elapsed)
+            : _failedState(error, stopwatch.elapsed, messageId),
       );
     }
+  }
+
+  ChatbotState _stoppedState(Duration duration) {
+    _retrySnapshot = null;
+    _finishTiming('cancelled');
+    final messages = List<ChatMessage>.from(state.messages);
+    if (messages.isNotEmpty &&
+        messages.last.role == ChatMessageRole.assistant) {
+      final last = messages.last;
+      messages[messages.length - 1] = last.copyWith(
+        content: last.content.isEmpty ? 'หยุดการตอบกลับแล้ว' : last.content,
+        isStreaming: false,
+        responseDuration: last.responseDuration ?? duration,
+        recommendedItems: const [],
+        questions: const [],
+        statusMessage: 'หยุดการตอบกลับแล้ว',
+      );
+    }
+    return state.copyWith(
+      messages: messages,
+      isSending: false,
+      clearError: true,
+      clearFailure: true,
+      clearStatus: true,
+      clearStartTime: true,
+    );
+  }
+
+  ChatbotState _failedState(Object error, Duration duration, String messageId) {
+    _finishTiming('error');
+    final exception = error is ChatbotException
+        ? error
+        : const ChatbotException('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+    final status = exception.statusCode;
+    final seconds = exception.retryAfterSeconds;
+    final failure = ChatbotFailure(
+      messageId: messageId,
+      message: exception.message,
+      errorCode: exception.errorCode,
+      statusCode: status,
+      isRetryable:
+          status == null || status == 408 || status == 429 || status >= 500,
+      retryAvailableAt: seconds != null && seconds > 0
+          ? _now().add(Duration(seconds: seconds))
+          : null,
+    );
+    final messages = List<ChatMessage>.from(state.messages);
+    if (messages.isNotEmpty && messages.last.id == messageId) {
+      final last = messages.last;
+      // ผลที่ล้มเหลวไม่แสดงรายการหรือคำถามที่ยังไม่ได้ยืนยันจาก done
+      messages[messages.length - 1] = ChatMessage(
+        id: last.id,
+        role: ChatMessageRole.assistant,
+        content: exception.message,
+        userQuery: last.userQuery,
+        createdAt: last.createdAt,
+        responseDuration: duration,
+        statusMessage: 'คำขอไม่สำเร็จ',
+      );
+    }
+    return state.copyWith(
+      messages: messages,
+      isSending: false,
+      errorMessage: exception.message,
+      failure: failure,
+      clearStatus: true,
+      clearStartTime: true,
+    );
+  }
+
+  Future<void> _onRetryRequested(
+    ChatbotRetryRequested event,
+    Emitter<ChatbotState> emit,
+  ) async {
+    final failure = state.failure;
+    final request = _retrySnapshot;
+    if (state.isSending ||
+        request == null ||
+        failure == null ||
+        failure.messageId != event.messageId ||
+        !failure.canRetry(_now()) ||
+        state.messages.isEmpty ||
+        state.messages.last.id != event.messageId)
+      return;
+    await _handleMessageStream(
+      query: request.query,
+      history: request.history,
+      messagesWithUser: request.messagesWithUser,
+      snapshotOverride: request,
+      timing: event.timing,
+      emit: emit,
+    );
   }
 
   Future<void> _onMessageEdited(
@@ -659,9 +653,33 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
   @override
   Future<void> close() {
     _finishTiming('screen_closed');
+    _attemptId++;
+    _retrySnapshot = null;
     _activeStreamCanceller?.call();
     _activeStreamCanceller = null;
     _sendMessage.close();
     return super.close();
   }
+}
+
+// สำเนาคำขอของรอบล่าสุด ไม่เผย history หรือ context ไปยัง widget
+class _ChatbotRequestSnapshot {
+  const _ChatbotRequestSnapshot({
+    required this.query,
+    required this.history,
+    required this.messagesWithUser,
+    required this.sessionId,
+    required this.context,
+    required this.questionnaireAnswers,
+    required this.questionnaireSkipped,
+    required this.activeQuestionId,
+  });
+  final String query;
+  final List<ChatMessage> history;
+  final List<ChatMessage> messagesWithUser;
+  final String sessionId;
+  final ChatSessionContext? context;
+  final List<QuestionnaireAnswer> questionnaireAnswers;
+  final bool questionnaireSkipped;
+  final String? activeQuestionId;
 }

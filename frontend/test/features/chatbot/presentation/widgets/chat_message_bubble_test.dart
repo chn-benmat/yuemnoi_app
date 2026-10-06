@@ -489,7 +489,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
+        expect(find.text('ข้อมูลประกอบคำแนะนำ'), findsOneWidget);
         expect(find.text('สรุปคำแนะนำ (6 วิ)'), findsOneWidget);
       },
     );
@@ -547,7 +547,7 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
+        expect(find.text('ข้อมูลประกอบคำแนะนำ'), findsOneWidget);
         expect(
           find.textContaining('กำลังค้นหาอุปกรณ์ในระบบ...'),
           findsOneWidget,
