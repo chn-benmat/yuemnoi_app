@@ -1,0 +1,195 @@
+{
+  "$defs": {
+    "Expected": {
+      "additionalProperties": false,
+      "properties": {
+        "request_scope": {
+          "enum": [
+            "broad",
+            "specific",
+            "not_applicable"
+          ],
+          "title": "Request Scope",
+          "type": "string"
+        },
+        "next_action": {
+          "enum": [
+            "answer",
+            "clarify"
+          ],
+          "title": "Next Action",
+          "type": "string"
+        },
+        "information_sufficient": {
+          "title": "Information Sufficient",
+          "type": "boolean"
+        },
+        "required_checks": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Required Checks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "request_scope",
+        "next_action",
+        "information_sufficient",
+        "required_checks"
+      ],
+      "title": "Expected",
+      "type": "object"
+    },
+    "Message": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "user",
+            "assistant"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "content": {
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "content"
+      ],
+      "title": "Message",
+      "type": "object"
+    },
+    "ReviewCase": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "family_id": {
+          "title": "Family Id",
+          "type": "string"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "enum": [
+                "broad_rental",
+                "specific_request",
+                "follow_up",
+                "correction_and_topic_change",
+                "app_information",
+                "language_variation"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "non_question",
+              "type": "string"
+            }
+          ],
+          "title": "Group"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/Message"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "clarification_declined": {
+          "title": "Clarification Declined",
+          "type": "boolean"
+        },
+        "expected": {
+          "$ref": "#/$defs/Expected"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "family_id",
+        "group",
+        "message",
+        "history",
+        "clarification_declined",
+        "expected",
+        "rationale"
+      ],
+      "title": "ReviewCase",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "version": {
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "draft_pending_owner_review",
+      "title": "Status",
+      "type": "string"
+    },
+    "production_enabled": {
+      "const": false,
+      "title": "Production Enabled",
+      "type": "boolean"
+    },
+    "split": {
+      "const": "development_review",
+      "title": "Split",
+      "type": "string"
+    },
+    "minimum_cases_per_group": {
+      "exclusiveMinimum": 0,
+      "title": "Minimum Cases Per Group",
+      "type": "integer"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/ReviewCase"
+      },
+      "title": "Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "version",
+    "status",
+    "production_enabled",
+    "split",
+    "minimum_cases_per_group",
+    "cases"
+  ],
+  "title": "LabelReview",
+  "type": "object"
+}

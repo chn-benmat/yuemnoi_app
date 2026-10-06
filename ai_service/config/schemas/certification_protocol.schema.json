@@ -1,0 +1,131 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "version": {
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "draft_pending_owner_review",
+      "title": "Status",
+      "type": "string"
+    },
+    "production_enabled": {
+      "const": false,
+      "title": "Production Enabled",
+      "type": "boolean"
+    },
+    "minimum_cases_per_group": {
+      "const": 20,
+      "title": "Minimum Cases Per Group",
+      "type": "integer"
+    },
+    "minimum_primary_cases": {
+      "const": 120,
+      "title": "Minimum Primary Cases",
+      "type": "integer"
+    },
+    "rounds": {
+      "const": 3,
+      "title": "Rounds",
+      "type": "integer"
+    },
+    "metrics": {
+      "items": {
+        "enum": [
+          "request_scope",
+          "next_action"
+        ],
+        "type": "string"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "title": "Metrics",
+      "type": "array"
+    },
+    "minimum_accuracy_per_group_per_round_per_metric": {
+      "const": 0.95,
+      "title": "Minimum Accuracy Per Group Per Round Per Metric",
+      "type": "number"
+    },
+    "groups": {
+      "items": {
+        "enum": [
+          "broad_rental",
+          "specific_request",
+          "follow_up",
+          "correction_and_topic_change",
+          "app_information",
+          "language_variation"
+        ],
+        "type": "string"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "title": "Groups",
+      "type": "array"
+    },
+    "invalid_output_counts_as_incorrect": {
+      "const": true,
+      "title": "Invalid Output Counts As Incorrect",
+      "type": "boolean"
+    },
+    "exclude_by_expected_label_only": {
+      "const": true,
+      "title": "Exclude By Expected Label Only",
+      "type": "boolean"
+    },
+    "heldout_family_disjoint": {
+      "const": true,
+      "title": "Heldout Family Disjoint",
+      "type": "boolean"
+    },
+    "labels_approved_before_freeze": {
+      "const": true,
+      "title": "Labels Approved Before Freeze",
+      "type": "boolean"
+    },
+    "critical_failures_allowed": {
+      "const": 0,
+      "title": "Critical Failures Allowed",
+      "type": "integer"
+    },
+    "latency_measurement": {
+      "const": "flutter_send_to_complete_render",
+      "title": "Latency Measurement",
+      "type": "string"
+    },
+    "semantic_review": {
+      "const": "independent_human_review_bound_to_output_hash",
+      "title": "Semantic Review",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "version",
+    "status",
+    "production_enabled",
+    "minimum_cases_per_group",
+    "minimum_primary_cases",
+    "rounds",
+    "metrics",
+    "minimum_accuracy_per_group_per_round_per_metric",
+    "groups",
+    "invalid_output_counts_as_incorrect",
+    "exclude_by_expected_label_only",
+    "heldout_family_disjoint",
+    "labels_approved_before_freeze",
+    "critical_failures_allowed",
+    "latency_measurement",
+    "semantic_review"
+  ],
+  "title": "CertificationProtocol",
+  "type": "object"
+}

@@ -4,8 +4,13 @@
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
+.packages
 build/
 coverage/
+.fvm/flutter_sdk/
+.fvm/versions/
+*.log
+*.tmp
 
 # Android Specific
 android/local.properties
@@ -14,9 +19,15 @@ android/app/profile
 android/app/release
 android/**/build/
 .gradle/
+.kotlin/
+.cxx/
+.externalNativeBuild/
+android/captures/
 *.keystore
 *.jks
 key.properties
+*.apk
+*.aab
 
 # iOS Specific
 ios/Pods/
@@ -24,13 +35,29 @@ ios/.symlinks/
 ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
 **/ios/Flutter/.last_build_id
+*.ipa
+*.dSYM/
+*.xcarchive/
+*.mobileprovision
+*.p12
+*.pfx
 
 # Secrets & Environment Variables
 .env
 .env.*
 !.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+!.env.*.sample
+!.env.*.template
 google-services.json
 GoogleService-Info.plist
+service-account*.json
+*firebase-adminsdk*.json
+credentials.json
+*.pem
+*.key
 
 # Obfuscation & Symbols
 app.*.symbols
@@ -38,6 +65,16 @@ app.*.map.json
 
 # IDE & OS Files
 .idea/
+.vscode/*
+# เก็บ configuration ที่ทีมใช้ร่วมกัน รวมถึงไฟล์ที่ติดตามอยู่แล้ว
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/extensions.json
 *.iml
 .DS_Store
 Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~

@@ -1,0 +1,181 @@
+"""Pooled transport with native schemas and safe per-task observations."""
+
+import json
+import math
+import time
+from contextvars import ContextVar
+
+import httpx
+from pydantic import BaseModel, ValidationError
+
+from app.core.config import settings
+from app.core.exceptions import LLMProviderException
+from app.infrastructure.llm.quota import retry_after_seconds
+from app.infrastructure.runtime.documents import ValidatedFile
+from app.infrastructure.runtime.schema import RuntimeDocument, unique_pairs
+from app.domain.interfaces.generation_stage import GENERATION_RECORDING,CURRENT_GENERATION
+
+SAFE_HEADERS = ("retry-after", "x-ratelimit-limit-requests", "x-ratelimit-limit-tokens",
+                "x-ratelimit-remaining-requests", "x-ratelimit-remaining-tokens",
+                "x-ratelimit-reset-requests", "x-ratelimit-reset-tokens")
+
+
+def native_schema(schema: type[BaseModel]) -> dict:
+    def convert(value):
+        if isinstance(value, list):
+            return [convert(v) for v in value]
+        if not isinstance(value, dict):
+            return value
+        result = {}
+        for key, child in value.items():
+            if key in ("default", "title"):
+                continue
+            if key == "x-provider-description" or (key == "description" and not value.get("x-provider-description")):
+                continue
+            if key == "const":
+                # enum ค่าเดียวคงข้อจำกัดเดิม และใช้รูปแบบร่วมของ provider
+                result["enum"] = [child]
+                continue
+            result[key] = {name: convert(spec) for name, spec in child.items()} if key in ("properties", "$defs") else convert(child)
+        if result.get("type") == "object":
+            if isinstance(result.get("additionalProperties"), dict):
+                raise ValueError("Open-ended objects cannot use strict native output")
+            result["additionalProperties"] = False
+            result["required"] = list(result.get("properties", {}))
+        return result
+    return convert(schema.model_json_schema())
+
+
+def decode_structured(raw, schema):
+    return schema.model_validate(json.loads(raw, object_pairs_hook=unique_pairs))
+
+
+class ProviderClient:
+    protocol: str
+    provider: str
+    key_setting: str
+
+    def __init__(self, api_key=None, timeout=None, http_client=None, runtime=None, configuration=None):
+        self.configuration = configuration or settings
+        self.runtime = runtime or ValidatedFile(self.configuration.AI_RUNTIME_PATH, RuntimeDocument).read()[0]
+        self._api_key = getattr(self.configuration, self.key_setting) if api_key is None else api_key
+        self._timeout = self.runtime.http.timeout_seconds if timeout is None else timeout
+        self._http = http_client
+        self._owns_http = http_client is None
+        self._observation = ContextVar(f"{self.provider}_observation", default=None)
+
+    @property
+    def configured(self):
+        return bool(self._api_key)
+
+    def profile(self, model):
+        profiles = [p for p in self.runtime.providers if p.protocol == self.protocol]
+        return next((p for p in profiles if getattr(self.configuration, p.model_setting) == model), profiles[0])
+
+    async def start(self):
+        if self._http is None:
+            cfg = self.runtime.http
+            self._http = httpx.AsyncClient(timeout=self._timeout, limits=httpx.Limits(
+                max_connections=cfg.max_connections, max_keepalive_connections=cfg.max_keepalive_connections,
+                keepalive_expiry=cfg.keepalive_expiry_seconds))
+
+    async def aclose(self):
+        if self._http is not None and self._owns_http:
+            await self._http.aclose()
+            self._http = None
+
+    def reset_observation(self):
+        self._observation.set(None)
+
+    def observation(self):
+        return self._observation.get()
+
+    def request_cost(self, method, model, kwargs):
+        payload = self.build_payload(model=model, **kwargs)
+        encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        cfg = self.runtime.http
+        maximum = kwargs.get("max_tokens", self.configuration.STRUCTURED_MAX_OUTPUT_TOKENS)
+        if maximum is None:
+            maximum = self.configuration.STRUCTURED_MAX_OUTPUT_TOKENS
+        return math.ceil(len(encoded) / cfg.token_estimation_characters_per_token * cfg.token_estimation_safety_factor) + maximum
+
+    async def post(self, model, payload):
+        if not self.configured:
+            raise LLMProviderException(self.provider, model, "Provider credential is unconfigured", 401, error_code="unconfigured")
+        await self.start()
+        started = time.perf_counter()
+        self._observation.set({"http_status": None, "elapsed_seconds": 0, "headers": {}, "usage": {}})
+        try:
+            response = await self._http.post(self.url(model), json=payload, headers=self.headers(), timeout=self._timeout)
+        except httpx.TimeoutException:
+            raise LLMProviderException(self.provider, model, "Provider transport timed out", 504, error_code="provider_timeout") from None
+        except httpx.HTTPError:
+            raise LLMProviderException(self.provider, model, "Provider transport failed", 502, error_code="provider_transport") from None
+        observation = {"http_status": response.status_code, "elapsed_seconds": time.perf_counter() - started,
+                       "headers": {k: response.headers[k] for k in SAFE_HEADERS if k in response.headers}, "usage": {}}
+        self._observation.set(observation)
+        if response.status_code != 200:
+            try:
+                error = response.json().get("error", {})
+                for name in ("code", "type"):
+                    value = error.get(name)
+                    if isinstance(value, str) and len(value) <= 80 and all(c.isalnum() or c in "_.-" for c in value):
+                        observation["error_" + name] = value
+            except (ValueError, AttributeError):
+                pass
+            retry = retry_after_seconds(response.headers.get("retry-after"), self.runtime.quota_backoff_seconds) if response.status_code == 429 else None
+            raise LLMProviderException(self.provider, model, "Provider rejected request", response.status_code,
+                                       retry_after=retry, error_code="provider_rate_limited" if response.status_code == 429 else (
+                                           "structured_output_invalid" if observation.get("error_code") == "json_validate_failed" else "provider_http_error"))
+        try:
+            data = response.json()
+            observation["usage"] = self.usage(data)
+            return self.content(data)
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            raise LLMProviderException(self.provider, model, "Invalid provider envelope", 502, error_code="provider_envelope_invalid") from None
+
+    async def generate_text(self, model, prompt, system_instruction=None, max_tokens=None, temperature=None):
+        return await self.post(model, self.build_payload(model, prompt, system_instruction, temperature, max_tokens=max_tokens))
+
+    async def generate_structured(self, model, prompt, schema, system_instruction=None, temperature=None):
+        try:
+            payload = self.build_payload(model, prompt, system_instruction, temperature, schema=schema)
+        except ValueError:
+            raise LLMProviderException(self.provider, model, "Unsupported structured schema", 400, error_code="schema_unsupported") from None
+        raw = await self.post(model, payload)
+        typed_event=None
+        try:
+            candidate=json.loads(raw,object_pairs_hook=unique_pairs)
+            recording=GENERATION_RECORDING.get();stage=CURRENT_GENERATION.get()
+            if recording is not None and stage is not None:
+                current=next((r for r in reversed(recording) if r.get('phase')==stage.name),None)
+                if current is not None:
+                    # Explicit local evaluation artifacts only, never normal
+                    # telemetry/logger/provider envelopes or request headers.
+                    typed_event={'provider':self.provider,'model':model,'native_output':candidate,'validated':False}
+                    current.setdefault('typed_outputs',[]).append(typed_event)
+            result=schema.model_validate(candidate)
+            if typed_event is not None:typed_event['validated']=True
+            return result
+        except ValidationError as error:
+            observation = self.observation()
+            if observation is not None:
+                document = schema.model_json_schema()
+                fields = set(document.get("properties", {}))
+                for definition in document.get("$defs", {}).values():
+                    fields.update(definition.get("properties", {}))
+                observation["validation_errors"] = [
+                    {"path": [part if isinstance(part, int) or part in fields else "unknown_field"
+                              for part in entry["loc"]], "type": entry["type"]}
+                    for entry in error.errors(include_url=False, include_context=False, include_input=False)
+                ]
+            raise LLMProviderException(self.provider, model, "Structured output failed validation", 502, error_code="structured_output_invalid") from None
+        except (ValueError, TypeError):
+            observation = self.observation()
+            if observation is not None:
+                observation["validation_errors"] = [{"path": [], "type": "structured_decode_failed"}]
+            raise LLMProviderException(self.provider, model, "Structured output failed validation", 502, error_code="structured_output_invalid") from None
+
+    async def generate_stream(self, model, prompt, system_instruction=None, max_tokens=None, temperature=None):
+        # Buffer completion; a failed stream cannot mix partial answers from two providers.
+        yield await self.generate_text(model, prompt, system_instruction, max_tokens, temperature)

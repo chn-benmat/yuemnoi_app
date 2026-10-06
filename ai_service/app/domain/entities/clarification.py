@@ -17,6 +17,8 @@ class QuestionStep(BaseModel):
     options: List[str] = Field(default_factory=list)
     step: int = 1
     total_steps: int = 1
+    dimension: str = ""
+    choices: List[ChoiceOption] = Field(default_factory=list)
     branch_titles: Dict[str, str] = Field(default_factory=dict)
     branch_options: Dict[str, List[str]] = Field(default_factory=dict)
 

@@ -1,5 +1,11 @@
 # 📱 Frontend: ยืมหน่อย (Yuemnoi Mobile App)
 
+ค่าการทำงานของ AI chat อยู่ใน `../ai_service/config/chat_client_runtime.json` ใช้ `flutter run --dart-define-from-file=../ai_service/config/chat_client_runtime.json` ร่วมกับไฟล์ configuration ของแอปตามสภาพแวดล้อม โดยไม่ใส่ server-only key ใน Flutter ค่า compile-time เป็น configuration ของ build; แก้ JSON แล้วต้อง build ใหม่
+
+คำตอบแบบมีโครงสร้างเก็บ scope/sufficiency/action/flow และบริบทเฉพาะแชต ส่งคำตอบแบบสอบถามด้วย ID เส้นทางใหม่แสดงข้อความและการ์ดทันทีเมื่อข้อมูลพร้อม การวัดผ่าน `ChatbotBloc.onTimingMeasured` แยก first text, transport complete และ post-frame render โดยไม่ log ข้อความหรือ credentials อัตโนมัติ กรณี error/cancelled/ไม่เห็นเฟรมครบไม่มี success render sample
+
+`test/features/chatbot/live_gateway_render_test.dart` เป็น smoke ที่ต้อง opt-in และใช้ HTTP จริงผ่าน Go/Python ใน Flutter Live Test Binding ไม่ใช่ physical device/profile mode และไม่ใช้รับรอง p95
+
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.11+-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
 [![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20Realtime-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
@@ -48,6 +54,8 @@ features/<feature_name>/
 - **Core Business Logic (REST API via Dio)**: การจอง, ดึงฟีดอุปกรณ์, อัปเดตโปรไฟล์, ธุรกรรม Wallet จะเรียกไปยัง **Go Backend** (`/api/v1/...`)
 - **Realtime Chat & Auth (Supabase SDK)**: การรับส่งข้อความสดในห้องแชท (`chat_room:*`), Presence Tracking และ Google OAuth เชื่อมต่อผ่าน `supabase_flutter` โดยตรงเพื่อความรวดเร็ว
 - **AI Chatbot Streaming (SSE)**: รับข้อมูลการตอบสดของ AI ทีละโทเค็นผ่าน Backend Gateway (`/api/v1/chat-ai/stream`)
+
+Chatbot ใช้ `AI_CHAT_RESPONSE_READY_TIMEOUT_SECONDS=30` นับจาก interaction ที่ส่งคำขอถึงได้รับคำตอบครบที่ผ่านการตรวจใน SSE `ready` หากครบเวลาให้ยกเลิก HTTP แม้ยังรอ headers ค่า `AI_CHAT_REQUEST_TIMEOUT_SECONDS=45` เป็นขอบเขต transport ส่วน idle timeout 20s ใช้ตรวจ stream ขาดการติดต่อและมี heartbeat จาก AI แยกกัน `response_ready_microseconds` และเวลาตอบที่แสดงไม่ถูกทับด้วยเวลาส่งตัวอักษร/วาดหน้าจอ ค่า build ใช้ `--dart-define-from-file=../ai_service/config/chat_client_runtime.json`; คำตอบที่พร้อมก่อนส่งทันที
 
 ---
 
@@ -264,3 +272,9 @@ flutter test test/features/
 2. **UI Stability**: ห้ามปรับเปลี่ยน Layout หรือ Styling เดิมโดยไม่ได้รับมอบหมาย ให้คงดีไซน์ Tokens และสีเดิมใน `core/constants/colors.dart`
 3. **No Direct Sensitive DB Joins**: ห้าม Query ข้อมูลส่วนบุคคล (เบอร์โทร, ข้อมูล KYC) ข้ามผู้ใช้ผ่าน Supabase Client โดยตรง ให้เรียกผ่าน Go Backend เสมอ
 4. **Code Comments**: เขียนคอมเมนต์อธิบายโค้ดด้วยภาษาไทยที่กระชับและเข้าใจง่าย
+
+## Conversation fixes (2026-10-04)
+
+Optional `active_question_id` identifies a displayed question from `context.questions`. It does not automatically associate the typed message with that question. Send the raw message and actual completed `questionnaire_answers`; the semantic planner resolves answers, corrections, social turns and topic changes. Legacy requests omit this field.
+
+Rental duration uses the `rental_duration` fact/question dimension, separate from the budget billing period `budget_unit`. Catalog factual prose uses authoritative field references in the internal evidence contract. Post-fix real-provider evaluation reuses the original suite in `ai_service/evaluation/conversation_afterfix_20261004`, with distinct checkpoints and all attempts preserved.

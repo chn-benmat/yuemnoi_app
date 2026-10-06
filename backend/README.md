@@ -206,6 +206,14 @@ Response:
 - `POST /api/v1/chat-ai` - สนทนากับ AI (Full JSON Response)
 - `POST /api/v1/chat-ai/stream` - สนทนากับ AI แบบถ่ายทอดสด (Server-Sent Events)
 
+คำขอทั้งสองแบบรองรับ `session_id`, `context`, `questionnaire_answers` ที่ผูกด้วย ID และ `questionnaire_skipped` แบบ optional ผลตอบกลับส่ง `request_scope`, `information_sufficient`, `next_action`, `response_flow` พร้อมคำตอบ คำถาม การ์ดและแหล่งอ้างอิง JSON และ SSE ใช้ผลที่ผ่านการตรวจจาก Python ชุดเดียวกัน ไม่มีการอ่านกลับจากข้อความ
+
+ผลตอบกลับเพิ่ม `response_kind` แบบ optional: `clarification`, `conversation`, `information`, `overview`, `recommendation`, `item_details`, `comparison`, `technical`, `app_information` ป้าย Flutter ใช้ชนิดนี้แทนการเดาจาก `search_query` และค่าใน SSE `ready`, `metadata`, `done` ตรงกัน การ์ดเพิ่ม `price_display`, `unit_display`, `status_display` สำหรับข้อความภาษาไทย โดยเก็บ `price`, `price_unit`, `unit`, `status` เดิมไว้ JSON/SSE ยังรองรับคำตอบรุ่นเก่าที่ไม่มีฟิลด์ใหม่
+
+ตั้ง `AI_CLIENT_RUNTIME_PATH=../ai_service/config/chat_client_runtime.json` เพื่ออ่านค่า timeout ร่วมกับ Flutter ค่า `AI_SERVICE_TIMEOUT` ที่ระบุใน environment/.env มีสิทธิ์สูงกว่า JSON ค่าเริ่มต้น gateway เป็น 45s สำหรับส่งผลผ่านเครือข่าย; Python จำกัดทุก flow ที่ 30s และ Flutter จำกัดจากกดส่งถึงได้รับคำตอบครบใน event `ready` ที่ 30s โดยไม่รวมการส่ง/แสดงตัวอักษรหลังคำตอบพร้อมแล้ว รหัส `providers_rate_limited` และ `Retry-After` ส่งกลับแบบปลอดภัยโดยไม่ retry อัตโนมัติ
+
+เครื่องมือ smoke แบบ opt-in อยู่ที่ `ai_service/evaluation/step4_integration_smoke.py` ใช้ handler/adapter จริงบน loopback แต่ไม่รวม middleware หรือ bootstrap ของ production ผล smoke ไม่ใช่ใบรับรองความแม่นยำหรือความเร็วภายใต้โหลด
+
 ---
 
 ## 🔒 ความปลอดภัยและการควบคุมสิทธิ์ (Security & Hardening)
@@ -232,3 +240,9 @@ go test -v ./tests/...
 ```bash
 go test -cover ./...
 ```
+
+## Conversation fixes (2026-10-04)
+
+Optional `active_question_id` identifies a displayed question from `context.questions`. It does not automatically associate the typed message with that question. Send the raw message and actual completed `questionnaire_answers`; the semantic planner resolves answers, corrections, social turns and topic changes. Legacy requests omit this field.
+
+Rental duration uses the `rental_duration` fact/question dimension, separate from the budget billing period `budget_unit`. Catalog factual prose uses authoritative field references in the internal evidence contract. Post-fix real-provider evaluation reuses the original suite in `ai_service/evaluation/conversation_afterfix_20261004`, with distinct checkpoints and all attempts preserved.

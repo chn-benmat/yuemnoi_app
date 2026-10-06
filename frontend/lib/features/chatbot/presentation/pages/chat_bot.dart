@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/chat_turn_timing.dart';
 import '../bloc/chatbot_bloc.dart';
 import '../bloc/chatbot_event.dart';
 import '../bloc/chatbot_state.dart';
@@ -31,6 +32,25 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
   final Set<int> _pendingAssistantAnimations = <int>{};
   final Set<int> _startedAssistantAnimations = <int>{};
   int _observedMessageCount = 0;
+  ChatTurnTiming? _questionnaireTiming;
+  final Set<String> _renderedBubbles = {};
+  final Set<String> _renderedQuestionnaires = {};
+  final Set<String> _reportedRenders = {};
+
+  void _observeRender(ChatMessage message, {bool questionnaire = false}) {
+    if (message.id.isEmpty || message.isStreaming) return;
+    (questionnaire ? _renderedQuestionnaires : _renderedBubbles).add(
+      message.id,
+    );
+    if (!_renderedBubbles.contains(message.id) ||
+        (message.questions.any((q) => q.selectedOption == null) &&
+            !_renderedQuestionnaires.contains(message.id)) ||
+        !_reportedRenders.add(message.id)) {
+      return;
+    }
+    context.read<ChatbotBloc>().add(ChatbotResponseRendered(message.id));
+  }
+
   int? _editingMessageIndex;
   bool _showScrollToBottomButton = false;
   bool _dismissedQuestionnaire = false;
@@ -64,7 +84,11 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
       _pendingAssistantAnimations.clear();
       _startedAssistantAnimations.clear();
       context.read<ChatbotBloc>().add(
-        ChatbotMessageEdited(index: editingMessageIndex, content: query),
+        ChatbotMessageEdited(
+          index: editingMessageIndex,
+          content: query,
+          timing: ChatTurnTiming(),
+        ),
       );
       setState(() {
         _editingMessageIndex = null;
@@ -76,18 +100,32 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
           state.messages.isNotEmpty &&
           state.messages.last.role == ChatMessageRole.assistant &&
           state.messages.last.questions.isNotEmpty &&
-          state.messages.last.questions.any(
-            (q) => q.selectedOption == null,
-          );
+          state.messages.last.questions.any((q) => q.selectedOption == null);
 
       if (hasActiveQuestionnaire && _questionnaireKey.currentState != null) {
-        _questionnaireKey.currentState!.submitCustomAnswer(query);
+        final questionnaire = _questionnaireKey.currentState!;
+        final answers = questionnaire.partialAnswers;
+        questionnaire.suspendProgression();
+        context.read<ChatbotBloc>().add(
+          ChatbotMessageSubmitted(
+            query,
+            activeQuestionId: questionnaire.activeQuestionId,
+            questionnaireAnswers: answers,
+            selectedOptions: {
+              for (final answer in answers)
+                answer.questionId: answer.optionId ?? answer.text!,
+            },
+            timing: ChatTurnTiming(),
+          ),
+        );
         _messageController.clear();
         _messageFocusNode.requestFocus();
         return;
       }
 
-      context.read<ChatbotBloc>().add(ChatbotMessageSubmitted(query));
+      context.read<ChatbotBloc>().add(
+        ChatbotMessageSubmitted(query, timing: ChatTurnTiming()),
+      );
       setState(() {
         _dismissedQuestionnaire = false;
       });
@@ -102,7 +140,9 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
   void _sendQuickReply(String text, ChatbotState state) {
     if (state.isSending || text.trim().isEmpty) return;
-    context.read<ChatbotBloc>().add(ChatbotMessageSubmitted(text.trim()));
+    context.read<ChatbotBloc>().add(
+      ChatbotMessageSubmitted(text.trim(), timing: ChatTurnTiming()),
+    );
     setState(() {
       _dismissedQuestionnaire = false;
     });
@@ -114,6 +154,8 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
     String text,
     ChatbotState state, {
     Map<String, String> selectedOptions = const {},
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
   }) {
     if (state.isSending || text.trim().isEmpty) return;
     context.read<ChatbotBloc>().add(
@@ -121,8 +163,12 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
         text.trim(),
         isVisibleInChat: false,
         selectedOptions: selectedOptions,
+        questionnaireAnswers: questionnaireAnswers,
+        questionnaireSkipped: questionnaireSkipped,
+        timing: _questionnaireTiming ?? ChatTurnTiming(),
       ),
     );
+    _questionnaireTiming = null;
     setState(() {
       _dismissedQuestionnaire = false;
     });
@@ -466,6 +512,8 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                                       originalIndex,
                                     ),
                                 onTextProgress: _keepLatestMessageVisible,
+                                onContentRendered: () =>
+                                    _observeRender(message),
                                 onCardRevealed: () =>
                                     _scrollToBottom(force: true),
                                 onEdit:
@@ -489,6 +537,12 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                       InteractiveQuestionnaireCard(
                         key: _questionnaireKey,
                         questions: state.messages.last.questions,
+                        onRequestStarted: () =>
+                            _questionnaireTiming = ChatTurnTiming(),
+                        onContentRendered: () => _observeRender(
+                          state.messages.last,
+                          questionnaire: true,
+                        ),
                         onCompleted: (summary) =>
                             _sendQuestionnaireAnswer(summary, state),
                         onCompletedWithAnswers: (summary, answers) =>
@@ -496,6 +550,13 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                               summary,
                               state,
                               selectedOptions: answers,
+                            ),
+                        onCompletedWithContext: (summary, answers, skipped) =>
+                            _sendQuestionnaireAnswer(
+                              summary,
+                              state,
+                              questionnaireAnswers: answers,
+                              questionnaireSkipped: skipped,
                             ),
                         onDismiss: () =>
                             setState(() => _dismissedQuestionnaire = true),

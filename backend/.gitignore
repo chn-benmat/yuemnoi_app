@@ -2,13 +2,19 @@
 .env
 .env.*
 !.env.example
-service-account.json
-firebase-adminsdk*.json
+!.env.sample
+!.env.template
+!.env.*.example
+!.env.*.sample
+!.env.*.template
+service-account*.json
+*firebase-adminsdk*.json
 credentials.json
 *.pem
 *.key
 *.crt
-scripts/*
+*.p12
+*.pfx
 
 # Compiled Binaries
 *.exe
@@ -16,21 +22,35 @@ scripts/*
 *.dll
 *.so
 *.dylib
-main
-server
-bin/
-dist/
+# ระบุ binary ที่โฟลเดอร์หลัก เพื่อไม่ให้ซ่อนซอร์สใน cmd/server/
+/main
+/server
+/bin/
+/build/
+/dist/
 
 # Air Live Reload & Logs
 tmp/
+/temp/
+/logs/
+/uploads/
 *.log
 build-errors.log
 
 # Go Testing & Coverage
 coverage.out
 coverage.html
+coverage.xml
+coverage/
 *.prof
 *.test
+
+# ฐานข้อมูลที่สร้างในเครื่อง
+/*.db
+/*.sqlite
+/*.sqlite3
+/*.sqlite-*
+/*.sqlite3-*
 
 # IDE & OS
 .idea/

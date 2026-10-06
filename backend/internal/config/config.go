@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -21,7 +23,8 @@ type Config struct {
 	AppSecretKeys          string        `env:"APP_SECRET_KEYS"`
 	InternalServiceKey     string        `env:"INTERNAL_SERVICE_KEY"`
 	AIServiceURL           string        `env:"AI_SERVICE_URL" envDefault:"http://localhost:8000"`
-	AIServiceTimeout       time.Duration `env:"AI_SERVICE_TIMEOUT" envDefault:"60s"`
+	AIServiceTimeout       time.Duration `env:"AI_SERVICE_TIMEOUT" envDefault:"45s"`
+	AIClientRuntimePath    string        `env:"AI_CLIENT_RUNTIME_PATH"`
 	ReadTimeout            time.Duration `env:"READ_TIMEOUT" envDefault:"15s"`
 	WriteTimeout           time.Duration `env:"WRITE_TIMEOUT" envDefault:"90s"`
 	ShutdownTimeout        time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"5s"`
@@ -56,6 +59,9 @@ func (c *Config) GetPrimaryInternalServiceKey() string {
 
 // Validate ตรวจสอบค่าคอนฟิกที่จำเป็นทั้งหมด
 func (c *Config) Validate() error {
+	if c.AIServiceTimeout <= 0 {
+		return fmt.Errorf("AI_SERVICE_TIMEOUT must be positive")
+	}
 	if strings.TrimSpace(c.SupabaseURL) == "" {
 		return fmt.Errorf("SUPABASE_URL is required")
 	}
@@ -90,10 +96,35 @@ func Load() (*Config, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("parse config error: %w", err)
 	}
+	if err := cfg.ApplyAIClientRuntime(); err != nil {
+		return nil, err
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
+}
+
+// โหลดค่าจาก JSON ร่วมกับ Flutter และให้ environment/.env ที่ระบุชัดเจนมีสิทธิ์สูงกว่า
+func (c *Config) ApplyAIClientRuntime() error {
+	if strings.TrimSpace(c.AIClientRuntimePath) == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(c.AIClientRuntimePath)
+	if err != nil {
+		return fmt.Errorf("cannot read AI client runtime")
+	}
+	var runtime struct {
+		SchemaVersion  string `json:"schema_version"`
+		GatewaySeconds int    `json:"AI_GATEWAY_TIMEOUT_SECONDS"`
+	}
+	if json.Unmarshal(raw, &runtime) != nil || runtime.SchemaVersion != "1" || runtime.GatewaySeconds <= 0 {
+		return fmt.Errorf("invalid AI client runtime")
+	}
+	if _, explicit := os.LookupEnv("AI_SERVICE_TIMEOUT"); !explicit {
+		c.AIServiceTimeout = time.Duration(runtime.GatewaySeconds) * time.Second
+	}
+	return nil
 }

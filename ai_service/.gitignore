@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -38,12 +38,25 @@ venv.bak/
 .env
 .env.*
 !.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+!.env.*.sample
+!.env.*.template
+service-account*.json
+*firebase-adminsdk*.json
+credentials.json
+*.pem
+*.key
+*.p12
+*.pfx
 
 # Unit test / coverage reports
 .pytest_cache/
 .coverage
 .coverage.*
 htmlcov/
+coverage/
 .tox/
 .nox/
 coverage.xml
@@ -61,7 +74,14 @@ dmypy.json
 
 # Logs and databases
 *.log
+*.sqlite
+*.sqlite-*
 *.sqlite3
+*.sqlite3-*
+/logs/
+/tmp/
+/temp/
+/uploads/
 
 # Operating System files
 .DS_Store
@@ -78,3 +98,15 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Local shared quota reservations, cooldowns, and file locks
+.state/
+
+# สถานะโควตารุ่นเดิมเป็นข้อมูลที่เปลี่ยนตามการรัน ไม่ใช่ configuration
+/config/llm_quota.json
+/config/llm_quota.json.lock
+
+# ผลการประเมินและชุดหลักฐานจากการรัน emulator ในเครื่อง
+# เก็บสคริปต์, schema และชุดทดสอบใน evaluation/ ไว้ใน Git
+/evaluation/reports/
+/evaluation/emulator_natural_[0-9]*_[0-9]*/

@@ -1,0 +1,231 @@
+{
+  "$defs": {
+    "Approval": {
+      "additionalProperties": false,
+      "properties": {
+        "approved_by": {
+          "minLength": 1,
+          "title": "Approved By",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "authorization": {
+          "minLength": 1,
+          "title": "Authorization",
+          "type": "string"
+        },
+        "content_sha256": {
+          "minLength": 1,
+          "title": "Content Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approved_by",
+        "approved_at",
+        "authorization",
+        "content_sha256"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "CatalogPresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "currency": {
+          "minLength": 1,
+          "title": "Currency",
+          "type": "string"
+        },
+        "amount_format": {
+          "minLength": 1,
+          "title": "Amount Format",
+          "type": "string"
+        },
+        "price_template": {
+          "minLength": 1,
+          "title": "Price Template",
+          "type": "string"
+        },
+        "unit_labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Unit Labels",
+          "type": "object"
+        },
+        "status_labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Status Labels",
+          "type": "object"
+        }
+      },
+      "required": [
+        "currency",
+        "amount_format",
+        "price_template",
+        "unit_labels",
+        "status_labels"
+      ],
+      "title": "CatalogPresentation",
+      "type": "object"
+    },
+    "ScopeDefinitions": {
+      "additionalProperties": false,
+      "properties": {
+        "broad": {
+          "minLength": 1,
+          "title": "Broad",
+          "type": "string"
+        },
+        "specific": {
+          "minLength": 1,
+          "title": "Specific",
+          "type": "string"
+        },
+        "not_applicable": {
+          "minLength": 1,
+          "title": "Not Applicable",
+          "type": "string"
+        },
+        "independence": {
+          "minLength": 1,
+          "title": "Independence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "broad",
+        "specific",
+        "not_applicable",
+        "independence"
+      ],
+      "title": "ScopeDefinitions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "version": {
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "approved",
+      "title": "Status",
+      "type": "string"
+    },
+    "production_enabled": {
+      "const": true,
+      "title": "Production Enabled",
+      "type": "boolean"
+    },
+    "approval": {
+      "$ref": "#/$defs/Approval"
+    },
+    "catalog_presentation": {
+      "$ref": "#/$defs/CatalogPresentation"
+    },
+    "turn_instruction": {
+      "minLength": 1,
+      "title": "Turn Instruction",
+      "type": "string"
+    },
+    "evidence_instruction": {
+      "minLength": 1,
+      "title": "Evidence Instruction",
+      "type": "string"
+    },
+    "review_instruction": {
+      "minLength": 1,
+      "title": "Review Instruction",
+      "type": "string"
+    },
+    "unavailable_notice": {
+      "minLength": 1,
+      "title": "Unavailable Notice",
+      "type": "string"
+    },
+    "empty_catalog_notice": {
+      "minLength": 1,
+      "title": "Empty Catalog Notice",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/ScopeDefinitions"
+    },
+    "information_sufficiency": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Information Sufficiency",
+      "type": "array"
+    },
+    "action": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Action",
+      "type": "array"
+    },
+    "context": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Context",
+      "type": "array"
+    },
+    "evidence": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "neutrality": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Neutrality",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "version",
+    "status",
+    "production_enabled",
+    "approval",
+    "catalog_presentation",
+    "turn_instruction",
+    "evidence_instruction",
+    "review_instruction",
+    "unavailable_notice",
+    "empty_catalog_notice",
+    "scope",
+    "information_sufficiency",
+    "action",
+    "context",
+    "evidence",
+    "neutrality"
+  ],
+  "title": "InterpretationPolicy",
+  "type": "object"
+}

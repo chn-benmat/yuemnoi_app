@@ -9,6 +9,8 @@
 .tags*
 **/.vagrant/
 **/DerivedData/
+**/build/
+**/.build/
 Icon?
 **/Pods/
 **/.symlinks/
@@ -20,12 +22,22 @@ Flutter/Flutter.framework
 Flutter/Flutter.podspec
 Flutter/Generated.xcconfig
 Flutter/ephemeral/
+Flutter/.last_build_id
 Flutter/app.flx
 Flutter/app.zip
 Flutter/flutter_assets/
 Flutter/flutter_export_environment.sh
 ServiceDefinitions.json
 Runner/GeneratedPluginRegistrant.*
+
+# ไฟล์เซ็นแอป, archive และ configuration ของ Firebase เฉพาะสภาพแวดล้อม
+*.p12
+*.pfx
+*.mobileprovision
+*.ipa
+*.dSYM/
+*.xcarchive/
+GoogleService-Info.plist
 
 # Exceptions to above rules.
 !default.mode1v3

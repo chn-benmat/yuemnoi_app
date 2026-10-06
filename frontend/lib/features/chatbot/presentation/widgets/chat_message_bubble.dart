@@ -8,6 +8,7 @@ import '../../../../core/constants/colors.dart';
 import '../../domain/entities/chat_message.dart';
 import 'interactive_questionnaire_card.dart';
 import 'ai_summary_bottom_sheet.dart';
+import 'chat_response_label.dart';
 
 class ChatMessageBubble extends StatelessWidget {
   const ChatMessageBubble({
@@ -17,6 +18,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.onAnimationStarted,
     this.onTextProgress,
     this.onCardRevealed,
+    this.onContentRendered,
     this.onEdit,
     this.onOptionSelected,
     super.key,
@@ -28,6 +30,7 @@ class ChatMessageBubble extends StatelessWidget {
   final VoidCallback? onAnimationStarted;
   final VoidCallback? onTextProgress;
   final VoidCallback? onCardRevealed;
+  final VoidCallback? onContentRendered;
   final VoidCallback? onEdit;
   final ValueChanged<String>? onOptionSelected;
 
@@ -64,6 +67,7 @@ class ChatMessageBubble extends StatelessWidget {
               onAnimationStarted: onAnimationStarted,
               onProgress: onTextProgress,
               onCardRevealed: onCardRevealed,
+              onContentRendered: onContentRendered,
               onOptionSelected: onOptionSelected,
             ),
     );
@@ -109,6 +113,7 @@ class _AnimatedAssistantContent extends StatefulWidget {
     this.onAnimationStarted,
     this.onProgress,
     this.onCardRevealed,
+    this.onContentRendered,
     this.onOptionSelected,
   });
 
@@ -118,6 +123,7 @@ class _AnimatedAssistantContent extends StatefulWidget {
   final VoidCallback? onAnimationStarted;
   final VoidCallback? onProgress;
   final VoidCallback? onCardRevealed;
+  final VoidCallback? onContentRendered;
   final ValueChanged<String>? onOptionSelected;
 
   @override
@@ -151,23 +157,24 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
 
   void _startStatusHeaderTimerIfNeeded() {
     if (_shouldShowStatusHeader && widget.message.responseDuration == null) {
-      if (_statusHeaderTimer == null) {
-        _statusHeaderTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (!mounted) {
-            timer.cancel();
-            _statusHeaderTimer = null;
-            return;
-          }
-          if (widget.message.responseDuration != null || !_shouldShowStatusHeader) {
-            timer.cancel();
-            _statusHeaderTimer = null;
-            return;
-          }
-          setState(() {
-            _updateElapsed();
-          });
+      _statusHeaderTimer ??= Timer.periodic(const Duration(seconds: 1), (
+        timer,
+      ) {
+        if (!mounted) {
+          timer.cancel();
+          _statusHeaderTimer = null;
+          return;
+        }
+        if (widget.message.responseDuration != null ||
+            !_shouldShowStatusHeader) {
+          timer.cancel();
+          _statusHeaderTimer = null;
+          return;
+        }
+        setState(() {
+          _updateElapsed();
         });
-      }
+      });
     } else {
       _statusHeaderTimer?.cancel();
       _statusHeaderTimer = null;
@@ -198,9 +205,11 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
     _targetCharacters = effectiveText.characters;
 
     // หากไม่ใช่ข้อความใหม่ที่ต้อง animate หรือเป็นแบบสอบถามที่ตอบแล้ว
-    final isNotAnimated = !widget.animate;
-    final hasAnsweredQuestion =
-        widget.message.questions.any((q) => q.selectedOption != null);
+    final isNotAnimated =
+        !widget.animate || widget.message.understanding != null;
+    final hasAnsweredQuestion = widget.message.questions.any(
+      (q) => q.selectedOption != null,
+    );
 
     if (isNotAnimated || hasAnsweredQuestion) {
       _visibleCount = _targetCharacters.length;
@@ -234,8 +243,11 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
     final effectiveText = _resolveContent();
     _targetCharacters = effectiveText.characters;
 
-    // หากมีการเลือกตัวเลือกในแบบสอบถามแล้ว ให้หยุด typewriter และแสดงทั้งหมดทันที
-    if (widget.message.questions.any((q) => q.selectedOption != null)) {
+    // ผลแบบมีโครงสร้างพร้อมแสดง ไม่เพิ่มคิวพิมพ์ดีดหลังบริการตอบครบแล้ว
+    if (widget.message.understanding != null ||
+        widget.message.questions.any((q) => q.selectedOption != null)) {
+      _cardStaggerTimer?.cancel();
+      _cardStaggerTimer = null;
       _typewriterTimer?.cancel();
       _typewriterTimer = null;
       _isTypewriting = false;
@@ -431,19 +443,11 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
       color: const Color(0xFFF8F6FD),
       borderRadius: BorderRadius.circular(10),
       border: const Border(
-        left: BorderSide(
-          color: AppColors.primaryColor,
-          width: 3,
-        ),
+        left: BorderSide(color: AppColors.primaryColor, width: 3),
       ),
     ),
     horizontalRuleDecoration: const BoxDecoration(
-      border: Border(
-        top: BorderSide(
-          width: 1,
-          color: Color(0xFFEBE5F7),
-        ),
-      ),
+      border: Border(top: BorderSide(width: 1, color: Color(0xFFEBE5F7))),
     ),
     tableBorder: TableBorder.all(
       color: const Color(0xFFE0D8F3),
@@ -463,55 +467,6 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
     tablePadding: const EdgeInsets.all(8),
   );
 
-  static final _headingWithoutLeadingNewlines = RegExp(r'(?<=\S)\s*(#{1,4})');
-  static final _headingMissingSpace = RegExp(r'(#{1,4})([^\s#])');
-  static final _numberedListParen = RegExp(r'(?:^|(?<=[.!?:\n])\s*)(\d+)\)\s*');
-  static final _numberedListSpace = RegExp(r'(?<=[.!?:\n])\s+(\d+\.\s+)');
-  static final _numberedListPattern = RegExp(r'(?:^|\n)\s*\d+\.\s');
-
-  static final _codeBlockRegex = RegExp(r'```');
-  static final _inlineCodeRegex = RegExp(r'(?<!`)`(?!`)');
-  static final _boldRegex = RegExp(r'\*\*');
-  static final _tripleUnderscoreRegex = RegExp(r'___');
-  static final _doubleUnderscoreRegex = RegExp(r'__');
-
-  static String _sanitizePartialMarkdown(String text) {
-    if (text.isEmpty) return text;
-    var sanitized = text;
-
-    final codeBlockMatches = _codeBlockRegex.allMatches(sanitized).length;
-    if (codeBlockMatches.isOdd) {
-      return '$sanitized\n```';
-    }
-
-    final inlineCodeMatches = _inlineCodeRegex.allMatches(sanitized).length;
-    if (inlineCodeMatches.isOdd) {
-      sanitized += '`';
-      return sanitized;
-    }
-
-    final boldMatches = _boldRegex.allMatches(sanitized).length;
-    if (boldMatches.isOdd) {
-      sanitized += '**';
-    }
-
-    final tripleUnderscoreMatches = _tripleUnderscoreRegex
-        .allMatches(sanitized)
-        .length;
-    if (tripleUnderscoreMatches.isOdd) {
-      sanitized += '___';
-    } else {
-      final doubleUnderscoreMatches = _doubleUnderscoreRegex
-          .allMatches(sanitized)
-          .length;
-      if (doubleUnderscoreMatches.isOdd) {
-        sanitized += '__';
-      }
-    }
-
-    return sanitized;
-  }
-
   bool get _shouldShowStatusHeader {
     return widget.message.responseDuration != null ||
         (widget.message.userQuery != null &&
@@ -528,18 +483,13 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
 
   String _getCompletedStatusTitle() {
     final status = widget.message.statusMessage;
-    if (status != null &&
-        status.isNotEmpty &&
-        !status.startsWith('กำลัง')) {
+    if (status != null && status.isNotEmpty && !status.startsWith('กำลัง')) {
       return status;
     }
-    if (widget.message.questions.isNotEmpty) {
-      return 'สอบถามข้อมูลเพิ่มเติม';
-    }
-    if (widget.message.searchQuery != null && widget.message.searchQuery!.isNotEmpty) {
-      return 'ผลการเปรียบเทียบ';
-    }
-    return 'สรุปคำแนะนำ';
+    return chatResponseLabel(
+      widget.message.understanding?.responseKind,
+      hasQuestions: widget.message.questions.isNotEmpty,
+    );
   }
 
   Widget _buildStatusHeader() {
@@ -612,10 +562,16 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
       'chatbot-animated-response-${widget.message.id}',
     );
 
-    final matchingItems = widget.message.recommendedItems.where((item) {
-      return RecommendedItemCard.isItemMentioned(item.name, effectiveText);
-    }).toList();
-    final itemsToRender = matchingItems;
+    // ใช้รายการที่ตรวจ ID แล้วโดยตรง ไม่อ่านชื่อสินค้ากลับจากข้อความ
+    final itemsToRender = widget.message.recommendedItems;
+    if (_isComplete && _revealedCardsCount >= itemsToRender.length) {
+      final message = widget.message;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && identical(message, widget.message)) {
+          widget.onContentRendered?.call();
+        }
+      });
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -635,23 +591,31 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
         else
           MarkdownBody(
             key: ValueKey('chatbot-markdown-response-${widget.message.id}'),
-            data: _formatMarkdownText(_sanitizePartialMarkdown(visibleText)),
+            data: visibleText,
             styleSheet: _markdownStyleSheet,
           ),
         if (widget.message.questions.any((q) => q.selectedOption != null))
           QuestionnaireRecapCard(questions: widget.message.questions),
-        if (!widget.message.questions.any((q) => q.selectedOption == null) && _isComplete) ...[
+        if (!widget.message.questions.any((q) => q.selectedOption == null) &&
+            _isComplete) ...[
           for (var i = 0; i < itemsToRender.length; i++) ...[
             if (i < _revealedCardsCount) ...[
               const SizedBox(height: 16),
-              _AnimatedCardEntrance(
-                key: ValueKey('staggered-card-${widget.message.id}-$i'),
-                child: RecommendedItemCard(
+              if (widget.message.understanding != null)
+                RecommendedItemCard(
                   item: itemsToRender[i],
                   messageContent: effectiveText,
                   onPressed: () => widget.onRentPressed(itemsToRender[i]),
+                )
+              else
+                _AnimatedCardEntrance(
+                  key: ValueKey('staggered-card-${widget.message.id}-$i'),
+                  child: RecommendedItemCard(
+                    item: itemsToRender[i],
+                    messageContent: effectiveText,
+                    onPressed: () => widget.onRentPressed(itemsToRender[i]),
+                  ),
                 ),
-              ),
             ],
           ],
         ],
@@ -659,123 +623,9 @@ class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
     );
   }
 
-  static String _formatMarkdownText(String text) {
-    var formatted = text;
-    // Convert HTML tags (like <strong>...</strong> or <b>...</b>) to Markdown (**...**)
-    formatted = formatted.replaceAllMapped(
-      RegExp(
-        r'<\s*(?:strong|b)\s*>(.*?)<\s*/\s*(?:strong|b)\s*>',
-        caseSensitive: false,
-        dotAll: true,
-      ),
-      (match) => '**${match.group(1)}**',
-    );
-    // Normalize markdown bold with inner whitespace: "** text **" -> "**text**"
-    formatted = formatted.replaceAllMapped(
-      RegExp(r'\*\*\s*([^*\n]+?)\s*\*\*'),
-      (match) => '**${match.group(1)?.trim()}**',
-    );
-    formatted = formatted.replaceAll(
-      RegExp(r'<\s*br\s*/?\s*>', caseSensitive: false),
-      '\n',
-    );
-    formatted = formatted.replaceAll(
-      RegExp(r'</?(?:strong|b|span|p|div|li|ul|ol)>', caseSensitive: false),
-      '',
-    );
-    // If the message contains "ชื่ออุปกรณ์: [ชื่อ]", remove "ชื่ออุปกรณ์:" and make the device name bold: **[ชื่อ]**
-    formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|\n)\s*(?:\*\*)?\s*ชื่ออุปกรณ์\s*[:：]\s*(?:\*\*)?\s*([^\n]+)', caseSensitive: false),
-      (match) {
-        final deviceName = match.group(1)?.replaceAll('*', '').trim() ?? '';
-        return deviceName.isNotEmpty ? '\n\n**$deviceName**' : '';
-      },
-    );
-    // Ensure property labels have clean opening and closing asterisks: - **รายละเอียด:**, - **ราคาเช่า:**
-    formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|\n)\s*[-•●*]?\s*(?:\*\*)?\s*รายละเอียด\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?\s*', caseSensitive: false),
-      (match) => '\n- **รายละเอียด:** ',
-    );
-    formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|\n)\s*[-•●*]?\s*(?:\*\*)?\s*(?:ราคาเช่า|ค่าเช่า)\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?\s*', caseSensitive: false),
-      (match) => '\n- **ราคาเช่า:** ',
-    );
-    formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|\n)\s*[-•●*]?\s*(?:\*\*)?\s*เหมาะสำหรับ\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?\s*', caseSensitive: false),
-      (match) => '\n- **เหมาะสำหรับ:** ',
-    );
-    formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|\n)\s*[-•●*]?\s*(?:\*\*)?\s*จุดเด่น\s*(?:\*\*)?\s*[:：]\s*(?:\*\*)?\s*', caseSensitive: false),
-      (match) => '\n- **จุดเด่น:** ',
-    );
-
-    // Format units to Thai "บาท ต่อ วัน" / "บาท ต่อ ชั่วโมง"
-    formatted = formatted.replaceAll(RegExp(r'(?:บาท\s*/\s*daily|บาท\s+ต่อ\s+daily)', caseSensitive: false), 'บาท ต่อ วัน');
-    formatted = formatted.replaceAll(RegExp(r'(?:บาท\s*/\s*hourly|บาท\s+ต่อ\s+hourly)', caseSensitive: false), 'บาท ต่อ ชั่วโมง');
-    formatted = formatted.replaceAll(RegExp(r'(?:บาท\s*/\s*weekly|บาท\s+ต่อ\s+weekly)', caseSensitive: false), 'บาท ต่อ สัปดาห์');
-    formatted = formatted.replaceAll(RegExp(r'(?:บาท\s*/\s*monthly|บาท\s+ต่อ\s+monthly)', caseSensitive: false), 'บาท ต่อ เดือน');
-    formatted = formatted.replaceAll(RegExp(r'บาท\s*/\s*วัน', caseSensitive: false), 'บาท ต่อ วัน');
-    formatted = formatted.replaceAll(RegExp(r'บาท\s*/\s*ชั่วโมง', caseSensitive: false), 'บาท ต่อ ชั่วโมง');
-
-    // Remove redundant .0 decimal from prices (e.g. 850.0 บาท -> 850 บาท)
-    formatted = formatted.replaceAllMapped(
-      RegExp(r'(\d+)\.0(?=\s*บาท|\s+ต่อ)', caseSensitive: false),
-      (match) => match.group(1)!,
-    );
-
-    // If a bullet item starts with a device emoji/icon, convert it to a Heading 3 so it renders in app purple without a bullet
-    formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|\n)\s*[-•●*]\s*(?=[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}])', unicode: true),
-      (match) => '\n\n### ',
-    );
-
-    // Convert unicode bullets into standard markdown list items
-    formatted = formatted.replaceAllMapped(
-      RegExp(r'(?:^|\n)\s*[•●]\s*'),
-      (match) => '\n- ',
-    );
-
-    formatted = formatted.replaceAllMapped(
-      _headingWithoutLeadingNewlines,
-      (match) => '\n\n${match.group(1)} ',
-    );
-    formatted = formatted.replaceAllMapped(
-      _headingMissingSpace,
-      (match) => '${match.group(1)} ${match.group(2)}',
-    );
-    // Ensure numbered lists (1. 2. 3. or 1) 2) 3)) start on a new line
-    formatted = formatted.replaceAllMapped(
-      _numberedListParen,
-      (match) => '\n\n${match.group(1)}. ',
-    );
-    formatted = formatted.replaceAllMapped(
-      _numberedListSpace,
-      (match) => '\n\n${match.group(1)}',
-    );
-    // Ensure blockquotes (> ...) start on a new line if preceded by non-newline characters
-    formatted = formatted.replaceAllMapped(
-      RegExp(r'(?<=\S)\s*(>[^\n]*)'),
-      (match) => '\n\n${match.group(1)}',
-    );
-    return formatted.trim();
-  }
-
-  static bool _containsMarkdown(String text) {
-    return text.contains('#') ||
-        text.contains('**') ||
-        text.contains('* ') ||
-        text.contains('- ') ||
-        text.contains('•') ||
-        text.contains('>') ||
-        text.contains('<strong') ||
-        text.contains('<b>') ||
-        text.contains('```') ||
-        text.contains('|') ||
-        text.contains('เหมาะสำหรับ') ||
-        text.contains('จุดเด่น') ||
-        text.contains('ค่าเช่า') ||
-        _numberedListPattern.hasMatch(text);
-  }
+  // ตรวจเฉพาะไวยากรณ์แสดงผล ไม่ตีความเจตนาหรือเปลี่ยนข้อมูลสินค้า
+  static bool _containsMarkdown(String text) =>
+      ['#', '**', '* ', '- ', '>', '`', '|', '[', '. '].any(text.contains);
 }
 
 class _AnimatedCardEntrance extends StatefulWidget {
@@ -807,10 +657,7 @@ class _AnimatedCardEntranceState extends State<_AnimatedCardEntrance>
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.12),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
   }
 
@@ -824,10 +671,7 @@ class _AnimatedCardEntranceState extends State<_AnimatedCardEntrance>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _fadeAnimation,
-      child: SlideTransition(
-        position: _slideAnimation,
-        child: widget.child,
-      ),
+      child: SlideTransition(position: _slideAnimation, child: widget.child),
     );
   }
 }
@@ -845,138 +689,6 @@ class RecommendedItemCard extends StatelessWidget {
   final String? messageContent;
 
   /// คำนวณชื่อสินค้าที่แสดงบนการ์ดให้ตรงกับชื่อรุ่นที่ AI ตอบในข้อความ (Zero-Hardcode Dynamic AI Model Match)
-  static String resolveItemDisplayName(String catalogName, String? messageContent) {
-    if (messageContent == null || messageContent.isEmpty || catalogName.isEmpty) {
-      return catalogName;
-    }
-
-    // 0. ตรวจสอบบรรทัด **ชื่ออุปกรณ์:** ... หรือ **ชื่ออุปกรณ์: ...** โดยตรง
-    final deviceLineRegex = RegExp(
-      r'(?:^|\n)\s*(?:\*\*)?\s*ชื่ออุปกรณ์\s*[:：]\s*(?:\*\*)?\s*([^\n]+)',
-      caseSensitive: false,
-    );
-    for (final match in deviceLineRegex.allMatches(messageContent)) {
-      var candidate = match.group(1)?.trim() ?? '';
-      candidate = candidate.replaceAll(RegExp(r'\*+'), '').trim();
-      if (candidate.isEmpty) continue;
-
-      final lowerCatalog = catalogName.toLowerCase();
-      final lowerCandidate = candidate.toLowerCase();
-
-      if (lowerCatalog == lowerCandidate ||
-          (lowerCatalog.contains(lowerCandidate) && lowerCandidate.length >= 3) ||
-          (lowerCandidate.contains(lowerCatalog) && lowerCatalog.length >= 3)) {
-        return candidate;
-      }
-
-      final catalogWords = lowerCatalog.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
-      final candidateWords = lowerCandidate.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
-      final intersection = catalogWords.intersection(candidateWords);
-      if (intersection.length >= 2 && intersection.length >= (candidateWords.length * 0.6)) {
-        return candidate;
-      }
-    }
-
-    // 1. ตรวจจับชื่อรุ่นในรูปแบบ Markdown Bold: **...** ที่ AI สกัดมา
-    final boldMatches = RegExp(r'\*\*\s*([^*\n]+?)\s*\*+').allMatches(messageContent);
-    for (final m in boldMatches) {
-      final rawCandidate = m.group(1)?.trim();
-      if (rawCandidate == null || rawCandidate.isEmpty) continue;
-
-      // กรองคำทั่วไปที่ไม่ใช่ชื่อสินค้า เช่น หัวข้อสรุปหรือคำแนะนำ
-      if (rawCandidate.contains('สรุป') ||
-          rawCandidate.contains('คำแนะนำ') ||
-          rawCandidate.contains('ค้นหา') ||
-          rawCandidate.contains('เปรียบเทียบ') ||
-          rawCandidate.contains('ข้อควรระวัง') ||
-          rawCandidate.contains('จุดเด่น') ||
-          rawCandidate.contains('หน้าจอ') ||
-          rawCandidate.contains('ประสิทธิภาพ') ||
-          rawCandidate.contains('หน่วยความจำ') ||
-          rawCandidate.contains('รายละเอียด') ||
-          rawCandidate.contains('ราคาเช่า') ||
-          rawCandidate.contains('ความคล่องตัว')) {
-        continue;
-      }
-
-      // ตัด prefix เช่น "ชื่ออุปกรณ์: " ออกถ้ามี
-      final candidate = rawCandidate.replaceFirst(RegExp(r'^(?:ชื่ออุปกรณ์|อุปกรณ์)\s*[:：]\s*'), '').trim();
-      if (candidate.isEmpty) continue;
-
-      final lowerCatalog = catalogName.toLowerCase();
-      final lowerCandidate = candidate.toLowerCase();
-
-      // 1.1 ตรงกันทั้งหมด (Exact match)
-      if (lowerCatalog == lowerCandidate) {
-        return candidate;
-      }
-
-      // 1.2 ชื่อที่ AI ตอบเป็นส่วนหนึ่งของชื่อเต็มในระบบ (Substring match)
-      // เช่น "PlayStation 5" ใน "PlayStation 5 พร้อมจอย 2 ตัวและเกม 3 แผ่น"
-      // หรือ "Nintendo Switch OLED" ใน "Nintendo Switch OLED พร้อมจอย 4 ตัว"
-      // หรือ "Dell UltraSharp 27 นิ้ว 4K" ใน "จอมอนิเตอร์ Dell UltraSharp 27 นิ้ว 4K"
-      if (lowerCatalog.contains(lowerCandidate) && lowerCandidate.length >= 3) {
-        return candidate;
-      }
-
-      // 1.3 ชื่อในระบบเป็นส่วนหนึ่งของชื่อที่ AI ตอบ
-      if (lowerCandidate.contains(lowerCatalog) && lowerCatalog.length >= 3) {
-        return candidate;
-      }
-
-      // 1.4 เปรียบเทียบคำสำคัญ (Word Token Overlap)
-      final catalogWords = lowerCatalog.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
-      final candidateWords = lowerCandidate.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
-      final intersection = catalogWords.intersection(candidateWords);
-      if (intersection.length >= 2 && intersection.length >= (candidateWords.length * 0.6)) {
-        return candidate;
-      }
-    }
-
-    return catalogName;
-  }
-
-  /// ตรวจสอบว่าอุปกรณ์ถูกระบุถึงหรือแนะนำในข้อความ AI หรือไม่ เพื่อให้การ์ดตรงกับข้อความ 100%
-  static bool isItemMentioned(String catalogName, String? messageContent) {
-    if (messageContent == null || messageContent.trim().isEmpty || catalogName.isEmpty) {
-      return false;
-    }
-    final resolved = resolveItemDisplayName(catalogName, messageContent);
-    final lowerCatalog = catalogName.toLowerCase();
-    final lowerContent = messageContent.toLowerCase();
-
-    // 1. ถ้า resolveItemDisplayName สกัดชื่อเฉพาะที่ตรงกับ Markdown Bold หรือบรรทัดชื่ออุปกรณ์ในข้อความมาได้
-    if (resolved != catalogName && lowerContent.contains(resolved.toLowerCase())) {
-      return true;
-    }
-
-    // 2. ชื่อเต็มของอุปกรณ์ปรากฏในข้อความโดยตรง
-    if (lowerContent.contains(lowerCatalog)) {
-      return true;
-    }
-
-    // 3. ตรวจสอบคำสำคัญ/ชื่อรุ่น ในบรรทัดที่มีการแนะนำ (Bullet point หรือ บรรทัดชื่ออุปกรณ์)
-    final words = lowerCatalog
-        .split(RegExp(r'\s+'))
-        .where((w) => w.length >= 3 && !RegExp(r'^\d+$').hasMatch(w) && !['เครื่อง', 'สำหรับ', 'พร้อม', 'ชุด', 'ขนาด'].contains(w))
-        .toList();
-    for (final line in messageContent.split('\n')) {
-      final lineTrim = line.trim();
-      if (lineTrim.startsWith('•') ||
-          lineTrim.startsWith('-') ||
-          lineTrim.startsWith('*') ||
-          lineTrim.contains('ชื่ออุปกรณ์')) {
-        final lineLower = lineTrim.toLowerCase();
-        final matched = words.where((w) => lineLower.contains(w)).toList();
-        if (matched.length >= 2 || (words.length == 1 && matched.length == 1)) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1089,7 +801,7 @@ class RecommendedItemCard extends StatelessWidget {
         ),
         const SizedBox(height: 5),
         Text(
-          resolveItemDisplayName(item.name, messageContent),
+          item.name,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
@@ -1105,7 +817,7 @@ class RecommendedItemCard extends StatelessWidget {
           TextSpan(
             children: [
               TextSpan(
-                text: '${_priceLabel(item.price)} ฿',
+                text: item.priceDisplay ?? '${_priceLabel(item.price)} ฿',
                 style: const TextStyle(
                   fontFamily: 'Prompt',
                   color: AppColors.primaryColor,
@@ -1114,7 +826,9 @@ class RecommendedItemCard extends StatelessWidget {
                 ),
               ),
               TextSpan(
-                text: ' / ${_formatUnit(item.unit)}',
+                text: item.priceDisplay != null
+                    ? ''
+                    : ' / ${_formatUnit(item.unitDisplay ?? item.unit)}',
                 style: const TextStyle(
                   fontFamily: 'Prompt',
                   color: Color(0xFF64748B),
@@ -1135,7 +849,7 @@ class RecommendedItemCard extends StatelessWidget {
     if (clean == 'hourly' || clean == 'hour') return 'ชั่วโมง';
     if (clean == 'monthly' || clean == 'month') return 'เดือน';
     if (clean == 'weekly' || clean == 'week') return 'สัปดาห์';
-    return unit.isEmpty ? 'วัน' : unit;
+    return unit.isEmpty ? '-' : unit;
   }
 
   static String _priceLabel(double? price) {

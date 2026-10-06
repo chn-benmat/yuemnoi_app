@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -8,16 +9,29 @@ import '../config/app_config.dart';
 enum ApiClientErrorType { timeout, connection, invalidResponse }
 
 class ApiClientException implements Exception {
-  const ApiClientException(this.type);
+  const ApiClientException(
+    this.type, {
+    this.statusCode,
+    this.errorCode,
+    this.retryAfterSeconds,
+  });
 
   final ApiClientErrorType type;
+  final int? statusCode;
+  final String? errorCode;
+  final int? retryAfterSeconds;
 }
 
 class ApiResponse {
-  const ApiResponse({required this.statusCode, required this.data});
+  const ApiResponse({
+    required this.statusCode,
+    required this.data,
+    this.retryAfterSeconds,
+  });
 
   final int statusCode;
   final dynamic data;
+  final int? retryAfterSeconds;
 }
 
 class ApiUpload {
@@ -140,31 +154,94 @@ class DioApiClient implements ApiClient {
     Map<String, dynamic>? data,
     Map<String, String>? headers,
   }) async {
-    try {
-      final response = await _dio.post<ResponseBody>(
-        path,
-        data: data,
-        options: Options(
-          responseType: ResponseType.stream,
-          headers: {
-            ...?headers,
-            'Accept': 'text/event-stream',
-          },
-        ),
-      );
+    final cancelToken = CancelToken();
+    StreamSubscription<String>? lines;
+    var cancelled = false;
+    late final StreamController<String> controller;
 
-      final responseBody = response.data;
-      if (responseBody == null) {
-        throw const ApiClientException(ApiClientErrorType.invalidResponse);
+    Future<void> receive() async {
+      try {
+        final response = await _dio.post<ResponseBody>(
+          path,
+          data: data,
+          cancelToken: cancelToken,
+          options: Options(
+            responseType: ResponseType.stream,
+            headers: {...?headers, 'Accept': 'text/event-stream'},
+          ),
+        );
+
+        if (cancelled) return;
+
+        final responseBody = response.data;
+        if (responseBody == null) {
+          throw const ApiClientException(ApiClientErrorType.invalidResponse);
+        }
+
+        if (response.statusCode != 200) {
+          // ตรวจสถานะก่อนอ่าน SSE เพื่อไม่รอ done จากคำตอบ HTTP ที่ล้มเหลว
+          String? errorCode;
+          try {
+            final body = await responseBody.stream
+                .cast<List<int>>()
+                .transform(utf8.decoder)
+                .join();
+            final decoded = jsonDecode(body);
+            if (decoded is Map && decoded['error_code'] is String) {
+              errorCode = decoded['error_code'] as String;
+            }
+          } catch (_) {
+            // ไม่เปิดเผยข้อความผิดพลาดจาก upstream
+          }
+          throw ApiClientException(
+            ApiClientErrorType.invalidResponse,
+            statusCode: response.statusCode,
+            errorCode: errorCode,
+            retryAfterSeconds: _retryAfter(response.headers),
+          );
+        }
+
+        lines = responseBody.stream
+            .cast<List<int>>()
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .listen(
+              controller.add,
+              onError: (Object error, StackTrace stack) {
+                if (cancelled || controller.isClosed) return;
+                controller.addError(
+                  error is DioException
+                      ? ApiClientException(_errorType(error))
+                      : error,
+                  stack,
+                );
+                unawaited(controller.close());
+              },
+              onDone: () => unawaited(controller.close()),
+              cancelOnError: true,
+            );
+      } catch (error, stack) {
+        if (cancelled || controller.isClosed) return;
+        controller.addError(
+          error is DioException ? ApiClientException(_errorType(error)) : error,
+          stack,
+        );
+        unawaited(controller.close());
       }
-
-      return responseBody.stream
-          .cast<List<int>>()
-          .transform(utf8.decoder)
-          .transform(const LineSplitter());
-    } on DioException catch (error) {
-      throw ApiClientException(_errorType(error));
     }
+
+    // คืน stream ก่อนรอ headers เพื่อให้ยกเลิก HTTP ได้ทันตามเวลารวมของผู้ใช้
+    controller = StreamController<String>(
+      onListen: () => unawaited(receive()),
+      onPause: () => lines?.pause(),
+      onResume: () => lines?.resume(),
+      onCancel: () async {
+        cancelled = true;
+        cancelToken.cancel();
+        await lines?.cancel();
+      },
+    );
+    return controller.stream;
   }
 
   @override
@@ -238,6 +315,7 @@ class DioApiClient implements ApiClient {
         return ApiResponse(
           statusCode: response.statusCode ?? 0,
           data: _decodeResponse(response.data),
+          retryAfterSeconds: _retryAfter(response.headers),
         );
       } on DioException catch (error) {
         final isRetryable = _isRetryable(error);
@@ -270,6 +348,11 @@ class DioApiClient implements ApiClient {
       case DioExceptionType.transformTimeout:
         return false;
     }
+  }
+
+  int? _retryAfter(Headers headers) {
+    final seconds = int.tryParse(headers.value('retry-after') ?? '');
+    return seconds != null && seconds > 0 ? seconds : null;
   }
 
   dynamic _decodeResponse(Object? responseData) {

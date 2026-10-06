@@ -1,215 +1,150 @@
-import logging
+from pydantic_core import PydanticCustomError
 from typing import List, Optional
+
+from app.application.prompts.catalog_guidance import SELECTION_PROMPT
+from app.application.services.catalog_guidance import catalog_snapshot, generate_reviewed, validated_schema
+from app.domain.entities.catalog_guidance import CatalogSelection, GuidancePolicy, SelectionPlan
 from app.domain.entities.intent_decision import IntentDecision
 from app.domain.entities.item import Item
-from app.domain.entities.semantic_item_filter import SemanticItemFilterDecision
 from app.domain.interfaces.item_repository import ItemRepositoryInterface
 from app.domain.interfaces.llm_service import LLMServiceInterface
-from app.infrastructure.prompts.prompt_templates import SEMANTIC_ITEM_FILTER_PROMPT
-
-logger = logging.getLogger(__name__)
+from app.domain.exceptions import GuidanceGenerationError
 
 
 class QueryItemsUseCase:
-    """Retrieves and ranks candidate items from repository matching user constraints with zero bias and zero hardcoded keywords."""
+    """Select catalog IDs semantically, then enforce verifiable numeric constraints."""
 
-    def __init__(
-        self,
-        item_repository: ItemRepositoryInterface,
-        llm_service: Optional[LLMServiceInterface] = None,
-    ):
+    def __init__(self, item_repository: ItemRepositoryInterface,
+                 llm_service: LLMServiceInterface, policy: GuidancePolicy):
         self._item_repo = item_repository
         self._llm = llm_service
+        self._policy = policy
 
-    async def execute(
-        self,
-        decision: IntentDecision,
-        limit: int = 5,
-    ) -> List[Item]:
-        all_items = await self._item_repo.get_all_items()
-        if not all_items:
-            return []
+    async def execute(self, decision: IntentDecision, limit: Optional[int] = None) -> List[Item]:
+        return (await self.execute_selection(decision, limit)).items
 
-        has_specific_search = bool(
-            decision.target_items or decision.categories or decision.intended_use or decision.budget_max
-        )
+    async def execute_selection(self, decision: IntentDecision,
+                                limit: Optional[int] = None) -> CatalogSelection:
+        limit = self._policy.max_items if limit is None else min(limit, self._policy.max_items)
+        if limit < 1:
+            raise PydanticCustomError("catalog_selection_limit_must_be_positive", "Selection limit must be positive")
+        items = await self._item_repo.get_all_items(refresh=True)
+        snapshot = catalog_snapshot(items)
+        if not items:
+            return CatalogSelection([], "no_matches", [], "", [], snapshot)
+        id_map = {item.id: item for item in items}
+        units = {item.type for item in items if item.type.strip()}
 
-        # 1. AI-Native Semantic Selection via LLM Structured Output
-        if self._llm and has_specific_search:
-            try:
-                catalog_lines = []
-                for it in all_items:
-                    desc = f", รายละเอียด: {it.description}" if it.description else ""
-                    avail = "พร้อมให้เช่า" if it.is_available else "ไม่ว่าง"
-                    catalog_lines.append(
-                        f"- ID: {it.id} | ชื่อ: {it.name} | หมวดหมู่: {it.category} | ค่าเช่า: {it.price} บาท | สถานะ: {avail}{desc}"
-                    )
-                catalog_str = "\n".join(catalog_lines)
+        def validate(plan: SelectionPlan):
+            ids = [selected.id for selected in plan.selected_items]
+            if len(ids) > limit or len(ids) != len(set(ids)) or not set(ids) <= set(id_map):
+                raise PydanticCustomError("catalog_selected_catalog_ids_must_be_real__unique_and_within_limit", "Selected catalog IDs must be real, unique and within limit")
+            if (plan.mode == "items") != bool(ids):
+                raise PydanticCustomError("catalog_selection_mode_and_item_list_disagree", "Selection mode and item list disagree")
+            if plan.mode == "categories" and not getattr(decision, "clarification_declined", False):
+                raise PydanticCustomError("catalog_category_browsing_requires_a_declined_questionnaire", "Category browsing requires a declined questionnaire")
+            requirement = plan.price_requirement
+            if requirement is not None:
+                if decision.budget_max is None or requirement.maximum != decision.budget_max:
+                    raise PydanticCustomError("catalog_price_requirement_must_match_the_user_s_stated_ceiling", "Price requirement must match the user's stated ceiling")
+                if decision.budget_unit is None or requirement.user_unit != decision.budget_unit:
+                    raise PydanticCustomError("catalog_price_requirement_must_preserve_an_established_user_billing_period", "Price requirement must preserve an established user billing period")
+                if not set(requirement.catalog_units) <= units:
+                    raise PydanticCustomError("catalog_price_requirement_must_use_real_catalog_units", "Price requirement must use real catalog units")
+            if ids and decision.budget_max is not None and requirement is None:
+                raise PydanticCustomError("catalog_a_stated_budget_requires_a_verified_unit_interpretation", "A stated budget requires a verified unit interpretation")
+            for item_id in ids:
+                item = id_map[item_id]
+                if plan.purpose == "recommendation" and not item.is_available:
+                    raise PydanticCustomError("catalog_unavailable_items_cannot_be_recommendations", "Unavailable items cannot be recommendations")
+                if requirement is not None:
+                    if item.type not in requirement.catalog_units or item.price > requirement.maximum:
+                        raise PydanticCustomError("catalog_selected_item_violates_price_or_billing_unit", "Selected item violates price or billing unit")
 
-                constraints = []
-                if decision.target_items:
-                    constraints.append(f"อุปกรณ์เป้าหมายที่ระบุ: {', '.join(decision.target_items)}")
-                if decision.categories:
-                    constraints.append(f"หมวดหมู่อุปกรณ์: {', '.join(decision.categories)}")
-                if decision.intended_use:
-                    constraints.append(f"วัตถุประสงค์การใช้งาน: {decision.intended_use}")
-                if decision.budget_max is not None and decision.budget_max > 0:
-                    constraints.append(f"งบประมาณสูงสุด: {decision.budget_max} บาท")
+        plan = await generate_reviewed(self._llm, self._policy, {
+            "task": "selection", "understanding": decision.model_dump(),
+            "catalog": snapshot, "limit": limit,
+        }, validated_schema(SelectionPlan, validate), SELECTION_PROMPT)
+        # Re-read authoritative fields after generation/review. A changed source
+        # invalidates the evidence instead of returning a stale price or stock flag.
+        fresh_items = await self._item_repo.get_all_items(refresh=True)
+        fresh_snapshot = catalog_snapshot(fresh_items)
+        fresh_map = {item.id: item for item in fresh_items}
+        fields = {"id", "name", "category", "price", "type", "status", "description"}
+        for selected in plan.selected_items:
+            if selected.id not in fresh_map or (
+                id_map[selected.id].model_dump(include=fields) != fresh_map[selected.id].model_dump(include=fields)
+            ):
+                raise GuidanceGenerationError("catalog_changed")
+        if plan.mode == "categories" and set(fresh_snapshot["categories"]) != set(snapshot["categories"]):
+            raise GuidanceGenerationError("catalog_changed")
+        if plan.mode == "no_matches" and (
+            {item["id"]: item for item in snapshot["items"]} !=
+            {item["id"]: item for item in fresh_snapshot["items"]}
+        ):
+            raise GuidanceGenerationError("catalog_changed")
+        return CatalogSelection(
+            items=[fresh_map[selected.id] for selected in plan.selected_items],
+            mode=plan.mode, available_categories=fresh_snapshot["categories"] if plan.mode == "categories" else [],
+            reasoning=plan.reasoning, selected_items=plan.selected_items, catalog_evidence=fresh_snapshot)
 
-                prompt = (
-                    f"รายการอุปกรณ์ทั้งหมดในคลังระบบยืมหน่อย:\n{catalog_str}\n\n"
-                    f"ข้อกำหนดและความต้องการของผู้ใช้:\n" + "\n".join(constraints) + "\n\n"
-                    f"กำหนดขีดจำกัดเพดานสูงสุด limit = {limit}\n"
-                    "คำสั่ง: กรุณาวิเคราะห์เชิงความหมาย (Semantic Reasoning) และเลือกเฉพาะ ID ของอุปกรณ์ที่ตรงกับความต้องการและชนิดอุปกรณ์ของผู้ใช้อย่างแท้จริง "
-                    "หากมีสินค้าที่ตรงเพียง 1 หรือ 2 ชิ้น ให้คืนค่าเฉพาะ ID นั้นเท่านั้น ห้ามเลือกสินค้าที่ไม่เกี่ยวข้องมาเติมให้เต็ม limit เด็ดขาด "
-                    "หากไม่มีสินค้าที่ตรงเลย ให้คืนค่า matched_item_ids เป็นรายการว่าง []"
-                )
+    async def refresh_selection(self, selection: CatalogSelection) -> CatalogSelection:
+        """Revalidate evidence after answer synthesis, without reading answer text."""
+        fresh = await self._item_repo.get_all_items(refresh=True)
+        snapshot = catalog_snapshot(fresh)
+        fresh_map = {item.id: item for item in fresh}
+        fields = {"id", "name", "category", "price", "type", "status", "description"}
+        for item in selection.items:
+            if item.id not in fresh_map or item.model_dump(include=fields) != fresh_map[item.id].model_dump(include=fields):
+                raise GuidanceGenerationError("catalog_changed")
+        if selection.mode == "categories" and set(selection.available_categories) != set(snapshot["categories"]):
+            raise GuidanceGenerationError("catalog_changed")
+        if selection.mode == "no_matches" and (
+            selection.catalog_evidence is None or
+            {i["id"]: i for i in selection.catalog_evidence["items"]} != {i["id"]: i for i in snapshot["items"]}
+        ):
+            raise GuidanceGenerationError("catalog_changed")
+        return CatalogSelection([fresh_map[i.id] for i in selection.items], selection.mode,
+            selection.available_categories, selection.reasoning, selection.selected_items, snapshot)
 
-                filter_decision = await self._llm.generate_structured(
-                    prompt=prompt,
-                    schema=SemanticItemFilterDecision,
-                    system_instruction=SEMANTIC_ITEM_FILTER_PROMPT,
-                    temperature=0.1,
-                )
+    def validate_selection(self, plan: SelectionPlan, decision, items: List[Item]):
+        """Pure source checks for the combined selection/answer call."""
+        id_map = {item.id: item for item in items}
+        ids = [selected.id for selected in plan.selected_items]
+        if len(ids) > self._policy.max_items or len(ids) != len(set(ids)) or not set(ids) <= set(id_map):
+            raise PydanticCustomError("catalog_invalid_selection_ids", "Invalid selection IDs")
+        if (plan.mode == "items") != bool(ids):
+            raise PydanticCustomError("catalog_selection_mode_disagrees_with_ids", "Selection mode disagrees with IDs")
+        if decision.catalog_operation == "selection" and plan.purpose != "recommendation":
+            raise PydanticCustomError("catalog_a_recommendation_cannot_bypass_availability_checks", "A recommendation cannot bypass availability checks")
+        if set(ids) & set(decision.excluded_items):
+            raise PydanticCustomError("catalog_selected_an_explicitly_excluded_id", "Selected an explicitly excluded ID")
+        requirement = plan.price_requirement
+        if requirement is not None:
+            if decision.budget_max is None or requirement.maximum != decision.budget_max:
+                raise PydanticCustomError("catalog_budget_ceiling_changed", "Budget ceiling changed")
+            if decision.budget_unit is None or requirement.user_unit != decision.budget_unit:
+                raise PydanticCustomError("catalog_unknown_or_changed_budget_period", "Unknown or changed budget period")
+            if not set(requirement.catalog_units) <= {item.type for item in items}:
+                raise PydanticCustomError("catalog_unknown_catalog_period", "Unknown catalog period")
+            if set(requirement.catalog_units) != {decision.budget_unit}:
+                raise PydanticCustomError("catalog_a_price_period_conversion_requires_authoritative_conversion_evidence", "A price period conversion requires authoritative conversion evidence")
+        if ids and decision.budget_max is not None and requirement is None:
+            raise PydanticCustomError("catalog_budget_requires_an_established_unit_interpretation", "Budget requires an established unit interpretation")
+        for item_id in ids:
+            item = id_map[item_id]
+            if plan.purpose == "recommendation" and not item.is_available:
+                raise PydanticCustomError("catalog_unavailable_recommendation", "Unavailable recommendation")
+            if requirement and (item.type not in requirement.catalog_units or item.price > requirement.maximum):
+                raise PydanticCustomError("catalog_budget_violation", "Budget violation")
 
-                if filter_decision and filter_decision.matched_item_ids:
-                    id_map = {i.id: i for i in all_items}
-                    matched_items = [id_map[i_id] for i_id in filter_decision.matched_item_ids if i_id in id_map]
-                    # Strictly treat limit as an upper ceiling, never backfill
-                    return matched_items[:limit]
-                return []
-            except Exception as e:
-                logger.warning(f"Semantic item retrieval via LLM failed, using deterministic fallback: {e}")
+    def selection_from_snapshot(self, plan: SelectionPlan, decision, items: List[Item]):
+        self.validate_selection(plan, decision, items)
+        snapshot = catalog_snapshot(items)
+        return CatalogSelection([i for selected in plan.selected_items for i in items if i.id == selected.id],
+            plan.mode, snapshot["categories"] if plan.mode == "categories" else [],
+            plan.reasoning, plan.selected_items, snapshot)
 
-        # 2. Pure String-Based Deterministic Fallback (Zero-Hardcode & Zero-Keyword)
-        target_tokens = [t.lower().strip() for t in decision.target_items if t.strip()]
-        category_tokens = [c.lower().strip() for c in decision.categories if c.strip() and c.strip() != "อื่น ๆ"]
-        use_lower = (decision.intended_use or "").lower().strip()
-        use_words = [w for w in use_lower.split() if len(w) >= 2] if use_lower else []
-
-        # If target equipment is specified, strictly isolate to items matching target name/description
-        if target_tokens:
-            target_matching_items = []
-            for item in all_items:
-                name_l = item.name.lower()
-                desc_l = (item.description or "").lower()
-                if any(t in name_l or t in desc_l for t in target_tokens):
-                    target_matching_items.append(item)
-                elif any(all(w in name_l for w in t.split()) for t in target_tokens if " " in t):
-                    target_matching_items.append(item)
-
-            if target_matching_items:
-                candidates_pool = target_matching_items
-            else:
-                # Target was requested, but no item in catalog matched the target name/desc
-                cat_match = [item for item in all_items if any(t in item.category.lower() for t in target_tokens)]
-                if cat_match:
-                    candidates_pool = cat_match
-                else:
-                    return []
-        elif category_tokens:
-            candidates_pool = [
-                item for item in all_items
-                if any(c in item.category.lower() or item.category.lower() in c for c in category_tokens)
-            ]
-            if not candidates_pool and decision.categories != ["อื่น ๆ"]:
-                return []
-        else:
-            candidates_pool = all_items
-
-        # Check if the requested category has any item matching intended_use
-        category_has_intended_use_match = False
-        if decision.intended_use and category_tokens:
-            for item in all_items:
-                cat_match = any(c in item.category.lower() or item.category.lower() in c for c in category_tokens)
-                if cat_match:
-                    desc_l = (item.description or "").lower()
-                    name_l = item.name.lower()
-                    if use_lower in desc_l or use_lower in name_l:
-                        category_has_intended_use_match = True
-                        break
-                    if any(w in desc_l or w in name_l for w in use_words):
-                        category_has_intended_use_match = True
-                        break
-
-        allow_cross_category_intended_use = (
-            bool(decision.intended_use)
-            and bool(category_tokens)
-            and not category_has_intended_use_match
-            and not bool(target_tokens)
-        )
-
-        scored_items = []
-        for item in candidates_pool:
-            score = 0.0
-            name_l = item.name.lower()
-            desc_l = (item.description or "").lower()
-            cat_l = item.category.lower()
-
-            if target_tokens:
-                for t in target_tokens:
-                    if t in name_l:
-                        score += 10.0
-                    elif t in desc_l:
-                        score += 5.0
-
-            if category_tokens:
-                for c in category_tokens:
-                    if c in cat_l or cat_l in c:
-                        score += 5.0
-                    elif c in name_l:
-                        score += 3.0
-
-            if use_lower:
-                if use_lower in desc_l or use_lower in name_l:
-                    score += 12.0
-                elif use_lower in cat_l:
-                    score += 8.0
-                else:
-                    matched_words = [w for w in use_words if w in desc_l or w in name_l or w in cat_l]
-                    if matched_words:
-                        score += 4.0 * len(matched_words)
-
-            if item.is_available:
-                score += 1.0
-
-            if decision.budget_max is not None and decision.budget_max > 0:
-                if item.price <= decision.budget_max:
-                    score += 2.0
-                else:
-                    score -= 5.0
-
-            scored_items.append((score, item))
-
-        if allow_cross_category_intended_use:
-            for item in all_items:
-                if item in candidates_pool:
-                    continue
-                name_l = item.name.lower()
-                desc_l = (item.description or "").lower()
-                cat_l = item.category.lower()
-
-                use_match = (use_lower in desc_l or use_lower in name_l or use_lower in cat_l)
-                if not use_match and use_words:
-                    use_match = any(w in desc_l or w in name_l or w in cat_l for w in use_words)
-
-                if use_match:
-                    score = 10.0
-                    if use_lower in desc_l or use_lower in name_l:
-                        score += 5.0
-                    if item.is_available:
-                        score += 1.0
-                    scored_items.append((score, item))
-
-        scored_items.sort(key=lambda x: x[0], reverse=True)
-
-        candidates = [item for score, item in scored_items if score > 1.0]
-
-        if decision.budget_max is not None and decision.budget_max > 0:
-            candidates = [c for c in candidates if c.price <= decision.budget_max]
-
-        if not candidates and not has_specific_search and scored_items:
-            candidates = [item for score, item in scored_items if item.is_available]
-
-        # Strictly return up to limit, never backfill
-        return candidates[:limit]
+    async def materialize_selection(self, plan: SelectionPlan, decision, items: List[Item]):
+        selection = self.selection_from_snapshot(plan, decision, items)
+        return await self.refresh_selection(selection)

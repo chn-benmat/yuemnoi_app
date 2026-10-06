@@ -14,13 +14,17 @@ from app.interface.api.v1.router import api_v1_router
 async def lifespan(app: FastAPI):
     """Application lifecycle events: pre-warm catalog cache on startup."""
     logger.info(f"Starting {settings.APP_NAME} in [{settings.APP_ENV}] environment...")
+    await container.start()
     try:
         items = await container.item_repository.get_all_items()
         logger.info(f"Pre-warmed catalog cache with {len(items)} rental items.")
     except Exception as exc:
         logger.warning(f"Failed to pre-warm catalog cache on startup: {exc}")
-    yield
-    logger.info("Shutting down AI service gracefully...")
+    try:
+        yield
+    finally:
+        await container.aclose()
+        logger.info("Shutting down AI service gracefully...")
 
 
 app = FastAPI(
