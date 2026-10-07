@@ -13,7 +13,7 @@ class WalletSuccessScreen extends StatelessWidget {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
-      AppRoutes.goToHome(context, initialIndex: 3);
+      AppRoutes.goToHome(context);
     }
   }
 
