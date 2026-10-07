@@ -18,7 +18,6 @@ import '../../../chat/presentation/pages/chat.dart';
 import '../../../notification/presentation/pages/page.dart';
 import '../../../profile/data/repositories/rental_management_repository_impl.dart';
 import '../../../profile/presentation/pages/profile/profile.dart';
-import '../../../wallet/presentation/pages/wallet.dart';
 import '../../data/repositories/home_repository_impl.dart';
 import '../../domain/usecases/get_home_feed_usecase.dart';
 import '../bloc/home_bloc.dart';
@@ -114,13 +113,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
         const HomeFeedView(),
         const ChatScreen(),
         const NotificationPage(),
-        WalletScreen(
-          onBack: () {
-            setState(() {
-              _selectedIndex = 0;
-            });
-          },
-        ),
         const ProfileScreen(),
       ];
 

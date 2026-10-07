@@ -9,6 +9,7 @@ import '../../domain/entities/feed_category.dart';
 import '../../domain/entities/feed_item.dart';
 import '../../domain/repositories/home_repository.dart';
 import '../widgets/category_filter_sheet.dart';
+import '../widgets/category_filter_chips.dart';
 import '../widgets/shopee_product_card.dart';
 
 /// หน้าค้นหาอุปกรณ์สไตล์ Shopee ผสาน Swiss Style / Clean SaaS
@@ -20,12 +21,20 @@ class EquipmentSearchScreen extends StatefulWidget {
     super.key,
     this.initialCuratedItems,
     this.initialQuery,
+    this.initialCategoryId,
+    this.initialMinPrice,
+    this.initialMaxPrice,
+    this.initialMinRating,
     this.initialCategories,
     this.homeRepository,
   });
 
   final List<FeedItem>? initialCuratedItems;
   final String? initialQuery;
+  final String? initialCategoryId;
+  final int? initialMinPrice;
+  final int? initialMaxPrice;
+  final double? initialMinRating;
   final List<FeedCategory>? initialCategories;
   final HomeRepository? homeRepository;
 
@@ -60,6 +69,10 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     _repository = widget.homeRepository ?? HomeRepositoryImpl();
     _searchController = TextEditingController(text: widget.initialQuery ?? '');
     _focusNode = FocusNode();
+    _selectedCategoryId = widget.initialCategoryId ?? 'all';
+    _minPrice = widget.initialMinPrice;
+    _maxPrice = widget.initialMaxPrice;
+    _minRating = widget.initialMinRating;
 
     _loadRecentSearches();
 
@@ -79,6 +92,11 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
 
     if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
       _executeSearch(widget.initialQuery!.trim());
+    } else if (_selectedCategoryId != 'all' ||
+        _minPrice != null ||
+        _maxPrice != null ||
+        _minRating != null) {
+      _executeSearch('');
     } else {
       // Auto-focus ช่องค้นหาเมื่อเปิดหน้าค้นหา
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -144,6 +162,44 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     }
   }
 
+  Future<void> _confirmClearSearchHistory() async {
+    final shouldClear = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('clear-search-history-dialog'),
+        title: const Text('ล้างประวัติการค้นหา'),
+        content: const Text('ต้องการลบประวัติการค้นหาทั้งหมดหรือไม่?'),
+        actions: [
+          TextButton(
+            key: const ValueKey('cancel-clear-search-history'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('ยกเลิก'),
+          ),
+          TextButton(
+            key: const ValueKey('confirm-clear-search-history'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('ลบประวัติ'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldClear != true) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_recentSearchesKey);
+    } catch (e) {
+      debugPrint('Error clearing recent searches: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _recentSearches = [];
+      });
+    }
+  }
+
 
 
   // ==========================================
@@ -193,7 +249,14 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
 
   Future<void> _executeSearch(String query) async {
     final trimmed = query.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty &&
+        _selectedCategoryId == 'all' &&
+        _minPrice == null &&
+        _maxPrice == null &&
+        _minRating == null) {
+      _resetToPreSearch();
+      return;
+    }
 
     _focusNode.unfocus();
     _searchController.text = trimmed;
@@ -204,12 +267,12 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       _lastSubmittedQuery = trimmed;
     });
 
-    await _saveSearchQuery(trimmed);
+    if (trimmed.isNotEmpty) await _saveSearchQuery(trimmed);
 
     try {
       final results = await _repository.getNearbyItems(
         categoryId: _selectedCategoryId != 'all' ? _selectedCategoryId : null,
-        searchQuery: trimmed,
+        searchQuery: trimmed.isNotEmpty ? trimmed : null,
         minPrice: _minPrice,
         maxPrice: _maxPrice,
         minRating: _minRating,
@@ -411,7 +474,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
                               onPressed: () {
                                 _searchController.clear();
                                 if (_isSearchSubmitted) {
-                                  _resetToPreSearch();
+                                  _executeSearch('');
                                 }
                               },
                               icon: const Icon(
@@ -478,10 +541,16 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildHistoryRow(_recentSearches.take(2).toList()),
+                  _buildHistoryRow(
+                    _recentSearches.take(2).toList(),
+                    showClearButton: _recentSearches.length <= 2,
+                  ),
                   if (_recentSearches.length > 2) ...[
                     const SizedBox(height: 8),
-                    _buildHistoryRow(_recentSearches.skip(2).take(2).toList()),
+                    _buildHistoryRow(
+                      _recentSearches.skip(2).take(2).toList(),
+                      showClearButton: true,
+                    ),
                   ],
                 ],
               ),
@@ -527,7 +596,10 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     );
   }
 
-  Widget _buildHistoryRow(List<String> items) {
+  Widget _buildHistoryRow(
+    List<String> items, {
+    bool showClearButton = false,
+  }) {
     return Row(
       children: [
         for (int i = 0; i < items.length; i++) ...[
@@ -536,7 +608,34 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
             child: _buildHistoryTag(items[i]),
           ),
         ],
+        if (showClearButton) ...[
+          if (items.isNotEmpty) const SizedBox(width: 8),
+          _buildClearHistoryButton(),
+        ],
       ],
+    );
+  }
+
+  Widget _buildClearHistoryButton() {
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: Color(0xFFE4E4E7), width: 1),
+      ),
+      child: InkWell(
+        key: const ValueKey('clear-search-history-button'),
+        borderRadius: BorderRadius.circular(8),
+        onTap: _confirmClearSearchHistory,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          child: Icon(
+            Icons.delete_outline_rounded,
+            size: 18,
+            color: Color(0xFF71717A),
+          ),
+        ),
+      ),
     );
   }
 
@@ -697,6 +796,16 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
   }
 
   Widget _buildResultsHeader({bool isPlaceholder = false}) {
+    final isCategorySearch = _selectedCategoryId != 'all';
+    final searchTerm = isCategorySearch
+        ? CategoryFilterChips.getCategoryLabel(_selectedCategoryId)
+        : _lastSubmittedQuery;
+    final heading = isCategorySearch
+        ? 'ผลการค้นหาหมวดหมู่สำหรับ '
+        : _lastSubmittedQuery.isNotEmpty
+            ? 'ผลการค้นหาสำหรับ '
+            : 'ผลการค้นหาตามตัวกรอง';
+
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
@@ -713,14 +822,15 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
                       fontSize: 13.5,
                     ),
                     children: [
-                      const TextSpan(text: 'ผลการค้นหาสำหรับ '),
-                      TextSpan(
-                        text: '"$_lastSubmittedQuery"',
-                        style: const TextStyle(
-                          color: Color(0xFF18181B),
-                          fontWeight: FontWeight.w700,
+                      TextSpan(text: heading),
+                      if (isCategorySearch || _lastSubmittedQuery.isNotEmpty)
+                        TextSpan(
+                          text: '"$searchTerm"',
+                          style: const TextStyle(
+                            color: Color(0xFF18181B),
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -811,7 +921,11 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
             ),
             const SizedBox(height: 18),
             Text(
-              'ไม่พบอุปกรณ์ที่ตรงกับ "$_lastSubmittedQuery"',
+              _selectedCategoryId != 'all'
+                  ? 'ไม่พบอุปกรณ์ในหมวดหมู่ "${CategoryFilterChips.getCategoryLabel(_selectedCategoryId)}"'
+                  : _lastSubmittedQuery.isNotEmpty
+                      ? 'ไม่พบอุปกรณ์ที่ตรงกับ "$_lastSubmittedQuery"'
+                      : 'ไม่พบอุปกรณ์ที่ตรงกับตัวกรองนี้',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Color(0xFF18181B),
