@@ -18,6 +18,15 @@ from app.domain.interfaces.knowledge_repository import KnowledgeRepositoryInterf
 from app.domain.interfaces.llm_service import LLMServiceInterface
 from app.domain.interfaces.search_service import SearchServiceInterface
 from app.domain.interfaces.execution_guard import ExecutionGuard
+from app.domain.interfaces.generation_stage import Stage, generation_progress
+
+
+_GENERATION_STATUS_MESSAGES = {
+    "planning": "กำลังวิเคราะห์คำถาม",
+    "evidence": "กำลังสร้างคำตอบ",
+    "review": "กำลังตรวจคำตอบ",
+    "repair": "กำลังสรุปคำคำตอบ",
+}
 
 
 class ProcessChatMessageUseCase:
@@ -143,13 +152,28 @@ class ProcessChatMessageUseCase:
         return f"event: {name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     async def execute_stream(self, request: ChatRequestDTO) -> AsyncGenerator[str, None]:
-        yield self._event("status", {"step": "processing", "message": "กำลังวิเคราะห์คำถาม..."})
-        task = asyncio.create_task(self.execute(request))
+        yield self._event("status", {"step": "preparing", "message": "กำลังเตรียมข้อมูล"})
+        progress: asyncio.Queue[Stage | None] = asyncio.Queue()
+
+        async def generate_with_progress():
+            try:
+                with generation_progress(progress.put_nowait):
+                    return await self.execute(request)
+            finally:
+                # จบคิวหลังสถานะทั้งหมด ทั้งกรณีสำเร็จ ล้มเหลว และถูกยกเลิก
+                progress.put_nowait(None)
+
+        task = asyncio.create_task(generate_with_progress())
         try:
-            while not task.done():
-                done, _ = await asyncio.wait({task}, timeout=self._heartbeat)
-                if not done:
+            while True:
+                try:
+                    stage = await asyncio.wait_for(progress.get(), timeout=self._heartbeat)
+                except asyncio.TimeoutError:
                     yield ": keep-alive\n\n"
+                    continue
+                if stage is None:
+                    break
+                yield self._event("status", {"step": stage, "message": _GENERATION_STATUS_MESSAGES[stage]})
             result = await task
             payload = result.model_dump(mode="json")
             # Legacy names and events remain projections of the same validated result.

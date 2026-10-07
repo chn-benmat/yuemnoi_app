@@ -19,6 +19,7 @@ from app.domain.entities.response_review import ResponseReview,NativeResponseRev
 from app.infrastructure.runtime.documents import ValidatedFile
 from app.infrastructure.runtime.execution import REQUEST_DEADLINE, consume_logical_call, TURN_TRACE_ID, TURN_RESOURCES
 from app.infrastructure.runtime.schema import RuntimeDocument
+from app.domain.interfaces.chat_diagnostics import record_diagnostic
 
 REQUEST_PHASE = ContextVar("llm_request_phase", default="chat")
 
@@ -45,7 +46,8 @@ class CascadeLLMService(LLMServiceInterface):
         path = self.configuration.AI_QUOTA_LEDGER_PATH or self.configuration.AI_RUNTIME_PATH.parent.parent / self.runtime.quota_ledger.path
         self.governor = PersistentQuotaGovernor(quotas, path,
             lock_timeout_seconds=self.runtime.quota_ledger.lock_timeout_seconds,
-            poll_seconds=self.runtime.quota_ledger.poll_seconds)
+            poll_seconds=self.runtime.quota_ledger.poll_seconds,
+            reservation_seconds=self.runtime.technical_hard_deadline_seconds)
         self.telemetry = deque(maxlen=self.runtime.http.telemetry_history)
 
     def _get_cascade_tiers(self):
@@ -90,11 +92,14 @@ class CascadeLLMService(LLMServiceInterface):
         profiles = [p for p in self.runtime.providers if p.protocol == protocol]
         return next((p for p in profiles if getattr(self.configuration, p.model_setting) == model), profiles[0])
 
-    @staticmethod
-    def _quota_bucket(profile, provider, model):
+    def _quota_bucket(self, profile, provider, model):
         # ใช้ model ที่ตั้งค่าจริง เพื่อไม่แยกโควตาซ้ำเมื่อสอง profile ชี้โมเดลเดียวกัน
         identity = (["model", provider, model] if profile.quota.scope == "model"
                     else ["provider", profile.quota.bucket])
+        # บัญชีใหม่แยกยอดเดิม แต่บัญชีเดิมยังแบ่งยอดร่วมกันแม้เปลี่ยน key
+        account_id = getattr(self.configuration, f"{provider.upper()}_QUOTA_ACCOUNT_ID", None)
+        if account_id:
+            identity = ["account", provider, account_id, *identity]
         return json.dumps(identity, separators=(",", ":"))
 
     def _review_candidates(self, writer):
@@ -114,12 +119,75 @@ class CascadeLLMService(LLMServiceInterface):
             candidates.append((provider, model, profile))
         return candidates
 
+    def _initial_review_cost(self, profile):
+        provisional = self.runtime.stages.initial_review_reserve_tokens
+        if profile.quota.authority == 'provider':
+            return provisional
+        return min(profile.quota.tokens_per_window, profile.quota.tokens_per_day, provisional)
+
     async def _turn_permit(self, phase, provider, model, bucket, cost, deadline):
         resources = TURN_RESOURCES.get()
-        if resources is None or phase not in ('planning', 'evidence', 'review'):
+        if resources is None or phase not in ('planning', 'evidence', 'review', 'repair'):
             return await self.governor.wait_reserve(bucket, cost, deadline=deadline)
         key = ('review_hold', id(self))
         hold = resources.get(key)
+        reserved = resources.get((('recovery_hold' if phase == 'repair' else 'final_review_hold'), id(self)))
+        if phase in ('repair', 'review') and reserved is not None and not reserved['permit'].sent:
+            if phase == 'review' and CURRENT_GENERATION.get().recovery_request is not None:
+                reserved = None  # ยังเป็นผู้ตรวจครั้งแรก
+            else:
+                if reserved['identity'] != (provider, model):
+                    return None
+                permit = await self.governor.replace_unused(reserved['permit'], bucket, cost)
+                if permit is not None:
+                    reserved['permit'] = permit
+                    if phase == 'review': resources[key] = reserved
+                return permit
+        capture = CURRENT_GENERATION.get()
+        if phase == 'review' and capture.recovery_request is not None:
+            plans = self._recovery_plans(provider, model, bucket, cost)
+            old = [hold['permit']] if hold and not hold['permit'].sent else []
+            statuses = []
+            resources.setdefault(('recovery_requests',id(self)), []).extend(requests for requests, _ in plans)
+            for requests, identities in plans:
+                permits = await self.governor.replace_unused_many(old, requests)
+                if permits is None:
+                    statuses.append(await self.governor.replacement_status(old, requests))
+                    continue
+                for name, permit, identity in zip(('review_hold','recovery_hold','final_review_hold'),permits,identities):
+                    reservation = {'permit': permit, 'identity': identity}
+                    resources[(name,id(self))] = reservation
+                    async def release(reservation=reservation):
+                        if not reservation['permit'].sent:
+                            await self.governor.release_unused(reservation['permit'])
+                    resources['cleanup'].append(release)
+                    if name != 'review_hold':
+                        record_diagnostic('reservation',stage='repair' if name == 'recovery_hold' else 'review',
+                            provider=identity[0],model=identity[1])
+                        self.telemetry.append({'trace_id':TURN_TRACE_ID.get(),'phase':name,'provider':identity[0],
+                            'model':identity[1],'status':'reserved','http_attempts':0,'reserved_tokens':permit.tokens})
+                return permits[0]
+            # A valid first draft may be publishable even when a speculative
+            # recovery cannot fit. Review it; reserve the exact recovery pair
+            # before any repair HTTP if the assessment actually rejects it.
+            permit=(await self.governor.replace_unused(hold['permit'],bucket,cost)
+                    if hold and not hold['permit'].sent else await self.governor.reserve(bucket,cost))
+            if permit is not None:
+                reservation={'permit':permit,'identity':(provider,model)}
+                resources[key]=reservation
+                resources.pop(('recovery_requests',id(self)),None)
+                resources.pop(('review_requests',id(self)),None)
+                async def release():
+                    if not reservation['permit'].sent:
+                        await self.governor.release_unused(reservation['permit'])
+                resources['cleanup'].append(release)
+                return permit
+            resources.pop(('recovery_requests',id(self)),None)
+            resources.setdefault(('review_requests',id(self)),[]).append([(bucket,cost)])
+            # ความล้มเหลวครั้งนี้คือโควตาผู้ตรวจครั้งแรก ไม่ใช่รอบกู้ที่ยังไม่จำเป็น
+            resources[('recovery_admission',id(self),provider,model)] = (
+                await self.governor.replacement_status(old,[(bucket,cost)]))
+            return None
         if phase == 'review':
             if hold is None:
                 return None
@@ -132,14 +200,23 @@ class CascadeLLMService(LLMServiceInterface):
             return permit
         if hold is not None:
             if hold['identity'] == (provider, model):
+                if phase == 'evidence':
+                    for rp,rm,profile in self._review_candidates((provider,model)):
+                        rb=self._quota_bucket(profile,rp,rm)
+                        capacity=self._initial_review_cost(profile)
+                        permits=await self.governor.replace_unused_many([hold['permit']],[(bucket,cost),(rb,capacity)])
+                        if permits is not None:
+                            hold.update(permit=permits[1],identity=(rp,rm))
+                            return permits[0]
                 return None  # Reserve an actual different model for the final review.
             return await self.governor.wait_reserve(bucket, cost, deadline=deadline)
         for review_provider, review_model, profile in self._review_candidates((provider, model)):
             review_bucket = self._quota_bucket(profile, review_provider, review_model)
-            # The final rendered input is not known yet. Hold only the existing
-            # bucket's maximum admissible request; shrink to its measured request
-            # cost atomically when the review stage has the complete draft.
-            capacity = min(profile.quota.tokens_per_window, profile.quota.tokens_per_day)
+            # Reserve the configured provisional review cost until the draft is
+            # known, then atomically reserve its actual review and recovery plan.
+            capacity = self._initial_review_cost(profile)
+            if phase == 'repair':
+                capacity=resources.get(('recovery_review_costs',id(self)),{}).get((review_provider,review_model),capacity)
             permits = await self.governor.reserve_many([(bucket, cost), (review_bucket, capacity)])
             if permits is not None:
                 hold = {'permit': permits[1], 'identity': (review_provider, review_model)}
@@ -151,16 +228,73 @@ class CascadeLLMService(LLMServiceInterface):
                 return permits[0]
         return None
 
-    def _quota_retry_delay(self, phase, provider, model, bucket, cost):
+    def _recovery_plans(self, provider, model, bucket, review_cost):
+        capture = CURRENT_GENERATION.get()
+        request = capture.recovery_request
+        kwargs = dict(prompt=request.prompt,schema=request.schema,system_instruction=request.system_instruction,
+                      temperature=request.temperature)
+        # สำรองขนาด assessment/คำตอบใหม่ตาม output limit ที่ใช้จริง ไม่เพิ่มเพดานบัญชี
+        margin = self.configuration.STRUCTURED_MAX_OUTPUT_TOKENS
+        profiles = {p.id:p for p in self.runtime.providers if p.enabled}
+        plans = []
+        for key in self.runtime.stages.repair.profiles:
+            profile = profiles.get(key)
+            if profile is None: continue
+            repair_provider = profile.protocol.removesuffix('_json_schema')
+            repair_model = getattr(self.configuration,profile.model_setting)
+            client = self._clients[repair_provider]
+            if (repair_provider in self._auth_blocked or time.monotonic() < self._model_open_until.get((repair_provider,repair_model),0)
+                    or isinstance(client,ProviderClient) and not client.configured): continue
+            repair_cost = self._request_cost(client,'generate_structured',repair_model,kwargs) + margin
+            for final_provider, final_model, final_profile in self._review_candidates((repair_provider,repair_model)):
+                requests = [(bucket,review_cost),
+                    (self._quota_bucket(profile,repair_provider,repair_model),repair_cost),
+                    (self._quota_bucket(final_profile,final_provider,final_model),
+                     TURN_RESOURCES.get().get(('recovery_review_costs',id(self)),{}).get((final_provider,final_model),review_cost+margin))]
+                plans.append((requests,[(provider,model),(repair_provider,repair_model),(final_provider,final_model)]))
+        return plans
+
+    @staticmethod
+    def _earliest_admission_status(statuses, empty_code='review_unavailable'):
+        feasible = [(code, delay) for code, delay in statuses
+                    if delay is not None and math.isfinite(delay) and code != 'request_budget_exceeded']
+        if feasible:
+            return min(feasible, key=lambda value: value[1])
+        for code in ('quota_temporarily_unavailable', 'quota_exhausted'):
+            if any(status == code for status, _ in statuses):
+                return code, None
+        if any(code == 'request_budget_exceeded' for code, _ in statuses):
+            return 'request_budget_exceeded', None
+        if any(code == 'review_unavailable' for code, _ in statuses):
+            return 'review_unavailable', None
+        return empty_code, None
+
+    async def _admission_status(self, phase, provider, model, bucket, cost):
         resources = TURN_RESOURCES.get()
-        if resources is not None and phase in ('planning','evidence') and resources.get(('review_hold',id(self))) is None:
-            delays=[]
+        hold = resources.get(('review_hold', id(self))) if resources is not None else None
+        recovery_status = resources.get(('recovery_admission',id(self),provider,model)) if resources else None
+        if phase == 'review' and recovery_status is not None:
+            return recovery_status
+        if resources is not None and phase == 'review' and hold is None:
+            return 'review_unavailable', None
+        if phase == 'evidence' and hold is not None and hold['identity'] == (provider,model):
+            statuses=[]
+            for rp,rm,profile in self._review_candidates((provider,model)):
+                rb=self._quota_bucket(profile,rp,rm)
+                capacity=self._initial_review_cost(profile)
+                statuses.append(await self.governor.replacement_status(
+                    [hold['permit']],[(bucket,cost),(rb,capacity)]))
+            return self._earliest_admission_status(statuses)
+        if resources is not None and phase in ('planning','evidence','repair') and hold is None:
+            statuses=[]
             for review_provider, review_model, profile in self._review_candidates((provider,model)):
                 review_bucket=self._quota_bucket(profile,review_provider,review_model)
-                capacity=min(profile.quota.tokens_per_window,profile.quota.tokens_per_day)
-                delays.append(self.governor.retry_after_many([(bucket,cost),(review_bucket,capacity)]))
-            return min(delays,default=self.runtime.quota_backoff_seconds)
-        return self.governor.retry_after(bucket,cost)
+                capacity=self._initial_review_cost(profile)
+                if phase == 'repair':
+                    capacity=resources.get(('recovery_review_costs',id(self)),{}).get((review_provider,review_model),capacity)
+                statuses.append(await self.governor.next_admission_status([(bucket,cost),(review_bucket,capacity)]))
+            return self._earliest_admission_status(statuses)
+        return await self.governor.next_admission_status([(bucket, cost)])
 
     def _request_cost(self, client, method, model, kwargs):
         if isinstance(client, ProviderClient):
@@ -173,26 +307,37 @@ class CascadeLLMService(LLMServiceInterface):
         # คืนเฉพาะโควตาผู้ตรวจที่ยังไม่ได้ส่ง ไม่คืนค่าใช้จ่ายของโมเดลที่เรียกไปแล้ว
         if resources is None:
             return
-        key = ('review_hold', id(self))
-        hold = resources.get(key)
-        if hold is not None and not hold['permit'].sent:
-            await self.governor.release_unused(hold['permit'])
-            resources.pop(key, None)
+        for name in ('review_hold','recovery_hold','final_review_hold'):
+            key = (name, id(self))
+            hold = resources.get(key)
+            if hold is not None and not hold['permit'].sent:
+                await self.governor.release_unused(hold['permit'])
+                resources.pop(key, None)
 
-    async def _turn_retry_delay(self, resources):
+    async def _turn_retry_status(self, resources):
         # คำนวณใหม่หลังปล่อยการจองและบันทึก usage เพื่อไม่แจ้งเวลารอจากสถานะเก่า
-        delays = []
+        statuses = []
+        if resources.get(('review_requests',id(self))):
+            return self._earliest_admission_status([
+                await self.governor.next_admission_status(requests)
+                for requests in resources[('review_requests',id(self))]])
+        if resources.get(('recovery_requests',id(self))):
+            return self._earliest_admission_status([
+                await self.governor.next_admission_status(requests)
+                for requests in resources[('recovery_requests',id(self))]])
+        available_writers = False
         for (provider, model), cost in resources.get(('planning_costs', id(self)), {}).items():
             if provider in self._auth_blocked or time.monotonic() < self._model_open_until.get((provider, model), 0):
                 continue
+            available_writers = True
             bucket = self._quota_bucket(self._profile(provider, model), provider, model)
             for review_provider, review_model, profile in self._review_candidates((provider, model)):
                 review_bucket = self._quota_bucket(profile, review_provider, review_model)
-                capacity = min(profile.quota.tokens_per_window, profile.quota.tokens_per_day)
-                delay = await self.governor.next_admission_delay([(bucket, cost), (review_bucket, capacity)])
-                if math.isfinite(delay):
-                    delays.append(delay)
-        return min(delays) if delays else None
+                capacity = self._initial_review_cost(profile)
+                capacity=resources.get(('recovery_review_costs',id(self)),{}).get((review_provider,review_model),capacity)
+                statuses.append(await self.governor.next_admission_status([(bucket, cost), (review_bucket, capacity)]))
+        return self._earliest_admission_status(statuses,
+            empty_code='review_unavailable' if available_writers else 'providers_exhausted')
 
     async def start(self):
         for client in self._clients.values():
@@ -267,8 +412,20 @@ class CascadeLLMService(LLMServiceInterface):
             recording.append(record)
         ordered = self._get_cascade_tiers() if tiers is None else list(tiers)
         resources = TURN_RESOURCES.get()
+        if resources is not None and phase == 'review' and capture.recovery_request is not None:
+            costs={}
+            for rp,rm,profile in self._review_candidates(('', '')):
+                try:
+                    costs[(rp,rm)]=self._request_cost(self._clients[rp],method,rm,kwargs)+self.configuration.STRUCTURED_MAX_OUTPUT_TOKENS
+                except ValueError:
+                    continue
+            resources[('recovery_review_costs',id(self))]=costs
+        if resources is not None and phase == 'repair' and ('recovery_hold',id(self)) not in resources:
+            # ผู้ตรวจรอบแรกใช้โควตาไปแล้ว ต้องจองคู่ใหม่ก่อนเริ่มแก้ ไม่คืน usage เดิม
+            await self._release_review_hold(resources)
+            resources.pop(('review_hold', id(self)), None)
         hold = resources.get(('review_hold', id(self))) if resources is not None else None
-        if resources is not None and phase == 'planning':
+        if resources is not None and phase in ('planning', 'repair'):
             costs = {}
             for provider, model in ordered:
                 client = self._clients[provider]
@@ -280,15 +437,30 @@ class CascadeLLMService(LLMServiceInterface):
                     continue
             resources[('planning_costs', id(self))] = costs
         if hold is not None:
-            if phase == 'review':
+            reserved = resources.get((('recovery_hold' if phase == 'repair' else 'final_review_hold'),id(self)))
+            if reserved is not None and not (phase == 'review' and capture.recovery_request is not None):
+                ordered.sort(key=lambda identity: identity != reserved['identity'])
+            elif phase == 'review':
                 ordered.sort(key=lambda identity: identity != hold['identity'])
-            else:
+            elif phase != 'evidence':
                 ordered = [identity for identity in ordered if identity != hold['identity']]
         attempts, quota_denied, oversized, waits = 0, False, False, []
         deadline_limited = False
+        admission_statuses = []
+        provider_rate_limited = False
+        structured_invalid = False
+        semaphore_acquired = False
+        primary_provider = ordered[0][0] if ordered else None
+        cross_provider_fallback = tiers is None and any(
+            provider != primary_provider and provider not in self._auth_blocked
+            and time.monotonic() >= self._model_open_until.get((provider, model), 0)
+            and (not isinstance(self._clients[provider], ProviderClient) or self._clients[provider].configured)
+            for provider, model in ordered)
+        primary_failed = False
         try:
             async with asyncio.timeout_at(deadline):
                 async with self._semaphore:
+                    semaphore_acquired = True
                     queue_seconds = loop.time() - started
                     for index, (provider, model) in enumerate(ordered):
                         if deadline-loop.time() < self.runtime.stages.minimum_attempt_seconds:
@@ -296,6 +468,8 @@ class CascadeLLMService(LLMServiceInterface):
                             break
                         if attempts >= 1 + self.runtime.max_failovers_per_logical_call:
                             break
+                        if cross_provider_fallback and primary_failed and provider == primary_provider:
+                            continue
                         profile, client = self._profile(provider, model), self._clients[provider]
                         quota_bucket = self._quota_bucket(profile, provider, model)
                         if provider in self._auth_blocked or time.monotonic() < self._model_open_until.get((provider, model), 0):
@@ -310,6 +484,7 @@ class CascadeLLMService(LLMServiceInterface):
                                 cost = self._request_cost(client, method, model, kwargs)
                             except ValueError:
                                 self._model_open_until[(provider, model)] = math.inf
+                                primary_failed |= provider == primary_provider
                                 continue
                             # จำกัดเวลารอโควตาของแต่ละโมเดล เพื่อเหลือเวลาให้โมเดลสำรอง
                             admission_deadline = min(deadline, loop.time() + self.runtime.http.quota_admission_wait_seconds)
@@ -319,18 +494,21 @@ class CascadeLLMService(LLMServiceInterface):
                             # polling boundary can discard an already committed permit.
                             permit = await self._turn_permit(phase, provider, model, quota_bucket, cost, admission_deadline)
                             if permit is None:
-                                too_large = self.governor.cost_exceeds_capacity(quota_bucket, cost)
+                                denial_code, retry_delay = await self._admission_status(phase, provider, model, quota_bucket, cost)
+                                admission_statuses.append((denial_code, retry_delay))
+                                too_large = denial_code == 'request_budget_exceeded'
                                 oversized |= too_large
-                                quota_denied |= not too_large
-                                retry_delay = None if too_large else self._quota_retry_delay(phase,provider,model,quota_bucket,cost)
+                                quota_denied |= denial_code in ('quota_temporarily_unavailable', 'quota_exhausted')
+                                primary_failed |= provider == primary_provider
                                 if retry_delay is not None and math.isfinite(retry_delay):
                                     waits.append(retry_delay)
                                 self.telemetry.append({'trace_id': TURN_TRACE_ID.get(), 'phase': phase, 'logical_call_id': call_id, 'provider': provider, 'model': model,
-                                                       'status': 'request_budget_exceeded' if too_large else 'quota_admission_denied',
+                                                       'status': denial_code or 'quota_admission_denied',
                                                        'admission_scope': 'turn_writer_and_review' if resources is not None and phase == 'planning' else 'logical_call',
                                                        'http_attempts': 0, 'estimated_tokens': cost,
                                                        'retry_after_seconds': retry_delay if retry_delay is not None and math.isfinite(retry_delay) else None,
                                                        'queue_seconds': loop.time() - started})
+                                record_diagnostic('admission', stage=phase, provider=provider, model=model, error_code=denial_code)
                                 continue
                             if isinstance(client, ProviderClient):
                                 client.reset_observation()
@@ -343,6 +521,8 @@ class CascadeLLMService(LLMServiceInterface):
                                    'remaining_turn_seconds': max(0, REQUEST_DEADLINE.get()-loop.time()) if REQUEST_DEADLINE.get() else None}
                             backups = [(p, m) for p, m in ordered[index+1:] if p not in self._auth_blocked
                                 and time.monotonic() >= self._model_open_until.get((p, m), 0)]
+                            if cross_provider_fallback and provider == primary_provider:
+                                backups = [identity for identity in backups if identity[0] != primary_provider]
                             remaining = max(0, deadline-loop.time())
                             reserve_backup = bool(backups) and attempts < 1 + self.runtime.max_failovers_per_logical_call
                             fraction = 1.0
@@ -370,13 +550,18 @@ class CascadeLLMService(LLMServiceInterface):
                             except TimeoutError:
                                 row['status'] = 'attempt_deadline_exceeded'
                                 deadline_limited = True
+                                primary_failed |= provider == primary_provider
                             except LLMProviderException as error:
                                 row.update(status=error.error_code, http_status=error.status_code)
+                                structured_invalid |= error.error_code == 'structured_output_invalid'
+                                primary_failed |= provider == primary_provider
                                 if error.status_code == 429:
                                     quota_denied = True
+                                    provider_rate_limited = True
                                     seconds = error.retry_after if error.retry_after is not None else self.runtime.quota_backoff_seconds
-                                    await self.governor.cooldown(quota_bucket, seconds)
-                                    waits.append(seconds)
+                                    await self.governor.cooldown(quota_bucket, seconds, reported=error.retry_after is not None)
+                                    if error.retry_after is not None:
+                                        waits.append(error.retry_after)
                                 else:
                                     self._failure(provider, model, error)
                             except asyncio.CancelledError:
@@ -384,6 +569,7 @@ class CascadeLLMService(LLMServiceInterface):
                                 raise
                             except Exception:
                                 row['status'] = 'provider_unexpected_failure'
+                                primary_failed |= provider == primary_provider
                                 self._model_open_until[(provider, model)] = time.monotonic() + self.runtime.circuit_open_seconds
                             finally:
                                 observation = client.observation() if isinstance(client, ProviderClient) else None
@@ -400,23 +586,50 @@ class CascadeLLMService(LLMServiceInterface):
                                 row['elapsed_seconds'] = loop.time() - attempt_start
                                 row['remaining_stage_seconds_after'] = max(0, deadline-loop.time())
                                 self.telemetry.append(row)
+                                record_diagnostic('provider_attempt', stage=phase, provider=provider, model=model,
+                                    http_status=row.get('http_status'), error_code=row['status'], observation=observation)
                                 await asyncio.shield(self.governor.finish(permit, observation))
-                                if phase == 'planning' and hold is None and row['status'] != 'success':
+                                if row['status'] == 'provider_rate_limited':
+                                    # The response may reveal an RPD reset later
+                                    # than Retry-After. Classify after recording
+                                    # the authoritative headers, including calls
+                                    # made outside whole-turn reservations.
+                                    admission_statuses.append(await self.governor.next_admission_status([(quota_bucket, cost)]))
+                                if phase in ('planning', 'repair') and hold is None and row['status'] != 'success':
                                     await asyncio.shield(self._release_review_hold(resources))
         except TimeoutError:
-            raise AllLLMProvidersExhaustedException(code='deadline_exceeded') from None
-        retry = min((w for w in waits if w > 0 and math.isfinite(w)), default=self.runtime.quota_backoff_seconds) if quota_denied else None
+            code = 'deadline_exceeded' if semaphore_acquired else 'providers_busy'
+            if not semaphore_acquired:
+                self.telemetry.append({'trace_id': TURN_TRACE_ID.get(), 'phase': phase,
+                    'logical_call_id': call_id, 'status': code, 'http_attempts': 0,
+                    'semaphore_queue_seconds': loop.time() - started})
+            raise AllLLMProvidersExhaustedException(code=code) from None
+        retry = min((w for w in waits if w > 0 and math.isfinite(w)), default=None) if quota_denied else None
+        admission_code, admission_delay = self._earliest_admission_status(admission_statuses, empty_code='providers_exhausted')
+        if quota_denied and admission_code in ('quota_temporarily_unavailable', 'quota_exhausted'):
+            retry = admission_delay
+        if admission_code is None and not provider_rate_limited:
+            quota_denied = False
+            retry = None
         if resources is not None:
             await self._release_review_hold(resources)
             if quota_denied:
-                refreshed = await self._turn_retry_delay(resources)
+                admission_code, refreshed = await self._turn_retry_status(resources)
                 if refreshed is not None:
                     retry = refreshed
                     # ถ้ายังมีคู่โมเดลที่รับคำขอได้ ความล้มเหลวนี้ไม่ใช่ทุกระบบติดโควตา
                     if refreshed <= 0:
                         quota_denied = False
                         retry = None
-        code = 'providers_rate_limited' if quota_denied else 'request_budget_exceeded' if oversized else 'deadline_exceeded' if deadline_limited else 'providers_exhausted'
+                else:
+                    quota_denied = admission_code in ('quota_temporarily_unavailable', 'quota_exhausted')
+                    retry = None
+        code = ((admission_code if admission_code == 'quota_exhausted' else
+                 'providers_rate_limited' if provider_rate_limited else admission_code) if quota_denied else
+                'request_budget_exceeded' if oversized else
+                'deadline_exceeded' if deadline_limited else
+                'review_unavailable' if admission_code == 'review_unavailable' else
+                'structured_output_invalid' if structured_invalid else 'providers_exhausted')
         raise AllLLMProvidersExhaustedException(code=code, retry_after=retry)
 
     async def generate_text(self, prompt, system_instruction=None, max_tokens=None, temperature=None):

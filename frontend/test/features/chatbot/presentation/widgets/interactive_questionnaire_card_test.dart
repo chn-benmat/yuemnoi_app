@@ -4,6 +4,95 @@ import 'package:frontend/features/chatbot/domain/entities/chat_message.dart';
 import 'package:frontend/features/chatbot/presentation/widgets/interactive_questionnaire_card.dart';
 
 void main() {
+  testWidgets(
+    'budget branch follows category ID and retains the exact option ID',
+    (tester) async {
+      List<QuestionnaireAnswer>? result;
+      const questions = [
+        ClarificationQuestion(
+          id: 'kind',
+          title: 'ประเภท',
+          totalSteps: 2,
+          options: ['เครื่องมือ', 'ดนตรี'],
+          choices: [
+            QuestionChoice(
+              id: 'tools',
+              label: 'เครื่องมือ',
+              actionValue: 'เครื่องมือ',
+            ),
+            QuestionChoice(id: 'music', label: 'ดนตรี', actionValue: 'ดนตรี'),
+          ],
+        ),
+        ClarificationQuestion(
+          id: 'use',
+          title: 'ใช้งานอะไร',
+          options: ['ทั่วไป'],
+          totalSteps: 2,
+        ),
+        ClarificationQuestion(
+          id: 'budget',
+          title: 'งบค่าเช่า',
+          totalSteps: 3,
+          options: ['ไม่จำกัดงบ'],
+          branchQuestionId: 'kind',
+          branchTitles: {
+            'tools': 'งบค่าเช่าต่อชั่วโมง',
+            'music': 'งบค่าเช่าต่อวัน',
+          },
+          choices: [
+            QuestionChoice(
+              id: 'tools:cap',
+              label: 'ไม่เกิน 250 บาทต่อชั่วโมง',
+              actionValue: 'ไม่เกิน 250 บาทต่อชั่วโมง',
+            ),
+            QuestionChoice(
+              id: 'music:cap',
+              label: 'ไม่เกิน 350 บาทต่อวัน',
+              actionValue: 'ไม่เกิน 350 บาทต่อวัน',
+            ),
+          ],
+          branchChoices: {
+            'tools': [
+              QuestionChoice(
+                id: 'tools:cap',
+                label: 'ไม่เกิน 250 บาทต่อชั่วโมง',
+                actionValue: 'ไม่เกิน 250 บาทต่อชั่วโมง',
+              ),
+            ],
+            'music': [
+              QuestionChoice(
+                id: 'music:cap',
+                label: 'ไม่เกิน 350 บาทต่อวัน',
+                actionValue: 'ไม่เกิน 350 บาทต่อวัน',
+              ),
+            ],
+          },
+        ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InteractiveQuestionnaireCard(
+              questions: questions,
+              onCompleted: (_) {},
+              onCompletedWithContext: (_, answers, _) => result = answers,
+              onDismiss: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('เครื่องมือ'));
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.tap(find.text('ทั่วไป'));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('งบค่าเช่าต่อชั่วโมง'), findsOneWidget);
+      expect(find.text('ไม่เกิน 350 บาทต่อวัน'), findsNothing);
+      await tester.tap(find.text('ไม่เกิน 250 บาทต่อชั่วโมง'));
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(result!.last.optionId, 'tools:cap');
+    },
+  );
+
   const singleStepQuestion = ClarificationQuestion(
     id: 'activity',
     title: 'เช่าคอมไปใช้งานแบบไหน?',
@@ -77,15 +166,15 @@ void main() {
       expect(find.text('เช่าคอมไปใช้งานแบบไหน?'), findsOneWidget);
       expect(find.text('ข้อ 1 จาก 1'), findsOneWidget);
 
-      // Numbered options check
+      // ตรวจตัวเลือกแบบกะทัดรัดที่ยังแตะเลือกได้ครบ
       expect(find.text('ทำงาน/ออฟฟิศ (โน้ตบุ๊ก/PC)'), findsOneWidget);
       expect(find.text('จัดอีเวนต์/บูธ (หลายเครื่อง)'), findsOneWidget);
       expect(find.text('เล่นเกม/สเปกแรง'), findsOneWidget);
       expect(find.text('ตัดต่อ/กราฟิก สเปกสูง'), findsOneWidget);
-      expect(find.text('1'), findsOneWidget);
-      expect(find.text('2'), findsOneWidget);
-      expect(find.text('3'), findsOneWidget);
-      expect(find.text('4'), findsOneWidget);
+      expect(
+        find.byIcon(Icons.radio_button_unchecked_rounded),
+        findsNWidgets(4),
+      );
 
       // Footer actions
       expect(find.text('ตอบเอง'), findsNothing);

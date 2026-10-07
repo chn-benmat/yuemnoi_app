@@ -38,7 +38,17 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str = Field(default="", description="Tavily search API key")
     GEMINI_API_KEY: str = Field(default="", description="Google Gemini API key")
     GROQ_API_KEY: str = Field(default="", description="Groq API key")
+    # ใช้รหัสขอบเขตโควตาคงที่ของบัญชี ไม่เปลี่ยนตามการหมุน API key
+    GEMINI_QUOTA_ACCOUNT_ID: Optional[str] = Field(default=None, description="Stable Gemini project quota identity")
+    GROQ_QUOTA_ACCOUNT_ID: Optional[str] = Field(default=None, description="Stable Groq organization quota identity")
     INTERNAL_SERVICE_KEY: str = Field(default="", description="Shared internal key for backend-to-ai auth")
+
+    @field_validator("GEMINI_QUOTA_ACCOUNT_ID", "GROQ_QUOTA_ACCOUNT_ID", mode="before")
+    @classmethod
+    def empty_quota_account_is_legacy(cls, value):
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
 
     # Application Settings
     APP_NAME: str = "Yuemnoi AI Service"

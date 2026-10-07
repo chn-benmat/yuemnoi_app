@@ -17,7 +17,7 @@ def test_approved_deadlines_allow_all_flows_thirty_seconds():
     assert runtime.general.hard_deadline_seconds == runtime.equipment.hard_deadline_seconds == runtime.technical_hard_deadline_seconds == 30
     assert runtime.http.logical_call_deadline_seconds == 30
     assert runtime.http.timeout_seconds >= runtime.http.logical_call_deadline_seconds
-    assert (runtime.general.logical_calls, runtime.equipment.logical_calls, runtime.max_failovers_per_logical_call) == (2, 3, 1)
+    assert (runtime.general.logical_calls, runtime.equipment.logical_calls, runtime.max_failovers_per_logical_call) == (4, 5, 1)
 
 
 def stream_case():

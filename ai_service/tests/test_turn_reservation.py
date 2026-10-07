@@ -10,6 +10,7 @@ from app.infrastructure.llm.cascade_llm_service import CascadeLLMService
 from app.infrastructure.runtime.execution import TURN_RESOURCES
 from app.core.exceptions import AllLLMProvidersExhaustedException, LLMProviderException
 from app.infrastructure.llm.quota import QuotaGovernor
+from test_provider_runtime import RUNTIME
 
 
 class Result(BaseModel):
@@ -22,7 +23,7 @@ def stack(tmp_path):
     groq.generate_structured = AsyncMock(return_value=Result(value='reviewer'))
     config = settings.model_copy(update={'AI_QUOTA_LEDGER_PATH': tmp_path / 'quota.json',
         'STRUCTURED_MAX_OUTPUT_TOKENS': 20})
-    cascade = CascadeLLMService(gemini, groq, configuration=config)
+    cascade = CascadeLLMService(gemini, groq, configuration=config, runtime=RUNTIME)
     # Existing enabled profiles and model identities remain unchanged.
     return cascade, gemini, groq
 
@@ -48,6 +49,201 @@ async def test_review_hold_survives_writing_and_is_shrunk_for_actual_request(tmp
     finally:
         for cleanup in resources['cleanup']:
             await cleanup()
+        TURN_RESOURCES.reset(token)
+        await cascade.aclose()
+
+
+@pytest.mark.asyncio
+async def test_repair_reserves_a_fresh_independent_review_without_refunding_spent_usage(tmp_path):
+    cascade, gemini, groq = stack(tmp_path)
+    resources = {'cleanup': []}
+    token = TURN_RESOURCES.set(resources)
+    try:
+        with generation_stage('planning') as first_writer:
+            await cascade.generate_structured('request', Result)
+        with generation_stage('review', excluded_models=[first_writer.provenance]):
+            await cascade.generate_structured('first review', Result)
+        first_permit = resources[('review_hold', id(cascade))]['permit']
+        with generation_stage('repair', downstream=('review',)) as repaired_writer:
+            await cascade.generate_structured('correct rejected answer', Result)
+        fresh_hold = resources[('review_hold', id(cascade))]
+        assert fresh_hold['permit'] is not first_permit and not fresh_hold['permit'].sent
+        assert fresh_hold['identity'] != (repaired_writer.provenance.provider, repaired_writer.provenance.model)
+        with generation_stage('review', excluded_models=[repaired_writer.provenance]) as final_reviewer:
+            await cascade.generate_structured('whole corrected draft', Result)
+        assert final_reviewer.provenance != repaired_writer.provenance
+        charged = [p for b in cascade.governor._buckets.values() for p in b.records if p.sent]
+        assert len(charged) == 4 and first_permit in charged
+        assert gemini.generate_structured.await_count + groq.generate_structured.await_count == 4
+    finally:
+        for cleanup in resources['cleanup']:
+            await cleanup()
+        TURN_RESOURCES.reset(token)
+        await cascade.aclose()
+
+
+@pytest.mark.asyncio
+async def test_repair_pair_quota_denial_calls_no_provider_and_reports_actual_wait(tmp_path):
+    cascade, gemini, groq = stack(tmp_path)
+    resources = {'cleanup': []}
+    token = TURN_RESOURCES.set(resources)
+    try:
+        for provider, model in cascade._get_cascade_tiers():
+            await cascade.governor.cooldown(cascade._quota_bucket(cascade._profile(provider, model),provider,model),45)
+        with generation_stage('repair',downstream=('review',)):
+            with pytest.raises(AllLLMProvidersExhaustedException) as caught:
+                await cascade.generate_structured('correct rejected answer',Result)
+        assert caught.value.code == 'quota_temporarily_unavailable' and 0 < caught.value.retry_after <= 45
+        gemini.generate_structured.assert_not_awaited()
+        groq.generate_structured.assert_not_awaited()
+        assert ('review_hold',id(cascade)) not in resources
+    finally:
+        for cleanup in resources['cleanup']:
+            await cleanup()
+        TURN_RESOURCES.reset(token)
+        await cascade.aclose()
+
+
+@pytest.mark.asyncio
+async def test_first_review_wait_is_not_reported_as_daily_quota_for_a_speculative_repair(tmp_path):
+    from app.domain.interfaces.generation_stage import GenerationRequest
+    cascade,gemini,groq=stack(tmp_path)
+    identities=[i for i in cascade._get_cascade_tiers() if i[0]=='groq'][:2]
+    enabled={cascade._profile(*i).id for i in identities}
+    profiles=[p.model_copy(update={'enabled':p.id in enabled,
+        'quota':p.quota.model_copy(update={'tokens_per_window':1000,'tokens_per_day':1000})})
+        for p in cascade.runtime.providers]
+    cascade.runtime=cascade.runtime.model_copy(update={'providers':profiles,
+        'stages':cascade.runtime.stages.model_copy(update={'initial_review_reserve_tokens':200,
+            'repair':cascade.runtime.stages.repair.model_copy(update={'profiles':[cascade._profile(*identities[0]).id]})})})
+    await cascade.governor.aclose()
+    clock=[0.0]
+    cascade.governor=QuotaGovernor([p.quota.model_copy(update={'bucket':cascade._quota_bucket(p,
+        p.protocol.removesuffix('_json_schema'),getattr(cascade.configuration,p.model_setting))})
+        for p in profiles],clock=lambda:clock[0])
+    writer_bucket=cascade._quota_bucket(cascade._profile(*identities[0]),*identities[0])
+    spent=await cascade.governor.reserve(writer_bucket,900)
+    await cascade.governor.mark_sent(spent)
+    await cascade.governor.finish(spent,None)
+    clock[0]=70
+    cascade._request_cost=lambda client,method,model,kw:980 if kw['prompt']=='recovery request' else 50
+    resources={'cleanup':[]}
+    token=TURN_RESOURCES.set(resources)
+    try:
+        with generation_stage('planning') as writer:
+            await cascade.generate_structured('request',Result)
+        reviewer=resources[('review_hold',id(cascade))]['identity']
+        review_bucket=cascade._quota_bucket(cascade._profile(*reviewer),*reviewer)
+        await cascade.governor.cooldown(review_bucket,60)
+        recovery=GenerationRequest('recovery request',Result,None,.1)
+        with generation_stage('review',excluded_models=[writer.provenance],recovery_request=recovery):
+            with pytest.raises(AllLLMProvidersExhaustedException) as caught:
+                await cascade.generate_structured('first review',Result)
+        assert caught.value.code=='quota_temporarily_unavailable'
+        assert caught.value.retry_after==60
+        assert groq.generate_structured.await_count==1
+        gemini.generate_structured.assert_not_awaited()
+    finally:
+        for cleanup in resources['cleanup']:await cleanup()
+        TURN_RESOURCES.reset(token)
+        await cascade.aclose()
+
+
+@pytest.mark.asyncio
+async def test_first_review_reserves_repair_and_final_review_atomically(tmp_path):
+    from app.domain.interfaces.generation_stage import GenerationRequest
+    cascade, gemini, groq = stack(tmp_path)
+    resources = {'cleanup': []}
+    token = TURN_RESOURCES.set(resources)
+    try:
+        with generation_stage('planning') as writer:
+            await cascade.generate_structured('request', Result)
+        recovery = GenerationRequest('correct rejected answer', Result, None, .1)
+        with generation_stage('review', excluded_models=[writer.provenance], recovery_request=recovery):
+            await cascade.generate_structured('first complete review', Result)
+        recovery_hold = resources[('recovery_hold', id(cascade))]
+        final_hold = resources[('final_review_hold', id(cascade))]
+        assert not recovery_hold['permit'].sent and not final_hold['permit'].sent
+        assert recovery_hold['identity'] != final_hold['identity']
+        with generation_stage('repair') as repaired_writer:
+            await cascade.generate_structured(recovery.prompt, Result)
+        with generation_stage('review', excluded_models=[repaired_writer.provenance]) as final:
+            await cascade.generate_structured('final complete review', Result)
+        assert final.provenance != repaired_writer.provenance
+        assert recovery_hold['permit'].sent and final_hold['permit'].sent
+        assert gemini.generate_structured.await_count + groq.generate_structured.await_count == 4
+    finally:
+        for cleanup in resources['cleanup']:
+            await cleanup()
+        TURN_RESOURCES.reset(token)
+        await cascade.aclose()
+
+
+@pytest.mark.asyncio
+async def test_insufficient_recovery_capacity_allows_review_but_prevents_repair_http_and_keeps_spent_usage(tmp_path):
+    from app.domain.interfaces.generation_stage import GenerationRequest
+    cascade,gemini,groq=stack(tmp_path)
+    identities=[i for i in cascade._get_cascade_tiers() if i[0]=='groq'][:2]
+    enabled={cascade._profile(*i).id for i in identities}
+    profiles=[p.model_copy(update={'enabled':p.id in enabled,
+        'quota':p.quota.model_copy(update={'tokens_per_window':1000,'tokens_per_day':10000})})
+        for p in cascade.runtime.providers]
+    cascade.runtime=cascade.runtime.model_copy(update={'providers':profiles,
+        'stages':cascade.runtime.stages.model_copy(update={'initial_review_reserve_tokens':200})})
+    await cascade.governor.aclose()
+    clock=[0.0]
+    cascade.governor=QuotaGovernor([p.quota.model_copy(update={'bucket':cascade._quota_bucket(p,
+        p.protocol.removesuffix('_json_schema'),getattr(cascade.configuration,p.model_setting))})
+        for p in profiles],clock=lambda:clock[0])
+    cascade._request_cost=lambda client,method,model,kw:980 if kw['prompt']=='reserved recovery request' else 50
+    resources={'cleanup':[]}
+    token=TURN_RESOURCES.set(resources)
+    try:
+        with generation_stage('planning') as writer:
+            await cascade.generate_structured('request',Result)
+        request=GenerationRequest('reserved recovery request',Result,None,.1)
+        with generation_stage('review',excluded_models=[writer.provenance],recovery_request=request):
+            await cascade.generate_structured('first complete review',Result)
+        assert groq.generate_structured.await_count==2
+        assert ('recovery_hold',id(cascade)) not in resources
+        with generation_stage('repair'):
+            with pytest.raises(AllLLMProvidersExhaustedException) as failure:
+                await cascade.generate_structured('reserved recovery request',Result)
+        assert failure.value.code=='quota_temporarily_unavailable'
+        assert failure.value.retry_after==60
+        assert groq.generate_structured.await_count==2
+        gemini.generate_structured.assert_not_awaited()
+        assert not any((key,id(cascade)) in resources for key in ('review_hold','recovery_hold','final_review_hold'))
+        charged=[p for b in cascade.governor._buckets.values() for p in b.records]
+        assert len(charged)==2 and all(p.sent and p.tokens==50 for p in charged)
+    finally:
+        for cleanup in resources['cleanup']:await cleanup()
+        TURN_RESOURCES.reset(token)
+        await cascade.aclose()
+
+
+@pytest.mark.asyncio
+async def test_evidence_can_atomically_move_review_hold_to_a_different_model(tmp_path):
+    cascade,gemini,groq=stack(tmp_path)
+    resources={'cleanup':[]}
+    token=TURN_RESOURCES.set(resources)
+    try:
+        with generation_stage('planning') as planner:
+            await cascade.generate_structured('request',Result)
+        hold=resources[('review_hold',id(cascade))]
+        original_identity,original_permit=hold['identity'],hold['permit']
+        with generation_stage('evidence') as writer:
+            await cascade._run('generate_structured',dict(prompt='evidence',schema=Result,
+                system_instruction=None,temperature=.1),tiers=[original_identity])
+        assert writer.provenance==Provenance(*original_identity)
+        assert hold['identity']!=original_identity
+        assert cascade.governor._stored_permit(original_permit) is None
+        with generation_stage('review',excluded_models=[writer.provenance]) as reviewer:
+            await cascade.generate_structured('complete draft',Result)
+        assert reviewer.provenance!=writer.provenance
+        assert gemini.generate_structured.await_count+groq.generate_structured.await_count==3
+    finally:
+        for cleanup in resources['cleanup']:await cleanup()
         TURN_RESOURCES.reset(token)
         await cascade.aclose()
 
@@ -95,7 +291,7 @@ async def test_quota_notice_is_not_used_when_groq_fails_validation_with_capacity
         with generation_stage('planning'):
             with pytest.raises(AllLLMProvidersExhaustedException) as caught:
                 await cascade.generate_structured('request', Result)
-        assert caught.value.code == 'providers_exhausted'
+        assert caught.value.code == 'structured_output_invalid'
         assert caught.value.retry_after is None
         gemini.generate_structured.assert_not_awaited()
         assert groq.generate_structured.await_count == 1 + cascade.runtime.max_failovers_per_logical_call
@@ -120,7 +316,7 @@ async def test_quota_failure_checks_enabled_groq_paths_before_notifying(tmp_path
                 await cascade.generate_structured('request', Result)
         checked = {(row['provider'], row['model']) for row in cascade.telemetry}
         assert checked == set(cascade._get_cascade_tiers())
-        assert caught.value.code == 'providers_rate_limited'
+        assert caught.value.code == 'quota_temporarily_unavailable'
         assert caught.value.retry_after > 0
         gemini.generate_structured.assert_not_awaited()
         groq.generate_structured.assert_not_awaited()
@@ -238,7 +434,7 @@ async def test_failed_writer_retry_uses_daily_pair_capacity_not_held_minute(tmp_
         with generation_stage('planning'):
             with pytest.raises(AllLLMProvidersExhaustedException) as caught:
                 await cascade.generate_structured('xxxx', Result)
-        assert caught.value.code == 'providers_rate_limited'
+        assert caught.value.code == 'quota_exhausted'
         assert caught.value.retry_after == 860
         assert ('review_hold', id(cascade)) not in resources
     finally:

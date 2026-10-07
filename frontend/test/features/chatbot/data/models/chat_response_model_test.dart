@@ -1,7 +1,51 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/chatbot/data/models/chat_response_model.dart';
+import 'package:frontend/features/chatbot/data/models/chat_context_model.dart';
+import 'package:frontend/features/chatbot/domain/entities/chat_message.dart';
 
 void main() {
+  test(
+    'adaptive choices retain dependency and exact billing values in return context',
+    () {
+      final payload = <String, dynamic>{
+        'id': 'batch:budget',
+        'title': 'งบค่าเช่า',
+        'options': ['ไม่จำกัดงบ'],
+        'branch_question_id': 'batch:kind',
+        'branch_titles': {'music': 'งบค่าเช่าต่อวัน'},
+        'branch_choices': {
+          'music': [
+            {
+              'id': 'music:cap',
+              'label': 'ไม่เกิน 350 บาทต่อวัน',
+              'action_value': 'ไม่เกิน 350 บาทต่อวัน',
+            },
+          ],
+        },
+        'choices': [
+          {
+            'id': 'music:cap',
+            'label': 'ไม่เกิน 350 บาทต่อวัน',
+            'action_value': 'ไม่เกิน 350 บาทต่อวัน',
+          },
+        ],
+      };
+      final question = ClarificationQuestionModel.fromJson(payload).toEntity();
+      expect(question.branchQuestionId, 'batch:kind');
+      expect(question.branchChoices['music']!.single.id, 'music:cap');
+      final encoded = ChatContextModel.toJson(
+        ChatSessionContext(
+          sessionId: 'session',
+          userGoal: 'เลือกอุปกรณ์',
+          questions: [question],
+        ),
+      );
+      final returned = (encoded['questions'] as List).single as Map;
+      expect(returned['branch_question_id'], payload['branch_question_id']);
+      expect(returned['branch_choices'], payload['branch_choices']);
+      expect(returned['branch_titles'], payload['branch_titles']);
+    },
+  );
   group('RecommendedItemModel.fromJson', () {
     test(
       'parses Python AI service DTO format (name, image_urls list, type)',

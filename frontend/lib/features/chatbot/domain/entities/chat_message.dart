@@ -69,6 +69,8 @@ class ClarificationQuestion extends Equatable {
     this.choices = const [],
     this.branchOptions,
     this.branchTitles,
+    this.branchQuestionId,
+    this.branchChoices = const {},
   });
 
   final String id;
@@ -82,6 +84,8 @@ class ClarificationQuestion extends Equatable {
   final List<QuestionChoice> choices;
   final Map<String, List<String>>? branchOptions;
   final Map<String, String>? branchTitles;
+  final String? branchQuestionId;
+  final Map<String, List<QuestionChoice>> branchChoices;
 
   ClarificationQuestion copyWith({
     String? id,
@@ -95,6 +99,8 @@ class ClarificationQuestion extends Equatable {
     List<QuestionChoice>? choices,
     Map<String, List<String>>? branchOptions,
     Map<String, String>? branchTitles,
+    String? branchQuestionId,
+    Map<String, List<QuestionChoice>>? branchChoices,
   }) {
     return ClarificationQuestion(
       id: id ?? this.id,
@@ -108,6 +114,8 @@ class ClarificationQuestion extends Equatable {
       choices: choices ?? this.choices,
       branchOptions: branchOptions ?? this.branchOptions,
       branchTitles: branchTitles ?? this.branchTitles,
+      branchQuestionId: branchQuestionId ?? this.branchQuestionId,
+      branchChoices: branchChoices ?? this.branchChoices,
     );
   }
 
@@ -124,6 +132,8 @@ class ClarificationQuestion extends Equatable {
     choices,
     branchOptions,
     branchTitles,
+    branchQuestionId,
+    branchChoices,
   ];
 }
 
@@ -157,6 +167,7 @@ class ChatMessage extends Equatable {
     this.responseDuration,
     this.isStreaming = false,
     this.isVisibleInChat = true,
+    this.isFailure = false,
     this.thought,
     this.searchSources = const [],
     this.searchQuery,
@@ -178,6 +189,8 @@ class ChatMessage extends Equatable {
   final Duration? responseDuration;
   final bool isStreaming;
   final bool isVisibleInChat;
+  // แจ้งสถานะในแชตได้ แต่ไม่ใช้เป็นคำตอบของผู้ช่วยในประวัติที่ส่งให้โมเดล
+  final bool isFailure;
   final String? thought;
   final List<SearchSource> searchSources;
   final String? searchQuery;
@@ -199,6 +212,7 @@ class ChatMessage extends Equatable {
     Duration? responseDuration,
     bool? isStreaming,
     bool? isVisibleInChat,
+    bool? isFailure,
     String? thought,
     List<SearchSource>? searchSources,
     String? searchQuery,
@@ -220,6 +234,7 @@ class ChatMessage extends Equatable {
       responseDuration: responseDuration ?? this.responseDuration,
       isStreaming: isStreaming ?? this.isStreaming,
       isVisibleInChat: isVisibleInChat ?? this.isVisibleInChat,
+      isFailure: isFailure ?? this.isFailure,
       thought: thought ?? this.thought,
       searchSources: searchSources ?? this.searchSources,
       searchQuery: searchQuery ?? this.searchQuery,
@@ -244,6 +259,7 @@ class ChatMessage extends Equatable {
     responseDuration,
     isStreaming,
     isVisibleInChat,
+    isFailure,
     thought,
     searchSources,
     searchQuery,

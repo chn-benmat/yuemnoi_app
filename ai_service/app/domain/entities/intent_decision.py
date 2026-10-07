@@ -1,5 +1,5 @@
-from typing import List, Literal, Optional
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing import List, Literal, Optional, Annotated, ClassVar
+from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 
 
 class IntentDecision(BaseModel):
@@ -68,8 +68,21 @@ class IntentDecision(BaseModel):
 class KnownFact(BaseModel):
     model_config = ConfigDict(extra="forbid")
     dimension: str = Field(min_length=1)
-    value: str = Field(min_length=1)
+    value: str = Field(min_length=1, description='A meaningful established fact, never an empty or punctuation-only placeholder. Omit unknown facts from the list.',
+                       json_schema_extra={'x-provider-description': True})
     source_message_ids: List[str] = Field(min_length=1)
+
+
+class NativeKnownFact(KnownFact):
+    value: Annotated[str,Field(min_length=1)] | float = Field(
+        description='Established text or quantitative JSON number; no punctuation placeholders. Omit unknown facts.',
+        json_schema_extra={'x-provider-description':True})
+
+    @field_validator('value',mode='before')
+    @classmethod
+    def numeric_text(cls,value):
+        # เปลี่ยน representation เท่านั้น ไม่ตีความข้อความหรือหน่วยของผู้ใช้
+        return str(value) if type(value) in (int,float) else value
 
 
 class RequestUnderstanding(IntentDecision):
@@ -84,14 +97,15 @@ class RequestUnderstanding(IntentDecision):
     target_items: List[str] = Field(description="Equipment actually requested or referred to; resolve only supported references.")
     categories: List[str] = Field(description="Conceptual equipment categories, without a fixed catalog taxonomy.")
     budget_max: Optional[float] = Field(description="Explicit maximum budget; null when absent or units cannot be interpreted.")
-    budget_unit: Optional[str] = Field(description="Budget billing period explicitly established by the user; null when unknown, do not infer it from shop units.")
+    budget_unit: Optional[str] = Field(description="User-established billing period. When semantically identical to a supplied catalog period, use that exact catalog unit string rather than translating/abbreviating it. Preserve unsupported periods; null only when unknown. Never infer a user period from prices.",json_schema_extra={'x-provider-description':True})
     intended_use: Optional[str] = Field(description="Relevant user-stated workload, after corrections; null if unknown.")
     missing_slots: List[str] = Field(description="Only material unknown requirements for the requested operation, not optional preferences.")
     needs_external_search: bool = Field(description="Whether technical facts need external verification; shop prices, stock and policies need their authoritative source.")
     search_query: Optional[str] = Field(description="Focused technical verification query, or null when unnecessary.")
     user_goal: str = Field(min_length=1)
     catalog_operation: Literal["none", "selection", "inspection", "comparison"] = Field(
-        description="Required catalog operation across all user goals, independent of the primary intent; none when no catalog evidence is needed.")
+        description="Selection recommends equipment for a need; inspection answers properties of referred equipment; comparison contrasts equipment; none needs no catalog evidence. Independent of intent.",
+        json_schema_extra={'x-provider-description': True})
     additional_goals: List[str]
     request_scope: Literal["broad", "specific", "not_applicable"]
     information_sufficient: bool
@@ -101,8 +115,8 @@ class RequestUnderstanding(IntentDecision):
     excluded_items: List[str]
     topic_changed: bool
     clarification_declined: bool
-    reference_resolution: str = Field(min_length=1)
-    decision_reason: str = Field(min_length=1)
+    reference_resolution: str = Field(min_length=1, description='Supported current referent, or absence of prior referent. Nonempty.',json_schema_extra={'x-provider-description': True})
+    decision_reason: str = Field(min_length=1, description='Nonempty evidenced reason to answer or ask material pending questions.',json_schema_extra={'x-provider-description': True})
 
     @model_validator(mode="after")
     def check_action_contract(self):
@@ -117,3 +131,38 @@ class RequestUnderstanding(IntentDecision):
         if self.needs_external_search and not (self.search_query or "").strip():
             raise ValueError("External verification requires a search query")
         return self
+
+
+class NativeBudgetPeriod(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    user_period: str = Field(min_length=1,description='Explicit user billing period; preserve meaning.',json_schema_extra={'x-provider-description':True})
+    catalog_unit: str | None = Field(description='Exact catalog unit equivalent to user_period, else null. No conversions/guesses.',json_schema_extra={'x-provider-description':True})
+
+
+class NativeRequestUnderstanding(RequestUnderstanding):
+    model_config = ConfigDict(extra='forbid',populate_by_name=True)
+    budget_unit: NativeBudgetPeriod | None = Field(alias='budget_period',description='Resolve the explicit user billing period against the canonical catalog units. Null when the user established no period.',json_schema_extra={'x-provider-description':True})
+    known_facts: List[NativeKnownFact]
+    user_constraints: List[NativeKnownFact]
+
+    def to_understanding(self):
+        data=self.model_dump()
+        data['budget_unit']=(self.budget_unit.catalog_unit or self.budget_unit.user_period) if self.budget_unit else None
+        return RequestUnderstanding.model_validate(data)
+
+
+class NativePlanningUnderstanding(NativeRequestUnderstanding):
+    # ให้ขั้นตอนและคำถามที่โมเดลเลือกเป็นแหล่งเดียว ป้องกันสถานะหลายช่องขัดกัน
+    catalog_operation: ClassVar[None] = None
+    next_action: ClassVar[None] = None
+    information_sufficient: ClassVar[None] = None
+    missing_slots: ClassVar[tuple] = ()
+
+    def to_understanding(self, catalog_operation, missing_slots):
+        data = self.model_dump()
+        data['catalog_operation'] = catalog_operation
+        data['missing_slots'] = missing_slots
+        data['next_action'] = 'clarify' if missing_slots else 'answer'
+        data['information_sufficient'] = not missing_slots
+        data['budget_unit'] = (self.budget_unit.catalog_unit or self.budget_unit.user_period) if self.budget_unit else None
+        return RequestUnderstanding.model_validate(data)

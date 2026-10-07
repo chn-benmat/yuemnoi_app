@@ -50,6 +50,65 @@ def decode_structured(raw, schema):
     return schema.model_validate(json.loads(raw, object_pairs_hook=unique_pairs))
 
 
+def validate_native_keys(candidate, schema):
+    """Enforce wire-required keys before domain defaults or aliases can fill them.
+
+    Pydantic handles types, bounds and semantic validators afterwards. This
+    guard keeps the stricter provider schema's object shape at every depth.
+    """
+    document = native_schema(schema)
+    definitions = document.get('$defs', {})
+
+    def resolve(spec):
+        return definitions.get(spec.get('$ref', '').removeprefix('#/$defs/'), spec)
+
+    def compatible(value, spec):
+        spec = resolve(spec)
+        kind = spec.get('type')
+        if kind == 'null':
+            return value is None
+        if kind == 'array':
+            return isinstance(value, list)
+        if kind == 'string':
+            return isinstance(value, str)
+        if kind == 'boolean':
+            return type(value) is bool
+        if kind in ('number', 'integer'):
+            return type(value) in ((int, float) if kind == 'number' else (int,))
+        if kind == 'object':
+            if not isinstance(value, dict):
+                return False
+            # Choose discriminated object unions using their actual literals.
+            return all(name not in value or 'enum' not in child or value[name] in child['enum']
+                       for name, child in spec.get('properties', {}).items())
+        return True
+
+    def inspect(value, spec, path):
+        spec = resolve(spec)
+        if 'anyOf' in spec:
+            branches = [inspect(value, branch, path) for branch in spec['anyOf'] if compatible(value, branch)]
+            return min(branches, key=len) if branches else []
+        errors = []
+        if isinstance(value, dict) and spec.get('type') == 'object':
+            properties = spec.get('properties', {})
+            errors.extend({'type': 'missing', 'loc': (*path, name), 'input': value}
+                          for name in spec.get('required', []) if name not in value)
+            if spec.get('additionalProperties') is False:
+                errors.extend({'type': 'extra_forbidden', 'loc': (*path, name), 'input': value[name]}
+                              for name in value if name not in properties)
+            for name, child in properties.items():
+                if name in value:
+                    errors.extend(inspect(value[name], child, (*path, name)))
+        elif isinstance(value, list) and spec.get('type') == 'array':
+            for index, child in enumerate(value):
+                errors.extend(inspect(child, spec.get('items', {}), (*path, index)))
+        return errors
+
+    errors = inspect(candidate, document, ())
+    if errors:
+        raise ValidationError.from_exception_data(schema.__name__, errors)
+
+
 class ProviderClient:
     protocol: str
     provider: str
@@ -87,6 +146,9 @@ class ProviderClient:
     def reset_observation(self):
         self._observation.set(None)
 
+    def decode_candidate(self, candidate, prompt, schema):
+        return candidate
+
     def observation(self):
         return self._observation.get()
 
@@ -115,15 +177,19 @@ class ProviderClient:
                        "headers": {k: response.headers[k] for k in SAFE_HEADERS if k in response.headers}, "usage": {}}
         self._observation.set(observation)
         if response.status_code != 200:
+            error = {}
             try:
                 error = response.json().get("error", {})
                 for name in ("code", "type"):
                     value = error.get(name)
                     if isinstance(value, str) and len(value) <= 80 and all(c.isalnum() or c in "_.-" for c in value):
                         observation["error_" + name] = value
+                if (self.provider == "groq" and response.status_code == 400
+                        and observation.get("error_code") == "json_validate_failed"):
+                    self._record_failed_native_generation(model, error)
             except (ValueError, AttributeError):
                 pass
-            retry = retry_after_seconds(response.headers.get("retry-after"), self.runtime.quota_backoff_seconds) if response.status_code == 429 else None
+            retry = self.rate_limit_retry(response.headers, error) if response.status_code == 429 else None
             raise LLMProviderException(self.provider, model, "Provider rejected request", response.status_code,
                                        retry_after=retry, error_code="provider_rate_limited" if response.status_code == 429 else (
                                            "structured_output_invalid" if observation.get("error_code") == "json_validate_failed" else "provider_http_error"))
@@ -133,6 +199,36 @@ class ProviderClient:
             return self.content(data)
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             raise LLMProviderException(self.provider, model, "Invalid provider envelope", 502, error_code="provider_envelope_invalid") from None
+
+    def rate_limit_retry(self, headers, error):
+        # Unknown provider wait stays unknown; the cascade may still back off
+        # locally, but must not advertise its configured backoff as API data.
+        return retry_after_seconds(headers.get('retry-after'), None)
+
+    def _record_failed_native_generation(self, model, error):
+        """Explicit local evidence only; never attach provider text to observations."""
+        recording, stage = GENERATION_RECORDING.get(), CURRENT_GENERATION.get()
+        if recording is None or stage is None:
+            return
+        record = next((row for row in reversed(recording) if row.get("phase") == stage.name), None)
+        if record is None:
+            return
+        failures = record.setdefault("failed_generations", [])
+        if len(failures) >= 1 + self.runtime.max_failovers_per_logical_call:
+            return
+        details = {"provider": self.provider, "model": model, "error_code": "json_validate_failed"}
+        truncated = []
+        # ใช้ขอบเขตอักขระจาก runtime เดิม ไม่เก็บ envelope หรือ request headers
+        limit = self.runtime.limits.characters
+        for source, target in (("failed_generation", "failed_generation"), ("message", "provider_message")):
+            value = error.get(source)
+            if isinstance(value, str):
+                details[target] = value[:limit]
+                if len(value) > limit:
+                    truncated.append(target)
+        if truncated:
+            details["truncated_fields"] = truncated
+        failures.append(details)
 
     async def generate_text(self, model, prompt, system_instruction=None, max_tokens=None, temperature=None):
         return await self.post(model, self.build_payload(model, prompt, system_instruction, temperature, max_tokens=max_tokens))
@@ -154,7 +250,9 @@ class ProviderClient:
                     # telemetry/logger/provider envelopes or request headers.
                     typed_event={'provider':self.provider,'model':model,'native_output':candidate,'validated':False}
                     current.setdefault('typed_outputs',[]).append(typed_event)
-            result=schema.model_validate(candidate)
+            candidate = self.decode_candidate(candidate,prompt,schema)
+            validate_native_keys(candidate, schema)
+            result=schema.model_validate(candidate,strict=True,by_alias=True,by_name=False)
             if typed_event is not None:typed_event['validated']=True
             return result
         except ValidationError as error:

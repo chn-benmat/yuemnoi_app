@@ -105,15 +105,20 @@ void main() {
       await tester.pumpWidget(buildBubble('## กล้อง'));
       await tester.pumpAndSettle();
       expect(find.byType(MarkdownBody), findsOneWidget);
+      expect(progressCalls, 0);
 
       await tester.pumpWidget(buildBubble('## กล้องสำหรับเดินทาง'));
       await tester.pumpAndSettle();
 
       expect(find.byType(MarkdownBody), findsOneWidget);
+      expect(progressCalls, 1);
       expect(
         find.byKey(const ValueKey('chatbot-markdown-response-assistant-1')),
         findsOneWidget,
       );
+      await tester.pumpWidget(buildBubble('## กล้องสำหรับเดินทาง'));
+      await tester.pumpAndSettle();
+      expect(progressCalls, 1);
     },
   );
 }

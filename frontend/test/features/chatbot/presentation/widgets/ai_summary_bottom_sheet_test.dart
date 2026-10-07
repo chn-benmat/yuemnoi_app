@@ -60,7 +60,9 @@ void main() {
 
         // ตรวจสอบ Header
         expect(find.byType(AISummaryBottomSheet), findsOneWidget);
-        expect(find.textContaining('7 วินาที'), findsOneWidget);
+        expect(find.text('สรุปคำแนะนำ'), findsOneWidget);
+        expect(find.byKey(const Key('chatbot-summary-duration')), findsNothing);
+        expect(find.textContaining('7 วินาที'), findsNothing);
 
         // ตรวจสอบ Web Search Query Card
         expect(find.text('คำค้นที่ใช้'), findsOneWidget);
@@ -128,8 +130,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // ตรวจสอบว่ามี Chevron และ Status Header
-        expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
-        expect(find.text('สรุปคำแนะนำ (3 วิ)'), findsOneWidget);
+        expect(find.text('สรุปคำแนะนำ 3 วินาที >'), findsOneWidget);
 
         // แตะที่ Status Header
         await tester.tap(
@@ -143,6 +144,11 @@ void main() {
 
         // ตรวจสอบว่า Bottom Sheet เปิดขึ้นมา
         expect(find.byType(AISummaryBottomSheet), findsOneWidget);
+        expect(find.text('สรุปคำแนะนำ'), findsOneWidget);
+        expect(find.textContaining('เวลาประมวลผล'), findsNothing);
+        expect(find.textContaining('แหล่งข้อมูลอ้างอิง'), findsNothing);
+        expect(find.text('ไม่มีแหล่งอ้างอิงเพิ่มเติม'), findsNothing);
+        expect(find.byKey(const Key('chatbot-summary-duration')), findsNothing);
         expect(find.text('วิเคราะห์ข้อความของผู้ใช้'), findsOneWidget);
         expect(find.text('เรียบเรียงคำตอบและข้อความต้อนรับ'), findsOneWidget);
         // ไม่มี Search Query Card เพราะไม่ได้ค้นหา Google

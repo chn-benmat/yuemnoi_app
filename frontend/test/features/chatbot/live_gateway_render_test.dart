@@ -49,6 +49,7 @@ void main() {
         find.byKey(const Key('chatbot-message-field')),
         query,
       );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('chatbot-send-button')));
       final wait = Stopwatch()..start();
       while (measurement.isEmpty &&

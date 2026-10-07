@@ -1,15 +1,8 @@
-import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-
-import '../../../../core/constants/colors.dart';
 import '../../domain/entities/chat_message.dart';
 import 'interactive_questionnaire_card.dart';
 import 'ai_summary_bottom_sheet.dart';
-import 'chat_response_label.dart';
 import 'chatbot_design.dart';
 import 'chatbot_state_card.dart';
 
@@ -25,9 +18,9 @@ class ChatMessageBubble extends StatelessWidget {
     this.onEdit,
     this.onOptionSelected,
     this.onReviseQuery,
+    this.questionnaire,
     super.key,
   });
-
   final ChatMessage message;
   final ValueChanged<RecommendedItem> onRentPressed;
   final bool animateAssistantResponse;
@@ -38,86 +31,73 @@ class ChatMessageBubble extends StatelessWidget {
   final VoidCallback? onEdit;
   final ValueChanged<String>? onOptionSelected;
   final VoidCallback? onReviseQuery;
+  final Widget? questionnaire;
 
   @override
   Widget build(BuildContext context) {
-    final isUser = message.role == ChatMessageRole.user;
-    final bubble = Container(
-      key: isUser
-          ? ValueKey('chat-user-${message.content}')
-          : const ValueKey('chat-assistant-bubble'),
-      padding: EdgeInsets.fromLTRB(
-        isUser ? 16 : 0,
-        isUser ? 12 : 6,
-        isUser ? 16 : 0,
-        isUser ? 12 : 8,
-      ),
-      decoration: BoxDecoration(
-        color: isUser ? ChatbotDesign.tint : Colors.transparent,
-        borderRadius: isUser
-            ? const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(4),
-                bottomLeft: Radius.circular(20),
-                bottomRight: Radius.circular(20),
-              )
-            : null,
-      ),
-      child: isUser
-          ? Text(message.content, style: _messageStyle(isUser: true))
-          : _AnimatedAssistantContent(
-              message: message,
-              onRentPressed: onRentPressed,
-              animate: animateAssistantResponse,
-              onAnimationStarted: onAnimationStarted,
-              onProgress: onTextProgress,
-              onCardRevealed: onCardRevealed,
-              onContentRendered: onContentRendered,
-              onOptionSelected: onOptionSelected,
-              onReviseQuery: onReviseQuery,
-            ),
-    );
-
-    if (isUser) {
+    if (message.role == ChatMessageRole.user) {
       return LayoutBuilder(
-        builder: (context, constraints) {
-          return Align(
-            alignment: Alignment.centerRight,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: constraints.maxWidth * 0.9),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  GestureDetector(onLongPress: onEdit, child: bubble),
-                  if (onEdit != null)
-                    IconButton(
-                      key: ValueKey(
-                        'chatbot-message-actions-${message.content}',
-                      ),
-                      tooltip: 'คัดลอกหรือแก้ไขข้อความ',
-                      onPressed: onEdit,
-                      constraints: const BoxConstraints(
-                        minWidth: 48,
-                        minHeight: 48,
-                      ),
-                      icon: const Icon(
-                        Icons.more_horiz_rounded,
-                        color: ChatbotDesign.muted,
+        builder: (context, constraints) => Align(
+          alignment: Alignment.centerRight,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth * .9),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  onLongPress: onEdit,
+                  child: Container(
+                    key: ValueKey('chat-user-${message.content}'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: const BoxDecoration(
+                      color: ChatbotDesign.tint,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(6),
+                        bottomLeft: Radius.circular(20),
+                        bottomRight: Radius.circular(20),
                       ),
                     ),
-                ],
-              ),
+                    child: Text(message.content, style: ChatbotDesign.body),
+                  ),
+                ),
+                if (onEdit != null)
+                  IconButton(
+                    key: ValueKey('chatbot-message-actions-${message.content}'),
+                    tooltip: 'คัดลอกหรือแก้ไขข้อความ',
+                    onPressed: onEdit,
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    icon: const Icon(
+                      Icons.more_horiz_rounded,
+                      size: 20,
+                      color: ChatbotDesign.muted,
+                    ),
+                  ),
+              ],
             ),
-          );
-        },
+          ),
+        ),
       );
     }
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        final content = Align(
-          alignment: Alignment.centerLeft,
-          child: FractionallySizedBox(widthFactor: 1, child: bubble),
+        final content = _AssistantContent(
+          key: ValueKey('assistant-content-${message.id}'),
+          message: message,
+          onRentPressed: onRentPressed,
+          animate: animateAssistantResponse,
+          onAnimationStarted: onAnimationStarted,
+          onProgress: onTextProgress,
+          onCardRevealed: onCardRevealed,
+          onContentRendered: onContentRendered,
+          onReviseQuery: onReviseQuery,
+          questionnaire: questionnaire,
         );
         return constraints.hasBoundedHeight
             ? SingleChildScrollView(child: content)
@@ -125,20 +105,10 @@ class ChatMessageBubble extends StatelessWidget {
       },
     );
   }
-
-  static TextStyle _messageStyle({required bool isUser}) {
-    return TextStyle(
-      fontFamily: 'Prompt',
-      color: ChatbotDesign.ink,
-      fontSize: 16,
-      height: 1.55,
-      fontWeight: FontWeight.w400,
-    );
-  }
 }
 
-class _AnimatedAssistantContent extends StatefulWidget {
-  const _AnimatedAssistantContent({
+class _AssistantContent extends StatefulWidget {
+  const _AssistantContent({
     required this.message,
     required this.onRentPressed,
     required this.animate,
@@ -146,10 +116,10 @@ class _AnimatedAssistantContent extends StatefulWidget {
     this.onProgress,
     this.onCardRevealed,
     this.onContentRendered,
-    this.onOptionSelected,
     this.onReviseQuery,
+    this.questionnaire,
+    super.key,
   });
-
   final ChatMessage message;
   final ValueChanged<RecommendedItem> onRentPressed;
   final bool animate;
@@ -157,579 +127,267 @@ class _AnimatedAssistantContent extends StatefulWidget {
   final VoidCallback? onProgress;
   final VoidCallback? onCardRevealed;
   final VoidCallback? onContentRendered;
-  final ValueChanged<String>? onOptionSelected;
   final VoidCallback? onReviseQuery;
-
+  final Widget? questionnaire;
   @override
-  State<_AnimatedAssistantContent> createState() =>
-      _AnimatedAssistantContentState();
+  State<_AssistantContent> createState() => _AssistantContentState();
 }
 
-class _AnimatedAssistantContentState extends State<_AnimatedAssistantContent> {
-  Timer? _typewriterTimer;
-  Timer? _cardStaggerTimer;
-  Timer? _statusHeaderTimer;
-  DateTime? _fallbackStartTime;
-  int _secondsElapsed = 0;
-  Characters _targetCharacters = Characters('');
-  int _visibleCount = 0;
-  int _revealedCardsCount = 0;
-  DateTime _lastProgressCall = DateTime.fromMillisecondsSinceEpoch(0);
-
-  bool get _isComplete =>
-      !widget.message.isStreaming && _visibleCount >= _targetCharacters.length;
-
-  void _updateElapsed() {
-    final start = widget.message.createdAt ?? _fallbackStartTime;
-    if (start != null) {
-      final diff = DateTime.now().difference(start).inSeconds;
-      _secondsElapsed = diff > _secondsElapsed ? diff : _secondsElapsed + 1;
-    } else {
-      _secondsElapsed += 1;
-    }
-  }
-
-  void _startStatusHeaderTimerIfNeeded() {
-    if (_shouldShowStatusHeader && widget.message.responseDuration == null) {
-      _statusHeaderTimer ??= Timer.periodic(const Duration(seconds: 1), (
-        timer,
-      ) {
-        if (!mounted) {
-          timer.cancel();
-          _statusHeaderTimer = null;
-          return;
-        }
-        if (widget.message.responseDuration != null ||
-            !_shouldShowStatusHeader) {
-          timer.cancel();
-          _statusHeaderTimer = null;
-          return;
-        }
-        setState(() {
-          _updateElapsed();
-        });
-      });
-    } else {
-      _statusHeaderTimer?.cancel();
-      _statusHeaderTimer = null;
-    }
-  }
-
-  String _resolveContent() {
-    final text = widget.message.content.trim();
-    if (text.isNotEmpty) {
-      return widget.message.content;
-    }
-    if (widget.message.isStreaming) return '';
-    return 'การตอบกลับไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง';
-  }
-
-  bool _isTypewriting = false;
+class _AssistantContentState extends State<_AssistantContent> {
+  late final bool _animateEntrance;
+  bool _observationScheduled = false;
+  bool _notifyProgress = false;
+  bool _notifyCards = false;
 
   @override
   void initState() {
     super.initState();
-    _fallbackStartTime = widget.message.createdAt ?? DateTime.now();
-    final start = widget.message.createdAt ?? _fallbackStartTime;
-    _secondsElapsed = start != null
-        ? math.max(0, DateTime.now().difference(start).inSeconds)
-        : 0;
-    _startStatusHeaderTimerIfNeeded();
-    final effectiveText = _resolveContent();
-    _targetCharacters = effectiveText.characters;
-
-    // หากไม่ใช่ข้อความใหม่ที่ต้อง animate หรือเป็นแบบสอบถามที่ตอบแล้ว
-    final isNotAnimated =
-        !widget.animate || widget.message.understanding != null;
-    final hasAnsweredQuestion = widget.message.questions.any(
-      (q) => q.selectedOption != null,
-    );
-
-    if (isNotAnimated || hasAnsweredQuestion) {
-      _visibleCount = _targetCharacters.length;
-      _revealedCardsCount = widget.message.recommendedItems.length;
-      _isTypewriting = false;
-      return;
-    }
-
-    _visibleCount = 0;
-    _revealedCardsCount = 0;
-    _isTypewriting = true;
-    widget.onAnimationStarted?.call();
-
-    if (_targetCharacters.isNotEmpty) {
-      _startTypewriter();
-    }
+    _animateEntrance = widget.animate;
+    if (_animateEntrance) widget.onAnimationStarted?.call();
+    _observeAfterFrame(progress: false, cards: _hasVisibleCards);
   }
 
+  bool get _hasVisibleCards =>
+      !widget.message.isStreaming &&
+      !widget.message.questions.any((q) => q.selectedOption == null) &&
+      widget.message.recommendedItems.isNotEmpty;
+
   @override
-  void didUpdateWidget(covariant _AnimatedAssistantContent oldWidget) {
+  void didUpdateWidget(covariant _AssistantContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.message.id != oldWidget.message.id ||
-        widget.message.createdAt != oldWidget.message.createdAt) {
-      _fallbackStartTime = widget.message.createdAt ?? DateTime.now();
-      final start = widget.message.createdAt ?? _fallbackStartTime;
-      _secondsElapsed = start != null
-          ? math.max(0, DateTime.now().difference(start).inSeconds)
-          : 0;
-    }
-    _startStatusHeaderTimerIfNeeded();
-    final effectiveText = _resolveContent();
-    _targetCharacters = effectiveText.characters;
-
-    // ผลแบบมีโครงสร้างพร้อมแสดง ไม่เพิ่มคิวพิมพ์ดีดหลังบริการตอบครบแล้ว
-    if (widget.message.understanding != null ||
-        widget.message.questions.any((q) => q.selectedOption != null)) {
-      _cardStaggerTimer?.cancel();
-      _cardStaggerTimer = null;
-      _typewriterTimer?.cancel();
-      _typewriterTimer = null;
-      _isTypewriting = false;
-      _visibleCount = _targetCharacters.length;
-      _revealedCardsCount = widget.message.recommendedItems.length;
-      return;
-    }
-
-    if (_isTypewriting) {
-      // อยู่ระหว่างการพิมพ์ดีดแบบ Stream หรือ Animate
-      if (_visibleCount < _targetCharacters.length) {
-        if (_typewriterTimer == null || !_typewriterTimer!.isActive) {
-          _startTypewriter();
-        }
-      } else if (!widget.message.isStreaming) {
-        // สตรีมสิ้นสุดแล้วและพิมพ์จนครบทุกตัวอักษรแล้ว
-        _isTypewriting = false;
-        _typewriterTimer?.cancel();
-        _typewriterTimer = null;
-        if (_revealedCardsCount < widget.message.recommendedItems.length) {
-          _startCardStagger();
-        }
-      }
-      return;
-    }
-
-    if (oldWidget.message.content != widget.message.content) {
-      if (widget.animate) {
-        _visibleCount = 0;
-        _revealedCardsCount = 0;
-        _isTypewriting = true;
-        widget.onAnimationStarted?.call();
-        _startTypewriter();
-      } else {
-        _visibleCount = _targetCharacters.length;
-        _revealedCardsCount = widget.message.recommendedItems.length;
-      }
-    } else if (oldWidget.message.recommendedItems.length !=
-        widget.message.recommendedItems.length) {
-      if (!widget.message.isStreaming && !_isTypewriting) {
-        _revealedCardsCount = widget.message.recommendedItems.length;
-      }
+    if (oldWidget.message != widget.message) {
+      _observeAfterFrame(
+        progress: oldWidget.message.content != widget.message.content,
+        cards:
+            _hasVisibleCards &&
+            (oldWidget.message.isStreaming ||
+                oldWidget.message.recommendedItems !=
+                    widget.message.recommendedItems),
+      );
     }
   }
 
-  void _startTypewriter() {
-    _typewriterTimer?.cancel();
-
-    _typewriterTimer = Timer.periodic(const Duration(milliseconds: 20), (
-      timer,
-    ) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      final targetLen = _targetCharacters.length;
-      if (_visibleCount >= targetLen) {
-        timer.cancel();
-        _typewriterTimer = null;
-        if (!widget.message.isStreaming) {
-          _isTypewriting = false;
-          setState(() {
-            _visibleCount = targetLen;
-          });
-          _startCardStagger();
-        }
-        return;
-      }
-
-      // คำนวณ step ในการพิมพ์อย่างนุ่มนวลตามจำนวนตัวอักษรที่ค้างอยู่ (backlog)
-      final backlog = targetLen - _visibleCount;
-      final int step;
-      if (backlog <= 8) {
-        step = 1;
-      } else if (backlog <= 24) {
-        step = 1;
-      } else if (backlog <= 60) {
-        step = 2;
-      } else if (backlog <= 120) {
-        step = 3;
-      } else {
-        step = (backlog / 35).ceil().clamp(3, 8);
-      }
-
-      setState(() {
-        final next = _visibleCount + step;
-        _visibleCount = next > targetLen ? targetLen : next;
-      });
-
-      final now = DateTime.now();
-      if (now.difference(_lastProgressCall).inMilliseconds >= 60) {
-        _lastProgressCall = now;
-        widget.onProgress?.call();
-      }
-
-      if (_isComplete) {
-        timer.cancel();
-        _typewriterTimer = null;
-        _isTypewriting = false;
-        _startCardStagger();
-      }
+  // แจ้งผลหลังวาดเฟรมและรวม callback เพื่อไม่สั่งเลื่อนจาก build หรือทุกตัวอักษร
+  void _observeAfterFrame({required bool progress, required bool cards}) {
+    _notifyProgress |= progress;
+    _notifyCards |= cards;
+    if (_observationScheduled) return;
+    _observationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _observationScheduled = false;
+      if (!mounted) return;
+      final notifyProgress = _notifyProgress;
+      final notifyCards = _notifyCards;
+      _notifyProgress = _notifyCards = false;
+      if (notifyProgress) widget.onProgress?.call();
+      if (notifyCards) widget.onCardRevealed?.call();
+      if (!widget.message.isStreaming) widget.onContentRendered?.call();
     });
   }
 
-  void _startCardStagger() {
-    _cardStaggerTimer?.cancel();
-    final totalCards = widget.message.recommendedItems.length;
-    if (totalCards == 0 || _revealedCardsCount >= totalCards) return;
-
-    _cardStaggerTimer = Timer.periodic(const Duration(milliseconds: 160), (
-      timer,
-    ) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (_revealedCardsCount >= totalCards) {
-        timer.cancel();
-        _cardStaggerTimer = null;
-        return;
-      }
-      setState(() {
-        _revealedCardsCount++;
-      });
-      widget.onProgress?.call();
-      widget.onCardRevealed?.call();
-    });
-  }
-
-  @override
-  void dispose() {
-    _statusHeaderTimer?.cancel();
-    _typewriterTimer?.cancel();
-    _cardStaggerTimer?.cancel();
-    super.dispose();
-  }
-
-  static final MarkdownStyleSheet _markdownStyleSheet = MarkdownStyleSheet(
-    h1: const TextStyle(
-      fontFamily: 'Prompt',
-      fontSize: 17,
-      fontWeight: FontWeight.w700,
-      color: AppColors.primaryColor,
-      height: 1.45,
-    ),
-    h2: const TextStyle(
-      fontFamily: 'Prompt',
-      fontSize: 16,
-      fontWeight: FontWeight.w700,
-      color: AppColors.primaryColor,
-      height: 1.45,
-    ),
-    h3: const TextStyle(
-      fontFamily: 'Prompt',
-      fontSize: 15,
-      fontWeight: FontWeight.w700,
-      color: AppColors.primaryColor,
-      height: 1.4,
-    ),
-    h1Padding: const EdgeInsets.only(top: 12, bottom: 6),
-    h2Padding: const EdgeInsets.only(top: 12, bottom: 6),
-    h3Padding: const EdgeInsets.only(top: 10, bottom: 4),
-    p: const TextStyle(
-      fontFamily: 'Prompt',
-      fontSize: 14,
-      height: 1.6,
-      color: Color(0xFF1E1B2E),
-    ),
-    pPadding: const EdgeInsets.only(bottom: 6),
-    strong: const TextStyle(
-      fontFamily: 'Prompt',
-      fontWeight: FontWeight.w700,
-      color: Color(0xFF1E1B2E),
-    ),
-    listBullet: const TextStyle(
-      fontFamily: 'Prompt',
-      color: AppColors.primaryColor,
-      fontWeight: FontWeight.w700,
-    ),
-    listBulletPadding: const EdgeInsets.only(right: 6),
-    listIndent: 16,
+  static final _markdownStyleSheet = MarkdownStyleSheet(
+    p: ChatbotDesign.body,
+    pPadding: const EdgeInsets.only(bottom: 8),
+    h1: ChatbotDesign.body.copyWith(fontSize: 20, fontWeight: FontWeight.w600),
+    h2: ChatbotDesign.body.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
+    h3: ChatbotDesign.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600),
+    h1Padding: const EdgeInsets.only(top: 16, bottom: 8),
+    h2Padding: const EdgeInsets.only(top: 16, bottom: 8),
+    h3Padding: const EdgeInsets.only(top: 12, bottom: 6),
+    strong: ChatbotDesign.body.copyWith(fontWeight: FontWeight.w600),
+    listBullet: ChatbotDesign.body,
+    listIndent: 18,
     blockSpacing: 8,
-    blockquote: const TextStyle(
-      fontFamily: 'Prompt',
-      fontSize: 13.5,
-      height: 1.55,
-      color: Color(0xFF2E1A58),
-      fontWeight: FontWeight.w500,
-    ),
-    blockquotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    blockquote: ChatbotDesign.body.copyWith(color: ChatbotDesign.muted),
+    blockquotePadding: const EdgeInsets.all(12),
     blockquoteDecoration: BoxDecoration(
-      color: const Color(0xFFF8F6FD),
-      borderRadius: BorderRadius.circular(10),
+      color: ChatbotDesign.subtle,
+      borderRadius: BorderRadius.circular(12),
       border: const Border(
-        left: BorderSide(color: AppColors.primaryColor, width: 3),
+        left: BorderSide(color: ChatbotDesign.border, width: 3),
       ),
     ),
     horizontalRuleDecoration: const BoxDecoration(
-      border: Border(top: BorderSide(width: 1, color: Color(0xFFEBE5F7))),
+      border: Border(top: BorderSide(color: ChatbotDesign.border)),
     ),
-    tableBorder: TableBorder.all(
-      color: const Color(0xFFE0D8F3),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    tableHead: const TextStyle(
-      fontFamily: 'Prompt',
-      fontSize: 13.5,
-      fontWeight: FontWeight.w700,
-      color: Color(0xFF2E1A58),
-    ),
-    tableBody: const TextStyle(
-      fontFamily: 'Prompt',
-      fontSize: 13,
-      color: Color(0xFF404044),
-    ),
+    tableBorder: TableBorder.all(color: ChatbotDesign.border),
+    tableHead: ChatbotDesign.caption.copyWith(fontWeight: FontWeight.w600),
+    tableBody: ChatbotDesign.caption.copyWith(color: ChatbotDesign.ink),
     tablePadding: const EdgeInsets.all(8),
   );
 
-  bool get _shouldShowStatusHeader {
-    return widget.message.responseDuration != null ||
-        (widget.message.userQuery != null &&
-            widget.message.userQuery!.isNotEmpty) ||
-        widget.message.isStreaming;
-  }
-
-  static String _formatSeconds(int seconds) {
-    if (seconds < 60) return '$seconds วิ';
-    final m = seconds ~/ 60;
-    final s = seconds % 60;
-    return '$m นาที $s วิ';
-  }
-
-  String _getCompletedStatusTitle() {
-    final status = widget.message.statusMessage;
-    if (status != null && status.isNotEmpty && !status.startsWith('กำลัง')) {
-      return status;
+  String get _content {
+    final message = widget.message;
+    if (message.content.trim().isNotEmpty) return message.content;
+    if (message.isStreaming ||
+        message.recommendedItems.isNotEmpty ||
+        message.questions.isNotEmpty) {
+      return '';
     }
-    return chatResponseLabel(
-      widget.message.understanding?.responseKind,
-      hasQuestions: widget.message.questions.isNotEmpty,
-    );
-  }
-
-  Widget _buildStatusHeader() {
-    String text;
-    if (widget.message.responseDuration != null) {
-      final seconds = widget.message.responseDuration!.inSeconds;
-      final displaySec = seconds > 0
-          ? seconds
-          : (widget.message.responseDuration!.inMilliseconds > 0 ? 1 : 0);
-      final title = _getCompletedStatusTitle();
-      text = '$title (${_formatSeconds(displaySec)})';
-    } else {
-      final status = widget.message.statusMessage ?? 'กำลังประมวลผล';
-      text = '$status (${_formatSeconds(_secondsElapsed)})..';
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            text,
-            key: ValueKey('chatbot-status-header-${widget.message.id}'),
-            style: ChatbotDesign.body.copyWith(
-              fontSize: 13,
-              color: ChatbotDesign.muted,
-            ),
-          ),
-          TextButton(
-            key: ValueKey('chatbot-status-header-button-${widget.message.id}'),
-            onPressed: () => AISummaryBottomSheet.show(context, widget.message),
-            style: TextButton.styleFrom(
-              minimumSize: ChatbotDesign.button,
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text('ข้อมูลประกอบคำแนะนำ', textAlign: TextAlign.left),
-                ),
-                SizedBox(width: 4),
-                Icon(Icons.chevron_right_rounded, size: 20),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return 'การตอบกลับไม่สมบูรณ์ ลองส่งคำถามอีกครั้งนะ';
   }
 
   @override
   Widget build(BuildContext context) {
-    final effectiveText = _resolveContent();
-    final visibleText = _targetCharacters.take(_visibleCount).toString();
-    final renderMarkdown = _containsMarkdown(effectiveText);
-    final responseKey = ValueKey(
-      'chatbot-animated-response-${widget.message.id}',
-    );
-
-    // ใช้รายการที่ตรวจ ID แล้วโดยตรง ไม่อ่านชื่อสินค้ากลับจากข้อความ
-    final itemsToRender = widget.message.recommendedItems;
-    if (_isComplete && _revealedCardsCount >= itemsToRender.length) {
-      final message = widget.message;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && identical(message, widget.message)) {
-          widget.onContentRendered?.call();
-        }
-      });
-    }
-
+    final message = widget.message;
+    final content = _content;
+    final isComplete = !message.isStreaming;
+    final items = message.recommendedItems;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      key: const ValueKey('chat-assistant-bubble'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_shouldShowStatusHeader) _buildStatusHeader(),
-        if (!renderMarkdown)
-          Semantics(
-            label: effectiveText,
-            child: ExcludeSemantics(
-              child: Text(
-                visibleText,
-                key: responseKey,
-                style: ChatMessageBubble._messageStyle(isUser: false),
+        if (isComplete)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: ValueKey('chatbot-status-header-button-${message.id}'),
+              onPressed: () => AISummaryBottomSheet.show(context, message),
+              style: TextButton.styleFrom(
+                foregroundColor: ChatbotDesign.muted,
+                minimumSize: ChatbotDesign.button,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    const TextSpan(text: 'สรุปคำแนะนำ'),
+                    if (message.responseDuration != null)
+                      TextSpan(
+                        text: ' ${message.responseDuration!.inSeconds} วินาที',
+                      ),
+                    const TextSpan(
+                      text: ' >',
+                      style: TextStyle(color: ChatbotDesign.primary),
+                    ),
+                  ],
+                ),
+                style: ChatbotDesign.caption,
               ),
             ),
-          )
-        else
-          MarkdownBody(
-            key: ValueKey('chatbot-markdown-response-${widget.message.id}'),
-            data: visibleText,
-            styleSheet: _markdownStyleSheet,
           ),
-        if (widget.message.questions.any((q) => q.selectedOption != null))
-          QuestionnaireRecapCard(questions: widget.message.questions),
-        if (_isComplete &&
-            itemsToRender.isEmpty &&
-            widget.message.questions.isEmpty &&
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipOval(
+                key: ValueKey('chatbot-assistant-avatar-${message.id}'),
+                child: Image.asset(
+                  'assets/images/yuemnoi.png',
+                  width: 28,
+                  height: 28,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: content.isEmpty
+                    ? const SizedBox.shrink()
+                    : _containsMarkdown(content)
+                    ? MarkdownBody(
+                        key: ValueKey(
+                          'chatbot-markdown-response-${message.id}',
+                        ),
+                        data: content,
+                        styleSheet: _markdownStyleSheet,
+                      )
+                    : Text(
+                        content,
+                        key: ValueKey(
+                          'chatbot-animated-response-${message.id}',
+                        ),
+                        style: ChatbotDesign.body,
+                      ),
+              ),
+            ],
+          ),
+        ),
+        if (message.questions.any((q) => q.selectedOption != null))
+          QuestionnaireRecapCard(questions: message.questions),
+        if (widget.questionnaire != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: widget.questionnaire,
+          ),
+        if (isComplete &&
+            items.isEmpty &&
+            message.questions.isEmpty &&
             [
               'recommendation',
               'overview',
-            ].contains(widget.message.understanding?.responseKind)) ...[
-          const SizedBox(height: 16),
+            ].contains(message.understanding?.responseKind)) ...[
+          const SizedBox(height: 12),
           ChatbotStateCard(
             key: const Key('chatbot-empty-results'),
-            title: 'ยังไม่พบอุปกรณ์ที่ตรง',
-            description: 'ลองปรับงบหรือบอกประเภทอุปกรณ์เพิ่มเติม',
+            title: 'ยังไม่เจออุปกรณ์ที่ตรง',
+            description: 'ลองปรับงบ หรือบอกประเภทอุปกรณ์เพิ่มได้เลย',
             icon: Icons.search_rounded,
             actionLabel: 'ปรับคำถาม',
             onAction: widget.onReviseQuery,
           ),
         ],
-        if (_isComplete)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () async {
-                await Clipboard.setData(
-                  ClipboardData(text: widget.message.content),
-                );
-                if (context.mounted)
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('คัดลอกข้อความแล้ว')),
-                  );
-              },
-              style: TextButton.styleFrom(minimumSize: ChatbotDesign.button),
-              icon: const Icon(Icons.copy_outlined, size: 18),
-              label: const Text('คัดลอกคำตอบ'),
+        if (_hasVisibleCards)
+          for (var index = 0; index < items.length; index++) ...[
+            const SizedBox(height: 10),
+            _CardEntrance(
+              key: ValueKey('staggered-card-${message.id}-$index'),
+              animate: _animateEntrance,
+              child: RecommendedItemCard(
+                item: items[index],
+                messageContent: content,
+                onPressed: () => widget.onRentPressed(items[index]),
+              ),
+            ),
+          ],
+        if (!isComplete)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              message.statusMessage?.trim().isNotEmpty == true
+                  ? message.statusMessage!
+                  : 'กำลังเรียบเรียงคำตอบ',
+              key: ValueKey('chatbot-status-header-${message.id}'),
+              style: ChatbotDesign.caption,
             ),
           ),
-        if (!widget.message.questions.any((q) => q.selectedOption == null) &&
-            _isComplete) ...[
-          for (var i = 0; i < itemsToRender.length; i++) ...[
-            if (i < _revealedCardsCount) ...[
-              const SizedBox(height: 16),
-              if (widget.message.understanding != null)
-                RecommendedItemCard(
-                  item: itemsToRender[i],
-                  messageContent: effectiveText,
-                  onPressed: () => widget.onRentPressed(itemsToRender[i]),
-                )
-              else
-                _AnimatedCardEntrance(
-                  key: ValueKey('staggered-card-${widget.message.id}-$i'),
-                  child: RecommendedItemCard(
-                    item: itemsToRender[i],
-                    messageContent: effectiveText,
-                    onPressed: () => widget.onRentPressed(itemsToRender[i]),
-                  ),
-                ),
-            ],
-          ],
-        ],
       ],
     );
   }
 
-  // ตรวจเฉพาะไวยากรณ์แสดงผล ไม่ตีความเจตนาหรือเปลี่ยนข้อมูลสินค้า
-  static bool _containsMarkdown(String text) =>
-      ['#', '**', '* ', '- ', '>', '`', '|', '[', '. '].any(text.contains);
+  // ตรวจเฉพาะรูปแบบ Markdown โดยไม่เปลี่ยนเนื้อหาหรือข้อมูลจากบริการ
+  static bool _containsMarkdown(String text) => [
+    '#',
+    '**',
+    '* ',
+    '- ',
+    '>',
+    String.fromCharCode(96),
+    '|',
+    '[',
+    '. ',
+  ].any(text.contains);
 }
 
-class _AnimatedCardEntrance extends StatefulWidget {
-  const _AnimatedCardEntrance({required this.child, super.key});
-
+class _CardEntrance extends StatelessWidget {
+  const _CardEntrance({required this.child, required this.animate, super.key});
   final Widget child;
-
-  @override
-  State<_AnimatedCardEntrance> createState() => _AnimatedCardEntranceState();
-}
-
-class _AnimatedCardEntranceState extends State<_AnimatedCardEntrance>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<Offset> _slideAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
+  final bool animate;
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: SlideTransition(position: _slideAnimation, child: widget.child),
+    if (!animate || MediaQuery.disableAnimationsOf(context)) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: ChatbotDesign.motion,
+      curve: Curves.easeOutCubic,
+      child: child,
+      builder: (context, value, child) => Opacity(
+        opacity: .9 + .1 * value,
+        child: Transform.translate(
+          offset: Offset(0, 6 * (1 - value)),
+          child: child,
+        ),
+      ),
     );
   }
 }
@@ -748,169 +406,162 @@ class RecommendedItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final validId = item.id != null && item.id! > 0;
-    final status = item.statusDisplay ?? item.status;
-    return Material(
-      color: ChatbotDesign.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: ChatbotDesign.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: ValueKey('recommended-item-${item.id ?? item.name}'),
-        onTap: validId ? onPressed : null,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    final priceDisplay = item.priceDisplay?.trim();
+    final hasPriceDisplay = priceDisplay?.isNotEmpty == true;
+    final price = hasPriceDisplay
+        ? priceDisplay!
+        : item.price == null
+        ? 'ไม่ระบุราคา'
+        : '${_priceLabel(item.price!)} ฿';
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          item.name,
+          style: ChatbotDesign.body.copyWith(fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 4),
+        Text.rich(
+          TextSpan(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: AspectRatio(
-                  aspectRatio: 3,
-                  child: _ProductImage(imageUrl: item.imageUrl),
+              TextSpan(
+                text: price,
+                style: ChatbotDesign.body.copyWith(
+                  color: item.price == null && !hasPriceDisplay
+                      ? ChatbotDesign.muted
+                      : ChatbotDesign.primary,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                item.name,
-                style: ChatbotDesign.body.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              Text.rich(
+              if (!hasPriceDisplay && item.price != null)
                 TextSpan(
-                  children: [
-                    TextSpan(
-                      text: item.priceDisplay ?? '${_priceLabel(item.price)} ฿',
-                      style: ChatbotDesign.body.copyWith(
-                        color: ChatbotDesign.primary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (item.priceDisplay == null)
-                      TextSpan(
-                        text:
-                            ' / ${_formatUnit(item.unitDisplay ?? item.unit)}',
-                        style: ChatbotDesign.body.copyWith(
-                          color: ChatbotDesign.muted,
-                        ),
-                      ),
-                  ],
+                  text: ' / ${_formatUnit(item.unitDisplay ?? item.unit)}',
+                  style: ChatbotDesign.caption,
                 ),
-              ),
-              if (status?.isNotEmpty == true ||
-                  item.category?.isNotEmpty == true) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 4,
-                  children: [
-                    if (status?.isNotEmpty == true)
-                      Text(
-                        status!,
-                        style: ChatbotDesign.body.copyWith(
-                          fontSize: 13,
-                          color: ChatbotDesign.muted,
-                        ),
-                      ),
-                    if (item.category?.isNotEmpty == true)
-                      Text(
-                        item.category!,
-                        style: ChatbotDesign.body.copyWith(
-                          fontSize: 13,
-                          color: ChatbotDesign.muted,
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: validId ? onPressed : null,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: ChatbotDesign.button,
-                  foregroundColor: ChatbotDesign.primary,
-                  side: const BorderSide(color: ChatbotDesign.primary),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                ),
-                child: const Text('ดูรายละเอียด', textAlign: TextAlign.center),
-              ),
             ],
+          ),
+        ),
+      ],
+    );
+    return Semantics(
+      button: validId,
+      enabled: validId,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(ChatbotDesign.radius),
+          boxShadow: ChatbotDesign.shadow,
+        ),
+        child: Material(
+          color: ChatbotDesign.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(ChatbotDesign.radius),
+            side: const BorderSide(color: ChatbotDesign.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: ValueKey('recommended-item-${item.id ?? item.name}'),
+            onTap: validId ? onPressed : null,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final stacked =
+                      MediaQuery.sizeOf(context).width < 320 ||
+                      constraints.maxWidth < 240 ||
+                      MediaQuery.textScalerOf(context).scale(16) >= 24;
+                  final image = ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox.square(
+                      dimension: 88,
+                      child: _ProductImage(imageUrl: item.imageUrl),
+                    ),
+                  );
+                  return stacked
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            image,
+                            const SizedBox(height: 12),
+                            details,
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            image,
+                            const SizedBox(width: 12),
+                            Expanded(child: details),
+                          ],
+                        );
+                },
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  static String _formatUnit(String unit) {
-    return switch (unit.trim().toLowerCase()) {
-      'daily' || 'day' => 'วัน',
-      'hourly' || 'hour' => 'ชั่วโมง',
-      'monthly' || 'month' => 'เดือน',
-      'weekly' || 'week' => 'สัปดาห์',
-      _ => unit.isEmpty ? '-' : unit,
-    };
-  }
-
-  static String _priceLabel(double? price) => price == null
-      ? '-'
-      : price == price.roundToDouble()
+  static String _formatUnit(String unit) => switch (unit.trim().toLowerCase()) {
+    'daily' || 'day' => 'วัน',
+    'hourly' || 'hour' => 'ชั่วโมง',
+    'monthly' || 'month' => 'เดือน',
+    'weekly' || 'week' => 'สัปดาห์',
+    _ => unit.isEmpty ? '-' : unit,
+  };
+  static String _priceLabel(double price) => price == price.roundToDouble()
       ? price.toInt().toString()
       : price.toStringAsFixed(2);
 }
 
 class _ProductImage extends StatelessWidget {
   const _ProductImage({required this.imageUrl});
-
   final String imageUrl;
-
   @override
   Widget build(BuildContext context) {
     if (imageUrl.isEmpty) return const _ProductImageFallback();
-    if (imageUrl.startsWith('assets/'))
-      return Image.asset(imageUrl, fit: BoxFit.cover);
-
+    if (imageUrl.startsWith('assets/')) {
+      return Image.asset(
+        imageUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            const _ProductImageFallback(),
+      );
+    }
     return Image.network(
       imageUrl,
       fit: BoxFit.cover,
       cacheWidth: 250,
       cacheHeight: 250,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return const _ProductImageFallback(showProgress: true);
-      },
-      errorBuilder: (context, error, stackTrace) {
-        return const _ProductImageFallback();
-      },
+      loadingBuilder: (context, child, progress) => progress == null
+          ? child
+          : const _ProductImageFallback(showProgress: true),
+      errorBuilder: (context, error, stackTrace) =>
+          const _ProductImageFallback(),
     );
   }
 }
 
 class _ProductImageFallback extends StatelessWidget {
   const _ProductImageFallback({this.showProgress = false});
-
   final bool showProgress;
-
   @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: const Color(0xFFF2F2F4),
-      child: Center(
-        child: showProgress
-            ? const SizedBox.square(
-                dimension: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(
-                Icons.inventory_2_outlined,
-                color: AppColors.primaryColor,
-                size: 34,
+  Widget build(BuildContext context) => ColoredBox(
+    color: ChatbotDesign.subtle,
+    child: Center(
+      child: showProgress
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: ChatbotDesign.primary,
               ),
-      ),
-    );
-  }
+            )
+          : const Icon(
+              Icons.inventory_2_outlined,
+              color: ChatbotDesign.muted,
+              size: 28,
+            ),
+    ),
+  );
 }

@@ -9,8 +9,8 @@ def assessed(result,paths=None):
             key={'neutral_voice':'neutral_voice','semantic':'relevance','grounding':'grounding','context':'context','choice':'choice_equivalence','contract':'completeness'}[issue['kind']]
             checks[key]=False
         value['checks']=checks
-    value['assessments']=[{'check':name,'reason':'Simulated independent unit-test assessment; not live quality evidence.',
-        'field_paths':paths or ['/response'],'passed':checks[name]} for name in names]
+    value['assessments']={name:{'reason':'Simulated independent unit-test assessment; not live quality evidence.',
+        'field_paths':paths or ['/response'],'passed':checks[name]} for name in names}
     # Simulated legacy fixtures declare the expected verdict; the native model
     # contract now emits each assessment only once and derives that verdict.
     for key in ('checks','semantic_pass','neutral_voice_pass'):value.pop(key,None)

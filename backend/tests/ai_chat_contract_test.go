@@ -135,3 +135,73 @@ func TestAIChatProviderFailureDoesNotExposeUpstreamBody(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, strings.Contains(err.Error(), "private-provider-details"))
 }
+
+func TestAIStageStatusesForwardedThroughHandlerAndAdapter(t *testing.T) {
+	var expected strings.Builder
+	for _, status := range []struct{ step, message string }{
+		{"preparing", "กำลังเตรียมข้อมูล"},
+		{"planning", "กำลังวิเคราะห์คำถาม"},
+		{"evidence", "กำลังสร้างคำตอบ"},
+		{"review", "กำลังตรวจคำตอบ"},
+		{"repair", "กำลังสรุปคำคำตอบ"},
+		{"review", "กำลังตรวจคำตอบ"},
+	} {
+		payload, err := json.Marshal(map[string]string{"step": status.step, "message": status.message})
+		require.NoError(t, err)
+		expected.WriteString("event: status\ndata: " + string(payload) + "\n\n")
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, event := range strings.SplitAfter(expected.String(), "\n\n") {
+			_, err := io.WriteString(w, event)
+			require.NoError(t, err)
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer upstream.Close()
+	client := aiservice.NewClient(upstream.URL, "", time.Second)
+	handler := ports.NewChatbotHandler(client, nil)
+	router := gin.New()
+	router.POST("/api/chat-ai/stream", handler.SendMessageStream)
+	request := httptest.NewRequest(http.MethodPost, "/api/chat-ai/stream", strings.NewReader(`{"query":"คำถาม"}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, expected.String(), recorder.Body.String())
+}
+
+func TestAIChatAdaptiveQuestionChoicesSurviveJSONAdapterAndReturnContext(t *testing.T) {
+	sourceID := "batch:kind"
+	choice := domain.QuestionChoice{ID: "music:cap", Label: "ไม่เกิน 350 บาทต่อวัน", ActionValue: "ไม่เกิน 350 บาทต่อวัน"}
+	questions := []domain.ClarificationQuestion{
+		{ID: sourceID, Title: "ประเภทอุปกรณ์", Choices: []domain.QuestionChoice{{ID: "music", Label: "ดนตรี", ActionValue: "ดนตรี"}}},
+		{ID: "batch:budget", Title: "งบค่าเช่า", Dimension: "budget_max", Choices: []domain.QuestionChoice{choice},
+			BranchQuestionID: &sourceID, BranchChoices: map[string][]domain.QuestionChoice{"music": {choice}},
+			BranchTitles: map[string]string{"music": "งบค่าเช่าต่อวัน"}},
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var forwarded domain.ChatbotRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&forwarded))
+		if forwarded.Context != nil {
+			require.Equal(t, questions, forwarded.Context.Questions)
+			require.Equal(t, choice.ID, *forwarded.QuestionnaireAnswers[1].OptionID)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"response": "เลือกข้อมูล", "questions": questions,
+			"context": domain.ChatSessionContext{SessionID: "session", UserGoal: "เลือกอุปกรณ์", Questions: questions},
+		}))
+	}))
+	defer upstream.Close()
+	client := aiservice.NewClient(upstream.URL, "", time.Second)
+	response, err := client.SendMessage(context.Background(), domain.ChatbotRequest{Query: "หาอุปกรณ์", SessionID: "session"})
+	require.NoError(t, err)
+	require.Equal(t, questions, response.Questions)
+	require.Equal(t, questions, response.Context.Questions)
+	sourceChoiceID := "music"
+	_, err = client.SendMessage(context.Background(), domain.ChatbotRequest{Query: choice.Label, SessionID: "session", Context: response.Context,
+		QuestionnaireAnswers: []domain.QuestionnaireAnswer{{QuestionID: sourceID, OptionID: &sourceChoiceID}, {QuestionID: questions[1].ID, OptionID: &choice.ID}},
+	})
+	require.NoError(t, err)
+}

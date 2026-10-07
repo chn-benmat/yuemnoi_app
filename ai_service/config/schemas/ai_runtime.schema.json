@@ -47,7 +47,7 @@
           "type": "number"
         },
         "logical_calls": {
-          "maximum": 3,
+          "maximum": 5,
           "minimum": 1,
           "title": "Logical Calls",
           "type": "integer"
@@ -396,6 +396,15 @@
           "title": "Scope",
           "type": "string"
         },
+        "authority": {
+          "default": "configured",
+          "enum": [
+            "configured",
+            "provider"
+          ],
+          "title": "Authority",
+          "type": "string"
+        },
         "requests_per_window": {
           "exclusiveMinimum": 0,
           "title": "Requests Per Window",
@@ -476,6 +485,9 @@
         "review": {
           "$ref": "#/$defs/StageRoute"
         },
+        "repair": {
+          "$ref": "#/$defs/StageRoute"
+        },
         "finalization_reserve_seconds": {
           "exclusiveMinimum": 0,
           "title": "Finalization Reserve Seconds",
@@ -496,15 +508,22 @@
             }
           ],
           "title": "Measurement Artifact"
+        },
+        "initial_review_reserve_tokens": {
+          "exclusiveMinimum": 0,
+          "title": "Initial Review Reserve Tokens",
+          "type": "integer"
         }
       },
       "required": [
         "planning",
         "evidence",
         "review",
+        "repair",
         "finalization_reserve_seconds",
         "minimum_attempt_seconds",
-        "measurement_artifact"
+        "measurement_artifact",
+        "initial_review_reserve_tokens"
       ],
       "title": "StageRouting",
       "type": "object"

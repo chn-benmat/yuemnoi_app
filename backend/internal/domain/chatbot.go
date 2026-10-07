@@ -62,16 +62,18 @@ type RecommendedItem struct {
 
 // ClarificationQuestion คำถามถามกลับเพื่อช่วยระบุความต้องการให้ชัดเจนขึ้น
 type ClarificationQuestion struct {
-	Dimension      string              `json:"dimension,omitempty"`
-	Choices        []QuestionChoice    `json:"choices,omitempty"`
-	ID             string              `json:"id"`
-	Title          string              `json:"title"`
-	Options        []string            `json:"options"`
-	Step           int                 `json:"step,omitempty"`
-	TotalSteps     int                 `json:"total_steps,omitempty"`
-	SelectedOption string              `json:"selected_option,omitempty"`
-	BranchTitles   map[string]string   `json:"branch_titles,omitempty"`
-	BranchOptions  map[string][]string `json:"branch_options,omitempty"`
+	Dimension        string                      `json:"dimension,omitempty"`
+	Choices          []QuestionChoice            `json:"choices,omitempty"`
+	ID               string                      `json:"id"`
+	Title            string                      `json:"title"`
+	Options          []string                    `json:"options"`
+	Step             int                         `json:"step,omitempty"`
+	TotalSteps       int                         `json:"total_steps,omitempty"`
+	SelectedOption   string                      `json:"selected_option,omitempty"`
+	BranchTitles     map[string]string           `json:"branch_titles,omitempty"`
+	BranchOptions    map[string][]string         `json:"branch_options,omitempty"`
+	BranchQuestionID *string                     `json:"branch_question_id,omitempty"`
+	BranchChoices    map[string][]QuestionChoice `json:"branch_choices,omitempty"`
 }
 
 // SearchSource ข้อมูลแหล่งอ้างอิงเว็บไซต์ที่ได้จากการค้นหาทางอินเทอร์เน็ต

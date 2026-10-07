@@ -1,9 +1,9 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../core/constants/colors.dart';
 import '../../../../core/widgets/responsive_app_bar_title.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../domain/entities/chat_message.dart';
@@ -19,7 +19,8 @@ import '../widgets/chatbot_welcome.dart';
 import '../widgets/chatbot_state_card.dart';
 
 class ChatBotScreen extends StatefulWidget {
-  const ChatBotScreen({super.key});
+  const ChatBotScreen({this.now = DateTime.now, super.key});
+  final DateTime Function() now;
 
   @override
   State<ChatBotScreen> createState() => _ChatBotScreenState();
@@ -59,6 +60,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
   int? _editingMessageIndex;
   bool _showScrollToBottomButton = false;
   bool _dismissedQuestionnaire = false;
+  String? _customAnswerQuestionId;
   bool _isScrollToBottomScheduled = false;
   bool _isScrollScheduled = false;
   bool _hasPendingScroll = false;
@@ -109,6 +111,15 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
       if (hasActiveQuestionnaire && _questionnaireKey.currentState != null) {
         final questionnaire = _questionnaireKey.currentState!;
+        if (_customAnswerQuestionId != null &&
+            _customAnswerQuestionId == questionnaire.activeQuestionId) {
+          questionnaire.suspendProgression();
+          setState(() => _customAnswerQuestionId = null);
+          _messageController.clear();
+          questionnaire.submitCustomAnswer(query);
+          _messageFocusNode.requestFocus();
+          return;
+        }
         final answers = questionnaire.partialAnswers;
         questionnaire.suspendProgression();
         context.read<ChatbotBloc>().add(
@@ -150,6 +161,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
     );
     setState(() {
       _dismissedQuestionnaire = false;
+      _customAnswerQuestionId = null;
     });
     _messageController.clear();
     _scrollToBottom(force: true);
@@ -176,6 +188,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
     _questionnaireTiming = null;
     setState(() {
       _dismissedQuestionnaire = false;
+      _customAnswerQuestionId = null;
     });
     _messageController.clear();
     _scrollToBottom(force: true);
@@ -183,6 +196,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
   void _startEditingMessage(int index, ChatMessage message) {
     setState(() {
+      _customAnswerQuestionId = null;
       _editingMessageIndex = index;
       _messageController.text = message.content;
       _messageController.selection = TextSelection.collapsed(
@@ -210,87 +224,108 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
           margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF26262A),
+            color: ChatbotDesign.surface,
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: ChatbotDesign.border),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
+                color: ChatbotDesign.ink.withValues(alpha: 0.08),
                 blurRadius: 20,
                 offset: const Offset(0, 6),
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  key: const Key('chatbot-copy-message-action'),
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () {
-                    Navigator.of(modalContext).pop();
-                    Clipboard.setData(ClipboardData(text: message.content));
-                    ScaffoldMessenger.of(context)
-                      ..hideCurrentSnackBar()
-                      ..showSnackBar(
-                        const SnackBar(
-                          content: Text('คัดลอกข้อความแล้ว'),
-                          duration: Duration(seconds: 1),
-                        ),
-                      );
-                  },
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    child: Row(
-                      children: [
-                        Icon(Icons.copy_rounded, color: Colors.white, size: 20),
-                        SizedBox(width: 14),
-                        Text(
-                          'คัดลอก',
-                          style: TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    key: const Key('chatbot-copy-message-action'),
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () {
+                      Navigator.of(modalContext).pop();
+                      Clipboard.setData(ClipboardData(text: message.content));
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          const SnackBar(
+                            content: Text('คัดลอกข้อความแล้ว'),
+                            duration: Duration(seconds: 1),
                           ),
-                        ),
-                      ],
+                        );
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.copy_rounded,
+                            color: ChatbotDesign.primary,
+                            size: 20,
+                          ),
+                          SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              'คัดลอก',
+                              style: TextStyle(
+                                fontFamily: 'Prompt',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: ChatbotDesign.ink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const Divider(color: Color(0x22FFFFFF), height: 1),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  key: const Key('chatbot-edit-message-action'),
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () {
-                    Navigator.of(modalContext).pop();
-                    _startEditingMessage(index, message);
-                  },
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_rounded, color: Colors.white, size: 20),
-                        SizedBox(width: 14),
-                        Text(
-                          'แก้ไข',
-                          style: TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                const Divider(color: ChatbotDesign.border, height: 1),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    key: const Key('chatbot-edit-message-action'),
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () {
+                      Navigator.of(modalContext).pop();
+                      _startEditingMessage(index, message);
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.edit_rounded,
+                            color: ChatbotDesign.primary,
+                            size: 20,
                           ),
-                        ),
-                      ],
+                          SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              'แก้ไข',
+                              style: TextStyle(
+                                fontFamily: 'Prompt',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: ChatbotDesign.ink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -324,10 +359,13 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
         await _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 140),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
         );
         if (!mounted || !_scrollController.hasClients) return;
+        if (_showScrollToBottomButton && !force) return;
 
         final position = _scrollController.position;
         if (position.pixels != position.maxScrollExtent) {
@@ -407,9 +445,23 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
           questionnaireAnswers: answers,
           questionnaireSkipped: skipped,
         ),
-    onDismiss: () => setState(() => _dismissedQuestionnaire = true),
+    onDismiss: () => setState(() {
+      _dismissedQuestionnaire = true;
+      _customAnswerQuestionId = null;
+    }),
     onCustomInput: () {
+      _questionnaireKey.currentState?.suspendProgression();
+      _questionnaireTiming = null;
+      setState(() {
+        _customAnswerQuestionId =
+            _questionnaireKey.currentState?.activeQuestionId;
+      });
       _messageFocusNode.requestFocus();
+    },
+    onQuestionChanged: () {
+      if (_customAnswerQuestionId != null) {
+        setState(() => _customAnswerQuestionId = null);
+      }
     },
   );
 
@@ -428,9 +480,9 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
       backgroundColor: ChatbotDesign.canvas,
       appBar: AppBar(
         backgroundColor: ChatbotDesign.surface,
-        foregroundColor: ChatbotDesign.primary,
+        foregroundColor: ChatbotDesign.ink,
         surfaceTintColor: Colors.transparent,
-        centerTitle: true,
+        centerTitle: false,
         elevation: 0,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -440,15 +492,29 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
           tooltip: 'ย้อนกลับ',
           onPressed: () => AppRoutes.pop(context),
           icon: const Icon(Icons.arrow_back_rounded),
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         ),
-        title: const ResponsiveAppBarTitle(
-          'ยืมหน่อย AI',
-          style: TextStyle(
-            fontFamily: 'Prompt',
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: ChatbotDesign.ink,
-          ),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_awesome_rounded,
+              color: ChatbotDesign.primary,
+              size: 18,
+            ),
+            SizedBox(width: 8),
+            Flexible(
+              child: ResponsiveAppBarTitle(
+                'ยืมหน่อย AI',
+                style: TextStyle(
+                  fontFamily: 'Prompt',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  color: ChatbotDesign.ink,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       body: SafeArea(
@@ -520,11 +586,13 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                                 separatorBuilder: (context, index) =>
                                     const SizedBox(height: 20),
                                 itemBuilder: (context, index) {
-                                  if (index == visibleEntries.length)
+                                  if (index == visibleEntries.length) {
                                     return _TypingIndicator(
                                       statusMessage: state.currentStatusMessage,
-                                      startTime: state.requestStartTime,
+                                      startedAt: state.requestStartTime,
+                                      now: widget.now,
                                     );
+                                  }
                                   final (originalIndex, message) =
                                       visibleEntries[index];
                                   final active =
@@ -572,8 +640,8 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                                                 _keepLatestMessageVisible,
                                             onContentRendered: () =>
                                                 _observeRender(message),
-                                            onCardRevealed: () =>
-                                                _scrollToBottom(force: true),
+                                            onCardRevealed:
+                                                _keepLatestMessageVisible,
                                             onEdit:
                                                 message.role ==
                                                         ChatMessageRole.user &&
@@ -589,11 +657,10 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                                                 ),
                                             onOptionSelected: (choice) =>
                                                 _sendQuickReply(choice, state),
+                                            questionnaire: active
+                                                ? _questionnaire(state)
+                                                : null,
                                           ),
-                                        if (active) ...[
-                                          const SizedBox(height: 12),
-                                          _questionnaire(state),
-                                        ],
                                       ],
                                     ),
                                   );
@@ -607,7 +674,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                                   'chatbot-scroll-to-bottom-control',
                                 ),
                                 scale: _showScrollToBottomButton ? 1 : 0,
-                                duration: const Duration(milliseconds: 180),
+                                duration: ChatbotDesign.motionFor(context),
                                 child: IgnorePointer(
                                   ignoring: !_showScrollToBottomButton,
                                   child: Material(
@@ -624,6 +691,10 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                                       color: ChatbotDesign.primary,
                                       icon: const Icon(
                                         Icons.keyboard_arrow_down_rounded,
+                                      ),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 48,
+                                        minHeight: 48,
                                       ),
                                     ),
                                   ),
@@ -650,6 +721,18 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                             ? null
                             : state.messages[_editingMessageIndex!],
                         onCancelEdit: _cancelEditingMessage,
+                        customQuestionTitle:
+                            hasActiveQuestionnaire &&
+                                _customAnswerQuestionId ==
+                                    _questionnaireKey
+                                        .currentState
+                                        ?.activeQuestionId
+                            ? _questionnaireKey
+                                  .currentState
+                                  ?.activeQuestionTitle
+                            : null,
+                        onCancelCustomAnswer: () =>
+                            setState(() => _customAnswerQuestionId = null),
                         onSend: () => _sendMessage(state),
                         onStop: _stopGeneration,
                       ),
@@ -680,11 +763,14 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 }
 
 class _TypingIndicator extends StatefulWidget {
-  const _TypingIndicator({this.statusMessage, this.startTime});
-
+  const _TypingIndicator({
+    this.statusMessage,
+    this.startedAt,
+    required this.now,
+  });
   final String? statusMessage;
-  final DateTime? startTime;
-
+  final DateTime? startedAt;
+  final DateTime Function() now;
   @override
   State<_TypingIndicator> createState() => _TypingIndicatorState();
 }
@@ -692,114 +778,92 @@ class _TypingIndicator extends StatefulWidget {
 class _TypingIndicatorState extends State<_TypingIndicator>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  Timer? _secondTimer;
-  int _secondsElapsed = 0;
-
+  late final DateTime _mountedAt;
+  Timer? _elapsedTimer;
   @override
   void initState() {
     super.initState();
+    _mountedAt = widget.now();
+    _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
-    )..repeat();
-    _secondsElapsed = widget.startTime != null
-        ? DateTime.now().difference(widget.startTime!).inSeconds
-        : 0;
-    _secondTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          _updateElapsed();
-        });
-      }
-    });
+    );
   }
 
-  void _updateElapsed() {
-    if (widget.startTime != null) {
-      final diff = DateTime.now().difference(widget.startTime!).inSeconds;
-      _secondsElapsed = diff > _secondsElapsed ? diff : _secondsElapsed + 1;
-    } else {
-      _secondsElapsed += 1;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
     }
   }
 
   @override
   void dispose() {
-    _secondTimer?.cancel();
+    _elapsedTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  String get _statusText {
-    final msg = widget.statusMessage?.trim();
-    if (msg != null && msg.isNotEmpty) {
-      return msg;
-    }
-    return 'กำลังประมวลผล';
-  }
-
-  String get _timeText {
-    if (_secondsElapsed < 60) return '$_secondsElapsed วิ';
-    final m = _secondsElapsed ~/ 60;
-    final s = _secondsElapsed % 60;
-    return '$m นาที $s วิ';
-  }
-
   @override
   Widget build(BuildContext context) {
+    final status = widget.statusMessage?.trim();
+    final elapsed = widget.now().difference(widget.startedAt ?? _mountedAt);
+    final seconds = elapsed.isNegative ? 0 : elapsed.inSeconds;
     return Align(
       alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: ChatbotDesign.subtle,
+          borderRadius: BorderRadius.circular(16),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
               Icons.auto_awesome_rounded,
-              size: 14,
-              color: Color(0xFF8E8E93),
+              size: 18,
+              color: ChatbotDesign.primary,
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Flexible(
-              child: Text(
-                '$_statusText ($_timeText)',
-                style: const TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: ChatbotDesign.muted,
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  status?.isNotEmpty == true ? status! : 'กำลังประมวลผล',
+                  style: ChatbotDesign.caption.copyWith(fontSize: 14),
                 ),
               ),
             ),
-            const SizedBox(width: 2),
-            Semantics(
-              label: 'AI กำลังคิด',
+            const SizedBox(width: 4),
+            ExcludeSemantics(
               child: AnimatedBuilder(
                 animation: _controller,
                 builder: (context, child) {
-                  final dotCount = 1 + (_controller.value * 3).floor();
-                  final dots = switch (dotCount) {
-                    1 => '.',
-                    2 => '..',
-                    _ => '...',
-                  };
+                  final count = MediaQuery.disableAnimationsOf(context)
+                      ? 3
+                      : 1 + (_controller.value * 3).floor().clamp(0, 2);
                   return SizedBox(
                     width: 18,
                     child: Text(
-                      dots,
+                      '.' * count,
                       key: const Key('chatbot-thinking-dots'),
-                      textAlign: TextAlign.left,
-                      style: const TextStyle(
-                        color: ChatbotDesign.muted,
-                        fontSize: 14,
-                        height: 1,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
-                      ),
+                      style: ChatbotDesign.caption,
                     ),
                   );
                 },
               ),
+            ),
+            Text(
+              ' $seconds วินาที',
+              key: const Key('chatbot-analysis-elapsed'),
+              style: ChatbotDesign.caption,
             ),
           ],
         ),

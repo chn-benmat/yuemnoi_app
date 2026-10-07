@@ -1,6 +1,6 @@
 """Internal response assessment; never a human-review certificate."""
 from typing import Literal
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from app.domain.entities.catalog_guidance import GuidanceModel
 
 
@@ -51,9 +51,17 @@ class ResponseReview(GuidanceModel):
 
 class NativeResponseReview(GuidanceModel):
     """A single model assessment per check, rather than contradictory verdict copies."""
-    assessments: list[ReviewAssessment] = Field(min_length=7,max_length=7)
+    model_config = ConfigDict(populate_by_name=True)
+    named_assessments: 'NamedReviewAssessments' = Field(alias='assessments',
+        description='One assessment for every required named property. Each property identifies its check; do not emit an array or repeated check entries.',
+        json_schema_extra={'x-provider-description': True})
     issues: list[ReviewIssue]
     reviewed_surface_groups: list[Literal['response','questions','clarification','items','suggested_replies','references','search_sources']]
+
+    @property
+    def assessments(self):
+        return [ReviewAssessment(check=name, **assessment.model_dump())
+                for name, assessment in self.named_assessments]
 
     @property
     def checks(self):
@@ -74,10 +82,37 @@ class NativeResponseReview(GuidanceModel):
 
     @model_validator(mode='after')
     def assessments_match_checks(self):
-        names=[assessment.check for assessment in self.assessments]
-        if len(set(names))!=len(names) or set(names)!=set(ResponseChecks.model_fields):
-            raise ValueError('Every quality check needs exactly one assessment')
         # Derive the public internal verdict from the one validated source of
         # truth. Issues still must agree; no malformed old output is repaired.
         self.as_review()
         return self
+
+
+class NamedAssessment(GuidanceModel):
+    reason: str = Field(min_length=1,
+        description='Specific assessment of this check against actual user evidence and original draft text.',
+        json_schema_extra={'x-provider-description': True})
+    field_paths: list[str] = Field(
+        description='Exact JSON pointers at the restored draft root; empty only when this check has no applicable field.',
+        json_schema_extra={'x-provider-description': True})
+    passed: bool
+
+
+class NamedReviewAssessments(GuidanceModel):
+    relevance: 'ApplicableAssessment'
+    completeness: 'ApplicableAssessment'
+    neutral_voice: 'ApplicableAssessment'
+    choice_equivalence: NamedAssessment
+    grounding: NamedAssessment
+    context: NamedAssessment
+    followups: NamedAssessment
+
+
+class ApplicableAssessment(NamedAssessment):
+    # คำตอบทุกฉบับมีข้อความให้ตรวจ จึงต้องอ้างฟิลด์จริงก่อนอนุมัติ
+    field_paths: list[str] = Field(min_length=1,
+        description='Cite at least one exact original draft pointer for this always-applicable check.',
+        json_schema_extra={'x-provider-description': True})
+
+
+NativeResponseReview.model_rebuild()

@@ -259,7 +259,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
         snapshotOverride ??
         _ChatbotRequestSnapshot(
           query: query,
-          history: List.unmodifiable(history),
+          history: List.unmodifiable(history.where((m) => !m.isFailure)),
           messagesWithUser: List.unmodifiable(messagesWithUser),
           sessionId: chatContext?.sessionId ?? _sessionId,
           context: chatContext,
@@ -287,14 +287,14 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
             userQuery: request.query,
             isStreaming: true,
             createdAt: startTime,
-            statusMessage: 'กำลังวิเคราะห์คำถาม...',
+            statusMessage: 'กำลังเชื่อมต่อผู้ช่วย AI',
           ),
         ],
         isSending: true,
         clearError: true,
         clearFailure: true,
         requestStartTime: startTime,
-        currentStatusMessage: 'กำลังวิเคราะห์คำถาม...',
+        currentStatusMessage: 'กำลังเชื่อมต่อผู้ช่วย AI',
       ),
     );
     final stopwatch = Stopwatch()..start();
@@ -318,8 +318,9 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
           if (currentMessages.isEmpty) return state;
           final lastIndex = currentMessages.length - 1;
           final last = currentMessages[lastIndex];
-          if (last.role != ChatMessageRole.assistant || last.id != messageId)
+          if (last.role != ChatMessageRole.assistant || last.id != messageId) {
             return state;
+          }
 
           switch (event) {
             case ChatReadyEvent():
@@ -506,6 +507,12 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
         : const ChatbotException('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
     final status = exception.statusCode;
     final seconds = exception.retryAfterSeconds;
+    final temporaryQuota =
+        exception.errorCode == 'quota_temporarily_unavailable' ||
+        exception.errorCode == 'providers_rate_limited' ||
+        (status == 429 && exception.errorCode != 'quota_exhausted');
+    // พักปุ่มโควต้าชั่วคราวอย่างน้อย 1 นาที และคงเวลาที่บริการขอหากนานกว่า
+    final retrySeconds = temporaryQuota && (seconds ?? 0) < 60 ? 60 : seconds;
     final failure = ChatbotFailure(
       messageId: messageId,
       message: exception.message,
@@ -513,8 +520,8 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
       statusCode: status,
       isRetryable:
           status == null || status == 408 || status == 429 || status >= 500,
-      retryAvailableAt: seconds != null && seconds > 0
-          ? _now().add(Duration(seconds: seconds))
+      retryAvailableAt: retrySeconds != null && retrySeconds > 0
+          ? _now().add(Duration(seconds: retrySeconds))
           : null,
     );
     final messages = List<ChatMessage>.from(state.messages);
@@ -529,6 +536,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
         createdAt: last.createdAt,
         responseDuration: duration,
         statusMessage: 'คำขอไม่สำเร็จ',
+        isFailure: true,
       );
     }
     return state.copyWith(
@@ -553,8 +561,9 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
         failure.messageId != event.messageId ||
         !failure.canRetry(_now()) ||
         state.messages.isEmpty ||
-        state.messages.last.id != event.messageId)
+        state.messages.last.id != event.messageId) {
       return;
+    }
     await _handleMessageStream(
       query: request.query,
       history: request.history,
@@ -619,6 +628,12 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
             return label == null
                 ? q
                 : q.copyWith(
+                    title:
+                        q.branchTitles?[event.questionnaireAnswers
+                            .where((a) => a.questionId == q.branchQuestionId)
+                            .firstOrNull
+                            ?.optionId] ??
+                        q.title,
                     selectedOption: label,
                     selectedOptionId: answer?.optionId,
                   );
@@ -638,11 +653,24 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
       ),
     ];
 
+    final contexts = history.reversed.where(
+      (m) => m.role == ChatMessageRole.assistant && m.context != null,
+    );
+    final latestContext = contexts.isEmpty ? null : contexts.first.context;
+    final pending = state.failure == null ? null : _retrySnapshot;
+    // คำตอบที่ผู้ใช้เลือกยังเป็นหลักฐาน แม้รอบก่อนล้มเหลวและพิมพ์ข้อความต่อ
+    final answers =
+        event.questionnaireAnswers.isEmpty &&
+            pending?.context != null &&
+            pending!.context == latestContext
+        ? pending.questionnaireAnswers
+        : event.questionnaireAnswers;
+
     await _handleMessageStream(
       query: query,
       history: history,
       messagesWithUser: messagesWithQuestion,
-      questionnaireAnswers: event.questionnaireAnswers,
+      questionnaireAnswers: answers,
       questionnaireSkipped: event.questionnaireSkipped,
       activeQuestionId: event.activeQuestionId,
       timing: event.timing,
@@ -653,10 +681,10 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
   @override
   Future<void> close() {
     _finishTiming('screen_closed');
-    _attemptId++;
-    _retrySnapshot = null;
     _activeStreamCanceller?.call();
     _activeStreamCanceller = null;
+    _attemptId++;
+    _retrySnapshot = null;
     _sendMessage.close();
     return super.close();
   }

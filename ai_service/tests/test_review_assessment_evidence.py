@@ -40,11 +40,28 @@ def test_duplicate_or_issues_disagreeing_assessments_are_not_native_valid():
     from app.domain.entities.response_review import NativeResponseReview
     from review_fixture import assessed
     value=assessed(dict(semantic_pass=True,neutral_voice_pass=True,issues=[],reviewed_surface_groups=['response']))
-    value['assessments'][1]['check']='relevance'
-    with pytest.raises(ValidationError,match='exactly one'):NativeResponseReview.model_validate(value)
+    value['assessments'].pop('completeness')
+    with pytest.raises(ValidationError,match='completeness'):NativeResponseReview.model_validate(value)
     value=assessed(dict(semantic_pass=True,neutral_voice_pass=True,issues=[],reviewed_surface_groups=['response']))
-    value['assessments'][0]['passed']=False
+    value['assessments']['relevance']['passed']=False
     with pytest.raises(ValidationError,match='must agree'):NativeResponseReview.model_validate(value)
+
+
+def test_native_review_schema_requires_each_check_instead_of_counting_array_entries():
+    from app.domain.entities.response_review import NativeResponseReview, ResponseChecks
+    from app.infrastructure.llm.provider_client import native_schema, decode_structured
+    from review_fixture import assessed
+    schema=native_schema(NativeResponseReview)
+    checks=schema['$defs']['NamedReviewAssessments']
+    assert set(checks['required']) == set(ResponseChecks.model_fields)
+    assert checks['additionalProperties'] is False
+    value=assessed(dict(semantic_pass=True,neutral_voice_pass=True,issues=[],reviewed_surface_groups=['response']))
+    # The failure seen live had seven entries but repeated followups and omitted
+    # mandatory checks. That shape is now invalid in the native schema itself.
+    rows=[{'check':'followups',**value['assessments']['followups']}] * 7
+    with pytest.raises(ValidationError):NativeResponseReview.model_validate({**value,'assessments':rows})
+    with pytest.raises(ValueError,match='Duplicate JSON property'):
+        decode_structured('{"assessments":{"relevance":{},"relevance":{}}}',NativeResponseReview)
 
 
 def test_voice_failure_does_not_duplicate_or_change_semantic_assessment():

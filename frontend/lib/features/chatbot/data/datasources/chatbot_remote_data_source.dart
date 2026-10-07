@@ -351,6 +351,7 @@ class ChatbotRemoteDataSource {
     final selected = <Map<String, Object?>>[];
     var characters = 0;
     for (final message in messages.reversed) {
+      if (message.isFailure) continue;
       final content = _historyContent(message);
       if (selected.length >= historyMaxMessages ||
           characters + content.length > historyMaxCharacters) {
@@ -384,11 +385,18 @@ class ChatbotRemoteDataSource {
   }
 
   String _modelError(String? code, {Object? retryAfterSeconds}) {
-    if (code == 'providers_rate_limited') {
+    if (code == 'providers_rate_limited' ||
+        code == 'quota_temporarily_unavailable' ||
+        code == 'quota_exhausted') {
+      final reason = code == 'quota_exhausted'
+          ? 'โควต้ารายวันของผู้ช่วย AI ไม่เพียงพอสำหรับคำขอนี้'
+          : code == 'quota_temporarily_unavailable'
+          ? 'ผู้ช่วย AI ติดโควต้าชั่วคราว จึงยังตอบคำขอนี้ไม่ได้'
+          : 'ผู้ช่วย AI ติดโควต้า จึงยังตอบคำขอนี้ไม่ได้';
       if (retryAfterSeconds is! num ||
           !retryAfterSeconds.isFinite ||
           retryAfterSeconds <= 0) {
-        return 'ผู้ช่วย AI ทั้งระบบหลักและสำรองยังตอบคำขอนี้ไม่ได้เนื่องจากคิวหรือโควต้า ยังไม่สามารถระบุเวลารอได้ กรุณาลองใหม่ภายหลัง';
+        return '$reason ยังไม่สามารถระบุเวลารอได้ กรุณาลองใหม่ภายหลัง';
       }
       // ปัดขึ้นเพื่อไม่ชวนให้ส่งซ้ำก่อนเวลาที่เซิร์ฟเวอร์ประเมินไว้
       final minutes = (retryAfterSeconds / Duration.secondsPerMinute).ceil();
@@ -399,7 +407,22 @@ class ChatbotRemoteDataSource {
           : remainingMinutes == 0
           ? '$hours ชั่วโมง'
           : '$hours ชั่วโมง $remainingMinutes นาที';
-      return 'ผู้ช่วย AI ทั้งระบบหลักและสำรองยังตอบคำขอนี้ไม่ได้เนื่องจากคิวหรือโควต้า โปรดลองอีกครั้งในประมาณ $wait ไม่จำเป็นต้องส่งซ้ำระหว่างรอ';
+      return '$reason โปรดลองอีกครั้งในประมาณ $wait ไม่จำเป็นต้องส่งซ้ำระหว่างรอ';
+    }
+    if (code == 'providers_busy') {
+      return 'ผู้ช่วย AI กำลังประมวลผลคำขออื่น จึงรอคิวไม่ทัน กรุณาลองใหม่อีกครั้ง';
+    }
+    if (code == 'review_unavailable') {
+      return 'ผู้ช่วย AI ยังตรวจสอบคำตอบไม่ได้ จึงยังส่งคำตอบให้ไม่ได้ กรุณาลองใหม่ภายหลัง';
+    }
+    if (code == 'providers_exhausted') {
+      return 'ผู้ช่วย AI ยังไม่พร้อมตอบคำขอนี้ กรุณาลองใหม่ภายหลัง';
+    }
+    if (code == 'structured_output_invalid') {
+      return 'ผู้ช่วย AI สร้างรูปแบบคำตอบไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง';
+    }
+    if (code == 'response_quality_rejected') {
+      return 'คำตอบของผู้ช่วย AI ยังไม่ผ่านการตรวจสอบคุณภาพ จึงยังแสดงคำตอบไม่ได้ กรุณาลองใหม่อีกครั้ง';
     }
     return code == 'timeout' || code == 'deadline_exceeded'
         ? 'ผู้ช่วย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง'

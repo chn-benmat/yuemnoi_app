@@ -24,7 +24,7 @@ func serviceError(resp *http.Response) error {
 	}
 	if json.NewDecoder(io.LimitReader(resp.Body, 16384)).Decode(&payload) == nil {
 		switch payload.Detail.Code {
-		case "providers_rate_limited", "timeout", "deadline_exceeded", "providers_exhausted", "request_budget_exceeded", "logical_call_budget_exceeded", "catalog_unavailable", "knowledge_unavailable", "processing_failed":
+		case "providers_rate_limited", "quota_temporarily_unavailable", "quota_exhausted", "providers_busy", "review_unavailable", "structured_output_invalid", "response_quality_rejected", "timeout", "deadline_exceeded", "providers_exhausted", "request_budget_exceeded", "logical_call_budget_exceeded", "catalog_unavailable", "knowledge_unavailable", "processing_failed":
 			failure.Code = payload.Detail.Code
 		}
 	}
@@ -79,15 +79,17 @@ type aiChoiceOptionDTO struct {
 
 // aiQuestionStepDTO โครงสร้างขั้นตอนคำถามพร้อมระบบ Adaptive Branching
 type aiQuestionStepDTO struct {
-	Dimension     string                  `json:"dimension"`
-	Choices       []domain.QuestionChoice `json:"choices"`
-	ID            string                  `json:"id"`
-	Title         string                  `json:"title"`
-	Options       []string                `json:"options"`
-	Step          int                     `json:"step"`
-	TotalSteps    int                     `json:"total_steps"`
-	BranchTitles  map[string]string       `json:"branch_titles,omitempty"`
-	BranchOptions map[string][]string     `json:"branch_options,omitempty"`
+	Dimension        string                             `json:"dimension"`
+	Choices          []domain.QuestionChoice            `json:"choices"`
+	ID               string                             `json:"id"`
+	Title            string                             `json:"title"`
+	Options          []string                           `json:"options"`
+	Step             int                                `json:"step"`
+	TotalSteps       int                                `json:"total_steps"`
+	BranchTitles     map[string]string                  `json:"branch_titles,omitempty"`
+	BranchOptions    map[string][]string                `json:"branch_options,omitempty"`
+	BranchQuestionID *string                            `json:"branch_question_id,omitempty"`
+	BranchChoices    map[string][]domain.QuestionChoice `json:"branch_choices,omitempty"`
 }
 
 // aiClarificationDTO โครงสร้างคำถามถามกลับเมื่อข้อมูลไม่ชัดเจน
@@ -241,15 +243,17 @@ func (c *Client) SendMessage(ctx context.Context, req domain.ChatbotRequest) (*d
 	if len(rawQuestions) > 0 {
 		for _, q := range rawQuestions {
 			questions = append(questions, domain.ClarificationQuestion{
-				ID:            q.ID,
-				Dimension:     q.Dimension,
-				Choices:       q.Choices,
-				Title:         q.Title,
-				Options:       q.Options,
-				Step:          q.Step,
-				TotalSteps:    q.TotalSteps,
-				BranchTitles:  q.BranchTitles,
-				BranchOptions: q.BranchOptions,
+				ID:               q.ID,
+				Dimension:        q.Dimension,
+				Choices:          q.Choices,
+				Title:            q.Title,
+				Options:          q.Options,
+				Step:             q.Step,
+				TotalSteps:       q.TotalSteps,
+				BranchTitles:     q.BranchTitles,
+				BranchOptions:    q.BranchOptions,
+				BranchQuestionID: q.BranchQuestionID,
+				BranchChoices:    q.BranchChoices,
 			})
 		}
 		if len(questions) > 0 && len(suggestedReplies) == 0 && aiResp.Context == nil {

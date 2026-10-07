@@ -26,7 +26,44 @@ from app.infrastructure.runtime.schema import InterpretationPolicy, RuntimeDocum
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ValidatedFile(ROOT / "config/ai_runtime.json", RuntimeDocument).read()[0]
+# These legacy admission tests deliberately exercise configured ceilings. The
+# production API-authority contract is covered in test_provider_quota_authority.
+RUNTIME = RUNTIME.model_copy(update={'providers': tuple(p.model_copy(update={
+    'quota': p.quota.model_copy(update={'authority': 'configured'})}) for p in RUNTIME.providers)})
+RUNTIME = RUNTIME.model_copy(update={'approval': RUNTIME.approval.model_copy(update={
+    'content_sha256': RUNTIME.approval_digest()})})
 POLICY = ValidatedFile(ROOT / "knowledge/interpretation_policy.json", InterpretationPolicy).read()[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('invalid', [
+    '{"value":"legacy internal field","children":[]}',
+    '{"text":"missing nested required default","children":[{}]}',
+    '{"text":"missing root required default"}',
+])
+async def test_wire_schema_rejects_internal_aliases_and_missing_defaulted_fields(invalid):
+    from pydantic import Field
+    class Child(BaseModel):
+        count: int = 0
+    class WireResult(BaseModel):
+        model_config=ConfigDict(populate_by_name=True)
+        value: str = Field(alias='text')
+        children: list[Child] = Field(default_factory=list)
+    calls=[]
+    def respond(request):
+        calls.append(json.loads(request.content)['model'])
+        content=invalid if len(calls)==1 else '{"text":"complete valid wire fields","children":[{"count":0}]}'
+        return httpx.Response(200,json=envelope(content))
+    service,http=stack(respond)
+    try:
+        result=await service.generate_structured('fixture wire schema',WireResult)
+        assert result.value=='complete valid wire fields'
+        assert len(calls)==2
+        assert service.telemetry[0]['status']=='structured_output_invalid'
+        assert service.telemetry[0]['validation_errors']
+    finally:
+        await service.aclose()
+        await http.aclose()
 
 
 def test_rate_limit_reset_accepts_millisecond_units():
@@ -83,6 +120,67 @@ async def test_model_validation_error_is_transient_and_telemetry_omits_error_mes
         await http.aclose()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("opt_in", [False, True])
+async def test_groq_rejected_native_generation_is_exact_local_evidence_only(opt_in):
+    from app.domain.interfaces.generation_stage import GENERATION_RECORDING, generation_stage
+    failed_generation = '{"value": "unfinished generated value"'
+    provider_message = "Generation failed native schema validation"
+    credential = "fixture-private-transport-key"
+    def respond(request):
+        assert request.headers["authorization"] == f"Bearer {credential}"
+        return httpx.Response(400, json={"error": {"code": "json_validate_failed",
+            "message": provider_message, "failed_generation": failed_generation,
+            "request_headers": {"authorization": credential}}, "private_envelope": credential})
+    records = [{"phase": "review", "logical_call_id": "fixture"}]
+    token = GENERATION_RECORDING.set(records if opt_in else None)
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
+            client = GroqClient(api_key=credential, http_client=http, runtime=RUNTIME)
+            with generation_stage("review"), pytest.raises(LLMProviderException) as failure:
+                await client.generate_structured(settings.GROQ_PRIMARY_MODEL, "fixture", SmallResult)
+            assert failure.value.error_code == "structured_output_invalid"
+            observation = client.observation()
+    finally:
+        GENERATION_RECORDING.reset(token)
+    ordinary = json.dumps(observation)
+    assert provider_message not in ordinary and failed_generation not in ordinary
+    assert "failed_generation" not in str(failure.value)
+    assert credential not in json.dumps(records) and credential not in ordinary
+    if opt_in:
+        assert records[0]["failed_generations"] == [{"provider": "groq",
+            "model": settings.GROQ_PRIMARY_MODEL, "error_code": "json_validate_failed",
+            "failed_generation": failed_generation, "provider_message": provider_message}]
+    else:
+        assert "failed_generations" not in records[0]
+
+
+@pytest.mark.asyncio
+async def test_groq_rejected_generation_capture_obeys_runtime_bounds():
+    from app.domain.interfaces.generation_stage import GENERATION_RECORDING, generation_stage
+    text = "x" * (RUNTIME.limits.characters + 10)
+    def respond(request):
+        return httpx.Response(400, json={"error": {"code": "json_validate_failed",
+            "message": text, "failed_generation": text}})
+    records = [{"phase": "repair", "logical_call_id": "fixture"}]
+    token = GENERATION_RECORDING.set(records)
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
+            client = GroqClient(api_key="fixture", http_client=http, runtime=RUNTIME)
+            with generation_stage("repair"):
+                for _ in range(3 + RUNTIME.max_failovers_per_logical_call):
+                    with pytest.raises(LLMProviderException):
+                        await client.generate_structured(settings.GROQ_PRIMARY_MODEL, "fixture", SmallResult)
+    finally:
+        GENERATION_RECORDING.reset(token)
+    failures = records[0]["failed_generations"]
+    assert len(failures) == 1 + RUNTIME.max_failovers_per_logical_call
+    for failure in failures:
+        assert len(failure["failed_generation"]) == RUNTIME.limits.characters
+        assert len(failure["provider_message"]) == RUNTIME.limits.characters
+        assert failure["truncated_fields"] == ["failed_generation", "provider_message"]
+
+
 class SmallResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     value: str
@@ -131,6 +229,26 @@ async def test_invalid_structured_turn_does_not_disable_model_for_other_chats():
         assert (await service.generate_structured("first fixture", SmallResult)).value == "valid"
         assert (await service.generate_structured("different fixture", SmallResult)).value == "valid"
     assert called == [settings.GROQ_PRIMARY_MODEL, settings.GROQ_FALLBACK_MODEL_1, settings.GROQ_PRIMARY_MODEL]
+
+
+@pytest.mark.asyncio
+async def test_native_number_field_does_not_accept_a_json_string_through_coercion():
+    from pydantic import BaseModel
+    class NumberResult(BaseModel):
+        value:float
+    calls=[]
+    def respond(request):
+        calls.append(json.loads(request.content)['model'])
+        return httpx.Response(200,json=envelope('{"value":"500"}' if len(calls)==1 else '{"value":500}'))
+    service,http=stack(respond)
+    try:
+        result=await service.generate_structured('fixture native number',NumberResult)
+        assert result.value==500
+        assert len(calls)==2 and calls[0]!=calls[1]
+        assert service.telemetry[0]['status']=='structured_output_invalid'
+    finally:
+        await service.aclose()
+        await http.aclose()
 
 
 @pytest.mark.asyncio
@@ -399,10 +517,10 @@ async def test_rate_limit_cooldown_is_shared_across_calls_and_models():
         profile["quota"]["scope"] = "provider"
     service, http = stack(respond, signed(data))
     async with http:
-        for _ in range(2):
+        for attempt in range(2):
             with pytest.raises(AllLLMProvidersExhaustedException) as failure:
                 await service.generate_structured("input", SmallResult)
-            assert failure.value.code == "providers_rate_limited"
+            assert failure.value.code == ("providers_rate_limited" if attempt == 0 else "quota_temporarily_unavailable")
             assert failure.value.retry_after > 100
     assert len(calls) == 1
     assert "fixture-secret" not in json.dumps(list(service.telemetry))
@@ -604,6 +722,10 @@ async def test_owned_transport_is_reused_and_closed(monkeypatch):
 @pytest.mark.parametrize("error", [
     RuntimeConfigurationException("runtime_document_invalid"),
     AllLLMProvidersExhaustedException(code="providers_rate_limited", retry_after=60),
+    AllLLMProvidersExhaustedException(code="quota_temporarily_unavailable", retry_after=60),
+    AllLLMProvidersExhaustedException(code="quota_exhausted", retry_after=60),
+    AllLLMProvidersExhaustedException(code="providers_busy"),
+    AllLLMProvidersExhaustedException(code="review_unavailable"),
     AllLLMProvidersExhaustedException(code="deadline_exceeded"),
 ])
 async def test_runtime_errors_have_safe_json_and_sse_codes(monkeypatch, error):

@@ -5,6 +5,7 @@ import pytest
 from app.domain.interfaces.generation_stage import generation_stage, Provenance
 from app.infrastructure.runtime.execution import REQUEST_DEADLINE, LOGICAL_CALL_BUDGET, LogicalCallBudget
 from app.core.exceptions import AllLLMProvidersExhaustedException
+from app.infrastructure.llm.quota import QuotaGovernor
 from test_provider_runtime import SmallResult, stack, runtime, envelope
 
 
@@ -22,6 +23,8 @@ async def test_slow_primary_is_canceled_while_backup_still_has_time():
                 raise
         return httpx.Response(200, json=envelope())
     service, http = stack(respond, runtime(logical_call_deadline_seconds=.16))
+    # แยกการแบ่งเวลา HTTP ออกจากเวลาเขียนไฟล์; การแชร์ ledger มีชุดทดสอบของตัวเอง
+    service.governor = QuotaGovernor([state.policy for state in service.governor._buckets.values()])
     async with http:
         result = await service.generate_structured("fixture", SmallResult)
     assert result.value == "valid" and len(models) == 2 and canceled == models[:1]

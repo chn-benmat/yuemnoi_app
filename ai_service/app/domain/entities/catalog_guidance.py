@@ -14,8 +14,8 @@ class GuidanceModel(BaseModel):
 
 class QuestionChoice(GuidanceModel):
     id: str = Field(min_length=1)
-    label: str = Field(min_length=1)
-    value: str = Field(min_length=1)
+    label: str = Field(min_length=1, description="Complete answer. Budget maximum: closed ceiling with billing period or explicitly unlimited; never a lower bound.", json_schema_extra={'x-provider-description': True})
+    value: str = Field(min_length=1, description="Exact label meaning, including ceiling/absence of ceiling and billing period. Preserve distinctions between choices.", json_schema_extra={'x-provider-description': True})
     supporting_item_ids: List[str]
 
 
@@ -41,7 +41,9 @@ class PriceRequirement(GuidanceModel):
 class SelectedItem(GuidanceModel):
     id: str = Field(min_length=1)
     reason: str = Field(min_length=1)
-    evidence_fields: List[Literal["name", "category", "description", "price", "type", "status"]] = Field(min_length=1)
+    evidence_fields: List[Literal["name", "category", "description", "price", "type", "status"]] = Field(
+        min_length=1, description="An array of individual catalog field names used as evidence for this item. Put the field names directly in the array.",
+        json_schema_extra={"x-provider-description": True})
 
 
 class SelectionPlan(GuidanceModel):

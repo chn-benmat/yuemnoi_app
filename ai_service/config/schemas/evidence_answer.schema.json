@@ -50,6 +50,7 @@
           "type": "string"
         },
         "evidence_fields": {
+          "description": "An array of individual catalog field names used as evidence for this item. Put the field names directly in the array.",
           "items": {
             "enum": [
               "name",
@@ -63,7 +64,8 @@
           },
           "minItems": 1,
           "title": "Evidence Fields",
-          "type": "array"
+          "type": "array",
+          "x-provider-description": true
         }
       },
       "required": [
@@ -133,7 +135,7 @@
     "speaker_register": {
       "const": "informal_ungendered",
       "default": "informal_ungendered",
-      "description": "Use direct conversational Thai without speaker-gender attribution, gender-associated pronouns or sentence-final honorifics. This register governs the answer and every suggested reply.",
+      "description": "Return the exact machine label informal_ungendered, never a description or translation. Answer and suggested replies use natural Thai without gendered speaker pronouns or honorifics.",
       "title": "Speaker Register",
       "type": "string",
       "x-provider-description": true
@@ -159,10 +161,10 @@
         }
       ]
     },
-    "answer": {
-      "description": "Lead with the request-fit conclusion in friendly nongendered Thai. For no_supported_match explicitly explain that the requested kind/function has no supported match within the preserved constraints; describe complementary or differently constrained options only as alternatives, never as satisfying the unmet request. Do not infer incompatibility from absent evidence. Render catalog names, prices, units and status through {{item:ID:FIELD}} references to supplied rows, never rewritten literal values.",
+    "text": {
+      "description": "Lead with the request-fit conclusion in friendly nongendered Thai. For no_supported_match explicitly explain that the requested kind/function has no supported match within the preserved constraints; describe complementary or differently constrained options only as alternatives, never as satisfying the unmet request. Do not infer incompatibility from absent evidence. Render catalog names, prices, units and status through {{item:ID:FIELD}} references to supplied rows, never rewritten literal values. For product recommendations, follow the system's presentation instructions: each product has a standalone bold name followed by a Markdown field list. Keep the name and fields on separate lines, never combine them into an inline paragraph.",
       "minLength": 1,
-      "title": "Answer",
+      "title": "Text",
       "type": "string",
       "x-provider-description": true
     },
@@ -184,7 +186,7 @@
   "required": [
     "request_fit",
     "selection",
-    "answer",
+    "text",
     "search_ids",
     "suggested_replies"
   ],

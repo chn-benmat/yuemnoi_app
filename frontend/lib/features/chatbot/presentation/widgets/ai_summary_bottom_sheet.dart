@@ -12,6 +12,7 @@ class AISummaryBottomSheet extends StatelessWidget {
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
+        constraints: const BoxConstraints(maxWidth: ChatbotDesign.maxWidth),
         builder: (context) => AISummaryBottomSheet(message: message),
       );
 
@@ -29,15 +30,17 @@ class AISummaryBottomSheet extends StatelessWidget {
     }
     try {
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened && context.mounted)
+      if (!opened && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('ไม่สามารถเปิดเบราว์เซอร์ได้')),
         );
+      }
     } catch (_) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('เกิดข้อผิดพลาดในการเปิดลิงก์')),
         );
+      }
     }
   }
 
@@ -71,7 +74,7 @@ class AISummaryBottomSheet extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'ข้อมูลประกอบคำแนะนำ',
+                    'สรุปคำแนะนำ',
                     style: ChatbotDesign.body.copyWith(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
@@ -134,27 +137,12 @@ class AISummaryBottomSheet extends StatelessWidget {
                         ],
                       ),
                     ),
-                  if (message.responseDuration != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      'เวลาประมวลผล ${message.responseDuration!.inSeconds} วินาที',
-                      style: ChatbotDesign.body.copyWith(
-                        fontSize: 13,
-                        color: ChatbotDesign.muted,
-                      ),
+                  if (message.searchSources.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _heading(
+                      'แหล่งข้อมูลอ้างอิง (${message.searchSources.length})',
                     ),
                   ],
-                  const SizedBox(height: 20),
-                  _heading(
-                    'แหล่งข้อมูลอ้างอิง (${message.searchSources.length})',
-                  ),
-                  if (message.searchSources.isEmpty)
-                    Text(
-                      'ไม่มีแหล่งอ้างอิงเพิ่มเติม',
-                      style: ChatbotDesign.body.copyWith(
-                        color: ChatbotDesign.muted,
-                      ),
-                    ),
                   for (final source in message.searchSources)
                     Material(
                       color: ChatbotDesign.surface,
