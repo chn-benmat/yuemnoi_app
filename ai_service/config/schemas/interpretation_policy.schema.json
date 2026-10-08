@@ -153,6 +153,11 @@
       "title": "Review Instruction",
       "type": "string"
     },
+    "repair_instruction": {
+      "minLength": 1,
+      "title": "Repair Instruction",
+      "type": "string"
+    },
     "unavailable_notice": {
       "minLength": 1,
       "title": "Unavailable Notice",
@@ -217,6 +222,7 @@
     "turn_instruction",
     "evidence_instruction",
     "review_instruction",
+    "repair_instruction",
     "unavailable_notice",
     "empty_catalog_notice",
     "scope",

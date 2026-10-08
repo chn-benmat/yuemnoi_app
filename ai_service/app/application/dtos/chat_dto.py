@@ -33,6 +33,7 @@ class ChatRequestDTO(BaseModel):
                 raise ValueError("Questionnaire answers require context")
             questions = {q.id: q for q in self.context.questions}
             ids = [a.question_id for a in self.questionnaire_answers]
+            answers = {a.question_id: a for a in self.questionnaire_answers}
             if len(ids) != len(set(ids)):
                 raise ValueError("Duplicate question answer")
             for answer in self.questionnaire_answers:
@@ -41,6 +42,11 @@ class ChatRequestDTO(BaseModel):
                     raise ValueError("Unknown question ID")
                 if answer.option_id is not None and answer.option_id not in {c.id for c in question.choices}:
                     raise ValueError("Unknown choice ID")
+                if answer.option_id is not None and question.branch_question_id:
+                    source = answers.get(question.branch_question_id)
+                    choices = question.branch_choices.get(source.option_id) if source else None
+                    if choices is not None and answer.option_id not in {c.id for c in choices}:
+                        raise ValueError("Choice does not belong to the selected question branch")
         return self
 
     @property

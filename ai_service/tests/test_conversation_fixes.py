@@ -159,7 +159,7 @@ async def test_validation_diagnostics_omit_provider_values_and_unknown_keys():
         diagnostics = [t["validation_errors"] for t in service.telemetry if "validation_errors" in t]
         assert diagnostics
         assert secret not in json.dumps(list(service.telemetry))
-        assert "value" in json.dumps(diagnostics)
+        assert "unknown_field" in json.dumps(diagnostics)
     finally:
         await http.aclose()
 
@@ -267,9 +267,9 @@ async def test_clarification_stage_preserves_pending_catalog_operation_without_s
     assert llm.generate_structured.await_count == 1
     schema = native_schema(llm.generate_structured.call_args.kwargs["schema"])
     fields = list(schema["properties"])
-    assert fields.index("stage") < fields.index("understanding")
+    assert fields.index("stage") < fields.index("analysis")
     assert schema['$defs']['ClarificationStage']['properties']['response_mode']['enum'] == ['clarification']
-    assert schema['$defs']['EvidenceStage']['properties']['message']['enum'] == ['']
+    assert schema['$defs']['EvidenceStage']['properties']['text']['enum'] == ['']
 
 
 @pytest.mark.asyncio

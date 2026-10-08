@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/chatbot/domain/entities/chat_message.dart';
 import 'package:frontend/features/chatbot/presentation/widgets/chat_message_bubble.dart';
+import 'package:frontend/features/chatbot/presentation/widgets/chatbot_design.dart';
 import 'package:frontend/features/chatbot/presentation/widgets/interactive_questionnaire_card.dart';
 
 void main() {
@@ -330,7 +331,13 @@ void main() {
         expect(find.textContaining('PlayStation 5'), findsWidgets);
         expect(find.textContaining('Nintendo Switch OLED'), findsWidgets);
         // Blockquote text rendered without raw markdown > markers
-        expect(find.textContaining('>'), findsNothing);
+        expect(
+          find.descendant(
+            of: find.byType(MarkdownBody),
+            matching: find.textContaining('>'),
+          ),
+          findsNothing,
+        );
         expect(
           find.textContaining('สรุปความคุ้มค่าและคำแนะนำ'),
           findsOneWidget,
@@ -469,7 +476,7 @@ void main() {
     });
 
     testWidgets(
-      'renders status summary header with duration on completed assistant response',
+      'shows measured timing and a purple arrow above the avatar beside the answer',
       (tester) async {
         const message = ChatMessage(
           id: 'assistant-complete-status',
@@ -489,13 +496,41 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('ข้อมูลประกอบคำแนะนำ'), findsOneWidget);
-        expect(find.text('สรุปคำแนะนำ (6 วิ)'), findsOneWidget);
+        final summary = find.text('สรุปคำแนะนำ 6 วินาที >');
+        expect(summary, findsOneWidget);
+        final label = tester.widget<Text>(summary).textSpan! as TextSpan;
+        expect(label.children!.last.style!.color, ChatbotDesign.primary);
+        final avatar = find.byKey(
+          const ValueKey('chatbot-assistant-avatar-assistant-complete-status'),
+        );
+        expect(tester.widget(avatar), isA<ClipOval>());
+        final avatarRect = tester.getRect(avatar);
+        expect(avatarRect.width, avatarRect.height);
+        expect(find.text('ยืมหน่อย AI'), findsNothing);
+        final answerRect = tester.getRect(find.text('คำแนะนำเรียบร้อยค่ะ'));
+        expect(answerRect.top, avatarRect.top);
+        expect(answerRect.left, greaterThan(avatarRect.right));
+        expect(
+          tester.getRect(summary).bottom,
+          lessThanOrEqualTo(avatarRect.top),
+        );
+        expect(find.byTooltip('คัดลอกคำตอบ'), findsNothing);
+        expect(find.byIcon(Icons.copy_outlined), findsNothing);
+        await tester.tap(
+          find.byKey(
+            const ValueKey(
+              'chatbot-status-header-button-assistant-complete-status',
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('สรุปคำแนะนำ'), findsOneWidget);
+        expect(find.textContaining('เวลาประมวลผล'), findsNothing);
       },
     );
 
     testWidgets(
-      'does not render status summary header on initial greeting assistant message',
+      'allows opening the summary for a completed greeting without sources',
       (tester) async {
         const initialGreeting = ChatMessage(
           role: ChatMessageRole.assistant,
@@ -516,7 +551,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byIcon(Icons.auto_awesome_rounded), findsNothing);
-        expect(find.textContaining('สรุปคำแนะนำ'), findsNothing);
+        expect(find.text('สรุปคำแนะนำ >'), findsOneWidget);
       },
     );
 
@@ -547,7 +582,7 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.text('ข้อมูลประกอบคำแนะนำ'), findsOneWidget);
+        expect(find.text('สรุปคำแนะนำ >'), findsNothing);
         expect(
           find.textContaining('กำลังค้นหาอุปกรณ์ในระบบ...'),
           findsOneWidget,
@@ -556,75 +591,46 @@ void main() {
     );
 
     testWidgets(
-      'periodically ticks and updates elapsed seconds in status header while response duration is null',
+      'shows fixed completion timing without a ticking stream timer',
       (tester) async {
-        final startTime = DateTime.now();
-        final inProgressMessage = ChatMessage(
+        const streaming = ChatMessage(
           id: 'assistant-timer-test',
           role: ChatMessageRole.assistant,
           content: 'กำลังพิมพ์คำตอบ...',
           userQuery: 'หาคอมพิวเตอร์',
           isStreaming: true,
           statusMessage: 'กำลังสรุปคำแนะนำ...',
-          createdAt: startTime,
         );
-
+        Widget mount(ChatMessage message) => MaterialApp(
+          home: Scaffold(
+            body: ChatMessageBubble(message: message, onRentPressed: (_) {}),
+          ),
+        );
+        await tester.pumpWidget(mount(streaming));
+        await tester.pump(const Duration(seconds: 3));
+        expect(find.text('กำลังสรุปคำแนะนำ...'), findsOneWidget);
+        expect(find.textContaining('วิ'), findsNothing);
         await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(fontFamily: 'Prompt'),
-            home: Scaffold(
-              body: ChatMessageBubble(
-                message: inProgressMessage,
-                onRentPressed: (_) {},
-              ),
+          mount(
+            streaming.copyWith(
+              isStreaming: false,
+              responseDuration: const Duration(seconds: 3),
             ),
           ),
         );
-        await tester.pump();
-
-        expect(find.textContaining('กำลังสรุปคำแนะนำ...'), findsOneWidget);
-        expect(find.textContaining('(0 วิ)..'), findsOneWidget);
-
-        // Advance 1 second
-        await tester.pump(const Duration(seconds: 1));
-        expect(find.textContaining('(1 วิ)..'), findsOneWidget);
-
-        // Advance 1 more second
-        await tester.pump(const Duration(seconds: 1));
-        expect(find.textContaining('(2 วิ)..'), findsOneWidget);
-
-        // Advance 1 more second
-        await tester.pump(const Duration(seconds: 1));
-        expect(find.textContaining('(3 วิ)..'), findsOneWidget);
-
-        // Now simulate completion by providing responseDuration
-        final completedMessage = inProgressMessage.copyWith(
-          isStreaming: false,
-          statusMessage: 'สรุปคำแนะนำ',
-          responseDuration: const Duration(seconds: 3),
-        );
-
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(fontFamily: 'Prompt'),
-            home: Scaffold(
-              body: ChatMessageBubble(
-                message: completedMessage,
-                onRentPressed: (_) {},
-              ),
-            ),
+        await tester.pumpAndSettle();
+        expect(find.text('สรุปคำแนะนำ 3 วินาที >'), findsOneWidget);
+        await tester.tap(
+          find.byKey(
+            const ValueKey('chatbot-status-header-button-assistant-timer-test'),
           ),
         );
-        await tester.pump();
-
-        expect(find.text('สรุปคำแนะนำ (3 วิ)'), findsOneWidget);
-
-        // Advance 2 more seconds - duration must remain frozen and timer stopped
+        await tester.pumpAndSettle();
+        expect(find.text('เวลาประมวลผล 3 วินาที'), findsNothing);
         await tester.pump(const Duration(seconds: 2));
-        expect(find.text('สรุปคำแนะนำ (3 วิ)'), findsOneWidget);
+        expect(find.text('เวลาประมวลผล 3 วินาที'), findsNothing);
       },
     );
-
     testWidgets('renders all validated cards without matching names in answer text', (
       tester,
     ) async {
@@ -696,6 +702,9 @@ void main() {
         find.text('ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED'),
         findsWidgets,
       );
+      expect(find.text('available'), findsNothing);
+      expect(find.text('แคมป์ปิงและกิจกรรมกลางแจ้ง'), findsNothing);
+      expect(find.text('ดูรายละเอียด'), findsNothing);
     });
 
     testWidgets('renders valid Markdown and catalog card names directly', (
@@ -703,12 +712,12 @@ void main() {
     ) async {
       const responseContent =
           'ยินดีจัดหาอุปกรณ์แคมป์ปิ้งพร้อมใช้งานให้ค่ะ ขอแนะนำรายการที่มีในระบบนะคะ:\n\n'
-          '**เต็นท์ Coleman Instant Cabin 4 คน**\n'
-          '- **รายละเอียด:** เต็นท์กันฝนและลมแรง กางและพับเก็บเสร็จใน 1 นาที\n'
-          '- **ราคาเช่า:** 450 บาท ต่อ วัน\n\n'
-          '**ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว**\n'
-          '- **รายละเอียด:** โต๊ะพับอลูมิเนียมพร้อมเก้าอี้ 4 ตัว น้ำหนักเบาพกพาสะดวก\n'
-          '- **ราคาเช่า:** 250 บาท ต่อ วัน\n\n'
+          '**เต็นท์ Coleman Instant Cabin 4 คน**\n\n'
+          '- **รายละเอียด**: เต็นท์กันฝนและลมแรง กางและพับเก็บเสร็จใน 1 นาที\n'
+          '- ราคา: 450 บาทต่อวัน\n\n'
+          '**ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว**\n\n'
+          '- **รายละเอียด**: โต๊ะพับอลูมิเนียมพร้อมเก้าอี้ 4 ตัว น้ำหนักเบาพกพาสะดวก\n'
+          '- ราคา: 250 บาทต่อวัน\n\n'
           'เชิญแตะดูรายละเอียดเพิ่มเติมจากการ์ดอุปกรณ์ด้านล่างนี้ได้เลยนะคะ';
 
       const message = ChatMessage(

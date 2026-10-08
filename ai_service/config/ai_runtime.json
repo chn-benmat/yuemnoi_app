@@ -1,13 +1,13 @@
 {
   "schema_version": "2",
-  "version": "2026-10-05-response-ready-30s",
+  "version": "2026-10-07-provider-quota-authority",
   "status": "approved",
   "production_enabled": true,
   "approval": {
     "approved_by": "user",
-    "approved_at": "2026-10-05T13:42:43.338942+00:00",
-    "authorization": "User selected every message up to30seconds from send interaction to complete validated answer ready, excluding SSE character delivery/typewriter; confirmed implementation in this chat on2026-10-05. Preserve old trials. Keep providers, quota ledger, logical caps2/3/3, one fallback and mandatory independent actual-model review unchanged.",
-    "content_sha256": "9284c76c818e4f09bf222f7508bb6d0571c8c08ac41cf040ad4cb0655405f01e"
+    "approved_at": "2026-10-07T08:19:13.442748+00:00",
+    "authorization": "User explicitly requested implementation of bounded draft recovery on 2026-10-07: one repair generation and fresh independent review; logical-call caps 4/5, total deadline 30 seconds, Gemini/Groq only, truthful quota/queue errors, and opt-in local diagnostics. Preserve shared quota ledger and authoritative catalog/document projections. User requested native schema alignment and sufficient reserved recovery quota on 2026-10-07; compact equivalent instructions and lossless inputs, preserve actual limits and ledger. User requested provider-reported quota authority for both Gemini and Groq on 2026-10-07; no inferred local daily exhaustion, preserve ledger usage and recovery reservations.",
+    "content_sha256": "827df1fcfde99091109f5c172b6aa157b9ca7fcae85169ac57a50c350eb3d414"
   },
   "knowledge_path": "knowledge/app_knowledge.json",
   "interpretation_policy_path": "knowledge/interpretation_policy.json",
@@ -32,7 +32,8 @@
         "requests_per_day": 1000,
         "tokens_per_day": 200000,
         "day_seconds": 86400.0,
-        "scope": "provider"
+        "scope": "provider",
+        "authority": "provider"
       }
     },
     {
@@ -53,7 +54,8 @@
         "requests_per_day": 1000,
         "tokens_per_day": 200000,
         "day_seconds": 86400.0,
-        "scope": "provider"
+        "scope": "provider",
+        "authority": "provider"
       }
     },
     {
@@ -74,7 +76,8 @@
         "requests_per_day": 1000,
         "tokens_per_day": 200000,
         "day_seconds": 86400.0,
-        "scope": "provider"
+        "scope": "provider",
+        "authority": "provider"
       }
     },
     {
@@ -95,7 +98,8 @@
         "requests_per_day": 1000,
         "tokens_per_day": 200000,
         "day_seconds": 86400.0,
-        "scope": "model"
+        "scope": "model",
+        "authority": "provider"
       }
     },
     {
@@ -116,7 +120,8 @@
         "requests_per_day": 1000,
         "tokens_per_day": 200000,
         "day_seconds": 86400.0,
-        "scope": "model"
+        "scope": "model",
+        "authority": "provider"
       }
     },
     {
@@ -137,19 +142,20 @@
         "requests_per_day": 1000,
         "tokens_per_day": 200000,
         "day_seconds": 86400.0,
-        "scope": "model"
+        "scope": "model",
+        "authority": "provider"
       }
     }
   ],
   "general": {
     "target_seconds": 15.0,
     "hard_deadline_seconds": 30.0,
-    "logical_calls": 2
+    "logical_calls": 4
   },
   "equipment": {
     "target_seconds": 15.0,
     "hard_deadline_seconds": 30.0,
-    "logical_calls": 3
+    "logical_calls": 5
   },
   "technical_hard_deadline_seconds": 30.0,
   "max_failovers_per_logical_call": 1,
@@ -227,6 +233,16 @@
     },
     "finalization_reserve_seconds": 0.15,
     "minimum_attempt_seconds": 0.025,
-    "measurement_artifact": null
+    "measurement_artifact": null,
+    "repair": {
+      "profiles": [
+        "gemini-primary",
+        "groq-primary",
+        "groq-fallback-1",
+        "groq-fallback-2"
+      ],
+      "p95_seconds": {}
+    },
+    "initial_review_reserve_tokens": 3200
   }
 }

@@ -81,7 +81,8 @@ async def test_faq_one_call_exact_document_without_full_articles_in_prompt():
     article = next(a for a in snapshot.articles if a.id == "account.registration")
     assert result.response == article.content
     assert llm.generate_structured.await_count == 1
-    payload = json.loads(llm.generate_structured.call_args.kwargs["prompt"])
+    from app.application.services.review_input import restore_planning_input
+    payload = restore_planning_input(json.loads(llm.generate_structured.call_args.kwargs["prompt"]))
     assert len(payload["knowledge_index"]) == 22
     assert all("content" not in a for a in payload["knowledge_index"])
     assert payload["catalog_summary"]["prices"]["rows"] == [[ITEM.category, ITEM.type, ITEM.price, ITEM.price]]
@@ -241,16 +242,16 @@ async def test_runtime_counts_logical_calls_independently_of_provider_failover()
     guard = RuntimeExecutionGuard(ROOT / "config/ai_runtime.json", ROOT / "knowledge/interpretation_policy.json")
     async with guard.turn():
         guard.select_flow("general")
-        consume_logical_call()
-        consume_logical_call()
+        for _ in range(guard.runtime.general.logical_calls):
+            consume_logical_call()
         with pytest.raises(AllLLMProvidersExhaustedException, match="cloud LLM") as error:
             consume_logical_call()
         assert error.value.code == "logical_call_budget_exceeded"
     async with guard.turn():
         consume_logical_call()
         guard.select_flow("equipment")
-        consume_logical_call()
-        consume_logical_call()
+        for _ in range(guard.runtime.equipment.logical_calls - 1):
+            consume_logical_call()
         with pytest.raises(AllLLMProvidersExhaustedException):
             consume_logical_call()
 

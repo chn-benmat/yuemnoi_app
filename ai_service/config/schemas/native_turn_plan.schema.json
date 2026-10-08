@@ -1,5 +1,25 @@
 {
   "$defs": {
+    "CatalogOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "none",
+            "selection",
+            "inspection",
+            "comparison"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "CatalogOperation",
+      "type": "object"
+    },
     "ClarificationStage": {
       "additionalProperties": false,
       "properties": {
@@ -8,14 +28,19 @@
           "title": "Response Mode",
           "type": "string"
         },
-        "message": {
+        "catalog_operation": {
+          "$ref": "#/$defs/CatalogOperation"
+        },
+        "text": {
+          "description": "Original assistant invitation to pending questions; never echo the user. Natural ungendered Thai.",
           "minLength": 1,
-          "title": "Message",
-          "type": "string"
+          "title": "Text",
+          "type": "string",
+          "x-provider-description": true
         },
         "questions": {
           "items": {
-            "$ref": "#/$defs/PlannedQuestion"
+            "$ref": "#/$defs/NativePlannedQuestion"
           },
           "maxItems": 3,
           "minItems": 1,
@@ -25,7 +50,8 @@
       },
       "required": [
         "response_mode",
-        "message",
+        "catalog_operation",
+        "text",
         "questions"
       ],
       "title": "ClarificationStage",
@@ -35,21 +61,26 @@
       "additionalProperties": false,
       "properties": {
         "response_mode": {
+          "description": "conversation pairs with analysis.intent=general_greeting for allowed social acts/humor. Explanations and scope refusals use information with analysis.intent=general_information. Catalog facts require equipment; unverifiable facts are evidence gaps, never preferences.",
           "enum": [
             "conversation",
             "information"
           ],
           "title": "Response Mode",
-          "type": "string"
+          "type": "string",
+          "x-provider-description": true
         },
-        "message": {
+        "catalog_operation": {
+          "$ref": "#/$defs/NoCatalogOperation"
+        },
+        "text": {
           "minLength": 1,
-          "title": "Message",
+          "title": "Text",
           "type": "string"
         },
         "questions": {
           "items": {
-            "$ref": "#/$defs/PlannedQuestion"
+            "type": "null"
           },
           "maxItems": 0,
           "title": "Questions",
@@ -58,33 +89,92 @@
       },
       "required": [
         "response_mode",
-        "message",
+        "catalog_operation",
+        "text",
         "questions"
       ],
       "title": "ConversationStage",
+      "type": "object"
+    },
+    "DocumentStage": {
+      "additionalProperties": false,
+      "properties": {
+        "response_mode": {
+          "const": "documents",
+          "description": "Ready app information uses supplied approved articles.",
+          "title": "Response Mode",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "catalog_operation": {
+          "$ref": "#/$defs/NoCatalogOperation"
+        },
+        "text": {
+          "const": "",
+          "title": "Text",
+          "type": "string"
+        },
+        "questions": {
+          "items": {
+            "type": "null"
+          },
+          "maxItems": 0,
+          "title": "Questions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "response_mode",
+        "catalog_operation",
+        "text",
+        "questions"
+      ],
+      "title": "DocumentStage",
+      "type": "object"
+    },
+    "EvidenceCatalogOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "selection",
+            "inspection",
+            "comparison"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "EvidenceCatalogOperation",
       "type": "object"
     },
     "EvidenceStage": {
       "additionalProperties": false,
       "properties": {
         "response_mode": {
+          "description": "equipment: ready named-item, comparison or filtered requests. catalog_overview: unfiltered category browsing only, without targets, spending ceiling, user constraints, exclusions or external verification.",
           "enum": [
             "equipment",
-            "technical",
-            "catalog_overview",
-            "documents"
+            "catalog_overview"
           ],
           "title": "Response Mode",
-          "type": "string"
+          "type": "string",
+          "x-provider-description": true
         },
-        "message": {
+        "catalog_operation": {
+          "$ref": "#/$defs/EvidenceCatalogOperation"
+        },
+        "text": {
           "const": "",
-          "title": "Message",
+          "title": "Text",
           "type": "string"
         },
         "questions": {
           "items": {
-            "$ref": "#/$defs/PlannedQuestion"
+            "type": "null"
           },
           "maxItems": 0,
           "title": "Questions",
@@ -93,13 +183,45 @@
       },
       "required": [
         "response_mode",
-        "message",
+        "catalog_operation",
+        "text",
         "questions"
       ],
       "title": "EvidenceStage",
       "type": "object"
     },
-    "KnownFact": {
+    "NativeBudgetPeriod": {
+      "additionalProperties": false,
+      "properties": {
+        "user_period": {
+          "description": "Explicit user billing period; preserve meaning.",
+          "minLength": 1,
+          "title": "User Period",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "catalog_unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact catalog unit equivalent to user_period, else null. No conversions/guesses.",
+          "title": "Catalog Unit",
+          "x-provider-description": true
+        }
+      },
+      "required": [
+        "user_period",
+        "catalog_unit"
+      ],
+      "title": "NativeBudgetPeriod",
+      "type": "object"
+    },
+    "NativeKnownFact": {
       "additionalProperties": false,
       "properties": {
         "dimension": {
@@ -108,9 +230,18 @@
           "type": "string"
         },
         "value": {
-          "minLength": 1,
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "description": "Established text or quantitative JSON number; no punctuation placeholders. Omit unknown facts.",
           "title": "Value",
-          "type": "string"
+          "x-provider-description": true
         },
         "source_message_ids": {
           "items": {
@@ -126,12 +257,23 @@
         "value",
         "source_message_ids"
       ],
-      "title": "KnownFact",
+      "title": "NativeKnownFact",
       "type": "object"
     },
-    "PlannedQuestion": {
+    "NativePlannedQuestion": {
       "additionalProperties": false,
       "properties": {
+        "choices": {
+          "description": "All displayed options in one array, including the unrestricted option when applicable. At most four total.",
+          "items": {
+            "$ref": "#/$defs/NativeQuestionChoice"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Choices",
+          "type": "array",
+          "x-provider-description": true
+        },
         "id": {
           "minLength": 1,
           "title": "Id",
@@ -147,63 +289,28 @@
           "title": "Title",
           "type": "string"
         },
-        "choices": {
+        "branches": {
+          "description": "Adapt to one earlier question: cover each source choice ID with relevant title/choices. Empty if independent or for unknown typed answers.",
           "items": {
-            "$ref": "#/$defs/QuestionChoice"
+            "$ref": "#/$defs/NativeQuestionBranch"
           },
           "maxItems": 4,
-          "minItems": 1,
-          "title": "Choices",
-          "type": "array"
+          "title": "Branches",
+          "type": "array",
+          "x-provider-description": true
         }
       },
       "required": [
+        "choices",
         "id",
         "dimension",
-        "title",
-        "choices"
+        "title"
       ],
-      "title": "PlannedQuestion",
+      "title": "NativePlannedQuestion",
       "type": "object"
     },
-    "QuestionChoice": {
+    "NativePlanningUnderstanding": {
       "additionalProperties": false,
-      "properties": {
-        "id": {
-          "minLength": 1,
-          "title": "Id",
-          "type": "string"
-        },
-        "label": {
-          "minLength": 1,
-          "title": "Label",
-          "type": "string"
-        },
-        "value": {
-          "minLength": 1,
-          "title": "Value",
-          "type": "string"
-        },
-        "supporting_item_ids": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Supporting Item Ids",
-          "type": "array"
-        }
-      },
-      "required": [
-        "id",
-        "label",
-        "value",
-        "supporting_item_ids"
-      ],
-      "title": "QuestionChoice",
-      "type": "object"
-    },
-    "RequestUnderstanding": {
-      "additionalProperties": false,
-      "description": "Required semantic contract for live routing, independent of legacy scores.",
       "properties": {
         "intent": {
           "description": "Communicative purpose, separate from whether clarification is needed.",
@@ -262,17 +369,17 @@
           "description": "Explicit maximum budget; null when absent or units cannot be interpreted.",
           "title": "Budget Max"
         },
-        "budget_unit": {
+        "budget_period": {
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/$defs/NativeBudgetPeriod"
             },
             {
               "type": "null"
             }
           ],
-          "description": "Budget billing period explicitly established by the user; null when unknown, do not infer it from shop units.",
-          "title": "Budget Unit"
+          "description": "Resolve the explicit user billing period against the canonical catalog units. Null when the user established no period.",
+          "x-provider-description": true
         },
         "intended_use": {
           "anyOf": [
@@ -285,14 +392,6 @@
           ],
           "description": "Relevant user-stated workload, after corrections; null if unknown.",
           "title": "Intended Use"
-        },
-        "missing_slots": {
-          "description": "Only material unknown requirements for the requested operation, not optional preferences.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Missing Slots",
-          "type": "array"
         },
         "needs_external_search": {
           "description": "Whether technical facts need external verification; shop prices, stock and policies need their authoritative source.",
@@ -311,28 +410,9 @@
           "description": "Focused technical verification query, or null when unnecessary.",
           "title": "Search Query"
         },
-        "next_action": {
-          "enum": [
-            "answer",
-            "clarify"
-          ],
-          "title": "Next Action",
-          "type": "string"
-        },
         "user_goal": {
           "minLength": 1,
           "title": "User Goal",
-          "type": "string"
-        },
-        "catalog_operation": {
-          "description": "Required catalog operation across all user goals, independent of the primary intent; none when no catalog evidence is needed.",
-          "enum": [
-            "none",
-            "selection",
-            "inspection",
-            "comparison"
-          ],
-          "title": "Catalog Operation",
           "type": "string"
         },
         "additional_goals": {
@@ -351,20 +431,16 @@
           "title": "Request Scope",
           "type": "string"
         },
-        "information_sufficient": {
-          "title": "Information Sufficient",
-          "type": "boolean"
-        },
         "known_facts": {
           "items": {
-            "$ref": "#/$defs/KnownFact"
+            "$ref": "#/$defs/NativeKnownFact"
           },
           "title": "Known Facts",
           "type": "array"
         },
         "user_constraints": {
           "items": {
-            "$ref": "#/$defs/KnownFact"
+            "$ref": "#/$defs/NativeKnownFact"
           },
           "title": "User Constraints",
           "type": "array"
@@ -385,14 +461,18 @@
           "type": "boolean"
         },
         "reference_resolution": {
+          "description": "Supported current referent, or absence of prior referent. Nonempty.",
           "minLength": 1,
           "title": "Reference Resolution",
-          "type": "string"
+          "type": "string",
+          "x-provider-description": true
         },
         "decision_reason": {
+          "description": "Nonempty evidenced reason to answer or ask material pending questions.",
           "minLength": 1,
           "title": "Decision Reason",
-          "type": "string"
+          "type": "string",
+          "x-provider-description": true
         }
       },
       "required": [
@@ -402,17 +482,13 @@
         "target_items",
         "categories",
         "budget_max",
-        "budget_unit",
+        "budget_period",
         "intended_use",
-        "missing_slots",
         "needs_external_search",
         "search_query",
-        "next_action",
         "user_goal",
-        "catalog_operation",
         "additional_goals",
         "request_scope",
-        "information_sufficient",
         "known_facts",
         "user_constraints",
         "excluded_items",
@@ -421,7 +497,147 @@
         "reference_resolution",
         "decision_reason"
       ],
-      "title": "RequestUnderstanding",
+      "title": "NativePlanningUnderstanding",
+      "type": "object"
+    },
+    "NativeQuestionBranch": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "description": "All displayed options in one array, including the unrestricted option when applicable. At most four total.",
+          "items": {
+            "$ref": "#/$defs/NativeQuestionChoice"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Choices",
+          "type": "array",
+          "x-provider-description": true
+        },
+        "source_question_id": {
+          "minLength": 1,
+          "title": "Source Question Id",
+          "type": "string"
+        },
+        "source_option_id": {
+          "minLength": 1,
+          "title": "Source Option Id",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "choices",
+        "source_question_id",
+        "source_option_id",
+        "title"
+      ],
+      "title": "NativeQuestionBranch",
+      "type": "object"
+    },
+    "NativeQuestionChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "description": "Complete answer. Budget maximum: closed ceiling with billing period or explicitly unlimited; never a lower bound.",
+          "minLength": 1,
+          "title": "Label",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "value": {
+          "description": "Exact label meaning, including ceiling/absence of ceiling and billing period. Preserve distinctions between choices.",
+          "minLength": 1,
+          "title": "Value",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "supporting_item_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supporting Item Ids",
+          "type": "array"
+        },
+        "choice_kind": {
+          "description": "specified establishes a preference or finite ceiling; unrestricted leaves that preference unconstrained. A maximum-budget question includes one unrestricted option explicitly removing the ceiling.",
+          "enum": [
+            "specified",
+            "unrestricted"
+          ],
+          "title": "Choice Kind",
+          "type": "string",
+          "x-provider-description": true
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "value",
+        "supporting_item_ids",
+        "choice_kind"
+      ],
+      "title": "NativeQuestionChoice",
+      "type": "object"
+    },
+    "NoCatalogOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "none",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "NoCatalogOperation",
+      "type": "object"
+    },
+    "TechnicalStage": {
+      "additionalProperties": false,
+      "properties": {
+        "response_mode": {
+          "const": "technical",
+          "description": "Ready technical facts need focused external verification.",
+          "title": "Response Mode",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "catalog_operation": {
+          "$ref": "#/$defs/CatalogOperation"
+        },
+        "text": {
+          "const": "",
+          "title": "Text",
+          "type": "string"
+        },
+        "questions": {
+          "items": {
+            "type": "null"
+          },
+          "maxItems": 0,
+          "title": "Questions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "response_mode",
+        "catalog_operation",
+        "text",
+        "questions"
+      ],
+      "title": "TechnicalStage",
       "type": "object"
     }
   },
@@ -430,8 +646,10 @@
   "properties": {
     "speaker_register": {
       "const": "informal_ungendered",
+      "description": "Exact machine label. Use natural ungendered Thai in all assistant text.",
       "title": "Speaker Register",
-      "type": "string"
+      "type": "string",
+      "x-provider-description": true
     },
     "stage": {
       "anyOf": [
@@ -442,17 +660,25 @@
           "$ref": "#/$defs/EvidenceStage"
         },
         {
+          "$ref": "#/$defs/TechnicalStage"
+        },
+        {
+          "$ref": "#/$defs/DocumentStage"
+        },
+        {
           "$ref": "#/$defs/ConversationStage"
         }
       ],
-      "title": "Stage"
+      "description": "Select the current stage using its response_mode semantics, not the eventual rental operation alone.",
+      "title": "Stage",
+      "x-provider-description": true
     },
     "overview_available_only": {
       "title": "Overview Available Only",
       "type": "boolean"
     },
-    "understanding": {
-      "$ref": "#/$defs/RequestUnderstanding"
+    "analysis": {
+      "$ref": "#/$defs/NativePlanningUnderstanding"
     },
     "knowledge_ids": {
       "items": {
@@ -473,7 +699,7 @@
     "speaker_register",
     "stage",
     "overview_available_only",
-    "understanding",
+    "analysis",
     "knowledge_ids",
     "unverified_topic_ids"
   ],

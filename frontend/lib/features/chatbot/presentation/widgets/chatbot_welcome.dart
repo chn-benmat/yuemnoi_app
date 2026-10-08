@@ -6,6 +6,14 @@ class ChatbotWelcome extends StatelessWidget {
   const ChatbotWelcome({required this.onSelect, super.key});
   final ValueChanged<String> onSelect;
 
+  static const _topics = [
+    ('ถ่ายคอนเทนต์', Icons.camera_alt_outlined),
+    ('ทำโปรเจกต์', Icons.laptop_mac_outlined),
+    ('ไปทริป', Icons.terrain_outlined),
+    ('เล่นเกม', Icons.sports_esports_outlined),
+    ('เล่นดนตรี', Icons.music_note_outlined),
+  ];
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) => SingleChildScrollView(
@@ -13,94 +21,92 @@ class ChatbotWelcome extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: constraints.maxHeight),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Image.asset(
-                  'assets/images/yuemnoi.png',
-                  width: 80,
-                  height: 80,
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: ChatbotDesign.subtle,
+                  borderRadius: BorderRadius.circular(ChatbotDesign.radius),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.asset(
+                    'assets/images/yuemnoi.png',
+                    width: 48,
+                    height: 48,
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
+              const Text('วันนี้อยากใช้อะไร?', style: ChatbotDesign.title),
+              const SizedBox(height: 10),
+              Text(
+                'เล่างานที่อยากทำ หรืองบที่มี\nเดี๋ยวช่วยเลือกอุปกรณ์ให้',
+                style: ChatbotDesign.body.copyWith(color: ChatbotDesign.muted),
+              ),
+              const SizedBox(height: 28),
               const Text(
-                'หาอุปกรณ์ที่ใช่ ให้ AI ช่วย',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 23,
-                  fontWeight: FontWeight.w600,
-                  color: ChatbotDesign.ink,
-                ),
+                'ลองเริ่มจากสิ่งที่อยากทำ',
+                style: ChatbotDesign.caption,
               ),
               const SizedBox(height: 12),
-              const Text(
-                'เล่างานที่ต้องใช้ งบประมาณ หรือรุ่นที่สนใจ\nแล้วเราช่วยหาตัวเลือกให้',
-                textAlign: TextAlign.center,
-                style: ChatbotDesign.body,
-              ),
-              const SizedBox(height: 24),
-              for (var index = 0; index < 3; index++) ...[
-                if (index > 0) const SizedBox(height: 8),
-                Material(
-                  color: ChatbotDesign.surface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: const BorderSide(color: ChatbotDesign.border),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    key: Key('chatbot-quick-reply-$index'),
-                    onTap: () =>
-                        onSelect(ChatbotState.defaultInitialSuggestions[index]),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 16,
+              Wrap(
+                spacing: 8,
+                runSpacing: 10,
+                children: [
+                  for (var index = 0; index < _topics.length; index++)
+                    Material(
+                      color: ChatbotDesign.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(color: ChatbotDesign.border),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            [
-                              Icons.camera_alt_outlined,
-                              Icons.terrain_outlined,
-                              Icons.laptop_mac_outlined,
-                            ][index],
-                            color: ChatbotDesign.primary,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              [
-                                'กล้องสำหรับถ่ายงาน',
-                                'อุปกรณ์ไปแคมป์ปิ้ง',
-                                'คอมพิวเตอร์ทำโปรเจกต์',
-                              ][index],
-                              style: ChatbotDesign.body,
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        key: Key('chatbot-quick-reply-$index'),
+                        onTap: () => onSelect(
+                          ChatbotState.defaultInitialSuggestions[index],
+                        ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 48),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _topics[index].$2,
+                                  color: ChatbotDesign.primary,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    _topics[index].$1,
+                                    style: ChatbotDesign.body.copyWith(
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const Icon(
-                            Icons.chevron_right_rounded,
-                            color: ChatbotDesign.muted,
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
+                ],
+              ),
+              const SizedBox(height: 18),
               const Text(
-                'แตะตัวอย่างเพื่อแก้ไขก่อนส่ง',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 13,
-                  color: ChatbotDesign.muted,
-                ),
+                'แตะตัวอย่าง แล้วเพิ่มรายละเอียดก่อนส่งได้เลย',
+                style: ChatbotDesign.caption,
               ),
             ],
           ),

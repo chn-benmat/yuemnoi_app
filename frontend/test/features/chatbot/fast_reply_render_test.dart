@@ -67,6 +67,7 @@ void main() {
           find.byKey(const Key('chatbot-message-field')),
           'คำถาม',
         );
+        await tester.pump();
         await tester.tap(find.byKey(const Key('chatbot-send-button')));
         await tester.pump();
         const item = RecommendedItem(

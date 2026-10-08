@@ -1,30 +1,50 @@
 {
   "$defs": {
-    "ReviewAssessment": {
+    "ApplicableAssessment": {
       "additionalProperties": false,
       "properties": {
-        "check": {
-          "enum": [
-            "relevance",
-            "completeness",
-            "neutral_voice",
-            "choice_equivalence",
-            "grounding",
-            "context",
-            "followups"
-          ],
-          "title": "Check",
-          "type": "string"
-        },
         "reason": {
-          "description": "Specific assessment against actual user evidence and original draft text; distinguish assistant authorship from quoted speech.",
+          "description": "Specific assessment of this check against actual user evidence and original draft text.",
           "minLength": 1,
           "title": "Reason",
           "type": "string",
           "x-provider-description": true
         },
         "field_paths": {
-          "description": "Relevant exact JSON pointers relative to restored draft root. Empty only when that check has no applicable draft field.",
+          "description": "Cite at least one exact original draft pointer for this always-applicable check.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Field Paths",
+          "type": "array",
+          "x-provider-description": true
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "reason",
+        "field_paths",
+        "passed"
+      ],
+      "title": "ApplicableAssessment",
+      "type": "object"
+    },
+    "NamedAssessment": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "description": "Specific assessment of this check against actual user evidence and original draft text.",
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "field_paths": {
+          "description": "Exact JSON pointers at the restored draft root; empty only when this check has no applicable field.",
           "items": {
             "type": "string"
           },
@@ -38,12 +58,81 @@
         }
       },
       "required": [
-        "check",
         "reason",
         "field_paths",
         "passed"
       ],
-      "title": "ReviewAssessment",
+      "title": "NamedAssessment",
+      "type": "object"
+    },
+    "NamedReviewAssessments": {
+      "additionalProperties": false,
+      "properties": {
+        "relevance": {
+          "$ref": "#/$defs/ApplicableAssessment"
+        },
+        "completeness": {
+          "$ref": "#/$defs/ApplicableAssessment"
+        },
+        "ungendered_speaker": {
+          "$ref": "#/$defs/NeutralVoiceAssessment"
+        },
+        "choice_equivalence": {
+          "$ref": "#/$defs/NamedAssessment"
+        },
+        "grounding": {
+          "$ref": "#/$defs/NamedAssessment"
+        },
+        "context": {
+          "$ref": "#/$defs/NamedAssessment"
+        },
+        "followups": {
+          "$ref": "#/$defs/NamedAssessment"
+        }
+      },
+      "required": [
+        "relevance",
+        "completeness",
+        "ungendered_speaker",
+        "choice_equivalence",
+        "grounding",
+        "context",
+        "followups"
+      ],
+      "title": "NamedReviewAssessments",
+      "type": "object"
+    },
+    "NeutralVoiceAssessment": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "description": "Inspect assistant-authored speaker expressions and politeness markers for grammatical gender. Conventional or courteous gender-marked wording still fails ungendered voice. Distinguish quoted user/catalog text from assistant speech; cite the actual authored wording rather than accepting the declared register.",
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "field_paths": {
+          "description": "Cite at least one exact original draft pointer for this always-applicable check.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Field Paths",
+          "type": "array",
+          "x-provider-description": true
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "reason",
+        "field_paths",
+        "passed"
+      ],
+      "title": "NeutralVoiceAssessment",
       "type": "object"
     },
     "ReviewIssue": {
@@ -95,13 +184,9 @@
   "description": "A single model assessment per check, rather than contradictory verdict copies.",
   "properties": {
     "assessments": {
-      "items": {
-        "$ref": "#/$defs/ReviewAssessment"
-      },
-      "maxItems": 7,
-      "minItems": 7,
-      "title": "Assessments",
-      "type": "array"
+      "$ref": "#/$defs/NamedReviewAssessments",
+      "description": "One assessment for every required named property. Each property identifies its check; do not emit an array or repeated check entries.",
+      "x-provider-description": true
     },
     "issues": {
       "items": {

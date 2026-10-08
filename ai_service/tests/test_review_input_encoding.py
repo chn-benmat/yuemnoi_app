@@ -49,22 +49,20 @@ async def test_issue_on_an_aliased_question_is_checked_against_original_draft():
     from app.domain.interfaces.generation_stage import CURRENT_GENERATION, Provenance
     from app.domain.exceptions import GuidanceGenerationError
     root = Path(__file__).resolve().parents[1]
-    captures = json.loads((root / 'evaluation/conversation_diagnostic_20261004_v14/'
-        'role_input_captures/captured_roles_01/captures.json').read_text(encoding='utf-8'))['captures']
-    original = next(json.loads(c['generation']['prompt']) for c in captures
-        if c['generation']['phase'] == 'review' and len(json.loads(c['generation']['prompt'])['draft']['questions']) == 3)
+    original = json.loads((root / 'tests/fixtures/review_questionnaire.json').read_text(encoding='utf-8'))
     class RejectQuestion:
         async def generate_structured(self, **kwargs):
             from app.application.services.review_input import restore_planning_input
             encoded = restore_planning_input(json.loads(kwargs['prompt']))
-            assert encoded['draft']['questions'] is None
+            assert encoded['draft']['questions'] == original['draft']['questions']
+            assert encoded['draft']['clarification']['questions'] is None
             restored = restore_review_draft(encoded['draft'], encoded['draft_references'])
             assert restored == ChatResponseDTO.model_validate(original['draft']).model_dump(mode='json')
             CURRENT_GENERATION.get().provenance = Provenance('fixture', 'reviewer')
             from review_fixture import assessed
             return kwargs['schema'].model_validate(assessed({'semantic_pass': False, 'neutral_voice_pass': True,
-                'issues': [{'kind': 'choice', 'field_path': '/questions/0/title',
-                    'quoted_text': original['draft']['questions'][0]['title'], 'reason': 'fixture rejection'}]},paths=['/questions/0/title']))
+                'issues': [{'kind': 'choice', 'field_path': '/clarification/questions/0/title',
+                    'quoted_text': original['draft']['questions'][0]['title'], 'reason': 'fixture rejection'}]},paths=['/clarification']))
     reviewer = ResponseReviewService(RejectQuestion(), 'fixture encoding instruction', .1)
     with pytest.raises(GuidanceGenerationError, match='response_quality_rejected') as error:
         await reviewer.execute(ChatRequestDTO.model_validate(original['request']),

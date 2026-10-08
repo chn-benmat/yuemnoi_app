@@ -51,9 +51,11 @@ flowchart LR
     Search["Tavily"] --> Evidence
 ```
 
-คำตอบ, แบบสอบถาม, ตัวเลือก, การ์ด, suggested replies และ references ต้องผ่าน review หากถูกปฏิเสธจะคืน error และยังไม่เผยแพร่ draft ไม่มี rewrite loop เพิ่มหลัง rejection
+คำตอบ, แบบสอบถาม, ตัวเลือก, การ์ด, suggested replies และ references ต้องผ่าน review หากถูกปฏิเสธคุณภาพจะกู้ได้หนึ่งรอบและตรวจทั้งคำตอบใหม่ด้วยโมเดลคนละตัว หากยังไม่ผ่านจะคืน error โดยไม่เผยแพร่ draft
 
 SSE ส่งคำตอบฉบับครบใน event `ready` แล้วจึงส่ง `metadata`, `delta` และ `done` การทยอยแสดงข้อความจึงเกิดหลังตรวจคำตอบครบแล้ว ส่วน session context ไม่ใช่ระบบเก็บความทรงจำระยะยาวตามบัญชี
+
+ก่อน `ready` บริการส่ง `event: status` พร้อม `step` และ `message` ตามขั้นตอนจริง: `preparing` เตรียมข้อมูล, `planning` วิเคราะห์คำถาม, `evidence` สร้างคำตอบ, `review` ตรวจคำตอบ และ `repair` ปรับปรุงคำตอบเมื่อผลตรวจไม่ผ่าน สถานะผูกกับแต่ละคำขอและส่งทันทีที่เริ่มขั้นตอน จึงอาจข้ามขั้นที่ไม่ได้ใช้หรือกลับมาตรวจหลังปรับปรุง โดยไม่เพิ่มการเรียกโมเดล เมื่อ client ปิด stream งานที่กำลังทำจะถูกยกเลิก
 
 <a id="stack"></a>
 
@@ -141,6 +143,24 @@ INTERNAL_SERVICE_KEY=replace-with-shared-internal-key-at-least-32-chars
 | `APP_KNOWLEDGE_PATH`         | `knowledge/app_knowledge.json` ใต้ service root         | JSON เติมค่าให้; explicit relative path อิง working directory  |
 | `INTERPRETATION_POLICY_PATH` | `knowledge/interpretation_policy.json` ใต้ service root | JSON เติมค่าให้                                                |
 | `AI_QUOTA_LEDGER_PATH`       | `.state/llm_quota.json` ใต้ service root                | ต้องเขียนได้; ทุก process บน host เดียวกันควรใช้ path เดียวกัน |
+| `GEMINI_QUOTA_ACCOUNT_ID`    | ว่าง: ใช้ bucket เดิม                                  | รหัสคงที่ของขอบเขต Google Cloud project สำหรับโควต้า Gemini |
+| `GROQ_QUOTA_ACCOUNT_ID`      | ว่าง: ใช้ bucket เดิม                                  | รหัสคงที่ของขอบเขต Groq organization สำหรับโควต้า Groq     |
+
+เมื่อย้ายไป **project / organization ใหม่ที่มีขอบเขตโควต้าแยกจากเดิม** ให้ตั้งรหัสใหม่ใน `.env` เช่น `GEMINI_QUOTA_ACCOUNT_ID=gemini-project-20261006` และ `GROQ_QUOTA_ACCOUNT_ID=groq-org-20261006` แล้ว restart AI service ทุก process รหัสนี้เป็นชื่อที่ผู้ดูแลกำหนด ไม่ใช่ API key และทุก process ที่ใช้บัญชีเดียวกันต้องตั้งตรงกัน
+
+คงรหัสเดิมเมื่อเปลี่ยน API key ภายใน project / organization เดิม เพราะการหมุน key ไม่ได้สร้างโควต้าใหม่ อย่าใช้ hash ของ key เป็นรหัสบัญชี หรือกำหนดรหัสใหม่ให้บัญชีเดิมเพื่อเริ่มยอดใหม่ หากบัญชีเดิมยังใช้ bucket legacy ให้คงค่าว่างไว้จนมีการย้ายยอดอย่างถูกต้อง
+
+Bucket ของบัญชีใหม่มี account scope นำหน้าตัวตน provider / model เดิม; ledger version 1 เก็บยอด legacy และบัญชีอื่นไว้ทั้งหมด ไม่มีการล้างยอดเดิม การสร้างคำตอบและการตรวจโดย actual model อีกตัวยังคงใช้โควต้าของ API คำขอเล็กที่ได้ HTTP 200 หรือ health ว่า configured จึงยังไม่ยืนยันว่ามีโควต้าพอสำหรับแชตทั้งรอบ
+
+Runtime ปัจจุบันตั้ง `quota.authority = "provider"` ทั้ง Gemini และ Groq ค่าตัวเลข `requests_per_window`, `tokens_per_window`, `requests_per_day`, `tokens_per_day` ใช้เฉพาะโหมด `configured` สำหรับระบบที่เลือกเพดานภายในเอง ในโหมด provider จะไม่เอาประวัติ token ในเครื่องไปสรุปว่า API หมดโควต้ารายวัน และไม่ลดเพดานที่ API รายงานให้เหลือเท่าค่าเดิมในไฟล์
+
+- Groq: `x-ratelimit-limit/remaining/reset-tokens` เป็น TPM ส่วน `...-requests` เป็น RPD ตาม [เอกสาร rate limits](https://console.groq.com/docs/rate-limits) เก็บ snapshot ล่าสุดและหักการจองกับ HTTP ที่กำลังทำงาน; header เหล่านี้ไม่ได้บอกยอด token รายวันคงเหลือ จึงถือว่า TPD ยังไม่ทราบและใช้ HTTP 429 ของ API เป็นหลัก
+- Gemini: ใช้ HTTP 429 และเวลาจาก `Retry-After` หรือ typed `google.rpc.RetryInfo.retryDelay` ใน error details เมื่อมีข้อมูล; ไม่สร้างยอดคงเหลือจากเพดานที่เราตั้งเอง [เพดานจริงขึ้นกับ project/model](https://ai.google.dev/gemini-api/docs/rate-limits) ปัญหาสิทธิ์ 401/403 ยังสลับไป Groq ตามเดิม
+- หาก API ไม่บอกเวลารอ จะไม่ส่งเวลารอสมมติไปหน้าแชต; `quota_backoff_seconds` ยังใช้ชะลอการเรียกซ้ำภายในเมื่อเจอ 429 ประวัติใน ledger เป็นสถิติของเครื่องนี้ ไม่ใช่ตัวนับการใช้ทั้งหมดของบัญชี API
+- การเปลี่ยนจาก configured เป็น provider รักษา usage, reservation IDs, account/model identities และ cooldown เดิม รีเฟรชเฉพาะ cache เพดาน/ยอด/เวลา reset ที่อัลกอริทึมเดิมเคยปรับด้วยค่าภายใน ทุก process ต้อง restart ให้ใช้ runtime เดียวกัน
+- Snapshot ที่ไม่มีเวลา reset ไม่ถูกใช้บล็อกคำขอในอนาคตถาวร; เรียก API เพื่อยืนยันใหม่หลังพ้น cooldown และการจองจาก process ที่หยุดไปจะไม่กัน capacity เกินเส้นตายของคำขอ โดยยังเก็บ record ไว้
+
+การจองรอบกู้ตรวจข้อมูลโควต้าที่ทราบจาก API และหัก capacity ใน transaction เดียวกัน แต่รับประกันโควต้าของมิติที่ API ไม่รายงาน หรือการใช้จากเครื่องอื่นไม่ได้ หากพบข้อจำกัดจริงระหว่างรอบยังต้องระงับ draft และส่งสาเหตุตาม API
 
 ลำดับค่าของ [Settings](app/core/config.py) คือ **explicit Settings values → process env → .env → secret files → runtime JSON → field defaults** คำสั่งในคู่มือนี้รันจาก `ai_service/` เพื่อให้ dotenv และ relative paths ชัดเจน
 
@@ -296,6 +316,8 @@ curl http://localhost:8000/api/chat \
 
 `questionnaire_answers` ใช้ `question_id` และ `option_id` หรือ `text` ที่ตรงกับ context `active_question_id` ระบุคำถามที่แสดงอยู่ โดยยังส่ง raw message ให้ semantic planner วิเคราะห์เอง
 
+คำถามที่เปลี่ยนตามคำตอบก่อนหน้าใช้ `branch_question_id` อ้างคำถามก่อนหน้า และ `branch_choices` / `branch_titles` จับคู่ด้วยรหัสช้อยของคำถามนั้น `choices` รวมรหัสช้อยทุกเวอร์ชันสำหรับตรวจคำตอบ; เวอร์ชันตามเงื่อนไขใช้รหัสช้อยที่มีรหัสต้นทางนำหน้า เมื่อมีคำตอบต้นทาง ระบบรับเฉพาะช้อยของเวอร์ชันนั้น ข้อความที่พิมพ์เองยังส่งเป็น `text` ของข้อที่ตอบจริง โดยไม่คาดเดารหัสช้อยจากข้อความ
+
 <a id="runtime"></a>
 
 ## 🧠 Runtime, knowledge & quota
@@ -308,7 +330,19 @@ curl http://localhost:8000/api/chat \
 | [chat_client_runtime.json](config/chat_client_runtime.json)        | History / transport / response-ready configuration ร่วมของ Flutter และ Go       |
 | [config/schemas](config/schemas/)                                  | JSON schemas ของ contracts                                                      |
 
-Runtime version ปัจจุบันคือ `2026-10-05-response-ready-30s` และ interpretation policy version คือ `2026-10-06-natural-emulator-v20` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
+Runtime ใช้ version `2026-10-07-schema-recovery-reservation` ส่วน interpretation policy ใช้ `2026-10-07-schema-recovery-reservation-concise-recommendations-product-field-list-adaptive-questionnaire` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
+
+คำขอภายในใช้ `input_tables`, `input_references` และ `input_dictionary` ลดข้อมูลซ้ำแบบคืนต้นฉบับได้ Groq ใช้รหัสอ้างอิงสั้นเฉพาะคำขอ แล้วแปลงกลับก่อนตรวจ provenance คำขอ retry และ DTO หน้าแชตเก็บ IDs และคำตอบเดิม Context ละค่าเริ่มต้นที่ว่างหรือไม่ทราบ
+
+Native planning ใช้ `analysis` และ `budget_period` ซึ่งแยกช่วงเวลาที่ผู้ใช้ระบุออกจาก `catalog_unit` ที่จำกัด enum ตามคลังจริง ถ้าหน่วยไม่ตรงกันต้องคงช่วงเวลาผู้ใช้และไม่แปลงราคา ข้อเท็จจริงเชิงปริมาณรับ JSON number แล้วแปลง representation เป็น string ใน domain เดิม Provider decoding ตรวจฟิลด์บังคับทุกระดับและรับเฉพาะชื่อฟิลด์จาก native schema ก่อนเติม domain defaults แล้วตรวจชนิดข้อมูลแบบ strict; JSON ผิด schema ไม่ผ่านด้วยการ coercion และไม่ถูกแจ้งเป็นโควต้าหรือคิวเพียงเพราะ JSON ผิด
+
+Native stage ใช้ `response_mode` เป็นตัวแยกประเภทเดียว และเก็บการเลือกงานคลังใน `catalog_operation.kind` เพื่อให้ Groq รับ union schema ได้ การแปลงกลับเข้า domain คง `catalog_operation` เดิมไว้ ขั้นวางแผนเห็นชื่อ/หมวดของสินค้าที่พร้อมเช่าและช่วงราคาตามหมวดกับหน่วยจริง; ขั้นสร้างคำแนะนำยังอ่านรายละเอียดเต็ม ช้อยงบต้องเป็นเพดานพร้อมหน่วยที่ชัดเจน หรือไม่จำกัดงบ และคำตอบล่าสุดใช้แก้ความเข้าใจเดิมที่ขัดกัน
+
+สถานะ `next_action`, `information_sufficient` และ `missing_slots` ใน domain/API มาจาก stage และ dimension ของคำถามที่โมเดลเลือก จึงไม่สร้างข้อมูลซ้ำที่ขัดกันใน `analysis` การตรวจอิสระต้องอ้างฟิลด์จริงอย่างน้อยหนึ่งฟิลด์สำหรับ relevance, completeness และ neutral_voice ก่อนอนุมัติคำตอบ
+
+คำถาม `budget_max` แต่ละเวอร์ชันต้องมี `unrestricted_choice` ที่โมเดลสร้างสำหรับไม่จำกัดงบ โดยนับรวมในเพดานช้อย UI และส่งข้อความช้อยงบทั้งประโยคเป็น `action_value` เพื่อรักษาหน่วยราคา Native evidence จำกัดรหัสสินค้าที่เลือกเป็น enum ของรายการที่ผ่านสถานะและเพดานราคาจริง แต่การพิจารณาว่าเหมาะกับงานยังเป็นการตัดสินของโมเดลและผู้ตรวจอิสระ
+
+การวางแผน รอบตรวจ และรอบกู้ใช้คำตอบแบบสอบถามที่เลือกจริงพร้อม label/value/IDs; เมื่อครบทุกคำถามจึงละตัวเลือก UI เก่าที่ไม่ได้เลือก DTO ต้นฉบับและข้อมูลสำหรับ retry ยังคงเดิม แบบสอบถามที่ยังตอบไม่ครบเก็บตัวเลือกทั้งหมด รอบตรวจสินค้าคง scalar facts ทั้งคลังและ description เต็มของทุกรายการที่ draft อ้าง `description_scope` ระบุว่ารายการอื่นยังไม่ทราบรายละเอียดใน view นี้; no_matches ที่ไม่อ้างสินค้าเก็บ description ทั้งคลัง ผู้ตรวจรอบสุดท้ายสร้าง view ใหม่ตามรายการที่คำตอบกู้อ้าง ไม่ถือรายละเอียดที่ละไว้ว่าไม่มีหรือเข้ากันไม่ได้
 
 ### Provider profiles ใน configuration ปัจจุบัน
 
@@ -324,7 +358,10 @@ Runtime version ปัจจุบันคือ `2026-10-05-response-ready-30s
 รายการนี้อ้างอิง JSON ใน checkout; ไม่ได้ยืนยันสิทธิ์หรือความพร้อมของผู้ให้บริการ ณ เวลาที่ติดตั้ง รายละเอียดเหตุผลการปิดอยู่ใน `disabled_reason` ลำดับ model ยังมีสถานะ `pending_development_measurement` และไม่มี measurement artifact ใน runtime
 
 - ทุก flow ใช้ validated-answer deadline **30s**, target **15s**; คำตอบพร้อมก่อนส่งได้ทันที
-- General ใช้ได้สูงสุด **2 logical calls**; equipment / technical สูงสุด **3** แต่ละ logical call มี failover ได้ไม่เกิน **1**
+- General ใช้ได้สูงสุด **4 logical calls**; equipment / technical สูงสุด **5** แต่ละ logical call มี failover ได้ไม่เกิน **1**
+- เมื่อผู้ตรวจปฏิเสธคุณภาพ สร้างคำตอบใหม่ใน response mode เดิมได้หนึ่งครั้ง แล้วตรวจทั้งคำตอบใหม่ด้วยโมเดลที่ไม่ได้เขียนคำตอบนั้น หากยังไม่ผ่านจะไม่ส่ง draft หรือการ์ดใด ๆ; โควต้าและเวลารวมยังต้องเพียงพอ
+- Native review schema ใช้ object ที่บังคับ assessment ครบทุกหัวข้อ (`relevance`, `completeness`, `neutral_voice`, `choice_equivalence`, `grounding`, `context`, `followups`) จึงส่งหัวข้อซ้ำแล้วขาดหัวข้ออื่นไม่ได้ ต่างจากการบังคับ array ให้ครบเจ็ดรายการ; domain review เดิมยังเป็นรายการพร้อมชื่อหัวข้อสำหรับ diagnostics และ repair
+- จองผู้ตรวจเบื้องต้นตาม `initial_review_reserve_tokens` แล้วปรับตาม payload จริง ถ้าจองเผื่อได้ จะจองตรวจครั้งแรก/กู้/ตรวจครั้งสุดท้ายพร้อมกัน; ถ้าเผื่อไม่ได้ยังตรวจ draft แรกได้ ก่อนเริ่มกู้ต้องจองทั้งผู้เขียนและผู้ตรวจอิสระให้ครบใน transaction เดียว คำตอบที่ตรวจผ่านไม่ถูกกันเพียงเพราะรอบกู้ที่ยังไม่จำเป็นไม่มีโควต้า คืนเฉพาะ reservation ที่ยังไม่ส่ง HTTP และเก็บยอดที่ใช้จริงเสมอ
 - Quota ledger ใช้ OS lock และ atomic writes ร่วมกัน เก็บ `.state/llm_quota.json` ข้ามการ restart และตรวจสิทธิ์เขียนของทุก process
 - Quota / deadline เป็นการควบคุมงบการทำงาน ไม่ใช่ผลรับรองความเร็วหรือความแม่นยำ
 - Knowledge มีทั้ง approved articles และ unverified topics; นโยบายเงินมัดจำ / คืนเงิน / ค่าปรับ / ความเสียหายและการชำระเงินจริงที่ยังไม่มีหลักฐานอนุมัติ ไม่ควรถูกอ้างเป็นกติกายืนยันของแอป
@@ -350,6 +387,18 @@ Runtime version ปัจจุบันคือ `2026-10-05-response-ready-30s
 ชุดเต็มเรียกด้วย `python -m pytest tests/ -v` จาก venv แต่ **checkout นี้ขาด modules / fixtures ภายใต้ `evaluation` ที่ tests หลายไฟล์ import** จึงต้องคืนไฟล์เหล่านั้นก่อนคาดหวังให้ทั้งชุด collect / run ได้ครบ นอกจากนี้ API health test บางตัวเรียก Supabase จริง อย่าใช้ full suite เป็น offline check โดยไม่ตรวจ prerequisites
 
 ชุดประเมินและ reports ที่ README เดิมอ้างถึง เช่น `evaluation/CURRENT.md`, Step reports และ acceptance scripts ไม่มีใน checkout นี้ จึงไม่ใส่ลิงก์หรือคำสั่งที่ชี้ไปไฟล์เหล่านั้น การผ่านชุด mocks ข้างบนยังไม่ยืนยันผลการประเมินกับ models จริง
+
+### หลักฐานของคำขอและการกู้คำตอบ
+
+Log ของ chat มี `trace_id` เชื่อม planning / evidence / review / repair กับ provider/model, HTTP status, provider error code, validation path และผลตรวจแต่ละหัวข้อ โดยไม่เก็บ prompt, draft หรือเหตุผลอิสระจากโมเดลใน log ปกติ และไม่ส่งข้อมูลวินิจฉัยไปหน้าแชต
+
+หากต้องตรวจ draft/assessment เต็มให้เปิด capture สำหรับคำขอทดสอบในเครื่องอย่างชัดเจน คำสั่งนี้เรียก providers และอ่านข้อมูลคลังจริง จึงนับโควต้าตามปกติและใช้ ledger เดิม:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.interface.cli.capture_chat_diagnostics --request .state/diagnostics/request.json --output .state/diagnostics/new-capture.json --stream
+```
+
+สร้างโฟลเดอร์และไฟล์ `ChatRequestDTO` ก่อนรัน; output ต้องเป็นไฟล์ใหม่เท่านั้น Capture เก็บ request, ผลสร้างและผลตรวจเต็ม รวมถึง header โควต้าต้นฉบับก่อน governor จำกัดด้วย configuration เก็บไฟล์นี้เป็นข้อมูลส่วนตัวในเครื่อง; CLI ปิดการบันทึกเมื่อจบและซ่อน credentials ที่ตั้งไว้ใน config
 
 ตรวจ knowledge document โดยไม่อนุมัติเนื้อหาเพิ่ม:
 
@@ -401,9 +450,14 @@ ai_service/
 | 401                                             | `X-Internal-Service-Key` ต้องตรงกับ single key ของ AI                                   |
 | 422                                             | ข้อความต้องไม่ว่าง; session / context / question / option IDs ต้องตรง                   |
 | `providers_exhausted`                           | ตรวจ keys, enabled profiles, model access และ candidate ที่ใช้ review คนละ model        |
-| `providers_rate_limited`                        | รอตาม `Retry-After` / `retry_after_seconds` และเก็บ quota ledger ไว้                    |
+| `providers_rate_limited`                        | ผู้ให้บริการตอบ HTTP 429; รอตาม `Retry-After` / `retry_after_seconds` โดยไม่เดาว่าเป็นรายนาทีหรือรายวัน |
+| `quota_temporarily_unavailable`                 | ยอดช่วงสั้นที่ API รายงานไม่พอ หรืออยู่ระหว่าง cooldown; ส่งเวลาเมื่อทราบจริงและเก็บ ledger |
+| `quota_exhausted`                               | ยอดคำขอรายวันที่ Groq รายงานไม่พอ (หรือเพดานรายวันในโหมด configured); ไม่สรุปจากยอด token ประมาณในเครื่องเมื่อใช้ provider authority |
+| `providers_busy`                                | รอช่องประมวลผลจนหมดเวลา; แจ้งติดคิว โดยไม่อ้างว่าโควต้าหมดหรือกำหนดเวลารอที่ไม่ทราบ |
+| `review_unavailable`                            | ไม่มีโมเดลตรวจคำตอบอิสระที่ใช้งานได้; ตรวจ enabled profiles และสิทธิ์ของ provider |
 | `deadline_exceeded` / `request_budget_exceeded` | ตรวจ context, output และ budgets ของ runtime                                            |
 | `response_quality_rejected`                     | คำตอบไม่ผ่าน independent model review จึงยังไม่ส่ง draft                                |
+| `structured_output_invalid`                    | ผู้ให้บริการสร้าง JSON หรือโครงสร้างไม่ผ่าน schema; ไม่ใช่หลักฐานว่าติดคิวหรือโควต้า     |
 | `catalog_changed` / `knowledge_changed`         | หลักฐานเปลี่ยนระหว่างสร้างคำตอบ; เริ่มคำขอใหม่กับข้อมูลล่าสุด                           |
 | `runtime_document_invalid`                      | ใช้ approved document ที่ schema / digest ตรงกัน                                        |
 | `runtime_changed_restart_required`              | Restart หลังใช้ runtime / policy ฉบับอนุมัติใหม่                                        |

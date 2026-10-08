@@ -14,8 +14,6 @@ from app.domain.entities.chat_message import ChatMessage
 from app.domain.entities.clarification import ClarificationQuestion, QuestionStep
 from app.domain.entities.intent_decision import IntentDecision, RequestUnderstanding
 from app.domain.entities.catalog_guidance import CatalogSelection
-from evaluation.baseline import score
-from evaluation.schema import RunConfig, load_suite
 from app.infrastructure.llm.provider_client import native_schema
 from pathlib import Path
 
@@ -149,6 +147,8 @@ async def test_router_preserves_corrections_and_validates_evidence_without_sessi
 
 
 def test_semantic_evaluation_scores_scope_and_sufficiency_separately():
+    from evaluation.baseline import score
+    from evaluation.schema import RunConfig, load_suite
     root = Path(__file__).resolve().parents[1]
     config = RunConfig.model_validate_json((root / "evaluation/step3_config.json").read_text(encoding="utf-8"))
     case = load_suite(root / "evaluation/development.json").cases[0]

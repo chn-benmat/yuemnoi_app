@@ -23,7 +23,10 @@ class ChatbotFailure extends Equatable {
       (retryAvailableAt == null || !now.isBefore(retryAvailableAt!));
 
   bool get isQuota =>
-      errorCode == 'providers_rate_limited' || statusCode == 429;
+      errorCode == 'providers_rate_limited' ||
+      errorCode == 'quota_temporarily_unavailable' ||
+      errorCode == 'quota_exhausted' ||
+      statusCode == 429;
 
   @override
   List<Object?> get props => [

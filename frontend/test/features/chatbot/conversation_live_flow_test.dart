@@ -130,6 +130,7 @@ void main() {
           find.byKey(const Key('chatbot-message-field')),
           text,
         );
+        await tester.pump();
         await tester.tap(find.byKey(const Key('chatbot-send-button')));
         await waitForReply(count);
       }

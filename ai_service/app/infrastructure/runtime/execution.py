@@ -7,6 +7,7 @@ from uuid import uuid4
 from app.core.exceptions import AllLLMProvidersExhaustedException, RuntimeConfigurationException
 from app.infrastructure.runtime.documents import ValidatedFile
 from app.infrastructure.runtime.schema import InterpretationPolicy, RuntimeDocument
+from app.domain.interfaces.chat_diagnostics import current_diagnostic_trace_id
 
 REQUEST_DEADLINE = ContextVar("ai_request_deadline", default=None)
 LOGICAL_CALL_BUDGET = ContextVar("ai_logical_call_budget", default=None)
@@ -54,7 +55,7 @@ class RuntimeExecutionGuard:
         timeout = asyncio.timeout_at(REQUEST_DEADLINE.get())
         clock_token = self._clock.set(TurnClock(start, timeout))
         budget_token = LOGICAL_CALL_BUDGET.set(LogicalCallBudget(self.runtime.equipment.logical_calls))
-        trace_token = TURN_TRACE_ID.set(uuid4().hex)
+        trace_token = TURN_TRACE_ID.set(current_diagnostic_trace_id() or uuid4().hex)
         resources = {'cleanup': []}
         resources_token = TURN_RESOURCES.set(resources)
         try:

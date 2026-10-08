@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/colors.dart';
 import '../../domain/entities/chat_message.dart';
 import 'chatbot_design.dart';
 
@@ -14,6 +13,7 @@ class InteractiveQuestionnaireCard extends StatefulWidget {
     this.onCustomInput,
     this.onRequestStarted,
     this.onContentRendered,
+    this.onQuestionChanged,
     super.key,
   });
 
@@ -26,6 +26,7 @@ class InteractiveQuestionnaireCard extends StatefulWidget {
   final VoidCallback? onCustomInput;
   final VoidCallback? onRequestStarted;
   final VoidCallback? onContentRendered;
+  final VoidCallback? onQuestionChanged;
 
   @override
   State<InteractiveQuestionnaireCard> createState() =>
@@ -43,6 +44,29 @@ class InteractiveQuestionnaireCardState
 
   String? get activeQuestionId =>
       _questions.isEmpty ? null : _questions[_currentIndex].id;
+  String? get activeQuestionTitle =>
+      _questions.isEmpty ? null : _effectiveQuestion(_currentIndex).$1;
+
+  (String, List<String>, List<QuestionChoice>) _effectiveQuestion(int index) {
+    final question = _questions[index];
+    if (question.branchQuestionId != null) {
+      final source = _questions.indexWhere(
+        (q) => q.id == question.branchQuestionId,
+      );
+      final optionId = source < 0
+          ? null
+          : _selectedChoiceIds[source] ?? _questions[source].selectedOptionId;
+      final choices = question.branchChoices[optionId];
+      if (choices != null) {
+        return (
+          question.branchTitles?[optionId] ?? question.title,
+          choices.map((c) => c.label).toList(),
+          choices,
+        );
+      }
+    }
+    return (question.title, question.options, question.choices);
+  }
 
   List<QuestionnaireAnswer> get partialAnswers {
     final answers = <QuestionnaireAnswer>[];
@@ -138,18 +162,24 @@ class InteractiveQuestionnaireCardState
     });
 
     if (_currentIndex < _questions.length - 1) {
-      // Instant local progression to next question after tap feedback
-      Future.delayed(const Duration(milliseconds: 160), () {
-        if (!mounted || generation != _progressGeneration) return;
-        setState(() {
-          _currentIndex++;
-          _tapFeedbackOption = null;
-        });
-      });
+      // เปลี่ยนข้อหลังให้ feedback สั้น ๆ และไม่หน่วงเมื่อผู้ใช้ลดแอนิเมชัน
+      Future.delayed(
+        MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 160),
+        () {
+          if (!mounted || generation != _progressGeneration) return;
+          setState(() {
+            _currentIndex++;
+            _tapFeedbackOption = null;
+          });
+          widget.onQuestionChanged?.call();
+        },
+      );
     } else {
       widget.onRequestStarted?.call();
       // All questions completed, compile combined answer and submit
-      Future.delayed(const Duration(milliseconds: 180), () {
+      Future.delayed(ChatbotDesign.motionFor(context), () {
         if (!mounted || generation != _progressGeneration) return;
         final answers = <String>[];
         for (var i = 0; i < _questions.length; i++) {
@@ -170,6 +200,7 @@ class InteractiveQuestionnaireCardState
         _currentIndex--;
         _tapFeedbackOption = null;
       });
+      widget.onQuestionChanged?.call();
     }
   }
 
@@ -180,6 +211,7 @@ class InteractiveQuestionnaireCardState
         _currentIndex++;
         _tapFeedbackOption = null;
       });
+      widget.onQuestionChanged?.call();
     }
   }
 
@@ -207,6 +239,12 @@ class InteractiveQuestionnaireCardState
       widget.onCustomInput?.call();
       return;
     }
+    suspendProgression();
+    final previous = _selectedAnswers[_currentIndex];
+    if (previous != null && previous != trimmed) {
+      _selectedAnswers.removeWhere((step, _) => step > _currentIndex);
+      _selectedChoiceIds.removeWhere((step, _) => step > _currentIndex);
+    }
     _selectedAnswers[_currentIndex] = trimmed;
     _selectedChoiceIds.remove(_currentIndex);
     if (_currentIndex < _questions.length - 1) {
@@ -214,6 +252,7 @@ class InteractiveQuestionnaireCardState
         _currentIndex++;
         _tapFeedbackOption = null;
       });
+      widget.onQuestionChanged?.call();
     } else {
       widget.onRequestStarted?.call();
       final answers = <String>[];
@@ -240,10 +279,10 @@ class InteractiveQuestionnaireCardState
     final safeIndex = _currentIndex.clamp(0, _questions.length - 1);
     final currentQuestion = _questions[safeIndex];
 
-    var effectiveTitle = currentQuestion.title;
-    var effectiveOptions = currentQuestion.options;
+    var (effectiveTitle, effectiveOptions, effectiveChoices) =
+        _effectiveQuestion(safeIndex);
     // ใช้เฉพาะตัวเลือกที่โมเดลส่งมา และจับคู่รหัสตัวเลือกตรงตัว
-    if (safeIndex > 0) {
+    if (safeIndex > 0 && currentQuestion.branchQuestionId == null) {
       final previous = _selectedAnswers[safeIndex - 1];
       if (previous != null) {
         final prevTrim = previous.trim();
@@ -259,6 +298,7 @@ class InteractiveQuestionnaireCardState
         }
         if (branchOpt != null && branchOpt.isNotEmpty) {
           effectiveOptions = branchOpt;
+          effectiveChoices = const [];
         }
       }
     }
@@ -276,9 +316,9 @@ class InteractiveQuestionnaireCardState
         currentQuestion.selectedOption;
     return Container(
       key: const Key('chatbot-questionnaire-card'),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: ChatbotDesign.tint,
+        color: ChatbotDesign.subtle,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: ChatbotDesign.border),
       ),
@@ -291,7 +331,7 @@ class InteractiveQuestionnaireCardState
               Expanded(
                 child: Text(
                   'ข้อ ${safeIndex + 1} จาก $totalSteps',
-                  style: ChatbotDesign.body.copyWith(
+                  style: ChatbotDesign.caption.copyWith(
                     color: ChatbotDesign.primary,
                     fontWeight: FontWeight.w600,
                   ),
@@ -316,32 +356,28 @@ class InteractiveQuestionnaireCardState
               backgroundColor: ChatbotDesign.border,
               borderRadius: BorderRadius.circular(4),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
           ],
           Text(
             effectiveTitle,
             style: ChatbotDesign.body.copyWith(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           for (var i = 0; i < effectiveOptions.length; i++)
             _OptionTile(
-              index: i,
               optionText: effectiveOptions[i],
               isSelected: selected == effectiveOptions[i],
               onTap: () => _selectOption(
                 effectiveOptions[i],
-                i < currentQuestion.choices.length &&
-                        effectiveOptions == currentQuestion.options
-                    ? currentQuestion.choices[i].id
-                    : null,
+                i < effectiveChoices.length ? effectiveChoices[i].id : null,
               ),
             ),
           const SizedBox(height: 8),
           Wrap(
-            alignment: WrapAlignment.spaceBetween,
+            alignment: WrapAlignment.start,
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 8,
             runSpacing: 4,
@@ -378,21 +414,20 @@ class InteractiveQuestionnaireCardState
                   ),
                   icon: const Icon(Icons.chevron_right_rounded),
                 ),
+              if (widget.onCustomInput != null)
+                TextButton(
+                  key: const Key('chatbot-questionnaire-custom-input'),
+                  style: TextButton.styleFrom(
+                    minimumSize: ChatbotDesign.button,
+                  ),
+                  onPressed: () {
+                    suspendProgression();
+                    widget.onCustomInput!();
+                  },
+                  child: const Text('พิมพ์ตอบเอง'),
+                ),
             ],
           ),
-          if (widget.onCustomInput != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                key: const Key('chatbot-questionnaire-custom-input'),
-                style: TextButton.styleFrom(minimumSize: ChatbotDesign.button),
-                onPressed: () {
-                  suspendProgression();
-                  widget.onCustomInput!();
-                },
-                child: const Text('พิมพ์ตอบเอง'),
-              ),
-            ),
         ],
       ),
     );
@@ -401,31 +436,24 @@ class InteractiveQuestionnaireCardState
 
 class _OptionTile extends StatelessWidget {
   const _OptionTile({
-    required this.index,
     required this.optionText,
     required this.isSelected,
     required this.onTap,
   });
-
-  final int index;
   final String optionText;
   final bool isSelected;
   final VoidCallback onTap;
-
   @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOut,
-      margin: const EdgeInsets.only(bottom: 8),
+  Widget build(BuildContext context) => Semantics(
+    selected: isSelected,
+    child: AnimatedContainer(
+      duration: ChatbotDesign.motionFor(context),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
-        color: isSelected
-            ? AppColors.primaryColor.withValues(alpha: 0.08)
-            : const Color(0xFFFAFAFC),
-        borderRadius: BorderRadius.circular(16),
+        color: isSelected ? ChatbotDesign.tint : ChatbotDesign.surface,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isSelected ? AppColors.primaryColor : const Color(0xFFE2E8F0),
-          width: isSelected ? 1.6 : 1.0,
+          color: isSelected ? ChatbotDesign.primary : ChatbotDesign.border,
         ),
       ),
       child: Material(
@@ -433,75 +461,48 @@ class _OptionTile extends StatelessWidget {
         child: InkWell(
           key: Key('chatbot-questionnaire-option-$optionText'),
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          splashColor: AppColors.primaryColor.withValues(alpha: 0.12),
-          highlightColor: AppColors.primaryColor.withValues(alpha: 0.06),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 24),
+          borderRadius: BorderRadius.circular(14),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
                 children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.primaryColor
-                          : const Color(0xFFEDF0F3),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '${index + 1}',
-                      style: TextStyle(
-                        fontFamily: 'Prompt',
-                        color: isSelected
-                            ? Colors.white
-                            : const Color(0xFF4B5563),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
+                  Icon(
+                    isSelected
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 20,
+                    color: isSelected
+                        ? ChatbotDesign.primary
+                        : ChatbotDesign.muted,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       optionText,
-                      style: TextStyle(
-                        fontFamily: 'Prompt',
+                      style: ChatbotDesign.body.copyWith(
                         fontSize: 15,
-                        fontWeight: isSelected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
                         color: isSelected
-                            ? AppColors.primaryColor
-                            : const Color(0xFF1E293B),
-                        height: 1.35,
+                            ? ChatbotDesign.primary
+                            : ChatbotDesign.ink,
+                        fontWeight: isSelected
+                            ? FontWeight.w500
+                            : FontWeight.w400,
                       ),
                     ),
                   ),
-                  if (isSelected)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 6),
-                      child: Icon(
-                        Icons.check_circle_rounded,
-                        size: 20,
-                        color: AppColors.primaryColor,
-                      ),
-                    ),
                 ],
               ),
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
-/// Sleek recap card shown in chat history once user answers a clarification question.
+// สรุปคำตอบที่เลือกไว้ในประวัติสนทนา
 class QuestionnaireRecapCard extends StatelessWidget {
   const QuestionnaireRecapCard({this.question, this.questions, super.key})
     : assert(question != null || questions != null);
@@ -527,9 +528,9 @@ class QuestionnaireRecapCard extends StatelessWidget {
       margin: const EdgeInsets.only(top: 10, bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: ChatbotDesign.subtle,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        border: Border.all(color: ChatbotDesign.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,15 +538,12 @@ class QuestionnaireRecapCard extends StatelessWidget {
         children: [
           const Row(
             children: [
-              Icon(Icons.tune_rounded, size: 14, color: Color(0xFF64748B)),
+              Icon(Icons.tune_rounded, size: 14, color: ChatbotDesign.muted),
               SizedBox(width: 6),
-              Text(
-                'ความต้องการที่คุณเลือก',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B),
+              Expanded(
+                child: Text(
+                  'ความต้องการที่คุณเลือก',
+                  style: ChatbotDesign.caption,
                 ),
               ),
             ],
@@ -555,7 +553,7 @@ class QuestionnaireRecapCard extends StatelessWidget {
             if (i > 0)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 6),
-                child: Divider(color: Color(0xFFE2E8F0), height: 1),
+                child: Divider(color: ChatbotDesign.border, height: 1),
               ),
             Container(
               key: Key('chatbot-questionnaire-recap-${answered[i].id}'),
@@ -569,7 +567,7 @@ class QuestionnaireRecapCard extends StatelessWidget {
                       fontFamily: 'Prompt',
                       fontSize: 12.5,
                       fontWeight: FontWeight.w400,
-                      color: Color(0xFF64748B),
+                      color: ChatbotDesign.muted,
                       height: 1.35,
                     ),
                   ),
@@ -580,7 +578,7 @@ class QuestionnaireRecapCard extends StatelessWidget {
                       fontFamily: 'Prompt',
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
+                      color: ChatbotDesign.ink,
                       height: 1.35,
                     ),
                   ),

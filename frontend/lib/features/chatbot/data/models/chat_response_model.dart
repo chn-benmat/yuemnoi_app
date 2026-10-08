@@ -170,6 +170,8 @@ class ClarificationQuestionModel {
     this.choices = const [],
     this.branchOptions,
     this.branchTitles,
+    this.branchQuestionId,
+    this.branchChoices = const {},
   });
 
   factory ClarificationQuestionModel.fromJson(Map<String, dynamic> json) {
@@ -230,6 +232,18 @@ class ClarificationQuestionModel {
           .toList(),
       branchOptions: branchOptions,
       branchTitles: branchTitles,
+      branchQuestionId: json['branch_question_id'] as String?,
+      branchChoices: {
+        for (final entry in (json['branch_choices'] as Map? ?? {}).entries)
+          entry.key as String: [
+            for (final choice in entry.value as List)
+              QuestionChoice(
+                id: choice['id'] as String,
+                label: choice['label'] as String,
+                actionValue: choice['action_value'] as String,
+              ),
+          ],
+      },
     );
   }
 
@@ -244,6 +258,8 @@ class ClarificationQuestionModel {
   final List<QuestionChoice> choices;
   final Map<String, List<String>>? branchOptions;
   final Map<String, String>? branchTitles;
+  final String? branchQuestionId;
+  final Map<String, List<QuestionChoice>> branchChoices;
 
   ClarificationQuestion toEntity() {
     return ClarificationQuestion(
@@ -258,6 +274,8 @@ class ClarificationQuestionModel {
       choices: choices,
       branchOptions: branchOptions,
       branchTitles: branchTitles,
+      branchQuestionId: branchQuestionId,
+      branchChoices: branchChoices,
     );
   }
 }

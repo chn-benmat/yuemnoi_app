@@ -66,6 +66,7 @@ class InterpretationPolicy(ApprovedDocument):
     turn_instruction: str = Field(min_length=1)
     evidence_instruction: str = Field(min_length=1)
     review_instruction: str = Field(min_length=1)
+    repair_instruction: str = Field(min_length=1)
     unavailable_notice: str = Field(min_length=1)
     empty_catalog_notice: str = Field(min_length=1)
     scope: ScopeDefinitions
@@ -79,7 +80,7 @@ class InterpretationPolicy(ApprovedDocument):
 class FlowBudget(Strict):
     target_seconds: float = Field(gt=0)
     hard_deadline_seconds: float = Field(gt=0)
-    logical_calls: int = Field(ge=1, le=3)
+    logical_calls: int = Field(ge=1, le=5)
 
     @model_validator(mode="after")
     def deadlines(self):
@@ -91,6 +92,7 @@ class FlowBudget(Strict):
 class QuotaPolicy(Strict):
     bucket: str = Field(min_length=1)
     scope: Literal["provider", "model"] = "provider"
+    authority: Literal["configured", "provider"] = "configured"
     requests_per_window: int = Field(gt=0)
     tokens_per_window: int = Field(gt=0)
     window_seconds: float = Field(gt=0)
@@ -188,9 +190,11 @@ class StageRouting(Strict):
     planning: StageRoute
     evidence: StageRoute
     review: StageRoute
+    repair: StageRoute
     finalization_reserve_seconds: float = Field(gt=0)
     minimum_attempt_seconds: float = Field(gt=0)
     measurement_artifact: str | None
+    initial_review_reserve_tokens: int = Field(gt=0)
 
 
 class RuntimeDocument(ApprovedDocument):
@@ -227,7 +231,7 @@ class RuntimeDocument(ApprovedDocument):
         if self.http.max_keepalive_connections > self.http.max_connections:
             raise ValueError("Keepalive connections exceed pool")
         enabled = {p.id for p in self.providers if p.enabled}
-        for route in (self.stages.planning, self.stages.evidence, self.stages.review):
+        for route in (self.stages.planning, self.stages.evidence, self.stages.review, self.stages.repair):
             if not set(route.profiles) <= {p.id for p in self.providers}:
                 raise ValueError("Stage route refers to unknown provider profile")
         if self.model_order_status == "measured_development" and not self.stages.measurement_artifact:

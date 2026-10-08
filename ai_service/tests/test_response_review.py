@@ -51,6 +51,19 @@ async def test_fabricated_issue_span_is_not_a_valid_rejection():
             [Provenance("fixture", "writer")], [], [], [])
 
 
+@pytest.mark.asyncio
+async def test_approval_cannot_claim_relevance_completeness_and_voice_without_draft_paths():
+    from pydantic import ValidationError
+    from review_fixture import assessed
+    result = assessed(dict(issues=[], reviewed_surface_groups=['response']))
+    for assessment in result['assessments'].values():
+        assessment['field_paths'] = []
+    review, _ = stack(result, assessments=False)
+    with pytest.raises(ValidationError):
+        await review.execute(ChatRequestDTO(message='fixture'), ChatResponseDTO(response='ข้อความจริง'),
+            [Provenance('fixture', 'writer')], [], [], [])
+
+
 def test_question_values_and_cards_are_in_review_surface():
     fields = visible_text_fields({"response":"intro", "questions":[{"title":"question", "choices":[
         {"label":"label", "action_value":"value"}]}], "items":[{"description":"card"}],
@@ -61,26 +74,10 @@ def test_question_values_and_cards_are_in_review_surface():
 
 
 @pytest.mark.asyncio
-async def test_pipeline_never_sends_rejected_final_reply_or_repairs_it():
-    from test_fast_turn import make_fast, turn
-    from test_request_understanding import understanding
-    from app.domain.interfaces.generation_stage import CURRENT_GENERATION
-    plan = turn(understanding=understanding(intent="general_greeting", catalog_operation="none",
-        information_sufficient=True, missing_slots=[], next_action="answer", request_scope="not_applicable"),
-        knowledge_ids=[], response_mode="conversation", message="คุยกันได้ครับ")
-    fast, llm, _, _ = make_fast(plan)
-    async def generate(**kwargs):
-        capture = CURRENT_GENERATION.get()
-        capture.provenance = Provenance("fixture", "writer" if capture.name == "planning" else "reviewer")
-        if capture.name == "planning":
-            return plan
-        payload = json.loads(kwargs["prompt"])
-        assert payload["draft"]["response"] == "คุยกันได้ครับ"
-        from review_fixture import assessed
-        return kwargs['schema'].model_validate(assessed(dict(semantic_pass=True, neutral_voice_pass=False, issues=[
-            dict(kind="neutral_voice", field_path="/response", quoted_text="ครับ", reason="Actual assistant voice")])) )
-    llm.generate_structured.side_effect = generate
-    fast._review = ResponseReviewService(llm, "fixture policy", .1)
+async def test_pipeline_stops_after_one_repair_and_withholds_second_rejection():
+    from test_response_repair import stack as recovery_stack
+    fast, llm, stages, _ = recovery_stack(second_rejection=True)
     with pytest.raises(GuidanceGenerationError, match="response_quality_rejected"):
         await fast.execute(ChatRequestDTO(message="fixture conversation"))
-    assert llm.generate_structured.await_count == 2
+    assert llm.generate_structured.await_count == 4
+    assert stages == ['planning', 'review', 'repair', 'review']

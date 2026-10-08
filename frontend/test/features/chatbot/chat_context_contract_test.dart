@@ -170,6 +170,7 @@ void main() {
           find.byKey(const Key('chatbot-message-field')),
           'หาอุปกรณ์',
         );
+        await tester.pump();
         await tester.tap(find.byKey(const Key('chatbot-send-button')));
         for (var frame = 0; frame < 12; frame++) {
           await tester.pump(const Duration(milliseconds: 100));
@@ -185,6 +186,7 @@ void main() {
           find.byKey(const Key('chatbot-message-field')),
           'เปลี่ยนไปถามสินค้าตัวใหม่',
         );
+        await tester.pump();
         await tester.tap(find.byKey(const Key('chatbot-send-button')));
         for (var frame = 0; frame < 12; frame++) {
           await tester.pump(const Duration(milliseconds: 100));

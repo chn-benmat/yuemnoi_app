@@ -28,7 +28,7 @@ def test_native_stage_schema_has_no_ready_stage_prose():
     branches = schema['properties']['stage']['anyOf']
     assert len(branches) >= 3
     ready = schema['$defs']['EvidenceStage']
-    assert ready['properties']['message']['enum'] == ['']
+    assert ready['properties']['text']['enum'] == ['']
     assert ready['properties']['questions']['maxItems'] == 0
 
 
@@ -52,7 +52,7 @@ async def test_actual_current_source_cannot_alias_old_current_fact():
         assert payload['current_message']['id'] == message_source_id('user', 'คำขอใหม่')
         return kwargs['schema'].model_validate(value)
     llm.generate_structured.side_effect = native
-    with pytest.raises(ValidationError, match='Unknown conversation evidence ID'):
+    with pytest.raises(ValidationError, match='literal_error'):
         await fast.execute(ChatRequestDTO(message='คำขอใหม่'))
 
 

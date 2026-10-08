@@ -77,6 +77,17 @@ class ChatContextModel {
     'options': q.options,
     'step': q.step,
     'total_steps': q.totalSteps,
+    if (q.branchQuestionId != null) 'branch_question_id': q.branchQuestionId,
+    if (q.branchTitles?.isNotEmpty == true) 'branch_titles': q.branchTitles,
+    if (q.branchOptions?.isNotEmpty == true) 'branch_options': q.branchOptions,
+    if (q.branchChoices.isNotEmpty)
+      'branch_choices': {
+        for (final entry in q.branchChoices.entries)
+          entry.key: [
+            for (final c in entry.value)
+              {'id': c.id, 'label': c.label, 'action_value': c.actionValue},
+          ],
+      },
     'choices': q.choices
         .map(
           (c) => {'id': c.id, 'label': c.label, 'action_value': c.actionValue},

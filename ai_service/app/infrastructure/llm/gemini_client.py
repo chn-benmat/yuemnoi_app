@@ -1,4 +1,5 @@
 from app.infrastructure.llm.provider_client import ProviderClient, native_schema
+from app.infrastructure.llm.quota import duration_seconds
 
 
 class GeminiClient(ProviderClient):
@@ -11,6 +12,24 @@ class GeminiClient(ProviderClient):
 
     def headers(self):
         return {"x-goog-api-key": self._api_key}
+
+    def rate_limit_retry(self, headers, error):
+        retry = super().rate_limit_retry(headers, error)
+        if retry is not None:
+            return retry
+        details = error.get('details', []) if isinstance(error, dict) else []
+        if not isinstance(details, list):
+            return None
+        waits = []
+        for detail in details:
+            if not isinstance(detail, dict) or detail.get('@type') != 'type.googleapis.com/google.rpc.RetryInfo':
+                continue
+            value = detail.get('retryDelay')
+            if isinstance(value, str) and value.endswith('s') and value[:-1].replace('.', '', 1).isdigit():
+                seconds = duration_seconds(value)
+                if seconds is not None:
+                    waits.append(seconds)
+        return max(waits, default=None)
 
     def build_payload(self, model, prompt, system_instruction=None, temperature=None, schema=None, max_tokens=None):
         generation = {"temperature": self.configuration.GUIDANCE_TEMPERATURE if temperature is None else temperature,
