@@ -234,11 +234,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             onTap: _handleRentalStatus,
                           ),
                           ProfileQuickActionData(
-                            icon: Icons.favorite_border_rounded,
-                            label: 'ถูกใจ',
-                            onTap: () => AppRoutes.openFavorite(context),
-                          ),
-                          ProfileQuickActionData(
                             icon: Icons.calendar_today_outlined,
                             label: 'ประวัติการเช่า',
                             onTap: _handleRentalHistory,

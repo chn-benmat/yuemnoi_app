@@ -18,6 +18,8 @@ import '../widgets/conversation_action_sheet.dart';
 import '../widgets/guest_chat_view.dart';
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_state.dart';
 
 enum _ConversationFilter { all, owner, renter }
 
@@ -196,10 +198,51 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
 
   @override
   Widget build(BuildContext context) {
-    if (!AuthSession.isAuthenticated) {
-      return const GuestChatView();
+    AuthBloc? authBloc;
+    try {
+      authBloc = BlocProvider.of<AuthBloc>(context);
+    } catch (_) {}
+
+    if (authBloc != null) {
+      return BlocConsumer<AuthBloc, AuthState>(
+        listener: (context, authState) {
+          if (authState is LoginSuccess || authState is GoogleLoginSuccess) {
+            context.read<ChatListBloc>().add(const LoadChatListStarted());
+            if (mounted) setState(() {});
+          } else if (authState is AuthInitial) {
+            if (mounted) setState(() {});
+          }
+        },
+        builder: (context, authState) {
+          final isAuthenticated = AuthSession.isAuthenticated ||
+              authState is LoginSuccess ||
+              authState is GoogleLoginSuccess;
+
+          if (!isAuthenticated) {
+            return GuestChatView(
+              onLoginSuccess: () {
+                if (mounted) setState(() {});
+              },
+            );
+          }
+
+          return _buildChatMainView(context);
+        },
+      );
     }
 
+    if (!AuthSession.isAuthenticated) {
+      return GuestChatView(
+        onLoginSuccess: () {
+          if (mounted) setState(() {});
+        },
+      );
+    }
+
+    return _buildChatMainView(context);
+  }
+
+  Widget _buildChatMainView(BuildContext context) {
     return SafeArea(
       bottom: false,
       child: Padding(
@@ -266,7 +309,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
             Expanded(
               child: BlocBuilder<ChatListBloc, ChatListState>(
                 builder: (context, state) {
-                  if (state.status == ChatListStatus.loading &&
+                  if ((state.status == ChatListStatus.loading ||
+                          state.status == ChatListStatus.initial) &&
                       state.conversations.isEmpty) {
                     return const ChatListLoadingSkeleton();
                   }

@@ -77,50 +77,6 @@ class ShopeeProductCard extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  // ป้ายยืนยันตัวตน / ร้านแนะนำ ด้านซ้ายบน (สไตล์ Shopee Mall / Shopee แนะนำ)
-                  if (item.isVerified)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryColor.withValues(alpha: 0.92),
-                          borderRadius: BorderRadius.circular(6),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.verified_rounded,
-                              size: 11,
-                              color: Colors.white,
-                            ),
-                            SizedBox(width: 3),
-                            Text(
-                              'ยืนยันแล้ว',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                height: 1,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                 ],
               ),
 

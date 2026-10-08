@@ -3,12 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../bloc/chat_list_bloc.dart';
 import '../bloc/chat_list_event.dart';
 
 class GuestChatView extends StatelessWidget {
-  const GuestChatView({super.key});
+  final VoidCallback? onLoginSuccess;
+  const GuestChatView({super.key, this.onLoginSuccess});
 
   @override
   Widget build(BuildContext context) {
@@ -61,10 +63,13 @@ class GuestChatView extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: () async {
                     final loggedIn = await AppRoutes.pushLogin(context);
-                    if (loggedIn == true && context.mounted) {
-                      context
-                          .read<ChatListBloc>()
-                          .add(const LoadChatListStarted());
+                    if (context.mounted) {
+                      if (loggedIn == true || AuthSession.isAuthenticated) {
+                        context
+                            .read<ChatListBloc>()
+                            .add(const LoadChatListStarted());
+                        onLoginSuccess?.call();
+                      }
                     }
                   },
                   style: ElevatedButton.styleFrom(
