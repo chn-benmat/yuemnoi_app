@@ -99,9 +99,10 @@ class NamedAssessment(GuidanceModel):
 
 
 class NamedReviewAssessments(GuidanceModel):
+    model_config = ConfigDict(populate_by_name=True)
     relevance: 'ApplicableAssessment'
     completeness: 'ApplicableAssessment'
-    neutral_voice: 'ApplicableAssessment'
+    neutral_voice: 'NeutralVoiceAssessment' = Field(alias='ungendered_speaker')
     choice_equivalence: NamedAssessment
     grounding: NamedAssessment
     context: NamedAssessment
@@ -115,4 +116,11 @@ class ApplicableAssessment(NamedAssessment):
         json_schema_extra={'x-provider-description': True})
 
 
+class NeutralVoiceAssessment(ApplicableAssessment):
+    reason: str = Field(min_length=1,
+        description='Inspect assistant-authored speaker expressions and politeness markers for grammatical gender. Conventional or courteous gender-marked wording still fails ungendered voice. Distinguish quoted user/catalog text from assistant speech; cite the actual authored wording rather than accepting the declared register.',
+        json_schema_extra={'x-provider-description': True})
+
+
+NamedReviewAssessments.model_rebuild()
 NativeResponseReview.model_rebuild()

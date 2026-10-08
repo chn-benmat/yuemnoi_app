@@ -74,8 +74,8 @@
         "completeness": {
           "$ref": "#/$defs/ApplicableAssessment"
         },
-        "neutral_voice": {
-          "$ref": "#/$defs/ApplicableAssessment"
+        "ungendered_speaker": {
+          "$ref": "#/$defs/NeutralVoiceAssessment"
         },
         "choice_equivalence": {
           "$ref": "#/$defs/NamedAssessment"
@@ -93,13 +93,46 @@
       "required": [
         "relevance",
         "completeness",
-        "neutral_voice",
+        "ungendered_speaker",
         "choice_equivalence",
         "grounding",
         "context",
         "followups"
       ],
       "title": "NamedReviewAssessments",
+      "type": "object"
+    },
+    "NeutralVoiceAssessment": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "description": "Inspect assistant-authored speaker expressions and politeness markers for grammatical gender. Conventional or courteous gender-marked wording still fails ungendered voice. Distinguish quoted user/catalog text from assistant speech; cite the actual authored wording rather than accepting the declared register.",
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "field_paths": {
+          "description": "Cite at least one exact original draft pointer for this always-applicable check.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Field Paths",
+          "type": "array",
+          "x-provider-description": true
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "reason",
+        "field_paths",
+        "passed"
+      ],
+      "title": "NeutralVoiceAssessment",
       "type": "object"
     },
     "ReviewIssue": {

@@ -1,5 +1,6 @@
 """Evidence views retain actual answers and every claim's authoritative fields."""
 import json
+from app.domain.entities.chat_result import QuestionnaireAnswer
 from app.application.services.conversation_context import conversation_context
 from app.application.services.catalog_guidance import catalog_snapshot,compact_catalog
 from app.domain.entities.clarification import QuestionStep
@@ -8,35 +9,48 @@ from app.domain.entities.clarification import QuestionStep
 def request_evidence(request, limits):
     data=request.model_dump(mode='json')
     data['history']=conversation_context(request.history,limits)['messages'] if limits else data['history']
+    answered={answer.question_id:answer for answer in request.questionnaire_answers}
+    def selected_view(question, answers):
+        answer=answers.get(question.get('id'))
+        if answer is None: return question
+        source_answer = answers.get(question.get('branch_question_id'))
+        choices_source = question.get('choices', [])
+        if source_answer and source_answer.option_id:
+            choices_source = question.get('branch_choices', {}).get(source_answer.option_id, choices_source)
+        choices=[c for c in choices_source if c.get('id')==answer.option_id]
+        if answer.option_id and len(choices) != 1:
+            return question
+        result=dict(question)
+        if source_answer and source_answer.option_id:
+            result['title'] = question.get('branch_titles', {}).get(source_answer.option_id, question['title'])
+        for field in ('branch_titles', 'branch_options', 'branch_choices', 'branch_question_id'):
+            result.pop(field, None)
+        result['choices']=choices
+        result['options']=[c['label'] for c in choices]
+        if answer.text is not None: result['typed_answer']=answer.text
+        normalized = QuestionStep.model_validate(result).model_dump(mode='json', exclude_defaults=True)
+        return {**normalized, **{key:value for key,value in result.items() if key not in QuestionStep.model_fields}}
     if request.context:
         data['context']=request.context.model_dump(mode='json',exclude_defaults=True)
-        answered={answer.question_id:answer for answer in request.questionnaire_answers}
         if answered and set(answered)=={q.id for q in request.context.questions}:
-            # ทางเลือกเก่าที่ไม่ได้เลือกเป็น metadata UI ไม่ใช่คำตอบของผู้ใช้
-            def selected_view(question):
-                answer=answered.get(question.get('id'))
-                if answer is None: return question
-                result=dict(question)
-                source_answer = answered.get(question.get('branch_question_id'))
-                if source_answer and source_answer.option_id:
-                    result['title'] = question.get('branch_titles', {}).get(source_answer.option_id, question['title'])
-                for field in ('branch_titles', 'branch_options', 'branch_choices', 'branch_question_id'):
-                    result.pop(field, None)
-                choices=[c for c in question.get('choices',[]) if c.get('id')==answer.option_id]
-                result['choices']=choices
-                result['options']=[c['label'] for c in choices]
-                if answer.text is not None: result['typed_answer']=answer.text
-                # ละค่าเริ่มต้นของ UI ให้ข้อมูลข้อเดียวกันยุบซ้ำได้ แต่คงคำตอบและ metadata อื่น
-                normalized = QuestionStep.model_validate(result).model_dump(mode='json', exclude_defaults=True)
-                return {**normalized, **{key:value for key,value in result.items() if key not in QuestionStep.model_fields}}
-            data['context']['questions']=[selected_view(q) for q in data['context']['questions']]
-            for message in data['history']:
-                content=message['content']
-                if isinstance(content,str):
-                    try:content=json.loads(content)
-                    except ValueError:continue
-                if isinstance(content,dict) and isinstance(content.get('questions'),list):
-                    message['content']={**content,'questions':[selected_view(q) for q in content['questions']]}
+            data['context']['questions']=[selected_view(q, answered) for q in data['context']['questions']]
+    for message in data['history']:
+        content=message['content']
+        if isinstance(content,str):
+            try:content=json.loads(content)
+            except ValueError:continue
+        if not isinstance(content,dict) or not isinstance(content.get('questions'),list):
+            continue
+        # ประวัติ UI มี ID ที่เลือกจริง จึงคงคำตอบได้แม้แชตใหม่ไม่มีแบบสอบถามปัจจุบัน
+        historical = {}
+        for question in content['questions']:
+            selected_id, text = question.get('selected_option_id'), question.get('selected')
+            if selected_id or text:
+                historical[question['id']] = QuestionnaireAnswer(question_id=question['id'],
+                    option_id=selected_id, text=None if selected_id else text)
+        complete = set(answered) >= {q.get('id') for q in content['questions']}
+        answers = answered if complete else historical
+        message['content']={**content,'questions':[selected_view(q, answers) for q in content['questions']]}
     return data
 
 

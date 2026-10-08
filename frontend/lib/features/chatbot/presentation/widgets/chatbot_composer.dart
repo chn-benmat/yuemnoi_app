@@ -106,7 +106,6 @@ class ChatbotComposer extends StatelessWidget {
                             controller: controller,
                             focusNode: focusNode,
                             enabled: !isSending,
-                            maxLength: 200,
                             minLines: 1,
                             maxLines: 4,
                             textInputAction: TextInputAction.send,
@@ -123,10 +122,10 @@ class ChatbotComposer extends StatelessWidget {
                                 }) => currentLength < 160
                                 ? null
                                 : Text(
-                                    '$currentLength/$maxLength',
+                                    '$currentLength',
                                     key: const Key('chatbot-character-counter'),
                                     semanticsLabel:
-                                        '$currentLength จาก $maxLength ตัวอักษร',
+                                        '$currentLength ตัวอักษร',
                                     style: ChatbotDesign.caption,
                                   ),
                             decoration: InputDecoration(

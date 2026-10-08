@@ -3,6 +3,8 @@
 import json
 import math
 import time
+from collections import Counter
+from copy import deepcopy
 from contextvars import ContextVar
 
 import httpx
@@ -44,6 +46,58 @@ def native_schema(schema: type[BaseModel]) -> dict:
             result["required"] = list(result.get("properties", {}))
         return result
     return convert(schema.model_json_schema())
+
+
+def compact_schema_definitions(document):
+    """Share repeated enum schemas and shorten refs without changing constraints."""
+    document = deepcopy(document)
+    counts, enums = Counter(), {}
+    def collect(value):
+        if isinstance(value, list):
+            for child in value: collect(child)
+        elif isinstance(value, dict):
+            if 'enum' in value and value.get('type') == 'string':
+                key = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+                counts[key] += 1
+                enums[key] = value
+            for child in value.values(): collect(child)
+    collect(document)
+    definitions = document.get('$defs', {})
+    shared = {}
+    for key, count in counts.items():
+        name = 'shared_enum_' + str(len(shared))
+        while name in definitions:
+            name += '_'
+        reference = {'$ref': '#/$defs/' + name}
+        # Factor only when its added definition and all refs use fewer bytes.
+        if count * len(key) > len(key) + len(json.dumps({name: enums[key]})) + count * len(json.dumps(reference)):
+            shared[key] = name
+    def factor(value):
+        if isinstance(value, list): return [factor(child) for child in value]
+        if not isinstance(value, dict): return value
+        if 'enum' in value and value.get('type') == 'string':
+            key = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+            if key in shared: return {'$ref': '#/$defs/' + shared[key]}
+        return {key: factor(child) for key, child in value.items()}
+    document = factor(document)
+    if shared:
+        document.setdefault('$defs', {}).update({name: enums[key] for key, name in shared.items()})
+    names = {name: 'd' + str(index) for index, name in enumerate(document.get('$defs', {}))}
+    def visit(value):
+        if isinstance(value, list):
+            return [visit(child) for child in value]
+        if not isinstance(value, dict):
+            return value
+        result = {}
+        for key, child in value.items():
+            if key == '$defs':
+                result[key] = {names[name]: visit(spec) for name, spec in child.items()}
+            elif key == '$ref' and child.startswith('#/$defs/'):
+                result[key] = '#/$defs/' + names[child.removeprefix('#/$defs/')]
+            else:
+                result[key] = visit(child)
+        return result
+    return visit(document)
 
 
 def decode_structured(raw, schema):

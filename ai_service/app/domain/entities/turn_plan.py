@@ -1,6 +1,6 @@
 """One semantic planning call, followed only by evidence synthesis when needed."""
 from typing import Literal
-from pydantic import Field, ConfigDict
+from pydantic import Field, ConfigDict, model_validator
 from app.domain.entities.catalog_guidance import GuidanceModel, MissingQuestion, QuestionChoice, SelectionPlan
 from app.domain.entities.intent_decision import RequestUnderstanding, NativePlanningUnderstanding
 
@@ -23,6 +23,53 @@ class PlannedQuestion(MissingQuestion):
     branches: list[QuestionBranch] = Field(default_factory=list, max_length=4,
         description='Adapt to one earlier question: cover each source choice ID with relevant title/choices. Empty if independent or for unknown typed answers.',
         json_schema_extra={'x-provider-description': True})
+
+
+class NativeQuestionChoice(QuestionChoice):
+    choice_kind: Literal['specified', 'unrestricted'] = Field(
+        description='specified establishes a preference or finite ceiling; unrestricted leaves that preference unconstrained. A maximum-budget question includes one unrestricted option explicitly removing the ceiling.',
+        json_schema_extra={'x-provider-description': True})
+
+
+class NativeChoiceSet(GuidanceModel):
+    choices: list[NativeQuestionChoice] = Field(min_length=1, max_length=4,
+        description='All displayed options in one array, including the unrestricted option when applicable. At most four total.',
+        json_schema_extra={'x-provider-description': True})
+
+    @model_validator(mode='after')
+    def valid_choice_kinds(self):
+        unrestricted = sum(choice.choice_kind == 'unrestricted' for choice in self.choices)
+        if unrestricted > 1 or unrestricted == len(self.choices):
+            raise ValueError('At most one unrestricted option and at least one specified option are required')
+        return self
+
+    def domain_choices(self):
+        specified, unrestricted = [], None
+        for choice in self.choices:
+            value = choice.model_dump(exclude={'choice_kind'})
+            if choice.choice_kind == 'unrestricted':
+                unrestricted = value
+            else:
+                specified.append(value)
+        return {'choices': specified, 'unrestricted_choice': unrestricted}
+
+
+class NativeQuestionBranch(NativeChoiceSet):
+    source_question_id: str = Field(min_length=1)
+    source_option_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+
+
+class NativePlannedQuestion(MissingQuestion, NativeChoiceSet):
+    choices: list[NativeQuestionChoice] = NativeChoiceSet.model_fields['choices']
+    branches: list[NativeQuestionBranch] = Field(default_factory=list, max_length=4,
+        description=PlannedQuestion.model_fields['branches'].description,
+        json_schema_extra={'x-provider-description': True})
+
+    def to_question(self):
+        value = self.model_dump(exclude={'choices', 'branches'})
+        branches = [{**branch.model_dump(exclude={'choices'}), **branch.domain_choices()} for branch in self.branches]
+        return PlannedQuestion.model_validate({**value, **self.domain_choices(), 'branches': branches})
 
 
 class TurnPlan(GuidanceModel):
@@ -53,35 +100,39 @@ class ClarificationStage(GuidanceModel):
     response_mode: Literal['clarification']
     catalog_operation: CatalogOperation
     message: str = Field(alias='text', min_length=1, description="Original assistant invitation to pending questions; never echo the user. Natural ungendered Thai.", json_schema_extra={'x-provider-description': True})
-    questions: list[PlannedQuestion] = Field(min_length=1, max_length=3)
+    questions: list[NativePlannedQuestion] = Field(min_length=1, max_length=3)
 
 
 class EvidenceStage(GuidanceModel):
     model_config = ConfigDict(extra='forbid',populate_by_name=True)
-    response_mode: Literal['equipment', 'catalog_overview']
+    response_mode: Literal['equipment', 'catalog_overview'] = Field(
+        description='equipment: ready named-item, comparison or filtered requests. catalog_overview: unfiltered category browsing only, without targets, spending ceiling, user constraints, exclusions or external verification.',
+        json_schema_extra={'x-provider-description': True})
     catalog_operation: EvidenceCatalogOperation
     message: Literal[''] = Field(alias='text')
-    questions: list[PlannedQuestion] = Field(max_length=0)
+    questions: list[None] = Field(max_length=0)
 
 
 class TechnicalStage(EvidenceStage):
-    response_mode: Literal['technical']
+    response_mode: Literal['technical'] = Field(description='Ready technical facts need focused external verification.',
+        json_schema_extra={'x-provider-description': True})
     catalog_operation: CatalogOperation
 
 
 class DocumentStage(EvidenceStage):
-    response_mode: Literal['documents']
+    response_mode: Literal['documents'] = Field(description='Ready app information uses supplied approved articles.',
+        json_schema_extra={'x-provider-description': True})
     catalog_operation: NoCatalogOperation
 
 
 class ConversationStage(GuidanceModel):
     model_config = ConfigDict(extra='forbid',populate_by_name=True)
     response_mode: Literal['conversation', 'information'] = Field(
-        description='conversation: nonfactual social greeting only. information: non-catalog general information only. Catalog price/detail requests require equipment evidence or clarification.',
+        description='conversation pairs with analysis.intent=general_greeting for allowed social acts/humor. Explanations and scope refusals use information with analysis.intent=general_information. Catalog facts require equipment; unverifiable facts are evidence gaps, never preferences.',
         json_schema_extra={'x-provider-description': True})
     catalog_operation: NoCatalogOperation
     message: str = Field(alias='text',min_length=1)
-    questions: list[PlannedQuestion] = Field(max_length=0)
+    questions: list[None] = Field(max_length=0)
 
 
 class NativeTurnPlan(GuidanceModel):
@@ -90,7 +141,7 @@ class NativeTurnPlan(GuidanceModel):
     speaker_register: Literal['informal_ungendered'] = Field(description=TurnPlan.model_fields['speaker_register'].description,
         json_schema_extra={'x-provider-description': True})
     stage: ClarificationStage | EvidenceStage | TechnicalStage | DocumentStage | ConversationStage = Field(
-        description='Pending unknowns: clarification. Ready catalog: equipment; external verification: technical. Unfiltered browsing: catalog_overview. App evidence: documents. Non-catalog reply: conversation/information.',
+        description='Select the current stage using its response_mode semantics, not the eventual rental operation alone.',
         json_schema_extra={'x-provider-description': True})
     overview_available_only: bool
     # Groq จัดลำดับ keys ตามตัวอักษร ให้ reasoning ออกก่อน stage และข้อความ
@@ -102,7 +153,10 @@ class NativeTurnPlan(GuidanceModel):
         fields = self.model_dump(exclude={'stage'})
         fields['understanding']=self.understanding.to_understanding(
             self.stage.catalog_operation.kind, [question.dimension for question in self.stage.questions]).model_dump()
-        return TurnPlan.model_validate({**fields, **self.stage.model_dump(exclude={'catalog_operation'})})
+        stage = self.stage.model_dump(exclude={'catalog_operation'})
+        # แปลงชนิดช้อยที่โมเดลระบุเข้าสัญญาภายใน โดยไม่ตีความข้อความ label/value
+        stage['questions'] = [question.to_question().model_dump() for question in self.stage.questions]
+        return TurnPlan.model_validate({**fields, **stage})
 
 
 class EvidenceAnswer(GuidanceModel):

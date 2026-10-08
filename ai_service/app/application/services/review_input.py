@@ -7,13 +7,21 @@ def _child_path(path, key):
     return path + '/' + str(key).replace('~', '~0').replace('/', '~1')
 
 
-def compact_review_draft(draft):
+def _literal_at(path, literal_paths):
+    return any(path == prefix or path.startswith(prefix + '/') for prefix in literal_paths)
+
+
+def _contains_literal(path, literal_paths):
+    return _literal_at(path, literal_paths) or any(prefix.startswith(path + '/') for prefix in literal_paths)
+
+
+def compact_review_draft(draft, *, literal_paths=()):
     seen, references = {}, {}
     def visit(value, path):
         if isinstance(value, (dict, list, str)) and value:
             encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
             previous = seen.get(encoded)
-            if previous is not None:
+            if previous is not None and not _contains_literal(path, literal_paths):
                 link_cost = len(json.dumps({path: previous}, ensure_ascii=False, separators=(',', ':')))
                 if len(encoded) > len('null') + link_cost:
                     references[path] = previous
@@ -62,17 +70,20 @@ def restore_review_draft(draft, references):
     return expand('', frozenset())
 
 
-def compact_planning_input(payload):
+def compact_planning_input(payload, *, literal_paths=()):
     """ลดเฉพาะข้อมูลซ้ำโดยคงข้อความและ provenance ต้นฉบับทุกฟิลด์."""
-    projected, references = compact_review_draft(payload)
+    projected, references = compact_review_draft(payload, literal_paths=literal_paths)
     tables = {}
     def tabulate(value, path):
+        if _literal_at(path, literal_paths):
+            return copy.deepcopy(value)
         if isinstance(value, dict):
             return {key: tabulate(child, _child_path(path, key)) for key, child in value.items()}
         if not isinstance(value, list):
             return value
         rows = [tabulate(child, _child_path(path, index)) for index, child in enumerate(value)]
-        if len(rows) >= 2 and all(isinstance(row, dict) for row in rows):
+        if (not _contains_literal(path, literal_paths)
+                and len(rows) >= 2 and all(isinstance(row, dict) for row in rows)):
             columns = list(rows[0])
             if columns and all(set(row) == set(columns) for row in rows):
                 table = {'columns': columns, 'rows': [[row[key] for key in columns] for row in rows]}
@@ -85,15 +96,17 @@ def compact_planning_input(payload):
     # ตารางคลังมี category/unit/status ซ้ำมาก ใช้พจนานุกรมข้อความแบบคืนต้นฉบับได้
     counts = {}
     marker_collision = False
-    def count(value):
+    def count(value, path=''):
         nonlocal marker_collision
+        if _literal_at(path, literal_paths):
+            return
         if isinstance(value, str):
             counts[value] = counts.get(value, 0) + 1
         elif isinstance(value, dict):
             marker_collision |= set(value) == {'$text'}
-            for child in value.values(): count(child)
+            for key, child in value.items(): count(child, _child_path(path, key))
         elif isinstance(value, list):
-            for child in value: count(child)
+            for index, child in enumerate(value): count(child, _child_path(path, index))
     count(projected)
     count(tables)
     encode = lambda data: json.dumps(data, ensure_ascii=False, separators=(',', ':'))
@@ -103,16 +116,20 @@ def compact_planning_input(payload):
         if amount * len(encode(value)) > amount * len(encode(marker)) + len(encode(value)) + 1:
             indices[value] = len(dictionary)
             dictionary.append(value)
-    def intern(value):
+    def intern(value, path=''):
+        if _literal_at(path, literal_paths):
+            return copy.deepcopy(value)
         if isinstance(value, str) and value in indices:
             return {'$text': indices[value]}
         if isinstance(value, dict):
-            return {key: intern(child) for key, child in value.items()}
+            return {key: intern(child, _child_path(path, key)) for key, child in value.items()}
         if isinstance(value, list):
-            return [intern(child) for child in value]
+            return [intern(child, _child_path(path, index)) for index, child in enumerate(value)]
         return value
     projected, tables = intern(projected), intern(tables)
     result = {**projected, 'input_references': references}
+    if literal_paths:
+        result['input_literal_paths'] = list(literal_paths)
     if tables:
         result['input_tables'] = tables
     if dictionary:
@@ -124,16 +141,19 @@ def compact_planning_input(payload):
 
 def restore_planning_input(payload):
     dictionary = payload.get('input_dictionary', [])
-    def unintern(value):
+    literal_paths = tuple(payload.get('input_literal_paths', ()))
+    def unintern(value, path=''):
+        if _literal_at(path, literal_paths):
+            return copy.deepcopy(value)
         if isinstance(value, dict):
             if set(value) == {'$text'}:
                 index = value['$text']
                 if type(index) is not int or not 0 <= index < len(dictionary) or not isinstance(dictionary[index],str):
                     raise ValueError('Invalid input dictionary reference')
                 return dictionary[index]
-            return {key: unintern(child) for key, child in value.items()}
+            return {key: unintern(child, _child_path(path, key)) for key, child in value.items()}
         if isinstance(value, list):
-            return [unintern(child) for child in value]
+            return [unintern(child, _child_path(path, index)) for index, child in enumerate(value)]
         return value
     if 'input_dictionary' in payload:
         payload = unintern({k: v for k,v in payload.items() if k != 'input_dictionary'})
@@ -151,5 +171,5 @@ def restore_planning_input(payload):
         if isinstance(value, list):
             return [expand(child, _child_path(path, index)) for index, child in enumerate(value)]
         return value
-    data = {k: v for k, v in payload.items() if k not in ('input_references', 'input_tables')}
+    data = {k: v for k, v in payload.items() if k not in ('input_references', 'input_tables', 'input_literal_paths')}
     return restore_review_draft(expand(data, ''), payload.get('input_references', {}))

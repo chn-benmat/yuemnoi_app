@@ -48,6 +48,7 @@ def test_native_stage_cannot_bypass_a_requested_catalog_operation():
 
 
 def test_native_question_stage_is_the_single_material_readiness_decision():
+    from native_turn_fixture import native_questions
     from test_response_repair import decision
     from app.domain.entities.intent_decision import NativePlanningUnderstanding
     understanding = decision().model_dump(exclude={
@@ -58,7 +59,7 @@ def test_native_question_stage_is_the_single_material_readiness_decision():
         overview_available_only=False, knowledge_ids=[], unverified_topic_ids=[])
     pending = NativeTurnPlan.model_validate({**native, 'stage': {
         'response_mode': 'clarification', 'catalog_operation': {'kind': 'selection'},
-        'text': 'เลือกข้อมูลเพิ่มเติม', 'questions': [planned()[0].model_dump()]}}).to_plan()
+        'text': 'เลือกข้อมูลเพิ่มเติม', 'questions': native_questions([planned()[0].model_dump()])}}).to_plan()
     assert pending.understanding.next_action == 'clarify'
     assert pending.understanding.information_sufficient is False
     assert pending.understanding.missing_slots == ['category']

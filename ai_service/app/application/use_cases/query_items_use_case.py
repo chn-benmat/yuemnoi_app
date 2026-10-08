@@ -129,7 +129,7 @@ class QueryItemsUseCase:
                 raise PydanticCustomError("catalog_unknown_catalog_period", "Unknown catalog period")
             if set(requirement.catalog_units) != {decision.budget_unit}:
                 raise PydanticCustomError("catalog_a_price_period_conversion_requires_authoritative_conversion_evidence", "A price period conversion requires authoritative conversion evidence")
-        if ids and decision.budget_max is not None and requirement is None:
+        if ids and decision.catalog_operation == 'selection' and decision.budget_max is not None and requirement is None:
             raise PydanticCustomError("catalog_budget_requires_an_established_unit_interpretation", "Budget requires an established unit interpretation")
         for item_id in ids:
             item = id_map[item_id]

@@ -1,5 +1,5 @@
 import json
-from app.infrastructure.llm.provider_client import ProviderClient, native_schema
+from app.infrastructure.llm.provider_client import ProviderClient, native_schema, compact_schema_definitions
 from app.infrastructure.llm.reference_transport import encode_references,decode_references
 
 
@@ -19,6 +19,7 @@ class GroqClient(ProviderClient):
         if schema is not None:
             document = native_schema(schema)
             prompt,document,_ = encode_references(prompt,document)
+            document = compact_schema_definitions(document)
             contract = ('Emit one JSON object with every required root key: '
                 + ', '.join(document['required'])
                 + '. Complete nested fields, use exact enum labels and no extra keys. Absent facts use []; null only where allowed.')

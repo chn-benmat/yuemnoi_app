@@ -12,7 +12,7 @@ class IntentDecision(BaseModel):
                     "'comparison' for comparing specifications or features of multiple models, or requesting decision advice/recommendation between 2+ previously recommended equipment items; "
                     "'clarification_needed' when request lacks necessary specificity to act; "
                     "'platform_faq' for inquiries on rental rules, fees, app identity, or policies; "
-                    "'general_greeting' for conversational greetings without specific rental requests."
+                    "'general_greeting' for friendly social exchanges, humor and creative conversation without a factual rental request."
     )
     ambiguity_level: float = Field(
         default=0.0,

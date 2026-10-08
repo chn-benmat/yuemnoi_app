@@ -23,9 +23,11 @@ async def test_assessment_cannot_cite_request_or_invented_draft_paths():
     value=assessed(dict(semantic_pass=True,neutral_voice_pass=True,issues=[],
         reviewed_surface_groups=['response']),paths=['/draft/response'])
     review,_=stack(value,assessments=False)
-    with pytest.raises(ValidationError,match='review_unknown_assessment_path'):
+    with pytest.raises(ValidationError) as failure:
         await review.execute(ChatRequestDTO(message='fixture'),ChatResponseDTO(response='actual draft'),
             [Provenance('fixture','writer')],[],[],[])
+    assert all(error['type'] == 'review_unknown_assessment_path'
+               for error in failure.value.errors())
 
 
 def test_native_schema_orders_assessments_before_final_verdict():
@@ -53,7 +55,7 @@ def test_native_review_schema_requires_each_check_instead_of_counting_array_entr
     from review_fixture import assessed
     schema=native_schema(NativeResponseReview)
     checks=schema['$defs']['NamedReviewAssessments']
-    assert set(checks['required']) == set(ResponseChecks.model_fields)
+    assert set(checks['required']) == (set(ResponseChecks.model_fields) - {'neutral_voice'}) | {'ungendered_speaker'}
     assert checks['additionalProperties'] is False
     value=assessed(dict(semantic_pass=True,neutral_voice_pass=True,issues=[],reviewed_surface_groups=['response']))
     # The failure seen live had seven entries but repeated followups and omitted
@@ -82,12 +84,14 @@ def test_both_actual_provider_payloads_keep_review_pointer_contract():
     from app.infrastructure.llm.gemini_client import GeminiClient
     from app.infrastructure.llm.groq_client import GroqClient
     from app.core.config import settings
+    from app.infrastructure.llm.provider_client import compact_schema_definitions
     gemini=GeminiClient(api_key='fixture').build_payload(settings.GEMINI_PRIMARY_MODEL,'fixture',schema=NativeResponseReview)
     groq=GroqClient(api_key='fixture').build_payload(settings.GROQ_PRIMARY_MODEL,'fixture',schema=NativeResponseReview)
     schemas=[gemini['generationConfig']['responseJsonSchema'],groq['response_format']['json_schema']['schema']]
-    assert schemas[0]==schemas[1]
+    assert compact_schema_definitions(schemas[0]) == schemas[1]
     for schema in schemas:
-        issue=schema['$defs']['ReviewIssue']['properties']
+        ref = schema['properties']['issues']['items']['$ref'].removeprefix('#/$defs/')
+        issue=schema['$defs'][ref]['properties']
         assert 'relative to the restored draft root' in issue['field_path']['description']
         assert 'Exact unchanged substring' in issue['quoted_text']['description']
         assert list(schema['properties'])[0]=='assessments'

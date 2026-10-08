@@ -321,7 +321,7 @@ class PlanChatTurnUseCase:
             candidates = category_items
             if decision.catalog_operation == "selection":
                 candidates = [i for i in candidates if i.is_available]
-            price_filter_applied = decision.budget_max is not None and decision.budget_unit in {i.type for i in candidates}
+            price_filter_applied = decision.catalog_operation == 'selection' and decision.budget_max is not None and decision.budget_unit in {i.type for i in candidates}
             if price_filter_applied:
                 candidates = [i for i in candidates if i.type == decision.budget_unit and i.price <= decision.budget_max]
             candidate_ids = {i.id for i in candidates}
@@ -355,12 +355,12 @@ class PlanChatTurnUseCase:
                     render_catalog_text(reply, fresh_items, presentation=self._interpretation['catalog_presentation'])
 
             allowed_purposes = ["recommendation"] if decision.catalog_operation == "selection" else ["inspection"]
-            established_unit = decision.budget_unit if decision.budget_max is not None and decision.budget_unit in {
+            established_unit = decision.budget_unit if decision.catalog_operation == 'selection' and decision.budget_max is not None and decision.budget_unit in {
                 item.type for item in fresh_items} else None
             price_schema = create_model("EstablishedPriceRequirement", __base__=PriceRequirement,
                 maximum=(float, Field(ge=decision.budget_max, le=decision.budget_max)), user_unit=(Literal[established_unit], ...),
                 catalog_units=(list[Literal[established_unit]], Field(min_length=1))) if established_unit else PriceRequirement
-            price_requirement_type = type(None) if decision.budget_max is None else price_schema | None
+            price_requirement_type = type(None) if decision.catalog_operation != 'selection' or decision.budget_max is None else price_schema | None
             eligible_item = create_model('EligibleSelectedItem', __base__=SelectedItem,
                 id=(Literal[tuple(sorted(candidate_ids))], ...)) if candidate_ids else type(None)
             selection_schema = create_model("ResolvedSelectionPlan", __base__=SelectionPlan,
@@ -417,7 +417,8 @@ class PlanChatTurnUseCase:
         recovery_request = await self._repair_draft(request, plan, draft, {'issues': [], 'assessments': []},
             review_catalog, articles, web, knowledge, sources, prefix_blocks, selection, response_schema,
             planning_catalog_summary, preview=True)
-        review_scope = {'catalog_summary': planning_catalog_summary} if questions else {}
+        review_scope = ({'catalog_summary': planning_catalog_summary}
+            if questions or plan.response_mode in ('conversation', 'information', 'documents') else {})
         try:
             await self._review.execute(request, draft, writers, review_catalog, articles, web_evidence,
                 recovery_request=recovery_request, **review_scope)
@@ -492,7 +493,8 @@ class PlanChatTurnUseCase:
                 "title_characters": self._policy.title_max_characters, "choice_characters": self._policy.option_max_characters},
             "catalog_presentation": self._interpretation['catalog_presentation']}
         # แบบสอบถามใช้สรุปเดิม ส่วนคำตอบสินค้าใช้ scalar facts ทั้งคลังและรายละเอียดที่อ้าง
-        repair_evidence = ({'catalog_summary': planning_catalog_summary} if plan.response_mode == 'clarification'
+        repair_evidence = ({'catalog_summary': planning_catalog_summary}
+            if plan.response_mode in ('clarification', 'conversation', 'information', 'documents')
             else {'catalog': catalog_evidence(catalog,draft)})
         payload = compact_planning_input({**payload, **repair_evidence})
         prompt = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
@@ -543,7 +545,8 @@ class PlanChatTurnUseCase:
                 "selection_required": decision.catalog_operation != "none",
                 "allowed_selection_purposes": allowed_purposes,
                 "allowed_search_ids": list(web_map),
-                "price_contract": {"ceiling": decision.budget_max, "established_period": decision.budget_unit,
+                "price_contract": {"ceiling": decision.budget_max if decision.catalog_operation == 'selection' else None,
+                                   "established_period": decision.budget_unit if decision.catalog_operation == 'selection' else None,
                                    "catalog_periods": sorted({i.type for i in fresh_items}),
                                    "permitted_catalog_periods": [established_unit] if established_unit else [],
                                    "conversion_allowed": False},

@@ -40,7 +40,7 @@
         },
         "questions": {
           "items": {
-            "$ref": "#/$defs/PlannedQuestion"
+            "$ref": "#/$defs/NativePlannedQuestion"
           },
           "maxItems": 3,
           "minItems": 1,
@@ -61,7 +61,7 @@
       "additionalProperties": false,
       "properties": {
         "response_mode": {
-          "description": "conversation: nonfactual social greeting only. information: non-catalog general information only. Catalog price/detail requests require equipment evidence or clarification.",
+          "description": "conversation pairs with analysis.intent=general_greeting for allowed social acts/humor. Explanations and scope refusals use information with analysis.intent=general_information. Catalog facts require equipment; unverifiable facts are evidence gaps, never preferences.",
           "enum": [
             "conversation",
             "information"
@@ -80,7 +80,7 @@
         },
         "questions": {
           "items": {
-            "$ref": "#/$defs/PlannedQuestion"
+            "type": "null"
           },
           "maxItems": 0,
           "title": "Questions",
@@ -101,8 +101,10 @@
       "properties": {
         "response_mode": {
           "const": "documents",
+          "description": "Ready app information uses supplied approved articles.",
           "title": "Response Mode",
-          "type": "string"
+          "type": "string",
+          "x-provider-description": true
         },
         "catalog_operation": {
           "$ref": "#/$defs/NoCatalogOperation"
@@ -114,7 +116,7 @@
         },
         "questions": {
           "items": {
-            "$ref": "#/$defs/PlannedQuestion"
+            "type": "null"
           },
           "maxItems": 0,
           "title": "Questions",
@@ -153,12 +155,14 @@
       "additionalProperties": false,
       "properties": {
         "response_mode": {
+          "description": "equipment: ready named-item, comparison or filtered requests. catalog_overview: unfiltered category browsing only, without targets, spending ceiling, user constraints, exclusions or external verification.",
           "enum": [
             "equipment",
             "catalog_overview"
           ],
           "title": "Response Mode",
-          "type": "string"
+          "type": "string",
+          "x-provider-description": true
         },
         "catalog_operation": {
           "$ref": "#/$defs/EvidenceCatalogOperation"
@@ -170,7 +174,7 @@
         },
         "questions": {
           "items": {
-            "$ref": "#/$defs/PlannedQuestion"
+            "type": "null"
           },
           "maxItems": 0,
           "title": "Questions",
@@ -254,6 +258,55 @@
         "source_message_ids"
       ],
       "title": "NativeKnownFact",
+      "type": "object"
+    },
+    "NativePlannedQuestion": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "description": "All displayed options in one array, including the unrestricted option when applicable. At most four total.",
+          "items": {
+            "$ref": "#/$defs/NativeQuestionChoice"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Choices",
+          "type": "array",
+          "x-provider-description": true
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "dimension": {
+          "minLength": 1,
+          "title": "Dimension",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "branches": {
+          "description": "Adapt to one earlier question: cover each source choice ID with relevant title/choices. Empty if independent or for unknown typed answers.",
+          "items": {
+            "$ref": "#/$defs/NativeQuestionBranch"
+          },
+          "maxItems": 4,
+          "title": "Branches",
+          "type": "array",
+          "x-provider-description": true
+        }
+      },
+      "required": [
+        "choices",
+        "id",
+        "dimension",
+        "title"
+      ],
+      "title": "NativePlannedQuestion",
       "type": "object"
     },
     "NativePlanningUnderstanding": {
@@ -447,84 +500,20 @@
       "title": "NativePlanningUnderstanding",
       "type": "object"
     },
-    "NoCatalogOperation": {
+    "NativeQuestionBranch": {
       "additionalProperties": false,
       "properties": {
-        "kind": {
-          "const": "none",
-          "title": "Kind",
-          "type": "string"
-        }
-      },
-      "required": [
-        "kind"
-      ],
-      "title": "NoCatalogOperation",
-      "type": "object"
-    },
-    "PlannedQuestion": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "minLength": 1,
-          "title": "Id",
-          "type": "string"
-        },
-        "dimension": {
-          "minLength": 1,
-          "title": "Dimension",
-          "type": "string"
-        },
-        "title": {
-          "minLength": 1,
-          "title": "Title",
-          "type": "string"
-        },
         "choices": {
+          "description": "All displayed options in one array, including the unrestricted option when applicable. At most four total.",
           "items": {
-            "$ref": "#/$defs/QuestionChoice"
+            "$ref": "#/$defs/NativeQuestionChoice"
           },
           "maxItems": 4,
           "minItems": 1,
           "title": "Choices",
-          "type": "array"
-        },
-        "unrestricted_choice": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/QuestionChoice"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "For a budget question, a separate explicit no-ceiling choice; otherwise null. Included in the displayed choices.",
-          "x-provider-description": true
-        },
-        "branches": {
-          "description": "Adapt to one earlier question: cover each source choice ID with relevant title/choices. Empty if independent or for unknown typed answers.",
-          "items": {
-            "$ref": "#/$defs/QuestionBranch"
-          },
-          "maxItems": 4,
-          "title": "Branches",
           "type": "array",
           "x-provider-description": true
-        }
-      },
-      "required": [
-        "id",
-        "dimension",
-        "title",
-        "choices"
-      ],
-      "title": "PlannedQuestion",
-      "type": "object"
-    },
-    "QuestionBranch": {
-      "additionalProperties": false,
-      "properties": {
+        },
         "source_question_id": {
           "minLength": 1,
           "title": "Source Question Id",
@@ -539,40 +528,18 @@
           "minLength": 1,
           "title": "Title",
           "type": "string"
-        },
-        "choices": {
-          "items": {
-            "$ref": "#/$defs/QuestionChoice"
-          },
-          "maxItems": 4,
-          "minItems": 1,
-          "title": "Choices",
-          "type": "array"
-        },
-        "unrestricted_choice": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/QuestionChoice"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "For a budget question, a separate explicit no-ceiling choice; otherwise null. Included in the displayed choices.",
-          "x-provider-description": true
         }
       },
       "required": [
+        "choices",
         "source_question_id",
         "source_option_id",
-        "title",
-        "choices"
+        "title"
       ],
-      "title": "QuestionBranch",
+      "title": "NativeQuestionBranch",
       "type": "object"
     },
-    "QuestionChoice": {
+    "NativeQuestionChoice": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -600,15 +567,41 @@
           },
           "title": "Supporting Item Ids",
           "type": "array"
+        },
+        "choice_kind": {
+          "description": "specified establishes a preference or finite ceiling; unrestricted leaves that preference unconstrained. A maximum-budget question includes one unrestricted option explicitly removing the ceiling.",
+          "enum": [
+            "specified",
+            "unrestricted"
+          ],
+          "title": "Choice Kind",
+          "type": "string",
+          "x-provider-description": true
         }
       },
       "required": [
         "id",
         "label",
         "value",
-        "supporting_item_ids"
+        "supporting_item_ids",
+        "choice_kind"
       ],
-      "title": "QuestionChoice",
+      "title": "NativeQuestionChoice",
+      "type": "object"
+    },
+    "NoCatalogOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "none",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "NoCatalogOperation",
       "type": "object"
     },
     "TechnicalStage": {
@@ -616,8 +609,10 @@
       "properties": {
         "response_mode": {
           "const": "technical",
+          "description": "Ready technical facts need focused external verification.",
           "title": "Response Mode",
-          "type": "string"
+          "type": "string",
+          "x-provider-description": true
         },
         "catalog_operation": {
           "$ref": "#/$defs/CatalogOperation"
@@ -629,7 +624,7 @@
         },
         "questions": {
           "items": {
-            "$ref": "#/$defs/PlannedQuestion"
+            "type": "null"
           },
           "maxItems": 0,
           "title": "Questions",
@@ -674,7 +669,7 @@
           "$ref": "#/$defs/ConversationStage"
         }
       ],
-      "description": "Pending unknowns: clarification. Ready catalog: equipment; external verification: technical. Unfiltered browsing: catalog_overview. App evidence: documents. Non-catalog reply: conversation/information.",
+      "description": "Select the current stage using its response_mode semantics, not the eventual rental operation alone.",
       "title": "Stage",
       "x-provider-description": true
     },

@@ -13,6 +13,7 @@ def encode_references(prompt, document):
         return prompt, document, {}
     if not isinstance(data,dict):
         return prompt, document, {}
+    literal_paths = tuple(data.get('input_literal_paths', ()))
     if 'input_references' in data:
         data = restore_planning_input(data)
     aliases = {}
@@ -56,7 +57,7 @@ def encode_references(prompt, document):
         if isinstance(value,dict): return {key:encode(child) for key,child in value.items()}
         if isinstance(value,list): return [encode(child) for child in value]
         return value
-    packed=compact_planning_input(encode(data))
+    packed=compact_planning_input(encode(data), literal_paths=literal_paths)
     return json.dumps(packed,ensure_ascii=False,separators=(',',':')),encode(document),{v:k for k,v in aliases.items()}
 
 

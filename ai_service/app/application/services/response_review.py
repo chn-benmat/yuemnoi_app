@@ -49,7 +49,9 @@ class ResponseReviewService:
                 for index,child in enumerate(value):collect_paths(child,path+'/'+str(index))
         collect_paths(data,'')
         groups = sorted({path.split('/')[1] for path in fields})
-        projected, draft_references = compact_review_draft(data)
+        # ให้คำถามหลักอ่านได้ตรง ๆ ก่อน alias สำเนาที่ UI/context ใช้ร่วมกัน
+        review_data = {'questions': data['questions'], **data}
+        projected, draft_references = compact_review_draft(review_data, literal_paths=('/questions',))
         if restore_review_draft(projected, draft_references) != data:
             raise GuidanceGenerationError("review_input_projection_invalid")
         request_data = request_evidence(request,self.context_limits)
@@ -65,15 +67,17 @@ class ResponseReviewService:
                     raise PydanticCustomError('review_positive_requires_all_checks', 'An approval must assess all quality checks')
                 if sorted(review.reviewed_surface_groups) != groups:
                     raise PydanticCustomError('review_surface_coverage_incomplete', 'An approval must cover every visible surface group')
+        # ตรวจ pointer ทุกตำแหน่งกับ draft จริงหลัง decode แทน enum ขนาดใหญ่
+        # เพื่อให้อ้างฟิลด์ย่อยได้โดยไม่ทำให้ schema กินงบทั้ง request
         schema = validated_schema(NativeResponseReview, validate)
         with generation_stage("review", excluded_models=writers, recovery_request=recovery_request) as capture:
             review = await self.llm.generate_structured(prompt=json.dumps(compact_planning_input({
                 "request": request_data, "draft": projected, "draft_references": draft_references, 'surface_groups': groups,
-                "issue_path_format": "Paths start at the restored draft root, never /draft. An issue cites an exact original substring, not a paraphrase. Assess actual user purpose and every quality check with specific reasons before deciding verdicts; inspect every string in every surface group.",
+                "issue_path_format": "Assess only the current restored draft. Request history is evidence, never part of the current assistant answer. Paths start at the restored draft root, never /draft. An issue cites an exact original substring, not a paraphrase or text from history. draft.questions is displayed separately from the introduction; assess both and their aliased duplicates. Inspect every string in every surface group against actual user purpose with specific reasons before deciding verdicts.",
                 **({'catalog_summary': catalog_summary} if catalog_summary is not None
                    else {'catalog': catalog_evidence(catalog,draft)}),
                 "approved_articles": articles, "search_evidence": web,
-            }), ensure_ascii=False, separators=(",", ":")), schema=schema,
+            }, literal_paths=('/draft', '/draft_references')), ensure_ascii=False, separators=(",", ":")), schema=schema,
                 system_instruction=self.instruction, temperature=self.temperature)
             review = schema.model_validate(review.model_dump())
             record_diagnostic("review", provider=capture.provenance.provider if capture.provenance else None,

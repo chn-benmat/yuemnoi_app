@@ -402,6 +402,7 @@ class CascadeLLMService(LLMServiceInterface):
         deadline = self._stage_deadline(started, REQUEST_DEADLINE.get())
         capture = CURRENT_GENERATION.get()
         phase = capture.name if capture else REQUEST_PHASE.get()
+        initial_instruction = kwargs.get('system_instruction') or ''
         call_id = uuid4().hex
         recording = GENERATION_RECORDING.get()
         record = None
@@ -554,6 +555,19 @@ class CascadeLLMService(LLMServiceInterface):
                             except LLMProviderException as error:
                                 row.update(status=error.error_code, http_status=error.status_code)
                                 structured_invalid |= error.error_code == 'structured_output_invalid'
+                                if (method == 'generate_structured' and phase == 'planning'
+                                        and error.error_code == 'structured_output_invalid'
+                                        and isinstance(client, ProviderClient)):
+                                    observation = client.observation() or {}
+                                    codes = sorted({entry['type'] for entry in observation.get('validation_errors', [])})
+                                    if codes:
+                                        # ส่งเฉพาะรหัส constraint ที่ระบบตรวจพบ ไม่ส่งค่าผิดหรือข้อความ provider
+                                        # ใช้ failover เดิม และคำนวณ cost จาก instruction ใหม่ก่อนจองครั้งถัดไป
+                                        kwargs = {**kwargs, 'system_instruction': initial_instruction +
+                                            '\nMachine constraint failures from previous attempt: ' + json.dumps(codes) +
+                                            '. Correct these while preserving the request and evidence; no quality check may be relaxed.'}
+                                        if record is not None:
+                                            record['retry_constraint_codes'] = codes
                                 primary_failed |= provider == primary_provider
                                 if error.status_code == 429:
                                     quota_denied = True
