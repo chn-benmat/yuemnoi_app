@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.mark.parametrize('name', ['turn_09a8d063c48d44fea9c6c98dc9622705.json', 'turn_80353fa8e23a43db86380fa70642701d.json', 'turn_397a1c1fac94444f84943559e5f135a7.json'])
 def test_recorded_questionnaire_payload_roundtrips_and_fits(name):
-    from app.infrastructure.llm.gemini_client import GeminiClient
+    from app.infrastructure.llm.groq_client import GroqClient
     from app.core.config import settings
     record = json.loads((ROOT/'evaluation/emulator_detailed_20261005'/name).read_text(encoding='utf-8'))
     generation = record['generation_records'][0]
@@ -19,9 +19,9 @@ def test_recorded_questionnaire_payload_roundtrips_and_fits(name):
     compact = compact_planning_input(original)
     assert restore_planning_input(compact) == original
     assert len(json.dumps(compact,ensure_ascii=False)) < len(json.dumps(original,ensure_ascii=False))
-    client = GeminiClient(api_key='fixture')
-    cost = client.request_cost('generate_structured',settings.GEMINI_PRIMARY_MODEL,dict(prompt=json.dumps(compact,ensure_ascii=False,separators=(',',':')),system_instruction=json.loads((ROOT/'knowledge/interpretation_policy.json').read_text(encoding='utf-8'))['turn_instruction'],schema=NativeTurnPlan))
-    assert cost <= client.profile(settings.GEMINI_PRIMARY_MODEL).quota.tokens_per_window
+    client = GroqClient(api_key='fixture')
+    cost = client.request_cost('generate_structured',settings.GROQ_PRIMARY_MODEL,dict(prompt=json.dumps(compact,ensure_ascii=False,separators=(',',':')),system_instruction=json.loads((ROOT/'knowledge/interpretation_policy.json').read_text(encoding='utf-8'))['turn_instruction'],schema=NativeTurnPlan))
+    assert cost <= client.profile(settings.GROQ_PRIMARY_MODEL).quota.tokens_per_window
 
 def test_native_stage_schema_has_no_ready_stage_prose():
     schema = native_schema(NativeTurnPlan)

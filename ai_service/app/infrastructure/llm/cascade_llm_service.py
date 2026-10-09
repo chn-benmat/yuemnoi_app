@@ -10,7 +10,6 @@ from contextvars import ContextVar
 from app.core.config import settings
 from app.core.exceptions import AllLLMProvidersExhaustedException, LLMProviderException
 from app.domain.interfaces.llm_service import LLMServiceInterface
-from app.infrastructure.llm.gemini_client import GeminiClient
 from app.infrastructure.llm.groq_client import GroqClient
 from app.infrastructure.llm.provider_client import ProviderClient
 from app.infrastructure.llm.quota import PersistentQuotaGovernor
@@ -27,12 +26,11 @@ REQUEST_PHASE = ContextVar("llm_request_phase", default="chat")
 class CascadeLLMService(LLMServiceInterface):
     """A bounded cascade with shared permission, quota and circuit state."""
 
-    def __init__(self, gemini_client=None, groq_client=None, runtime=None, configuration=None):
+    def __init__(self, groq_client=None, runtime=None, configuration=None):
         self.configuration = configuration or settings
         self.runtime = runtime or ValidatedFile(self.configuration.AI_RUNTIME_PATH, RuntimeDocument).read()[0]
-        self._gemini = gemini_client or GeminiClient(runtime=self.runtime, configuration=self.configuration)
         self._groq = groq_client or GroqClient(runtime=self.runtime, configuration=self.configuration)
-        self._clients = {"gemini": self._gemini, "groq": self._groq}
+        self._clients = {"groq": self._groq}
         self._semaphore = asyncio.Semaphore(self.runtime.load.concurrent_requests)
         self._permission_locks = {name: asyncio.Lock() for name in self._clients}
         self._permission_confirmed = set()
@@ -389,7 +387,9 @@ class CascadeLLMService(LLMServiceInterface):
         # คำตอบของหนึ่งคำขอไม่ผ่าน contract ไม่ได้แปลว่าโมเดลล่มสำหรับทุกแชต
         if error.error_code == "structured_output_invalid":
             return
-        if error.status_code in (401, 403):
+        if error.error_code == "model_permission_denied":
+            self._model_open_until[(provider, model)] = time.monotonic() + self.runtime.circuit_open_seconds
+        elif error.status_code in (401, 403):
             self._auth_blocked.add(provider)
         else:
             permanent = error.status_code in (400, 404) and error.error_code != "structured_output_invalid"
@@ -555,7 +555,7 @@ class CascadeLLMService(LLMServiceInterface):
                             except LLMProviderException as error:
                                 row.update(status=error.error_code, http_status=error.status_code)
                                 structured_invalid |= error.error_code == 'structured_output_invalid'
-                                if (method == 'generate_structured' and phase == 'planning'
+                                if (method == 'generate_structured'
                                         and error.error_code == 'structured_output_invalid'
                                         and isinstance(client, ProviderClient)):
                                     observation = client.observation() or {}

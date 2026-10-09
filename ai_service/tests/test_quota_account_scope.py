@@ -20,7 +20,6 @@ from app.domain.entities.catalog_guidance import GuidancePolicy
 from app.domain.entities.response_review import ResponseChecks
 from app.infrastructure.knowledge.file_knowledge_repository import FileKnowledgeRepository
 from app.infrastructure.llm.cascade_llm_service import CascadeLLMService
-from app.infrastructure.llm.gemini_client import GeminiClient
 from app.infrastructure.llm.groq_client import GroqClient
 from app.infrastructure.runtime.execution import RuntimeExecutionGuard
 from test_provider_runtime import RUNTIME
@@ -29,13 +28,11 @@ from test_provider_runtime import RUNTIME
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def configuration(path, gemini_scope=None, groq_scope=None, **changes):
+def configuration(path, groq_scope=None, **changes):
     return Settings(
         _env_file=None,
         AI_QUOTA_LEDGER_PATH=path,
-        GEMINI_API_KEY="fixture-gemini",
         GROQ_API_KEY="fixture-groq",
-        GEMINI_QUOTA_ACCOUNT_ID=gemini_scope,
         GROQ_QUOTA_ACCOUNT_ID=groq_scope,
         **changes,
     )
@@ -45,7 +42,6 @@ def cascade(cfg, http):
     return CascadeLLMService(
         configuration=cfg,
         runtime=RUNTIME,
-        gemini_client=GeminiClient(configuration=cfg, http_client=http, runtime=RUNTIME),
         groq_client=GroqClient(configuration=cfg, http_client=http, runtime=RUNTIME),
     )
 
@@ -73,7 +69,7 @@ def seed_legacy(service):
     return rows
 
 
-@pytest.mark.parametrize("field", ["GEMINI_QUOTA_ACCOUNT_ID", "GROQ_QUOTA_ACCOUNT_ID"])
+@pytest.mark.parametrize("field", ["GROQ_QUOTA_ACCOUNT_ID"])
 @pytest.mark.parametrize("value,expected", [(None, None), ("", None), ("   ", None), (" project-a ", "project-a")])
 def test_scope_settings_are_optional_and_trimmed(tmp_path, field, value, expected):
     cfg = configuration(tmp_path / "ledger.json").model_dump()
@@ -81,38 +77,38 @@ def test_scope_settings_are_optional_and_trimmed(tmp_path, field, value, expecte
     assert getattr(Settings(_env_file=None, **cfg), field) == expected
 
 
-@pytest.mark.parametrize("provider", ["gemini", "groq"])
+@pytest.mark.parametrize("provider", ["groq"])
 @pytest.mark.asyncio
 async def test_new_account_isolated_and_legacy_rows_preserved(tmp_path, provider):
     path = tmp_path / "ledger.json"
     async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(500))) as http:
         old = cascade(configuration(path), http)
         rows = seed_legacy(old)
-        new = cascade(configuration(path, gemini_scope="new-project", groq_scope="new-org"), http)
+        new = cascade(configuration(path, groq_scope="new-org"), http)
         try:
             assert await old.governor.reserve(bucket(old, provider), 2000) is None
             assert await new.governor.reserve(bucket(new, provider), 2000) is not None
             saved = json.loads(path.read_text(encoding="utf-8"))["buckets"]
             assert all(saved[name] == row for name, row in rows.items())
             assert json.loads(bucket(new, provider)) == ["account", provider,
-                "new-project" if provider == "gemini" else "new-org", *json.loads(bucket(old, provider))]
+                "new-org", *json.loads(bucket(old, provider))]
         finally:
             await old.aclose()
             await new.aclose()
 
 
-@pytest.mark.parametrize("provider", ["gemini", "groq"])
+@pytest.mark.parametrize("provider", ["groq"])
 @pytest.mark.asyncio
 async def test_same_account_key_rotation_and_restart_keep_balance(tmp_path, provider):
     path = tmp_path / "ledger.json"
     async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(500))) as http:
-        first = cascade(configuration(path, "project", "org"), http)
+        first = cascade(configuration(path, "org"), http)
         permit = await first.governor.reserve(bucket(first, provider), 5000)
         assert permit is not None
         await first.governor.mark_sent(permit)
         await first.governor.finish(permit, {"http_status": 200, "usage": {"total_tokens": 5000}, "headers": {}})
         await first.aclose()
-        cfg = configuration(path, "project", "org").model_dump()
+        cfg = configuration(path, "org").model_dump()
         cfg[f"{provider.upper()}_API_KEY"] = "rotated-fixture-key"
         restarted = cascade(Settings(_env_file=None, **cfg), http)
         try:
@@ -170,32 +166,30 @@ def test_scoped_balance_is_shared_between_processes(tmp_path):
 
 def native_reply(request, calls):
     payload = json.loads(request.content)
-    if "generateContent" in request.url.path:
-        return httpx.Response(403, json={"error": {"status": "PERMISSION_DENIED", "message": "fixture"}})
     schema = payload.get("response_format", {}).get("json_schema", {}).get("schema", {})
     if "assessments" in schema.get("properties", {}):
         phase = "review"
         result = {"assessments": {name: {"reason": "Simulated assessment of /response.",
             "field_paths": ["/response"], "passed": True} for name in ResponseChecks.model_fields},
             "issues": [], "reviewed_surface_groups": ["response"]}
+        from app.domain.entities.response_review import NativeResponseReview
+        result = NativeResponseReview.model_validate(result).model_dump(mode="json", by_alias=True)
     elif schema:
         phase = "planning"
-        result = {"speaker_register": "informal_ungendered", "overview_available_only": False,
-            "stage": {"response_mode": "conversation", "text": "สวัสดี มีอะไรให้ช่วยบ้าง", "questions": []},
-            "analysis": {"intent": "general_greeting", "catalog_operation": "none",
-                "information_sufficient": True, "missing_slots": [], "next_action": "answer",
-                "request_scope": "not_applicable", "user_goal": "ทักทาย", "additional_goals": [],
-                "known_facts": [], "user_constraints": [], "excluded_items": [], "topic_changed": False,
-                "clarification_declined": False, "reference_resolution": "ไม่มีสิ่งอ้างถึง",
-                "decision_reason": "ไม่มีคำขอข้อมูล", "ambiguity_level": 0.0, "confidence": 1.0,
-                "target_items": [], "categories": [], "budget_max": None, "budget_period": None,
-                "intended_use": None, "needs_external_search": False, "search_query": None},
-            "knowledge_ids": [], "unverified_topic_ids": []}
+        from test_fast_turn import turn
+        from native_turn_fixture import native_fixture
+        from test_request_understanding import understanding
+        social = understanding(intent='general_greeting', catalog_operation='none', request_scope='not_applicable', information_sufficient=True, next_action='answer', missing_slots=[], user_goal='ทักทาย')
+        plan = turn(understanding=social, knowledge_ids=[], response_mode='conversation', message='สวัสดี มีอะไรให้ช่วยบ้าง')
+        value = native_fixture(plan, message='สวัสดี')
+        # Apply native aliases and required defaults exactly as the adapter expects.
+        from app.domain.entities.turn_plan import NativeTurnPlan
+        result = NativeTurnPlan.model_validate(value).model_dump(mode='json', by_alias=True)
     else:
         phase, result = "startup_permission_probe", "fixture"
     calls.append((phase, payload["model"]))
     text = json.dumps(result, ensure_ascii=False) if isinstance(result, dict) else result
-    return httpx.Response(200, json={"choices": [{"message": {"content": text}}], "usage": {"total_tokens": 50}})
+    return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": text}}], "usage": {"total_tokens": 50}})
 
 
 def planner(service):
@@ -215,7 +209,6 @@ async def test_new_account_completes_groq_chat_and_independent_review(tmp_path):
     async with httpx.AsyncClient(transport=httpx.MockTransport(lambda req: native_reply(req, calls))) as http:
         old = cascade(configuration(path), http)
         rows = seed_legacy(old)
-        old._auth_blocked.add("gemini")
         old_planner, guard = planner(old)
         try:
             async with guard.turn():
@@ -226,10 +219,9 @@ async def test_new_account_completes_groq_chat_and_independent_review(tmp_path):
             assert all(row["http_attempts"] == 0 for row in old.telemetry)
         finally:
             await old.aclose()
-        new = cascade(configuration(path, "new-project", "new-org"), http)
+        new = cascade(configuration(path, "new-org"), http)
         try:
             await new.start()
-            assert "gemini" in new._auth_blocked
             calls.clear()
             fast, guard = planner(new)
             async with guard.turn():
@@ -249,9 +241,8 @@ async def test_new_account_completes_groq_chat_and_independent_review(tmp_path):
 async def test_new_account_own_daily_limit_still_blocks_full_chat(tmp_path):
     calls = []
     async with httpx.AsyncClient(transport=httpx.MockTransport(lambda req: native_reply(req, calls))) as http:
-        service = cascade(configuration(tmp_path / "ledger.json", "project", "org"), http)
+        service = cascade(configuration(tmp_path / "ledger.json", "org"), http)
         seed_legacy(service)
-        service._auth_blocked.add("gemini")
         fast, guard = planner(service)
         try:
             async with guard.turn():

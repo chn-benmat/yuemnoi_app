@@ -17,7 +17,8 @@ def test_openapi_endpoint_paths():
 
 
 @pytest.mark.asyncio
-async def test_health_endpoint():
+async def test_health_endpoint(monkeypatch):
+    monkeypatch.setattr(container.item_repository, "get_all_items", AsyncMock(return_value=[]))
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/health")
@@ -25,6 +26,11 @@ async def test_health_endpoint():
         data = resp.json()
         assert data["status"] == "healthy"
         assert "providers" in data
+        assert set(data["dependencies"]) == {"supabase", "tavily", "groq"}
+        assert data["providers"]["groq_primary"] == settings.GROQ_PRIMARY_MODEL
+        assert data["providers"]["groq_review_primary"] == settings.GROQ_FALLBACK_MODEL_1
+        assert data["providers"]["groq_fallback"] == settings.GROQ_FALLBACK_MODEL_2
+        assert {p["id"] for p in data["providers"]["profiles"]} == {"groq-primary", "groq-fallback-1", "groq-fallback-2"}
 
 
 @pytest.mark.asyncio

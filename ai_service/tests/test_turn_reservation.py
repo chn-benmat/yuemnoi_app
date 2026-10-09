@@ -18,19 +18,16 @@ class Result(BaseModel):
 
 
 def stack(tmp_path):
-    gemini, groq = MagicMock(), MagicMock()
-    gemini.generate_structured = AsyncMock(return_value=Result(value='writer'))
-    groq.generate_structured = AsyncMock(return_value=Result(value='reviewer'))
+    groq = MagicMock()
+    groq.generate_structured = AsyncMock(return_value=Result(value='valid'))
     config = settings.model_copy(update={'AI_QUOTA_LEDGER_PATH': tmp_path / 'quota.json',
         'STRUCTURED_MAX_OUTPUT_TOKENS': 20})
-    cascade = CascadeLLMService(gemini, groq, configuration=config, runtime=RUNTIME)
-    # Existing enabled profiles and model identities remain unchanged.
-    return cascade, gemini, groq
+    return CascadeLLMService(groq_client=groq, configuration=config, runtime=RUNTIME), groq
 
 
 @pytest.mark.asyncio
 async def test_review_hold_survives_writing_and_is_shrunk_for_actual_request(tmp_path):
-    cascade, gemini, groq = stack(tmp_path)
+    cascade, groq = stack(tmp_path)
     resources = {'cleanup': []}
     token = TURN_RESOURCES.set(resources)
     try:
@@ -45,7 +42,7 @@ async def test_review_hold_survives_writing_and_is_shrunk_for_actual_request(tmp
         assert (reviewer.provenance.provider, reviewer.provenance.model) == reviewer_identity
         assert hold['permit'].sent and not hold['permit'].pending
         assert hold['permit'].tokens < cascade._profile(*reviewer_identity).quota.tokens_per_window
-        assert gemini.generate_structured.await_count + groq.generate_structured.await_count == 2
+        assert groq.generate_structured.await_count == 2
     finally:
         for cleanup in resources['cleanup']:
             await cleanup()
@@ -55,7 +52,7 @@ async def test_review_hold_survives_writing_and_is_shrunk_for_actual_request(tmp
 
 @pytest.mark.asyncio
 async def test_repair_reserves_a_fresh_independent_review_without_refunding_spent_usage(tmp_path):
-    cascade, gemini, groq = stack(tmp_path)
+    cascade, groq = stack(tmp_path)
     resources = {'cleanup': []}
     token = TURN_RESOURCES.set(resources)
     try:
@@ -74,7 +71,7 @@ async def test_repair_reserves_a_fresh_independent_review_without_refunding_spen
         assert final_reviewer.provenance != repaired_writer.provenance
         charged = [p for b in cascade.governor._buckets.values() for p in b.records if p.sent]
         assert len(charged) == 4 and first_permit in charged
-        assert gemini.generate_structured.await_count + groq.generate_structured.await_count == 4
+        assert groq.generate_structured.await_count == 4
     finally:
         for cleanup in resources['cleanup']:
             await cleanup()
@@ -84,7 +81,7 @@ async def test_repair_reserves_a_fresh_independent_review_without_refunding_spen
 
 @pytest.mark.asyncio
 async def test_repair_pair_quota_denial_calls_no_provider_and_reports_actual_wait(tmp_path):
-    cascade, gemini, groq = stack(tmp_path)
+    cascade, groq = stack(tmp_path)
     resources = {'cleanup': []}
     token = TURN_RESOURCES.set(resources)
     try:
@@ -94,7 +91,6 @@ async def test_repair_pair_quota_denial_calls_no_provider_and_reports_actual_wai
             with pytest.raises(AllLLMProvidersExhaustedException) as caught:
                 await cascade.generate_structured('correct rejected answer',Result)
         assert caught.value.code == 'quota_temporarily_unavailable' and 0 < caught.value.retry_after <= 45
-        gemini.generate_structured.assert_not_awaited()
         groq.generate_structured.assert_not_awaited()
         assert ('review_hold',id(cascade)) not in resources
     finally:
@@ -107,7 +103,7 @@ async def test_repair_pair_quota_denial_calls_no_provider_and_reports_actual_wai
 @pytest.mark.asyncio
 async def test_first_review_wait_is_not_reported_as_daily_quota_for_a_speculative_repair(tmp_path):
     from app.domain.interfaces.generation_stage import GenerationRequest
-    cascade,gemini,groq=stack(tmp_path)
+    cascade,groq=stack(tmp_path)
     identities=[i for i in cascade._get_cascade_tiers() if i[0]=='groq'][:2]
     enabled={cascade._profile(*i).id for i in identities}
     profiles=[p.model_copy(update={'enabled':p.id in enabled,
@@ -142,7 +138,6 @@ async def test_first_review_wait_is_not_reported_as_daily_quota_for_a_speculativ
         assert caught.value.code=='quota_temporarily_unavailable'
         assert caught.value.retry_after==60
         assert groq.generate_structured.await_count==1
-        gemini.generate_structured.assert_not_awaited()
     finally:
         for cleanup in resources['cleanup']:await cleanup()
         TURN_RESOURCES.reset(token)
@@ -152,7 +147,7 @@ async def test_first_review_wait_is_not_reported_as_daily_quota_for_a_speculativ
 @pytest.mark.asyncio
 async def test_first_review_reserves_repair_and_final_review_atomically(tmp_path):
     from app.domain.interfaces.generation_stage import GenerationRequest
-    cascade, gemini, groq = stack(tmp_path)
+    cascade, groq = stack(tmp_path)
     resources = {'cleanup': []}
     token = TURN_RESOURCES.set(resources)
     try:
@@ -171,7 +166,7 @@ async def test_first_review_reserves_repair_and_final_review_atomically(tmp_path
             await cascade.generate_structured('final complete review', Result)
         assert final.provenance != repaired_writer.provenance
         assert recovery_hold['permit'].sent and final_hold['permit'].sent
-        assert gemini.generate_structured.await_count + groq.generate_structured.await_count == 4
+        assert groq.generate_structured.await_count == 4
     finally:
         for cleanup in resources['cleanup']:
             await cleanup()
@@ -182,7 +177,7 @@ async def test_first_review_reserves_repair_and_final_review_atomically(tmp_path
 @pytest.mark.asyncio
 async def test_insufficient_recovery_capacity_allows_review_but_prevents_repair_http_and_keeps_spent_usage(tmp_path):
     from app.domain.interfaces.generation_stage import GenerationRequest
-    cascade,gemini,groq=stack(tmp_path)
+    cascade,groq=stack(tmp_path)
     identities=[i for i in cascade._get_cascade_tiers() if i[0]=='groq'][:2]
     enabled={cascade._profile(*i).id for i in identities}
     profiles=[p.model_copy(update={'enabled':p.id in enabled,
@@ -212,7 +207,6 @@ async def test_insufficient_recovery_capacity_allows_review_but_prevents_repair_
         assert failure.value.code=='quota_temporarily_unavailable'
         assert failure.value.retry_after==60
         assert groq.generate_structured.await_count==2
-        gemini.generate_structured.assert_not_awaited()
         assert not any((key,id(cascade)) in resources for key in ('review_hold','recovery_hold','final_review_hold'))
         charged=[p for b in cascade.governor._buckets.values() for p in b.records]
         assert len(charged)==2 and all(p.sent and p.tokens==50 for p in charged)
@@ -224,7 +218,7 @@ async def test_insufficient_recovery_capacity_allows_review_but_prevents_repair_
 
 @pytest.mark.asyncio
 async def test_evidence_can_atomically_move_review_hold_to_a_different_model(tmp_path):
-    cascade,gemini,groq=stack(tmp_path)
+    cascade,groq=stack(tmp_path)
     resources={'cleanup':[]}
     token=TURN_RESOURCES.set(resources)
     try:
@@ -241,7 +235,7 @@ async def test_evidence_can_atomically_move_review_hold_to_a_different_model(tmp
         with generation_stage('review',excluded_models=[writer.provenance]) as reviewer:
             await cascade.generate_structured('complete draft',Result)
         assert reviewer.provenance!=writer.provenance
-        assert gemini.generate_structured.await_count+groq.generate_structured.await_count==3
+        assert groq.generate_structured.await_count==3
     finally:
         for cleanup in resources['cleanup']:await cleanup()
         TURN_RESOURCES.reset(token)
@@ -250,26 +244,32 @@ async def test_evidence_can_atomically_move_review_hold_to_a_different_model(tmp
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('blocked_before_http', [False, True])
-async def test_gemini_rate_limit_automatically_uses_two_distinct_groq_models(tmp_path, blocked_before_http):
-    cascade, gemini, groq = stack(tmp_path)
-    gemini_identity = next(identity for identity in cascade._get_cascade_tiers() if identity[0] == 'gemini')
-    bucket = cascade._quota_bucket(cascade._profile(*gemini_identity), *gemini_identity)
+async def test_two_available_models_need_an_independent_reviewer_when_one_is_rate_limited(tmp_path, blocked_before_http):
+    cascade, groq = stack(tmp_path)
+    cascade.runtime = cascade.runtime.model_copy(update={'providers': tuple(p.model_copy(update={
+        'enabled': p.id != 'groq-fallback-2',
+        'disabled_reason': 'preview_disabled' if p.id == 'groq-fallback-2' else None})
+        for p in cascade.runtime.providers)})
+    primary = cascade._get_cascade_tiers()[0]
+    bucket = cascade._quota_bucket(cascade._profile(*primary), *primary)
     if blocked_before_http:
-        await cascade.governor.cooldown(bucket, cascade.runtime.quota_backoff_seconds)
+        await cascade.governor.cooldown(bucket, 45)
     else:
-        gemini.generate_structured.side_effect = LLMProviderException(*gemini_identity,
-            'queued', status_code=429, retry_after=cascade.runtime.quota_backoff_seconds)
+        async def generate(*, model, **kwargs):
+            if model == primary[1]:
+                raise LLMProviderException(*primary, 'queued', status_code=429, retry_after=45)
+            return Result(value='fallback')
+        groq.generate_structured.side_effect = generate
     resources = {'cleanup': []}
     token = TURN_RESOURCES.set(resources)
     try:
-        with generation_stage('planning') as writer:
-            await cascade.generate_structured('request', Result)
-        with generation_stage('review', excluded_models=[writer.provenance]) as review:
-            await cascade.generate_structured('complete rendered draft', Result)
-        assert writer.provenance.provider == review.provenance.provider == 'groq'
-        assert writer.provenance.model != review.provenance.model
-        assert gemini.generate_structured.await_count == (0 if blocked_before_http else 1)
-        assert groq.generate_structured.await_count == 2
+        with generation_stage('planning'):
+            with pytest.raises(AllLLMProvidersExhaustedException) as failed:
+                await cascade.generate_structured('request', Result)
+        assert failed.value.code == ('quota_temporarily_unavailable' if blocked_before_http else 'providers_rate_limited')
+        assert 0 < failed.value.retry_after <= 45
+        assert groq.generate_structured.await_count == (0 if blocked_before_http else 1)
+        assert ('review_hold', id(cascade)) not in resources
     finally:
         for cleanup in resources['cleanup']:
             await cleanup()
@@ -279,10 +279,7 @@ async def test_gemini_rate_limit_automatically_uses_two_distinct_groq_models(tmp
 
 @pytest.mark.asyncio
 async def test_quota_notice_is_not_used_when_groq_fails_validation_with_capacity_left(tmp_path):
-    cascade, gemini, groq = stack(tmp_path)
-    gemini_identity = next(identity for identity in cascade._get_cascade_tiers() if identity[0] == 'gemini')
-    bucket = cascade._quota_bucket(cascade._profile(*gemini_identity), *gemini_identity)
-    await cascade.governor.cooldown(bucket, cascade.runtime.quota_backoff_seconds)
+    cascade, groq = stack(tmp_path)
     groq.generate_structured.side_effect = LLMProviderException('groq', 'test model',
         'invalid structured output', status_code=400, error_code='structured_output_invalid')
     resources = {'cleanup': []}
@@ -293,7 +290,6 @@ async def test_quota_notice_is_not_used_when_groq_fails_validation_with_capacity
                 await cascade.generate_structured('request', Result)
         assert caught.value.code == 'structured_output_invalid'
         assert caught.value.retry_after is None
-        gemini.generate_structured.assert_not_awaited()
         assert groq.generate_structured.await_count == 1 + cascade.runtime.max_failovers_per_logical_call
     finally:
         for cleanup in resources['cleanup']:
@@ -304,7 +300,7 @@ async def test_quota_notice_is_not_used_when_groq_fails_validation_with_capacity
 
 @pytest.mark.asyncio
 async def test_quota_failure_checks_enabled_groq_paths_before_notifying(tmp_path):
-    cascade, gemini, groq = stack(tmp_path)
+    cascade, groq = stack(tmp_path)
     for provider, model in cascade._get_cascade_tiers():
         bucket = cascade._quota_bucket(cascade._profile(provider, model), provider, model)
         await cascade.governor.cooldown(bucket, cascade.runtime.quota_backoff_seconds)
@@ -318,7 +314,6 @@ async def test_quota_failure_checks_enabled_groq_paths_before_notifying(tmp_path
         assert checked == set(cascade._get_cascade_tiers())
         assert caught.value.code == 'quota_temporarily_unavailable'
         assert caught.value.retry_after > 0
-        gemini.generate_structured.assert_not_awaited()
         groq.generate_structured.assert_not_awaited()
     finally:
         for cleanup in resources['cleanup']:
@@ -329,7 +324,7 @@ async def test_quota_failure_checks_enabled_groq_paths_before_notifying(tmp_path
 
 @pytest.mark.asyncio
 async def test_no_independent_review_capacity_prevents_wasting_writer_http(tmp_path):
-    cascade, gemini, groq = stack(tmp_path)
+    cascade, groq = stack(tmp_path)
     cascade._review_candidates = lambda _: []
     token = TURN_RESOURCES.set({'cleanup': []})
     from app.core.exceptions import AllLLMProvidersExhaustedException
@@ -337,7 +332,6 @@ async def test_no_independent_review_capacity_prevents_wasting_writer_http(tmp_p
         with generation_stage('planning', downstream=('review',)):
             with pytest.raises(AllLLMProvidersExhaustedException):
                 await cascade.generate_structured('request', Result)
-        gemini.generate_structured.assert_not_awaited()
         groq.generate_structured.assert_not_awaited()
         assert all(row['http_attempts'] == 0 for row in cascade.telemetry)
     finally:
@@ -347,7 +341,7 @@ async def test_no_independent_review_capacity_prevents_wasting_writer_http(tmp_p
 
 @pytest.mark.asyncio
 async def test_cancellation_releases_only_unsent_review_capacity(tmp_path):
-    cascade, _, _ = stack(tmp_path)
+    cascade, _ = stack(tmp_path)
     resources = {'cleanup': []}
     token = TURN_RESOURCES.set(resources)
     try:
@@ -366,8 +360,9 @@ async def test_cancellation_releases_only_unsent_review_capacity(tmp_path):
 
 @pytest.mark.asyncio
 async def test_failed_writer_releases_review_hold_for_fallback(tmp_path):
-    cascade, gemini, groq = stack(tmp_path)
-    ordered = cascade._get_cascade_tiers()
+    cascade, groq = stack(tmp_path)
+    with generation_stage('planning'):
+        ordered = cascade._get_cascade_tiers()
     first, fallback = ordered[:2]
     calls = []
 
@@ -378,7 +373,6 @@ async def test_failed_writer_releases_review_hold_for_fallback(tmp_path):
                 status_code=400, error_code='structured_output_invalid')
         return Result(value='fallback')
 
-    gemini.generate_structured.side_effect = generate
     groq.generate_structured.side_effect = generate
     resources = {'cleanup': []}
     token = TURN_RESOURCES.set(resources)
@@ -401,7 +395,7 @@ async def test_failed_writer_releases_review_hold_for_fallback(tmp_path):
 
 @pytest.mark.asyncio
 async def test_failed_writer_retry_uses_daily_pair_capacity_not_held_minute(tmp_path):
-    cascade, gemini, groq = stack(tmp_path)
+    cascade, groq = stack(tmp_path)
     identities = cascade._get_cascade_tiers()[:2]
     enabled = {cascade._profile(*identity).id for identity in identities}
     providers = []
@@ -446,7 +440,7 @@ async def test_failed_writer_retry_uses_daily_pair_capacity_not_held_minute(tmp_
 
 @pytest.mark.asyncio
 async def test_temporary_rate_limit_recovers_after_reported_quota_wait(tmp_path):
-    cascade, gemini, groq = stack(tmp_path)
+    cascade, groq = stack(tmp_path)
     identities = cascade._get_cascade_tiers()[:2]
     enabled = {cascade._profile(*identity).id for identity in identities}
     cascade.runtime = cascade.runtime.model_copy(update={'providers': [
@@ -468,13 +462,12 @@ async def test_temporary_rate_limit_recovers_after_reported_quota_wait(tmp_path)
             with pytest.raises(AllLLMProvidersExhaustedException) as caught:
                 await cascade.generate_structured('request', Result)
         assert caught.value.retry_after > 0
-        assert gemini.generate_structured.await_count + groq.generate_structured.await_count <= 2
+        assert groq.generate_structured.await_count <= 2
         clock[0] += caught.value.retry_after
         for cleanup in resources['cleanup']:
             await cleanup()
         resources.clear()
         resources['cleanup'] = []
-        gemini.generate_structured.side_effect = None
         groq.generate_structured.side_effect = None
         with generation_stage('planning') as writer:
             await cascade.generate_structured('request', Result)

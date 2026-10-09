@@ -73,7 +73,8 @@ class ResponseReviewService:
         with generation_stage("review", excluded_models=writers, recovery_request=recovery_request) as capture:
             review = await self.llm.generate_structured(prompt=json.dumps(compact_planning_input({
                 "request": request_data, "draft": projected, "draft_references": draft_references, 'surface_groups': groups,
-                "issue_path_format": "Assess only the current restored draft. Request history is evidence, never part of the current assistant answer. Paths start at the restored draft root, never /draft. An issue cites an exact original substring, not a paraphrase or text from history. draft.questions is displayed separately from the introduction; assess both and their aliased duplicates. Inspect every string in every surface group against actual user purpose with specific reasons before deciding verdicts.",
+                "assessment_field_paths": sorted('/' + name for name in VISIBLE_TEXT_SURFACES if name in data),
+                "issue_path_format": "Assess only the current restored draft. Request history is evidence, never part of the current assistant answer. Assessment field_paths select applicable surfaces from assessment_field_paths. Issue field_path names the exact original string within a surface. Paths start at the restored draft root, never /draft. An issue cites an exact original substring, not a paraphrase or text from history. draft.questions is displayed separately from the introduction; assess both and their aliased duplicates. Inspect every string in every surface group against actual user purpose with specific reasons before deciding verdicts.",
                 **({'catalog_summary': catalog_summary} if catalog_summary is not None
                    else {'catalog': catalog_evidence(catalog,draft)}),
                 "approved_articles": articles, "search_evidence": web,

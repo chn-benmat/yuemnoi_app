@@ -8,7 +8,7 @@ from app.application.services.response_review import ResponseReviewService
 from app.application.services.review_input import restore_planning_input
 from app.domain.entities.item import Item
 from app.domain.interfaces.generation_stage import CURRENT_GENERATION, Provenance
-from app.infrastructure.llm.gemini_client import GeminiClient
+from app.infrastructure.llm.groq_client import GroqClient
 from app.infrastructure.runtime.documents import ValidatedFile
 from app.infrastructure.runtime.schema import RuntimeDocument
 from app.core.config import settings
@@ -17,13 +17,11 @@ from app.core.config import settings
 @pytest.mark.asyncio
 async def test_actual_three_question_review_fits_unchanged_bucket_capacity():
     root = Path(__file__).resolve().parents[1]
-    record = json.loads((root / 'evaluation/conversation_diagnostic_20261004_v14/'
-        'role_input_captures/captured_roles_01/captures.json').read_text(encoding='utf-8'))
-    payload = next(json.loads(c['generation']['prompt']) for c in record['captures']
-        if c['generation']['phase'] == 'review' and len(json.loads(c['generation']['prompt'])['draft']['questions']) == 3)
-    inventory = json.loads((root / 'evaluation/conversation_diagnostic_20261004_v14/inventory.json').read_text(encoding='utf-8'))
+    payload = json.loads((root / 'tests/fixtures/review_questionnaire.json').read_text(encoding='utf-8'))
+    payload.update(approved_articles=[], search_evidence=[])
+    inventory = {'items': []}
     runtime = ValidatedFile(settings.AI_RUNTIME_PATH, RuntimeDocument).read()[0]
-    client = GeminiClient(api_key='fixture', runtime=runtime)
+    client = GroqClient(api_key='fixture', runtime=runtime)
     profile = next(p for p in runtime.providers if p.enabled and p.protocol == client.protocol)
     model = getattr(settings, profile.model_setting)
     class CostOnlyReview:

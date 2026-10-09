@@ -103,10 +103,10 @@ class QuotaPolicy(Strict):
 
 class ProviderProfile(Strict):
     id: str = Field(min_length=1)
-    protocol: Literal["groq_json_schema", "gemini_json_schema"]
+    protocol: Literal["groq_json_schema"]
     endpoint: HttpUrl
-    key_setting: Literal["GROQ_API_KEY", "GEMINI_API_KEY"]
-    model_setting: Literal["GEMINI_PRIMARY_MODEL", "GEMINI_FALLBACK_MODEL_1", "GEMINI_FALLBACK_MODEL_2", "GROQ_PRIMARY_MODEL", "GROQ_FALLBACK_MODEL_1", "GROQ_FALLBACK_MODEL_2"]
+    key_setting: Literal["GROQ_API_KEY"]
+    model_setting: Literal["GROQ_PRIMARY_MODEL", "GROQ_FALLBACK_MODEL_1", "GROQ_FALLBACK_MODEL_2"]
     proposed_model: str = Field(min_length=1)
     reasoning_effort: Literal["none", "low", "medium", "high"] | None
     enabled: bool
@@ -118,8 +118,7 @@ class ProviderProfile(Strict):
         u = self.endpoint
         if u.scheme != "https" or u.username or u.password or u.query or u.fragment:
             raise ValueError("Unsafe provider endpoint")
-        provider = "GROQ" if self.protocol == "groq_json_schema" else "GEMINI"
-        if self.key_setting != provider + "_API_KEY" or not self.model_setting.startswith(provider + "_"):
+        if not self.model_setting.startswith("GROQ_"):
             raise ValueError("Provider setting mismatch")
         if not self.enabled and not self.disabled_reason:
             raise ValueError("Disabled provider needs an operational reason")

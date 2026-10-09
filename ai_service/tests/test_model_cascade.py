@@ -1,53 +1,47 @@
+import json
+
+import httpx
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+
 from app.core.config import settings
-from app.core.exceptions import AllLLMProvidersExhaustedException, LLMProviderException
+from app.core.exceptions import AllLLMProvidersExhaustedException
 from app.infrastructure.llm.cascade_llm_service import CascadeLLMService
+from app.infrastructure.llm.groq_client import GroqClient
+from test_provider_runtime import RUNTIME, envelope
 
 
 @pytest.mark.asyncio
-async def test_cascade_falls_back_to_other_provider_when_primary_rate_limited(monkeypatch):
-    """One failed attempt uses one eligible fallback, without repeating the quota bucket."""
-    mock_gemini = MagicMock()
-    mock_groq = MagicMock()
-
-    # Make all Gemini calls fail with 429 Quota Exceeded
-    mock_gemini.generate_text = AsyncMock(
-        side_effect=LLMProviderException("Gemini", "gemini-3.5-flash-lite", "Quota exceeded", status_code=429)
-    )
-
-    # Make Groq succeed on primary model
-    mock_groq.generate_text = AsyncMock(return_value="คำตอบจาก Groq สำรองค่ะ")
-
-    config = settings.model_copy(update={"GROQ_PRIMARY_MODEL": "fixture-backup"})
-    cascade = CascadeLLMService(gemini_client=mock_gemini, groq_client=mock_groq, configuration=config)
-    monkeypatch.setattr(cascade, "_get_cascade_tiers", lambda: [("gemini", "fixture-primary"), ("groq", "fixture-backup")])
-    result = await cascade.generate_text(prompt="สวัสดีค่ะ")
-
-    assert result == "คำตอบจาก Groq สำรองค่ะ"
-    assert mock_gemini.generate_text.call_count == 1
-    assert mock_groq.generate_text.call_count == 1
+async def test_cascade_falls_back_to_other_model_when_primary_rate_limited():
+    calls = []
+    def respond(request):
+        model = json.loads(request.content)['model']
+        calls.append(model)
+        if model == settings.GROQ_PRIMARY_MODEL:
+            return httpx.Response(429, headers={'retry-after': '45'}, json={'error': {'code': 'rate_limit_exceeded'}})
+        return httpx.Response(200, json=envelope('คำตอบจาก Groq สำรอง'))
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
+        cascade = CascadeLLMService(runtime=RUNTIME,
+            groq_client=GroqClient(api_key='fixture', runtime=RUNTIME, http_client=http))
+        try:
+            assert await cascade.generate_text(prompt='สวัสดี') == 'คำตอบจาก Groq สำรอง'
+            assert calls == list(settings.groq_models[:2])
+        finally:
+            await cascade.aclose()
 
 
 @pytest.mark.asyncio
-async def test_cascade_raises_exhausted_after_bounded_failed_attempts(monkeypatch):
-    """The failover bound does not expand to every configured model."""
-    mock_gemini = MagicMock()
-    mock_groq = MagicMock()
-
-    mock_gemini.generate_text = AsyncMock(
-        side_effect=LLMProviderException("Gemini", "gemini", "Service down", status_code=503)
-    )
-    mock_groq.generate_text = AsyncMock(
-        side_effect=LLMProviderException("Groq", "groq", "Rate limited", status_code=429)
-    )
-
-    config = settings.model_copy(update={"GROQ_PRIMARY_MODEL": "fixture-backup", "GROQ_FALLBACK_MODEL_1": "fixture-extra"})
-    cascade = CascadeLLMService(gemini_client=mock_gemini, groq_client=mock_groq, configuration=config)
-    monkeypatch.setattr(cascade, "_get_cascade_tiers", lambda: [("gemini", "fixture-primary"), ("groq", "fixture-backup"), ("groq", "fixture-extra")])
-
-    with pytest.raises(AllLLMProvidersExhaustedException):
-        await cascade.generate_text(prompt="ทดสอบ")
-
-    assert mock_gemini.generate_text.call_count == 1
-    assert mock_groq.generate_text.call_count == 1
+async def test_cascade_raises_exhausted_after_bounded_failed_attempts():
+    calls = []
+    def respond(request):
+        calls.append(json.loads(request.content)['model'])
+        return httpx.Response(503, json={'error': {'code': 'unavailable'}})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
+        cascade = CascadeLLMService(runtime=RUNTIME,
+            groq_client=GroqClient(api_key='fixture', runtime=RUNTIME, http_client=http))
+        try:
+            with pytest.raises(AllLLMProvidersExhaustedException):
+                await cascade.generate_text(prompt='ทดสอบ')
+            assert calls == list(settings.groq_models[:2])
+            assert len(calls) == 1 + cascade.runtime.max_failovers_per_logical_call
+        finally:
+            await cascade.aclose()

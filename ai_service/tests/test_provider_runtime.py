@@ -16,7 +16,6 @@ from pydantic import BaseModel, ConfigDict
 from app.core.config import Settings, settings
 from app.core.exceptions import AllLLMProvidersExhaustedException, LLMProviderException, RuntimeConfigurationException
 from app.infrastructure.llm.cascade_llm_service import CascadeLLMService
-from app.infrastructure.llm.gemini_client import GeminiClient
 from app.infrastructure.llm.groq_client import GroqClient
 from app.infrastructure.llm.quota import QuotaGovernor, duration_seconds, retry_after_seconds
 from app.infrastructure.runtime.audit import effective_settings
@@ -200,17 +199,11 @@ def runtime(**http_changes):
 
 
 def envelope(text='{"value":"valid"}', **usage):
-    return {"choices": [{"message": {"content": text}}], "usage": {"total_tokens": 50, **usage}}
+    return {"choices": [{"finish_reason": "stop", "message": {"content": text}}], "usage": {"total_tokens": 50, **usage}}
 
 
 def stack(handler, cfg=None):
     cfg = cfg or RUNTIME
-    # ชุดนี้ทดสอบโควตา Groq โดยแยกจาก provider อื่นและ credentials จริง
-    data = cfg.model_dump(mode="json")
-    for profile in data["providers"]:
-        if profile["protocol"] == "gemini_json_schema":
-            profile.update(enabled=False, disabled_reason="isolated_groq_unit_fixture")
-    cfg = signed(data)
     transport = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     client = GroqClient(api_key="fixture-secret", http_client=transport, runtime=cfg)
     return CascadeLLMService(groq_client=client, runtime=cfg), transport
@@ -253,28 +246,22 @@ async def test_native_number_field_does_not_accept_a_json_string_through_coercio
 
 @pytest.mark.asyncio
 async def test_startup_permission_probe_prevents_cold_provider_blocking_five_chats():
-    counts = {"gemini": 0, "groq": 0}
+    calls = []
     async def respond(request):
-        payload = json.loads(request.content)
-        provider = "gemini" if "contents" in payload else "groq"
-        counts[provider] += 1
-        await asyncio.sleep(.25 if counts[provider] == 1 else .01)
-        if provider == "gemini":
-            return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": '{"value":"valid"}'}]}}], "usageMetadata": {"totalTokenCount": 50}})
+        calls.append(json.loads(request.content)['model'])
+        await asyncio.sleep(.25 if len(calls) == 1 else .01)
         return httpx.Response(200, json=envelope())
-    transport = httpx.AsyncClient(transport=httpx.MockTransport(respond))
-    service = CascadeLLMService(gemini_client=GeminiClient(api_key="fixture", http_client=transport),
-                               groq_client=GroqClient(api_key="fixture", http_client=transport))
-    # This assertion isolates a cold HTTP permission probe, not Windows disk
-    # scheduling. Persistent ledger restart/concurrency is covered separately.
-    service.governor = QuotaGovernor([state.policy for state in service.governor._buckets.values()])
-    try:
-        await service.start()
-        results = await asyncio.wait_for(asyncio.gather(*(service.generate_structured("fixture", SmallResult) for _ in range(5))), .15)
-        assert all(r.value == "valid" for r in results)
-    finally:
-        await service.aclose()
-        await transport.aclose()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as transport:
+        service = CascadeLLMService(groq_client=GroqClient(api_key='fixture', http_client=transport))
+        service.governor = QuotaGovernor([state.policy for state in service.governor._buckets.values()])
+        try:
+            await service.start()
+            results = await asyncio.wait_for(asyncio.gather(*(
+                service.generate_structured('fixture', SmallResult) for _ in range(5))), .3)
+            assert all(r.value == 'valid' for r in results)
+            assert len(calls) == 6
+        finally:
+            await service.aclose()
 
 
 @pytest.mark.asyncio
@@ -297,19 +284,22 @@ async def test_primary_token_limit_does_not_block_independent_backup_model():
 async def test_model_aliases_share_one_admission_balance():
     called = []
     def respond(request):
-        called.append(json.loads(request.content)["model"])
-        return httpx.Response(200, json=envelope(total_tokens=7500 if len(called) == 1 else 50))
-    cfg = settings.model_copy(update={"GROQ_FALLBACK_MODEL_1": settings.GROQ_PRIMARY_MODEL})
-    transport = httpx.AsyncClient(transport=httpx.MockTransport(respond))
-    client = GroqClient(api_key="fixture", http_client=transport, runtime=RUNTIME, configuration=cfg)
-    service = CascadeLLMService(gemini_client=GeminiClient(api_key="", runtime=RUNTIME, configuration=cfg),
-                               groq_client=client, runtime=RUNTIME, configuration=cfg)
-    try:
-        await service.generate_structured("fixture", SmallResult)
-        await service.generate_structured("fixture", SmallResult)
-        assert called == [cfg.GROQ_PRIMARY_MODEL, cfg.GROQ_FALLBACK_MODEL_2]
-    finally:
-        await transport.aclose()
+        called.append(json.loads(request.content)['model'])
+        return httpx.Response(200, json=envelope(total_tokens=7500))
+    cfg = settings.model_copy(update={'GROQ_FALLBACK_MODEL_1': settings.GROQ_PRIMARY_MODEL,
+        'GROQ_FALLBACK_MODEL_2': settings.GROQ_PRIMARY_MODEL})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as transport:
+        client = GroqClient(api_key='fixture', http_client=transport, runtime=RUNTIME, configuration=cfg)
+        service = CascadeLLMService(groq_client=client, runtime=RUNTIME, configuration=cfg)
+        try:
+            await service.generate_structured('fixture', SmallResult)
+            with pytest.raises(AllLLMProvidersExhaustedException) as failure:
+                await service.generate_structured('fixture', SmallResult)
+            assert failure.value.code == 'quota_temporarily_unavailable'
+            assert called == [cfg.GROQ_PRIMARY_MODEL]
+            assert len(service.governor._buckets) == 1
+        finally:
+            await service.aclose()
 
 
 @pytest.mark.asyncio
@@ -542,7 +532,7 @@ async def test_first_wave_permission_denied_does_not_repeat_for_every_chat():
 
 
 @pytest.mark.asyncio
-async def test_disabled_gemini_gets_no_http_request():
+async def test_all_generation_requests_use_groq_endpoint():
     called = []
     def respond(request):
         called.append(str(request.url))
@@ -709,11 +699,11 @@ async def test_owned_transport_is_reused_and_closed(monkeypatch):
         created.append(client)
         return client
     monkeypatch.setattr(httpx, "AsyncClient", create)
-    service = CascadeLLMService(gemini_client=GeminiClient(api_key=""), groq_client=GroqClient(api_key="fixture"))
+    service = CascadeLLMService(groq_client=GroqClient(api_key="fixture"))
     await service.start()
     for _ in range(3):
         await service.generate_structured("input", SmallResult)
-    assert len(created) == 2  # One owned pool for each configured provider.
+    assert len(created) == 1  # One shared Groq pool for both models.
     await service.aclose()
     assert all(client.is_closed for client in created)
 

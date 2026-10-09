@@ -112,16 +112,13 @@ def test_prompts_never_include_expected_labels_or_rationales():
     assert all(set(a) == {"id", "title", "status"} for a in data["knowledge_index"])
 
 
-def test_native_schema_payload_and_safe_gemini_auth():
-    _, _, payload = request_for(PROFILE, "fixture-model", "secret", "instruction", "input", 100, .1)
+def test_native_schema_payload_and_safe_groq_auth():
+    url, headers, payload = request_for(PROFILE, "fixture-model", "secret", "instruction", "input", 100, .1)
+    assert "secret" not in url
+    assert headers["Authorization"] == "Bearer secret"
     assert payload["response_format"]["type"] == "json_schema"
     assert payload["response_format"]["json_schema"]["strict"] is True
-    assert payload["reasoning_effort"] == "none"
-    gemini = next(p for p in RUNTIME.providers if p.protocol == "gemini_json_schema")
-    url, headers, payload = request_for(gemini, "fixture-model", "secret", "instruction", "input", 100, .1)
-    assert "secret" not in url
-    assert headers["x-goog-api-key"] == "secret"
-    assert "responseJsonSchema" in payload["generationConfig"]
+    assert payload["reasoning_effort"] == PROFILE.reasoning_effort
 
 
 def test_unknown_article_and_invalid_provenance_rejected():

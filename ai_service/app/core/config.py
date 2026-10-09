@@ -36,14 +36,12 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = Field(default="", description="Supabase project URL")
     SUPABASE_KEY: str = Field(default="", description="Supabase service role or anon key")
     TAVILY_API_KEY: str = Field(default="", description="Tavily search API key")
-    GEMINI_API_KEY: str = Field(default="", description="Google Gemini API key")
     GROQ_API_KEY: str = Field(default="", description="Groq API key")
     # ใช้รหัสขอบเขตโควตาคงที่ของบัญชี ไม่เปลี่ยนตามการหมุน API key
-    GEMINI_QUOTA_ACCOUNT_ID: Optional[str] = Field(default=None, description="Stable Gemini project quota identity")
     GROQ_QUOTA_ACCOUNT_ID: Optional[str] = Field(default=None, description="Stable Groq organization quota identity")
     INTERNAL_SERVICE_KEY: str = Field(default="", description="Shared internal key for backend-to-ai auth")
 
-    @field_validator("GEMINI_QUOTA_ACCOUNT_ID", "GROQ_QUOTA_ACCOUNT_ID", mode="before")
+    @field_validator("GROQ_QUOTA_ACCOUNT_ID", mode="before")
     @classmethod
     def empty_quota_account_is_legacy(cls, value):
         if isinstance(value, str):
@@ -84,23 +82,10 @@ class Settings(BaseSettings):
             return stripped if stripped else None
         return value
 
-    # Gemini Cascade: Primary -> Fallback 1 -> Fallback 2
-    GEMINI_PRIMARY_MODEL: str
-    GEMINI_FALLBACK_MODEL_1: str
-    GEMINI_FALLBACK_MODEL_2: str
-
-    # Groq Cascade: Primary -> Fallback 1 -> Fallback 2
+    # Groq model profiles support generation, independent review and failover.
     GROQ_PRIMARY_MODEL: str
     GROQ_FALLBACK_MODEL_1: str
     GROQ_FALLBACK_MODEL_2: str
-
-    @property
-    def gemini_models(self) -> Tuple[str, ...]:
-        return (
-            self.GEMINI_PRIMARY_MODEL,
-            self.GEMINI_FALLBACK_MODEL_1,
-            self.GEMINI_FALLBACK_MODEL_2,
-        )
 
     @property
     def groq_models(self) -> Tuple[str, ...]:

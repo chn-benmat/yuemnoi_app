@@ -15,7 +15,7 @@ class Result(BaseModel):value:str
 @pytest.mark.parametrize('opt_in',[False,True])
 async def test_invalid_native_value_is_preserved_only_in_evaluation(opt_in):
     async def respond(request):
-        return httpx.Response(200,json={'choices':[{'message':{'content':'{"value":27}'}}]})
+        return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{"value":27}'}}]})
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond))as http:
         client=GroqClient(api_key='fixture-private-header',http_client=http)
         records=[{'phase':'review','logical_call_id':'fixture'}]

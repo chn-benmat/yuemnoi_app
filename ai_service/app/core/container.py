@@ -8,7 +8,6 @@ from app.core.config import settings
 from app.domain.entities.catalog_guidance import GuidancePolicy
 from app.infrastructure.cache.memory_cache_service import MemoryCacheService
 from app.infrastructure.llm.cascade_llm_service import CascadeLLMService
-from app.infrastructure.llm.gemini_client import GeminiClient
 from app.infrastructure.llm.groq_client import GroqClient
 from app.infrastructure.knowledge.file_knowledge_repository import FileKnowledgeRepository
 from app.infrastructure.search.tavily_client import TavilyClient
@@ -26,10 +25,8 @@ class Container:
         self.item_repository = SupabaseRepository(cache_service=self.cache_service, runtime=self.execution_guard.runtime)
         self.knowledge_repository = FileKnowledgeRepository(settings.APP_KNOWLEDGE_PATH)
         self.search_service = TavilyClient()
-        self.gemini_client = GeminiClient()
         self.groq_client = GroqClient()
         self.llm_service = CascadeLLMService(
-            gemini_client=self.gemini_client,
             groq_client=self.groq_client,
         )
 

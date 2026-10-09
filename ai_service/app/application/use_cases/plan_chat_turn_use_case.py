@@ -465,7 +465,12 @@ class PlanChatTurnUseCase:
             if projected_mode and reply.answer != draft.response:
                 raise PydanticCustomError("repair_authoritative_projection_changed", "Approved document and inventory projections remain authoritative")
 
-        fields = {"questions": (list[PlannedQuestion] if plan.questions else list[None], Field(min_length=1 if plan.questions else 0,
+        question_type = PlannedQuestion
+        if plan.questions:
+            # ส่งรหัสข้อมูลที่ยังขาดใน schema เพื่อไม่ให้ขั้นแก้ข้อความเปลี่ยนรหัสที่ใช้ต่อบทสนทนา
+            question_type = create_model("PendingRepairQuestion", __base__=PlannedQuestion,
+                dimension=(Literal[tuple(plan.understanding.missing_slots)], ...))
+        fields = {"questions": (list[question_type] if plan.questions else list[None], Field(min_length=1 if plan.questions else 0,
                     max_length=self._policy.max_questions if plan.questions else 0))}
         if evidence_mode:
             fields.update({key:(evidence_schema.model_fields[key].annotation,evidence_schema.model_fields[key])

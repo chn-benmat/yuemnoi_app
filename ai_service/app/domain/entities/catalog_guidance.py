@@ -14,8 +14,8 @@ class GuidanceModel(BaseModel):
 
 class QuestionChoice(GuidanceModel):
     id: str = Field(min_length=1)
-    label: str = Field(min_length=1, description="Complete answer. Budget maximum: closed ceiling with billing period or explicitly unlimited; never a lower bound.", json_schema_extra={'x-provider-description': True})
-    value: str = Field(min_length=1, description="Exact label meaning, including ceiling/absence of ceiling and billing period. Preserve distinctions between choices.", json_schema_extra={'x-provider-description': True})
+    label: str = Field(min_length=1, description="Complete answer. Spending maximum: ceiling with billing period or explicitly unlimited, never a lower bound.", json_schema_extra={'x-provider-description': True})
+    value: str = Field(min_length=1, description="Same full meaning as label: ceiling/absence and billing period. Keep choices distinct.", json_schema_extra={'x-provider-description': True})
     supporting_item_ids: List[str]
 
 

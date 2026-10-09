@@ -23,7 +23,7 @@
 
 ## ✨ ส่วนนี้ทำอะไร
 
-Python service ของ **Yuemnoi** ใช้ FastAPI เป็น API ให้ Go Backend เรียก ค้นข้อมูลอุปกรณ์จาก Supabase สร้างคำตอบผ่าน Gemini / Groq และใช้ Tavily เมื่อ flow ต้องการหลักฐานทางเทคนิคจากภายนอก
+Python service ของ **Yuemnoi** ใช้ FastAPI เป็น API ให้ Go Backend เรียก ค้นข้อมูลอุปกรณ์จาก Supabase สร้างคำตอบผ่าน Groq และใช้ Tavily เมื่อ flow ต้องการหลักฐานทางเทคนิคจากภายนอก
 
 | ความสามารถ         | สิ่งที่ service ทำ                                                 |
 | ------------------ | ------------------------------------------------------------------ |
@@ -35,7 +35,7 @@ Python service ของ **Yuemnoi** ใช้ FastAPI เป็น API ให�
 | ✅ Response review | ให้ actual model คนละตัวตรวจคำตอบก่อนเผยแพร่                       |
 | ⚡ JSON / SSE      | ส่งผลที่ผ่านการตรวจเป็น JSON หรือ SSE พร้อมการ์ดและ references     |
 
-Service ใช้ **Cloud APIs** ไม่มี local model / Ollama / GPU เป็น dependency ของการติดตั้ง และใช้ HTTPX adapters โดยตรง จึงไม่ต้องติดตั้ง SDK ของ Gemini, Groq, Tavily หรือ Supabase เพิ่มนอก requirements
+Service ใช้ **Cloud APIs** ไม่มี local model / Ollama / GPU เป็น dependency ของการติดตั้ง และใช้ HTTPX adapters โดยตรง จึงไม่ต้องติดตั้ง SDK ของ Groq, Tavily หรือ Supabase เพิ่มนอก requirements
 
 ### คำตอบเดินทางอย่างไร
 
@@ -82,7 +82,7 @@ SSE ส่งคำตอบฉบับครบใน event `ready` แล้�
 
 - Git และ Python **3.12** พร้อม `venv` / pip ดู [Python venv guide](https://docs.python.org/3.12/library/venv.html)
 - Supabase project และ credential ที่อ่าน catalog ผ่าน PostgREST ได้
-- API keys ของ [Gemini](https://ai.google.dev/gemini-api/docs/api-key) และ [Groq](https://console.groq.com/docs/quickstart) สำหรับ profiles ที่เปิดใช้
+- API key ของ [Groq](https://console.groq.com/docs/quickstart) พร้อมสิทธิ์ใช้ GPT-OSS 120B และ 20B สำหรับสร้างและตรวจคำตอบด้วยคนละโมเดล
 - [Tavily API key](https://docs.tavily.com/documentation/quickstart) เมื่อต้องค้นหลักฐานภายนอก
 - อินเทอร์เน็ตออกไปยัง APIs และพื้นที่เขียน state / lock files ของ service
 - Go Backend สำหรับ flow จากแอป; สามารถตรวจ AI API โดยตรงระหว่างพัฒนาได้
@@ -113,7 +113,6 @@ CACHE_TTL_SECONDS=300
 
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=replace-with-server-catalog-access-key
-GEMINI_API_KEY=replace-with-gemini-api-key
 GROQ_API_KEY=replace-with-groq-api-key
 TAVILY_API_KEY=replace-with-tavily-api-key
 INTERNAL_SERVICE_KEY=replace-with-shared-internal-key-at-least-32-chars
@@ -123,7 +122,6 @@ INTERNAL_SERVICE_KEY=replace-with-shared-internal-key-at-least-32-chars
 | ---------------------- | -------------------- | --------------------------------------------------------------------- |
 | `SUPABASE_URL`         | ว่าง                 | อ่าน catalog; project base URL                                        |
 | `SUPABASE_KEY`         | ว่าง                 | อ่าน `item_tb` ผ่าน PostgREST; ต้องมีสิทธิ์ตรงกับ integration         |
-| `GEMINI_API_KEY`       | ว่าง                 | ใช้ Gemini profiles ที่เปิดไว้                                        |
 | `GROQ_API_KEY`         | ว่าง                 | ใช้ Groq profiles ที่เปิดไว้                                          |
 | `TAVILY_API_KEY`       | ว่าง                 | ค้นข้อมูลเทคนิค; หากไม่ตั้งจะไม่มี search sources จาก adapter         |
 | `INTERNAL_SERVICE_KEY` | ว่าง                 | ถ้าตั้ง จะบังคับ header บน chat routes; ต้องตรงกับ Go                 |
@@ -143,19 +141,17 @@ INTERNAL_SERVICE_KEY=replace-with-shared-internal-key-at-least-32-chars
 | `APP_KNOWLEDGE_PATH`         | `knowledge/app_knowledge.json` ใต้ service root         | JSON เติมค่าให้; explicit relative path อิง working directory  |
 | `INTERPRETATION_POLICY_PATH` | `knowledge/interpretation_policy.json` ใต้ service root | JSON เติมค่าให้                                                |
 | `AI_QUOTA_LEDGER_PATH`       | `.state/llm_quota.json` ใต้ service root                | ต้องเขียนได้; ทุก process บน host เดียวกันควรใช้ path เดียวกัน |
-| `GEMINI_QUOTA_ACCOUNT_ID`    | ว่าง: ใช้ bucket เดิม                                  | รหัสคงที่ของขอบเขต Google Cloud project สำหรับโควต้า Gemini |
 | `GROQ_QUOTA_ACCOUNT_ID`      | ว่าง: ใช้ bucket เดิม                                  | รหัสคงที่ของขอบเขต Groq organization สำหรับโควต้า Groq     |
 
-เมื่อย้ายไป **project / organization ใหม่ที่มีขอบเขตโควต้าแยกจากเดิม** ให้ตั้งรหัสใหม่ใน `.env` เช่น `GEMINI_QUOTA_ACCOUNT_ID=gemini-project-20261006` และ `GROQ_QUOTA_ACCOUNT_ID=groq-org-20261006` แล้ว restart AI service ทุก process รหัสนี้เป็นชื่อที่ผู้ดูแลกำหนด ไม่ใช่ API key และทุก process ที่ใช้บัญชีเดียวกันต้องตั้งตรงกัน
+เมื่อย้ายไป **organization ใหม่ที่มีขอบเขตโควต้าแยกจากเดิม** ให้ตั้งรหัสใหม่ใน `.env` เช่น `GROQ_QUOTA_ACCOUNT_ID=groq-org-20261006` แล้ว restart AI service ทุก process รหัสนี้เป็นชื่อที่ผู้ดูแลกำหนด ไม่ใช่ API key และทุก process ที่ใช้บัญชีเดียวกันต้องตั้งตรงกัน
 
 คงรหัสเดิมเมื่อเปลี่ยน API key ภายใน project / organization เดิม เพราะการหมุน key ไม่ได้สร้างโควต้าใหม่ อย่าใช้ hash ของ key เป็นรหัสบัญชี หรือกำหนดรหัสใหม่ให้บัญชีเดิมเพื่อเริ่มยอดใหม่ หากบัญชีเดิมยังใช้ bucket legacy ให้คงค่าว่างไว้จนมีการย้ายยอดอย่างถูกต้อง
 
 Bucket ของบัญชีใหม่มี account scope นำหน้าตัวตน provider / model เดิม; ledger version 1 เก็บยอด legacy และบัญชีอื่นไว้ทั้งหมด ไม่มีการล้างยอดเดิม การสร้างคำตอบและการตรวจโดย actual model อีกตัวยังคงใช้โควต้าของ API คำขอเล็กที่ได้ HTTP 200 หรือ health ว่า configured จึงยังไม่ยืนยันว่ามีโควต้าพอสำหรับแชตทั้งรอบ
 
-Runtime ปัจจุบันตั้ง `quota.authority = "provider"` ทั้ง Gemini และ Groq ค่าตัวเลข `requests_per_window`, `tokens_per_window`, `requests_per_day`, `tokens_per_day` ใช้เฉพาะโหมด `configured` สำหรับระบบที่เลือกเพดานภายในเอง ในโหมด provider จะไม่เอาประวัติ token ในเครื่องไปสรุปว่า API หมดโควต้ารายวัน และไม่ลดเพดานที่ API รายงานให้เหลือเท่าค่าเดิมในไฟล์
+Runtime ปัจจุบันตั้ง `quota.authority = "provider"` สำหรับ Groq ค่าตัวเลข `requests_per_window`, `tokens_per_window`, `requests_per_day`, `tokens_per_day` ใช้เฉพาะโหมด `configured` สำหรับระบบที่เลือกเพดานภายในเอง ในโหมด provider จะไม่เอาประวัติ token ในเครื่องไปสรุปว่า API หมดโควต้ารายวัน และไม่ลดเพดานที่ API รายงานให้เหลือเท่าค่าเดิมในไฟล์
 
 - Groq: `x-ratelimit-limit/remaining/reset-tokens` เป็น TPM ส่วน `...-requests` เป็น RPD ตาม [เอกสาร rate limits](https://console.groq.com/docs/rate-limits) เก็บ snapshot ล่าสุดและหักการจองกับ HTTP ที่กำลังทำงาน; header เหล่านี้ไม่ได้บอกยอด token รายวันคงเหลือ จึงถือว่า TPD ยังไม่ทราบและใช้ HTTP 429 ของ API เป็นหลัก
-- Gemini: ใช้ HTTP 429 และเวลาจาก `Retry-After` หรือ typed `google.rpc.RetryInfo.retryDelay` ใน error details เมื่อมีข้อมูล; ไม่สร้างยอดคงเหลือจากเพดานที่เราตั้งเอง [เพดานจริงขึ้นกับ project/model](https://ai.google.dev/gemini-api/docs/rate-limits) ปัญหาสิทธิ์ 401/403 ยังสลับไป Groq ตามเดิม
 - หาก API ไม่บอกเวลารอ จะไม่ส่งเวลารอสมมติไปหน้าแชต; `quota_backoff_seconds` ยังใช้ชะลอการเรียกซ้ำภายในเมื่อเจอ 429 ประวัติใน ledger เป็นสถิติของเครื่องนี้ ไม่ใช่ตัวนับการใช้ทั้งหมดของบัญชี API
 - การเปลี่ยนจาก configured เป็น provider รักษา usage, reservation IDs, account/model identities และ cooldown เดิม รีเฟรชเฉพาะ cache เพดาน/ยอด/เวลา reset ที่อัลกอริทึมเดิมเคยปรับด้วยค่าภายใน ทุก process ต้อง restart ให้ใช้ runtime เดียวกัน
 - Snapshot ที่ไม่มีเวลา reset ไม่ถูกใช้บล็อกคำขอในอนาคตถาวร; เรียก API เพื่อยืนยันใหม่หลังพ้น cooldown และการจองจาก process ที่หยุดไปจะไม่กัน capacity เกินเส้นตายของคำขอ โดยยังเก็บ record ไว้
@@ -188,12 +184,9 @@ Runtime ปัจจุบันตั้ง `quota.authority = "provider"` ท�
 Model setting names ที่ env override ได้:
 
 ```dotenv
-GEMINI_PRIMARY_MODEL=gemini-3.5-flash-lite
-GEMINI_FALLBACK_MODEL_1=gemini-3.1-flash-lite
-GEMINI_FALLBACK_MODEL_2=gemini-flash-lite-latest
-GROQ_PRIMARY_MODEL=qwen/qwen3.8-27b
-GROQ_FALLBACK_MODEL_1=openai/gpt-oss-120b
-GROQ_FALLBACK_MODEL_2=openai/gpt-oss-20b
+GROQ_PRIMARY_MODEL=openai/gpt-oss-120b
+GROQ_FALLBACK_MODEL_1=openai/gpt-oss-20b
+GROQ_FALLBACK_MODEL_2=qwen/qwen3.8-27b
 ```
 
 นี่คือ **ค่าที่ repository ตั้งไว้** ไม่ใช่รายการรับรอง model availability การ override ชื่อ model ไม่ได้เปิด profile ที่ runtime ปิดไว้ และอาจทำให้ assumptions ของการประเมินเดิมเปลี่ยน
@@ -330,7 +323,7 @@ curl http://localhost:8000/api/chat \
 | [chat_client_runtime.json](config/chat_client_runtime.json)        | History / transport / response-ready configuration ร่วมของ Flutter และ Go       |
 | [config/schemas](config/schemas/)                                  | JSON schemas ของ contracts                                                      |
 
-Runtime ใช้ version `2026-10-07-schema-recovery-reservation` ส่วน interpretation policy ใช้ `2026-10-07-schema-recovery-reservation-concise-recommendations-product-field-list-adaptive-questionnaire` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
+Runtime ใช้ version `2026-10-08-groq-only` ส่วน interpretation policy ใช้ `2026-10-07-schema-recovery-reservation-concise-recommendations-product-field-list-adaptive-questionnaire` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
 
 คำขอภายในใช้ `input_tables`, `input_references` และ `input_dictionary` ลดข้อมูลซ้ำแบบคืนต้นฉบับได้ Groq ใช้รหัสอ้างอิงสั้นเฉพาะคำขอ แล้วแปลงกลับก่อนตรวจ provenance คำขอ retry และ DTO หน้าแชตเก็บ IDs และคำตอบเดิม Context ละค่าเริ่มต้นที่ว่างหรือไม่ทราบ
 
@@ -348,12 +341,27 @@ Native stage ใช้ `response_mode` เป็นตัวแยกประ�
 
 | Profile           | Model ที่ตั้งไว้           | เปิดใช้งาน |
 | ----------------- | -------------------------- | ---------- |
-| Gemini primary    | `gemini-3.5-flash-lite`    | เปิด       |
-| Gemini fallback 1 | `gemini-3.1-flash-lite`    | ปิด        |
-| Gemini fallback 2 | `gemini-flash-lite-latest` | ปิด        |
-| Groq primary      | `qwen/qwen3.8-27b`         | เปิด       |
-| Groq fallback 1   | `openai/gpt-oss-120b`      | เปิด       |
-| Groq fallback 2   | `openai/gpt-oss-20b`       | เปิด       |
+| Groq primary      | `openai/gpt-oss-120b`     | เปิด       |
+| Groq fallback 1   | `openai/gpt-oss-20b`      | เปิด       |
+| Groq fallback 2   | `qwen/qwen3.8-27b`       | เปิด เป็นตัวสำรอง Preview ที่ผู้ใช้อนุมัติ |
+
+Planning / evidence / repair เรียง GPT-OSS 120B → Qwen 3.8 → GPT-OSS 20B ส่วน review เรียง GPT-OSS 20B → Qwen 3.8 → GPT-OSS 120B และตัดโมเดลผู้เขียน draft ปัจจุบันออกเสมอ รอบปกติจึงใช้คู่ 120B / 20B; Qwen รับหน้าที่สำรองเมื่อคู่หลักตัวหนึ่งไม่พร้อม เมื่อเหลือโมเดลเดียวที่ใช้งานได้จะคืน structured error เพราะไม่มีผู้ตรวจอิสระ แต่ละ logical call ยังคงลอง HTTP ได้สูงสุดสองครั้ง และข้าม profile ที่ถูกปิดหรือพักไว้ได้
+
+Groq 403 ที่ระบุ `model_permission_blocked_org` หรือ `model_permission_blocked_project` จะพักเฉพาะโมเดลนั้นตาม `circuit_open_seconds` และลองรุ่นอื่น ส่วน 401 / 403 ที่ไม่ระบุว่าเป็นสิทธิ์เฉพาะโมเดลยังระงับ provider ตามเดิม ดู [model permissions](https://console.groq.com/docs/model-permissions)
+
+GPT-OSS ทั้งสองเป็น Production; Qwen 3.8 เป็น Preview ที่ผู้ใช้อนุมัติให้ทดสอบและใช้สำรอง และอาจถูกยุติบริการโดยแจ้งล่วงหน้าสั้น ๆ ตาม [Groq models](https://console.groq.com/docs/models) ทั้งสามรองรับ [strict structured output](https://console.groq.com/docs/structured-outputs) แต่ schema ที่ถูกต้องไม่รับรองข้อเท็จจริง คำตอบ SSE ส่งหลัง validate และ review ครบแล้ว ผู้ตรวจได้รับรายการ JSON pointers ของ surface ที่มีจริงใน draft และยังตรวจ exact paths / quoted spans ทุกครั้ง
+
+ก่อนส่งต่อ structured output จะตรวจว่า Groq จบคำตอบด้วย `finish_reason: stop` และไม่มี refusal หรือ tool call จากนั้นอ่าน JSON โดยปฏิเสธ keys ซ้ำ, `NaN`, `Infinity` และตัวเลขที่เกินช่วง float ตรวจ JSON ต้นฉบับด้วย [jsonschema](https://python-jsonschema.readthedocs.io/en/stable/validate/) ตาม native schema ทุกระดับ รวมถึง union / `$ref`, required keys และค่าขอบเขต ก่อนตรวจ Pydantic แบบ strict และ semantic validators จึงไม่ยอมให้ default หรือการละ extra fields ของ Pydantic กลบข้อมูลที่ผิดสัญญา
+
+ผลที่ไม่ผ่านใช้ failover เดิมภายใน budgets เดิม โดยส่งเฉพาะรหัสข้อผิดพลาดให้โมเดลสำรอง เมื่อหมดทางเลือก `/api/chat` คืน HTTP 503 พร้อม `detail.error_code: structured_output_invalid` และ SSE คืน `event: error` พร้อมรหัสเดียวกัน โดยไม่ส่ง draft ที่ไม่ผ่าน การตรวจนี้รับรองเฉพาะการยอมรับผลตาม schema และ validators ที่กำหนด ไม่รับรองว่าทุกคำขอจะสำเร็จหรือข้อเท็จจริงจะถูกต้อง 100%; ไม่มี retry จาก library เพิ่มซ้อนกับ cascade
+
+ทดสอบขอบเขต structured output แบบ offline ได้ด้วย `.\.venv\Scripts\python.exe -m pytest tests/test_structured_output_boundary.py tests/test_provider_runtime.py tests/test_structured_failover_feedback.py -q` ครอบคลุม JSON ที่ถูกตัด, refusal, non-finite numbers, union / default fields, reference handles, domain validators และ error JSON / SSE
+
+Groq ใช้แผนที่บัญชีเลือกไว้; ผู้ใช้อนุมัติ Developer Plan และงบรายเดือน USD 5 ใน Console ค่าใช้จ่ายคิดตามการใช้งานทุกโมเดลร่วมกัน การตั้งงบต้องทำที่ [Billing → Limits](https://console.groq.com/settings/billing/limits) และยอดอัปเดตอาจช้า 10–15 นาทีตาม [Spend Limits](https://console.groq.com/docs/spend-limits) จึงไม่ใช่เพดานค่าใช้จ่ายที่แอปนี้รับประกันได้
+
+การทดสอบจริงวันที่ 2026-10-08 ใช้ข้อมูลคลังจริงและ ledger เดิม: หลังพบและปรับข้อมูล pointer สำหรับผู้ตรวจ แชตดูสินค้าผ่านด้วย Qwen planning / review, GPT-OSS 120B evidence / repair และ fresh independent review ใน 11.151 วินาที การทดสอบก่อนหน้านั้นพบ JSON validation failure ในแบบสอบถามและ unknown assessment path ใน review; เก็บหลักฐานใน `.state/groq_third_model_smoke.json` การผ่านหนึ่งกรณียังไม่รับรองคุณภาพแบบสอบถาม ภาษาไทยทุกกรณี หรือ p95
+
+การอ่านคำตอบสุดท้ายด้วยตนเองยังพบข้อความจาก knowledge ที่ไม่เกี่ยวกับคำถามและข้อความสำหรับผู้เขียนเอกสาร แม้ผู้ตรวจโมเดลอนุมัติแล้ว จึงถือว่าทดสอบการเชื่อมต่อและ contract ผ่านเฉพาะกรณีนี้ แต่คุณภาพเชิงความหมายยังต้องปรับและทดสอบเพิ่มเติม แบบสอบถามที่ล้มเหลวยังไม่ได้ยืนยันซ้ำหลังแก้ pointer
 
 รายการนี้อ้างอิง JSON ใน checkout; ไม่ได้ยืนยันสิทธิ์หรือความพร้อมของผู้ให้บริการ ณ เวลาที่ติดตั้ง รายละเอียดเหตุผลการปิดอยู่ใน `disabled_reason` ลำดับ model ยังมีสถานะ `pending_development_measurement` และไม่มี measurement artifact ใน runtime
 

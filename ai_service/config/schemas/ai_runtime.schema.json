@@ -262,10 +262,7 @@
           "type": "string"
         },
         "protocol": {
-          "enum": [
-            "groq_json_schema",
-            "gemini_json_schema"
-          ],
+          "const": "groq_json_schema",
           "title": "Protocol",
           "type": "string"
         },
@@ -277,18 +274,12 @@
           "type": "string"
         },
         "key_setting": {
-          "enum": [
-            "GROQ_API_KEY",
-            "GEMINI_API_KEY"
-          ],
+          "const": "GROQ_API_KEY",
           "title": "Key Setting",
           "type": "string"
         },
         "model_setting": {
           "enum": [
-            "GEMINI_PRIMARY_MODEL",
-            "GEMINI_FALLBACK_MODEL_1",
-            "GEMINI_FALLBACK_MODEL_2",
             "GROQ_PRIMARY_MODEL",
             "GROQ_FALLBACK_MODEL_1",
             "GROQ_FALLBACK_MODEL_2"
