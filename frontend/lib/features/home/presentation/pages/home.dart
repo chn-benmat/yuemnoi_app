@@ -123,6 +123,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
         if (authState is LoginSuccess || authState is GoogleLoginSuccess) {
           context.read<ChatListBloc>().add(const LoadChatListStarted());
           _checkNotifications();
+          if (mounted) setState(() {});
         }
       },
       child: Scaffold(

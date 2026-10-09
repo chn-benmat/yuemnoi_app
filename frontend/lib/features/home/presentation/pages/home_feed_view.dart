@@ -121,12 +121,10 @@ class _HomeFeedViewState extends State<HomeFeedView> {
 
   Widget _buildLoadedContent(HomeLoaded state) {
     final displayedItems = _getDisplayedItems(state);
-    const curveDepth = 48.0;
-    const controlDeckHeight = 168.0;
 
     return Column(
       children: [
-        // ── 1. Top Search Bar (PINNED / ตรึงอยู่กับที่ ไม่เลื่อนตาม) ──
+        // ── 1. Top Control Deck: Search Bar + แถบ navbar ของอุปกรณ์ประเภทต่างๆ (PINNED / ตรึงอยู่กับที่ ไม่เลื่อนตาม และไม่ถูกดึงลงเมื่อรีเฟรช) ──
         ListenableBuilder(
           listenable: _scrollController,
           builder: (context, _) {
@@ -136,6 +134,10 @@ class _HomeFeedViewState extends State<HomeFeedView> {
             return Container(
               decoration: BoxDecoration(
                 color: AppColors.primaryColor,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(22),
+                  bottomRight: Radius.circular(22),
+                ),
                 boxShadow: isScrolled
                     ? [
                         BoxShadow(
@@ -144,137 +146,130 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                           offset: const Offset(0, 3),
                         ),
                       ]
-                    : null,
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
               ),
               child: SafeArea(
                 bottom: false,
-                child: _buildSearchAndFilterSection(state),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildSearchAndFilterSection(state),
+                    _buildCategoryNavbarSection(state),
+                    const SizedBox(height: 10),
+                  ],
+                ),
               ),
             );
           },
         ),
 
-        // ── 2. Scrollable Content Layer (Category Chips เลื่อนตาม + Item List) ──
+        // ── 2. Scrollable Product Feed Layer (Pull to Refresh) ──
         Expanded(
-          child: Stack(
-            children: [
-              // พื้นหลัง Control Deck สีม่วงหลัก พร้อมส่วนโค้งลงแบบครึ่งวงกลม (ตรงโค้งมนเป็นสีม่วงหลัก ไม่ทำสีอ่อน)
-              ListenableBuilder(
-                listenable: _scrollController,
-                builder: (context, _) {
-                  double scrollOffset = 0.0;
-                  if (_scrollController.hasClients) {
-                    scrollOffset = _scrollController.offset
-                        .clamp(0.0, controlDeckHeight);
-                  }
-
-                  return Positioned(
-                    top: -scrollOffset,
-                    left: 0,
-                    right: 0,
-                    height: controlDeckHeight,
-                    child: const CustomPaint(
-                      painter: SemicircleControlDeckPainter(
-                        color: AppColors.primaryColor, // ตรงโค้งมนเป็นสีม่วงหลักตามปกติ ไม่ทำสีอ่อน
-                        curveDepth: curveDepth,
-                      ),
-                    ),
-                  );
-                },
+          child: RefreshIndicator(
+            color: AppColors.primaryColor,
+            backgroundColor: Colors.white,
+            onRefresh: () async {
+              context.read<HomeBloc>().add(const RefreshHomeFeedRequested());
+              await Future<void>.delayed(const Duration(milliseconds: 400));
+            },
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
               ),
-
-              // Scroll View: Category Chips (แถบพาเนลสีอ่อน) + Product Grid
-              RefreshIndicator(
-                color: AppColors.primaryColor,
-                backgroundColor: Colors.white,
-                onRefresh: () async {
-                  context.read<HomeBloc>().add(const RefreshHomeFeedRequested());
-                  await Future<void>.delayed(const Duration(milliseconds: 400));
-                },
-                child: CustomScrollView(
-                  controller: _scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  slivers: [
-                    // แถวหมวดหมู่สินค้า: สีม่วงอ่อนสว่างชัดเจน (Light Purple) เฉพาะแถวนี้
-                    SliverToBoxAdapter(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Color(0xFFBA77FF), // สีม่วงอ่อนสว่าง
-                              Color(0xFFC78FFF), // สีม่วงพาสเทลอ่อนละมุน
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.50),
-                            width: 1.0,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        padding: const EdgeInsets.symmetric(vertical: 5),
-                        child: CategoryFilterChips(
-                          categories: state.categories,
-                          selectedCategoryId: state.selectedCategoryId,
-                          onCategorySelected: (categoryId) async {
-                            if (categoryId == 'all') {
-                              _applyFilter(
-                                categoryId: 'all',
-                                minPrice: state.minPrice,
-                                maxPrice: state.maxPrice,
-                                minRating: state.minRating,
-                              );
-                              return;
-                            }
-
-                            await AppRoutes.openSearch(
-                              context,
-                              initialCategoryId: categoryId,
-                              curatedItems: _getDisplayedItems(state),
-                              categories: state.categories,
-                              minPrice: state.minPrice,
-                              maxPrice: state.maxPrice,
-                              minRating: state.minRating,
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-
-                    // ระยะห่างก่อนถึงการ์ดสินค้า
-                    const SliverToBoxAdapter(
-                      child: SizedBox(height: 10),
-                    ),
-
-                    // รายการสินค้า (อยู่ด้านหน้าสีพื้นหลังโค้งที่เลยลงมา)
-                    _buildProductGridSliver(displayedItems, state.searchQuery),
-
-                    // ระยะห่างด้านล่างสำหรับ FloatingActionButton & Bottom Navigation Bar
-                    const SliverToBoxAdapter(
-                      child: SizedBox(height: 110),
-                    ),
-                  ],
+              slivers: [
+                // ระยะห่างก่อนถึงการ์ดสินค้า
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 10),
                 ),
-              ),
-            ],
+
+                // รายการสินค้า
+                _buildProductGridSliver(displayedItems, state.searchQuery),
+
+                // ระยะห่างด้านล่างสำหรับ FloatingActionButton & Bottom Navigation Bar
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 110),
+                ),
+              ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  /// แถบ navbar ของอุปกรณ์ประเภทต่างๆ (Category Filter Chips) ตรึงอยู่กับที่ใน Top Control Deck
+  Widget _buildCategoryNavbarSection(HomeLoaded state) {
+    return Container(
+      margin: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFBA77FF), // สีม่วงอ่อนสว่าง
+            Color(0xFFC78FFF), // สีม่วงพาสเทลอ่อนละมุน
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.50),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: CategoryFilterChips(
+        categories: state.categories,
+        selectedCategoryId: state.selectedCategoryId,
+        onCategorySelected: (categoryId) async {
+          if (categoryId == 'all') {
+            _applyFilter(
+              categoryId: 'all',
+              minPrice: state.minPrice,
+              maxPrice: state.maxPrice,
+              minRating: state.minRating,
+            );
+            return;
+          }
+
+          final label =
+              CategoryFilterChips.getCategoryLabel(categoryId);
+          await AppRoutes.openSearch(
+            context,
+            initialQuery: label,
+            curatedItems: _getDisplayedItems(state),
+            categories: state.categories,
+          );
+          if (mounted &&
+              (state.selectedCategoryId != 'all' ||
+                  _searchController.text.isNotEmpty)) {
+            _searchController.clear();
+            _applyFilter(
+              categoryId: 'all',
+              minPrice: state.minPrice,
+              maxPrice: state.maxPrice,
+              minRating: state.minRating,
+            );
+          }
+        },
+      ),
     );
   }
 
