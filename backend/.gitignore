@@ -22,20 +22,19 @@ credentials.json
 *.dll
 *.so
 *.dylib
-# ระบุ binary ที่โฟลเดอร์หลัก เพื่อไม่ให้ซ่อนซอร์สใน cmd/server/
+# ระบุ binary เฉพาะที่โฟลเดอร์หลัก เพื่อไม่ให้ซ่อนไฟล์ซอร์ส
 /main
 /server
 /bin/
 /build/
 /dist/
 
-# Air Live Reload & Logs
+# Temporary Files & Logs
 tmp/
 /temp/
 /logs/
 /uploads/
 *.log
-build-errors.log
 
 # Go Testing & Coverage
 coverage.out

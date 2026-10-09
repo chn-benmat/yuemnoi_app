@@ -1,52 +1,39 @@
 package ports
 
 import (
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
+	"golang.org/x/time/rate"
 )
 
 type rateLimiterEntry struct {
-	tokens     float64
-	lastRefill time.Time
+	limiter  *rate.Limiter
+	lastSeen time.Time
 }
 
 // RateLimiter อิมพลีเมนต์ Token Bucket In-Memory ป้องกันการยิงสแปม/Brute-force
 type RateLimiter struct {
 	mu          sync.Mutex
-	rate        float64 // tokens per second
-	capacity    float64 // max burst
+	rate        rate.Limit
+	capacity    int
 	entries     map[string]*rateLimiterEntry
-	cleanupTick time.Duration
+	nextCleanup time.Time
 }
 
 // NewRateLimiter สร้าง RateLimiter ด้วยอัตราการสร้าง Token และขนาดบัคเก็ตสูงสุด
-func NewRateLimiter(rate float64, capacity float64) *RateLimiter {
+func NewRateLimiter(tokensPerSecond float64, capacity float64) *RateLimiter {
 	rl := &RateLimiter{
-		rate:        rate,
-		capacity:    capacity,
+		rate:        rate.Limit(tokensPerSecond),
+		capacity:    int(capacity),
 		entries:     make(map[string]*rateLimiterEntry),
-		cleanupTick: 5 * time.Minute,
+		nextCleanup: time.Now().Add(5 * time.Minute),
 	}
-	go rl.cleanupLoop()
 	return rl
-}
-
-func (rl *RateLimiter) cleanupLoop() {
-	ticker := time.NewTicker(rl.cleanupTick)
-	defer ticker.Stop()
-	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for k, v := range rl.entries {
-			if now.Sub(v.lastRefill) > 10*time.Minute {
-				delete(rl.entries, k)
-			}
-		}
-		rl.mu.Unlock()
-	}
 }
 
 // Allow ตรวจสอบว่าคำขอสำหรับ key ที่ระบุ (เช่น Client IP) ได้รับอนุญาตหรือไม่
@@ -55,42 +42,39 @@ func (rl *RateLimiter) Allow(key string) bool {
 	defer rl.mu.Unlock()
 
 	now := time.Now()
+	// กวาด IP ที่ไม่ได้ใช้งานเมื่อมีคำขอใหม่ จึงไม่มี goroutine ค้างหลังปิด app
+	if !now.Before(rl.nextCleanup) {
+		for key, entry := range rl.entries {
+			if now.Sub(entry.lastSeen) > 10*time.Minute {
+				delete(rl.entries, key)
+			}
+		}
+		rl.nextCleanup = now.Add(5 * time.Minute)
+	}
 	entry, exists := rl.entries[key]
 	if !exists {
-		rl.entries[key] = &rateLimiterEntry{
-			tokens:     rl.capacity - 1,
-			lastRefill: now,
-		}
-		return true
+		entry = &rateLimiterEntry{limiter: rate.NewLimiter(rl.rate, rl.capacity)}
+		rl.entries[key] = entry
 	}
-
-	// เติม Token ตามเวลาที่ผ่านไป
-	elapsed := now.Sub(entry.lastRefill).Seconds()
-	entry.tokens += elapsed * rl.rate
-	if entry.tokens > rl.capacity {
-		entry.tokens = rl.capacity
-	}
-	entry.lastRefill = now
-
-	if entry.tokens >= 1.0 {
-		entry.tokens -= 1.0
-		return true
-	}
-
-	return false
+	entry.lastSeen = now
+	return entry.limiter.AllowN(now, 1)
 }
 
-// RateLimitMiddleware สร้าง Gin Middleware สำหรับจำกัดจำนวนคำขอตาม IP Address
-func RateLimitMiddleware(limiter *RateLimiter, errorMessage string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		clientIP := c.ClientIP()
+// RateLimitMiddleware สร้าง Fiber middleware สำหรับจำกัดจำนวนคำขอตาม IP Address
+func RateLimitMiddleware(limiter *RateLimiter, errorMessage string) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		clientIP := c.IP()
+		if c.IsProxyTrusted() && c.Get(fiber.HeaderXForwardedFor) == "" {
+			if realIP := strings.TrimSpace(c.Get("X-Real-IP")); net.ParseIP(realIP) != nil {
+				clientIP = realIP
+			}
+		}
 		if !limiter.Allow(clientIP) {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+			return c.Status(http.StatusTooManyRequests).JSON(fiber.Map{
 				"status": http.StatusTooManyRequests,
 				"error":  errorMessage,
 			})
-			return
 		}
-		c.Next()
+		return c.Next()
 	}
 }

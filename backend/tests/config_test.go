@@ -11,7 +11,7 @@ import (
 
 func TestConfigLoadSuccessWithDefaults(t *testing.T) {
 	t.Setenv("PORT", "")
-	t.Setenv("GIN_MODE", "")
+	t.Setenv("APP_ENV", "")
 	t.Setenv("SUPABASE_URL", "https://test.supabase.co")
 	t.Setenv("SUPABASE_SERVICE_ROLE_KEY", "test-service-key")
 	t.Setenv("APP_SECRET_KEY", "test-secret")
@@ -21,7 +21,7 @@ func TestConfigLoadSuccessWithDefaults(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	assert.Equal(t, "8080", cfg.Port)
-	assert.Equal(t, "debug", cfg.GinMode)
+	assert.Equal(t, "debug", cfg.Mode)
 	assert.Equal(t, "https://test.supabase.co", cfg.SupabaseURL)
 	assert.Equal(t, "test-service-key", cfg.SupabaseServiceRoleKey)
 	assert.Equal(t, "test-secret", cfg.AppSecretKey)
@@ -32,7 +32,7 @@ func TestConfigLoadSuccessWithDefaults(t *testing.T) {
 
 func TestConfigLoadCustomValues(t *testing.T) {
 	t.Setenv("PORT", "3000")
-	t.Setenv("GIN_MODE", "release")
+	t.Setenv("APP_ENV", "release")
 	t.Setenv("SUPABASE_URL", "https://custom.supabase.co")
 	t.Setenv("SUPABASE_SERVICE_ROLE_KEY", "custom-key")
 	t.Setenv("APP_SECRET_KEY", "custom-secret-key")
@@ -44,7 +44,7 @@ func TestConfigLoadCustomValues(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	assert.Equal(t, "3000", cfg.Port)
-	assert.Equal(t, "release", cfg.GinMode)
+	assert.Equal(t, "release", cfg.Mode)
 	assert.Equal(t, "https://custom.supabase.co", cfg.SupabaseURL)
 	assert.Equal(t, "custom-key", cfg.SupabaseServiceRoleKey)
 	assert.Equal(t, "custom-secret-key", cfg.AppSecretKey)
@@ -60,5 +60,3 @@ func TestConfigLoadMissingRequiredFields(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, cfg)
 }
-
-

@@ -8,12 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestResponseLoggingMiddlewareLogsRedactedJSONResponse(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 
 	var output bytes.Buffer
 	testLogger := slog.New(slog.NewTextHandler(&output, nil))
@@ -23,21 +22,23 @@ func TestResponseLoggingMiddlewareLogsRedactedJSONResponse(t *testing.T) {
 		slog.SetDefault(previousLogger)
 	})
 
-	router := gin.New()
+	router := NewHTTPApp()
 	router.Use(ResponseLoggingMiddleware())
-	router.GET("/result", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
+	router.Get("/result", func(c fiber.Ctx) error {
+		return c.Status(http.StatusOK).JSON(fiber.Map{
 			"answer":       "พบอุปกรณ์ 2 รายการ",
 			"access_token": "secret-access-token",
-			"profile": gin.H{
+			"profile": fiber.Map{
 				"email": "customer@example.com",
 			},
 		})
 	})
 
 	request := httptest.NewRequest(http.MethodGet, "/result", nil)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
+	result, err := router.Test(request)
+	assert.NoError(t, err)
+	defer result.Body.Close()
+	assert.Equal(t, http.StatusOK, result.StatusCode)
 
 	logged := output.String()
 	for _, expected := range []string{

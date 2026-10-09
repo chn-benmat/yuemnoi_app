@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -18,12 +19,14 @@ const profileBucket = "profile_bk"
 type supabaseUserRepository struct {
 	client     *supabase.Client
 	authAPIKey string
+	storage    *storageClient
 }
 
 func NewSupabaseUserRepository(sbClient *supabase.Client, authAPIKey string) domain.AuthGateway {
 	return &supabaseUserRepository{
 		client:     sbClient,
 		authAPIKey: authAPIKey,
+		storage:    newStorageClient(sbClient, authAPIKey),
 	}
 }
 
@@ -156,16 +159,12 @@ func (r *supabaseUserRepository) completeRegistration(ctx context.Context, user 
 	}
 
 	objectPath := fmt.Sprintf("profile-%s-%d%s", userID, time.Now().UTC().UnixNano(), user.ProfileImage.Extension)
-	_, err := r.uploadProfileImage(objectPath, user.ProfileImage)
+	err := r.uploadProfileImage(ctx, objectPath, user.ProfileImage)
 	if err != nil {
 		return nil, err
 	}
 
-	publicURL := r.client.Storage.From(profileBucket).GetPublicUrl(objectPath).SignedUrl
-	if publicURL == "" {
-		r.removeProfileImage(objectPath)
-		return nil, fmt.Errorf("profile image uploaded but public URL was not returned")
-	}
+	publicURL := r.storage.publicURL(profileBucket, objectPath)
 
 	var updated []map[string]interface{}
 	err = r.client.DB.From("profile_tb").
@@ -173,11 +172,11 @@ func (r *supabaseUserRepository) completeRegistration(ctx context.Context, user 
 		Eq("user_id", userID).
 		ExecuteWithContext(ctx, &updated)
 	if err != nil {
-		r.removeProfileImage(objectPath)
+		r.removeProfileImage(ctx, objectPath)
 		return nil, fmt.Errorf("failed to save profile image URL: %w", err)
 	}
 	if len(updated) == 0 {
-		r.removeProfileImage(objectPath)
+		r.removeProfileImage(ctx, objectPath)
 		return nil, fmt.Errorf("profile row was not created for the registered user")
 	}
 
@@ -185,37 +184,32 @@ func (r *supabaseUserRepository) completeRegistration(ctx context.Context, user 
 	return result, nil
 }
 
-func (r *supabaseUserRepository) uploadProfileImage(path string, image *domain.ProfileImage) (response supabase.FileResponse, err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("profile image upload failed: %v", recovered)
-		}
-	}()
-
-	response = r.client.Storage.From(profileBucket).Upload(
-		path,
-		bytes.NewReader(image.Data),
-		&supabase.FileUploadOptions{
-			CacheControl: "3600",
-			ContentType:  image.ContentType,
-			MimeType:     image.ContentType,
-		},
-	)
-	if response.Key == "" {
-		if response.Message == "" {
-			response.Message = "Supabase Storage did not return an object key"
-		}
-		return response, fmt.Errorf("profile image upload failed: %s", response.Message)
+func (r *supabaseUserRepository) uploadProfileImage(ctx context.Context, path string, image *domain.ProfileImage) error {
+	if err := r.storage.upload(ctx, profileBucket, path, image.Data, image.ContentType); err != nil {
+		return fmt.Errorf("profile image upload failed: %w", err)
 	}
-
-	return response, nil
+	return nil
 }
 
-func (r *supabaseUserRepository) removeProfileImage(path string) {
-	defer func() {
-		_ = recover()
-	}()
-	r.client.Storage.From(profileBucket).Remove([]string{path})
+func (r *supabaseUserRepository) removeProfileImage(ctx context.Context, path string) {
+	// ชดเชยไฟล์ที่อัปโหลดแล้วได้แม้คำขอหลักถูกยกเลิก โดยจำกัดเวลาแยกไว้
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storageCleanupTimeout)
+	defer cancel()
+	// การตัดการเชื่อมต่ออาจเกิดหลัง DB บันทึกสำเร็จ จึงตรวจการอ้างอิงก่อนลบไฟล์
+	var references []map[string]interface{}
+	err := r.client.DB.From("profile_tb").Select("user_id").
+		Eq("user_image_url", r.storage.publicURL(profileBucket, path)).
+		ExecuteWithContext(cleanupCtx, &references)
+	if err != nil {
+		slog.Warn("ยังลบรูปโปรไฟล์ไม่ได้ เพราะตรวจการอ้างอิงในฐานข้อมูลไม่สำเร็จ")
+		return
+	}
+	if len(references) > 0 {
+		return
+	}
+	if err := r.storage.remove(cleanupCtx, profileBucket, []string{path}); err != nil {
+		slog.Warn("ลบรูปโปรไฟล์หลังบันทึกไม่สำเร็จไม่ได้")
+	}
 }
 
 // ChangePassword เปลี่ยนรหัสผ่านของผู้ใช้ผ่าน Supabase Auth
@@ -244,7 +238,11 @@ func (r *supabaseUserRepository) ChangePassword(ctx context.Context, userToken, 
 	defer response.Body.Close()
 
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return decodeAuthAPIError(response)
+		authErr := decodeAuthAPIError(response)
+		if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+			return fmt.Errorf("%w: %v", domain.ErrInvalidAccessToken, authErr)
+		}
+		return authErr
 	}
 
 	return nil
@@ -462,6 +460,7 @@ func (r *supabaseUserRepository) UpdateProfile(
 ) (*domain.UserProfile, error) {
 	fields := make(map[string]interface{})
 	metadata := make(map[string]interface{})
+	var uploadedPath string
 
 	if req.DisplayName != nil {
 		trimmed := strings.TrimSpace(*req.DisplayName)
@@ -481,15 +480,14 @@ func (r *supabaseUserRepository) UpdateProfile(
 
 	if img != nil {
 		objectPath := fmt.Sprintf("profile-%s-%d%s", userID, time.Now().UTC().UnixNano(), img.Extension)
-		_, err := r.uploadProfileImage(objectPath, img)
+		err := r.uploadProfileImage(ctx, objectPath, img)
 		if err != nil {
 			return nil, err
 		}
-		publicURL := r.client.Storage.From(profileBucket).GetPublicUrl(objectPath).SignedUrl
-		if publicURL != "" {
-			fields["user_image_url"] = publicURL
-			metadata["avatar_url"] = publicURL
-		}
+		uploadedPath = objectPath
+		publicURL := r.storage.publicURL(profileBucket, objectPath)
+		fields["user_image_url"] = publicURL
+		metadata["avatar_url"] = publicURL
 	}
 
 	if len(fields) > 0 {
@@ -499,7 +497,14 @@ func (r *supabaseUserRepository) UpdateProfile(
 			Eq("user_id", userID).
 			ExecuteWithContext(ctx, &updated)
 		if err != nil {
+			if uploadedPath != "" {
+				r.removeProfileImage(ctx, uploadedPath)
+			}
 			return nil, fmt.Errorf("update profile_tb failed: %w", err)
+		}
+		if img != nil && len(updated) == 0 {
+			r.removeProfileImage(ctx, uploadedPath)
+			return nil, fmt.Errorf("profile row was not found for image update")
 		}
 	}
 
@@ -591,4 +596,3 @@ func (r *supabaseUserRepository) DeleteFCMToken(ctx context.Context, userID stri
 
 	return nil
 }
-

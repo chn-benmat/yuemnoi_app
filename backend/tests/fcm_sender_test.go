@@ -9,12 +9,52 @@ import (
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync"
 	"testing"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/fcm"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 )
+
+// เปลี่ยนเฉพาะปลายทาง FCM เป็น loopback โดยยังผ่าน SDK และ OAuth จริงทั้งหมด
+type firebaseTestTransport struct {
+	base   http.RoundTripper
+	target *url.URL
+}
+
+func (t firebaseTestTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.URL.Host == "fcm.googleapis.com" {
+		request = request.Clone(request.Context())
+		request.URL.Scheme = t.target.Scheme
+		request.URL.Host = t.target.Host
+	}
+	return t.base.RoundTrip(request)
+}
+
+func firebaseTestHTTPClient(server *httptest.Server) *http.Client {
+	client := *server.Client()
+	base := client.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	target, _ := url.Parse(server.URL)
+	client.Transport = firebaseTestTransport{base: base, target: target}
+	return &client
+}
+
+func firebaseTestCredentials(t *testing.T, project, tokenURL, privateKey string) string {
+	t.Helper()
+	data, err := json.Marshal(map[string]string{
+		"type": "service_account", "project_id": project,
+		"client_email": "fixture@" + project + ".iam.gserviceaccount.com",
+		"private_key":  privateKey, "token_uri": tokenURL,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
 
 type mockTokenManager struct {
 	mu           sync.Mutex
@@ -103,7 +143,7 @@ func TestFCMSenderSendChatPushSuccessAndInvalidation(t *testing.T) {
 	var fcmStatusCode = http.StatusOK
 	var fcmResponseBody = `{"name":"projects/test-proj/messages/msg-123"}`
 
-	// Mock Google OAuth and FCM Server
+	// จำลอง Google OAuth และ FCM โดยไม่ส่งแจ้งเตือนจริง
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/oauth2/token":
@@ -112,7 +152,7 @@ func TestFCMSenderSendChatPushSuccessAndInvalidation(t *testing.T) {
 				"access_token": "mock-google-token",
 				"expires_in":   3600,
 			})
-		case "/fcm/send":
+		case "/v1/projects/test-proj/messages:send":
 			var payload map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&payload)
 			fcmRequests = append(fcmRequests, payload)
@@ -128,17 +168,10 @@ func TestFCMSenderSendChatPushSuccessAndInvalidation(t *testing.T) {
 	tokenMgr := newMockTokenManager()
 	tokenMgr.tokens["user-target"] = "target-fcm-device-token"
 
-	sender, err := fcm.NewFCMSender(tokenMgr, "", "", server.Client())
+	sender, err := fcm.NewFCMSender(tokenMgr, "", firebaseTestCredentials(t, "test-proj", server.URL+"/oauth2/token", pemKey), firebaseTestHTTPClient(server))
 	if err != nil {
 		t.Fatalf("NewFCMSender error: %v", err)
 	}
-
-	sender.SetServiceAccountForTesting(&fcm.ServiceAccountKey{
-		ProjectID:   "test-proj",
-		ClientEmail: "test-bot@test-proj.iam.gserviceaccount.com",
-		PrivateKey:  pemKey,
-	})
-	sender.SetEndpointsForTesting(server.URL+"/oauth2/token", server.URL+"/fcm/send")
 
 	t.Run("sends chat push successfully", func(t *testing.T) {
 		err := sender.SendChatPush(context.Background(), domain.ChatPushNotification{
@@ -158,7 +191,7 @@ func TestFCMSenderSendChatPushSuccessAndInvalidation(t *testing.T) {
 
 	t.Run("invalidates token when FCM returns UNREGISTERED", func(t *testing.T) {
 		fcmStatusCode = http.StatusNotFound
-		fcmResponseBody = `{"error":{"message":"UNREGISTERED"}}`
+		fcmResponseBody = `{"error":{"code":404,"status":"NOT_FOUND","message":"UNREGISTERED","details":[{"@type":"type.googleapis.com/google.firebase.fcm.v1.FcmError","errorCode":"UNREGISTERED"}]}}`
 
 		err := sender.SendChatPush(context.Background(), domain.ChatPushNotification{
 			ReceiverID:     "user-target",

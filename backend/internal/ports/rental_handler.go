@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 type RentalHandler struct {
@@ -28,32 +28,33 @@ func NewRentalHandler(
 }
 
 type createRentalRequest struct {
-	ItemID         int64     `json:"item_id" binding:"required,gt=0"`
-	StartAt        time.Time `json:"start_at" binding:"required"`
-	EndAt          time.Time `json:"end_at" binding:"required"`
-	RentalType     string    `json:"rental_type" binding:"required,oneof=daily hourly"`
-	PickupLocation string    `json:"pickup_location" binding:"required,min=1,max=500"`
+	ItemID         int64     `json:"item_id" validate:"required,gt=0"`
+	StartAt        time.Time `json:"start_at" validate:"required"`
+	EndAt          time.Time `json:"end_at" validate:"required"`
+	RentalType     string    `json:"rental_type" validate:"required,oneof=daily hourly"`
+	PickupLocation string    `json:"pickup_location" validate:"required,min=1,max=500"`
 }
 
 // CreateRentalOrder สร้างคำขอจองอุปกรณ์ใหม่ โดยระบบจะตรวจสอบความพร้อมและคำนวณราคา
-func (h *RentalHandler) CreateRentalOrder(c *gin.Context) {
+func (h *RentalHandler) CreateRentalOrder(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
-		return
+		return nil
 	}
 
 	var req createRentalRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลคำขอเช่าไม่ถูกต้อง"})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลคำขอเช่าไม่ถูกต้อง"})
 	}
 	req.PickupLocation = strings.TrimSpace(req.PickupLocation)
+	if req.PickupLocation == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุสถานที่รับอุปกรณ์"})
+	}
 	if !req.EndAt.After(req.StartAt) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น"})
 	}
 
-	rental, err := h.rentalRepository.CreateRental(c.Request.Context(), userID, domain.CreateRentalRequest{
+	rental, err := h.rentalRepository.CreateRental(c.Context(), userID, domain.CreateRentalRequest{
 		ItemID:         req.ItemID,
 		StartAt:        req.StartAt,
 		EndAt:          req.EndAt,
@@ -61,39 +62,37 @@ func (h *RentalHandler) CreateRentalOrder(c *gin.Context) {
 		PickupLocation: req.PickupLocation,
 	})
 	if err != nil {
-		writeRentalError(c, err)
-		return
+		return writeRentalError(c, err)
 	}
-	c.JSON(http.StatusCreated, rental)
+	return c.Status(http.StatusCreated).JSON(rental)
 }
 
-func parseRentalID(c *gin.Context) (int64, bool) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+func parseRentalID(c fiber.Ctx) (int64, bool) {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสการเช่าต้องเป็นจำนวนเต็มที่มากกว่า 0"})
+		_ = c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "รหัสการเช่าต้องเป็นจำนวนเต็มที่มากกว่า 0"})
 		return 0, false
 	}
 	return id, true
 }
 
 // [POST] /api/rentals/:id/handover - ยืนยันการส่งมอบอุปกรณ์ (เปลี่ยนสถานะเป็น active)
-func (h *RentalHandler) HandoverRental(c *gin.Context) {
+func (h *RentalHandler) HandoverRental(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
-		return
+		return nil
 	}
 	id, ok := parseRentalID(c)
 	if !ok {
-		return
+		return nil
 	}
 
-	order, err := h.rentalRepository.UpdateRentalStatus(c.Request.Context(), userID, id, "active")
+	order, err := h.rentalRepository.UpdateRentalStatus(c.Context(), userID, id, "active")
 	if err != nil {
-		writeRentalStatusError(c, err)
-		return
+		return writeRentalStatusError(c, err)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":  http.StatusOK,
 		"message": "ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว",
 		"rental":  order,
@@ -101,53 +100,52 @@ func (h *RentalHandler) HandoverRental(c *gin.Context) {
 }
 
 // [POST] /api/rentals/:id/return - ยืนยันการรับคืนอุปกรณ์ (เปลี่ยนสถานะเป็น completed)
-func (h *RentalHandler) ReturnRental(c *gin.Context) {
+func (h *RentalHandler) ReturnRental(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
-		return
+		return nil
 	}
 	id, ok := parseRentalID(c)
 	if !ok {
-		return
+		return nil
 	}
 
-	order, err := h.rentalRepository.UpdateRentalStatus(c.Request.Context(), userID, id, "completed")
+	order, err := h.rentalRepository.UpdateRentalStatus(c.Context(), userID, id, "completed")
 	if err != nil {
-		writeRentalStatusError(c, err)
-		return
+		return writeRentalStatusError(c, err)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":  http.StatusOK,
 		"message": "ยืนยันการรับคืนอุปกรณ์เรียบร้อยแล้ว",
 		"rental":  order,
 	})
 }
 
-func writeRentalStatusError(c *gin.Context, err error) {
+func writeRentalStatusError(c fiber.Ctx, err error) error {
 	switch {
 	case errors.Is(err, domain.ErrRentalNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบรายการเช่านี้"})
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบรายการเช่านี้"})
 	case errors.Is(err, domain.ErrRentalForbidden):
-		c.JSON(http.StatusForbidden, gin.H{"error": "คุณไม่มีสิทธิ์จัดการรายการเช่านี้"})
+		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "คุณไม่มีสิทธิ์จัดการรายการเช่านี้"})
 	case errors.Is(err, domain.ErrRentalStatusTransition):
-		c.JSON(http.StatusConflict, gin.H{"error": "ไม่สามารถเปลี่ยนสถานะการเช่านี้ได้เนื่องจากสถานะปัจจุบันไม่ถูกต้อง"})
+		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "ไม่สามารถเปลี่ยนสถานะการเช่านี้ได้เนื่องจากสถานะปัจจุบันไม่ถูกต้อง"})
 	default:
 		log.Printf("update rental status failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ระบบอัปเดตสถานะการเช่าขัดข้อง"})
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ระบบอัปเดตสถานะการเช่าขัดข้อง"})
 	}
 }
 
-func writeRentalError(c *gin.Context, err error) {
+func writeRentalError(c fiber.Ctx, err error) error {
 	switch {
 	case errors.Is(err, domain.ErrRentalNotFound), errors.Is(err, domain.ErrItemNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบรายการเช่าหรืออุปกรณ์"})
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบรายการเช่าหรืออุปกรณ์"})
 	case errors.Is(err, domain.ErrRentalUnavailable):
-		c.JSON(http.StatusConflict, gin.H{"error": "อุปกรณ์หรือช่วงเวลานี้ไม่พร้อมให้เช่า"})
+		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "อุปกรณ์หรือช่วงเวลานี้ไม่พร้อมให้เช่า"})
 	case errors.Is(err, domain.ErrInvalidRental):
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลคำขอเช่าไม่ถูกต้อง"})
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลคำขอเช่าไม่ถูกต้อง"})
 	default:
 		log.Printf("rental request operation failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถส่งคำขอเช่าได้"})
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถส่งคำขอเช่าได้"})
 	}
 }

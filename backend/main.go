@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -15,7 +14,7 @@ import (
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/config"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 func main() {
@@ -27,18 +26,16 @@ func main() {
 
 	// ตั้งค่า Structured Logger (slog): JSON ใน Release mode, Text ใน Debug mode
 	var logHandler slog.Handler
-	if cfg.GinMode == "release" {
-		gin.SetMode(gin.ReleaseMode)
+	if cfg.Mode == "release" {
 		logHandler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
 	} else {
-		gin.SetMode(gin.DebugMode)
 		logHandler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
 	}
 	slog.SetDefault(slog.New(logHandler))
 
 	// สร้าง Supabase Client และ Repositories
 	supabaseClient := supabase.InitSupabaseClient(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey)
-	itemRepo := supabase.NewSupabaseItemRepository(supabaseClient)
+	itemRepo := supabase.NewSupabaseItemRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
 	authGateway := supabase.NewSupabaseUserRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
 	contactRepository := supabase.NewSupabaseConversationContactRepository(supabaseClient)
 	rentalRepository := supabase.NewSupabaseRentalRepository(supabaseClient)
@@ -64,20 +61,13 @@ func main() {
 		fcmSender,
 		aiGateway,
 		allAppSecretKeys,
+		fiber.Config{ReadTimeout: cfg.ReadTimeout, WriteTimeout: cfg.WriteTimeout},
 	)
-
-	// กำหนดค่า HTTP Server ด้วย Timeouts จาก Config
-	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      router,
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
-	}
 
 	// รัน Server แบบ Background (Non-blocking)
 	go func() {
-		slog.Info("Server is starting...", slog.String("port", cfg.Port), slog.String("mode", cfg.GinMode))
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		slog.Info("Server is starting...", slog.String("port", cfg.Port), slog.String("mode", cfg.Mode))
+		if err := router.Listen(":"+cfg.Port, fiber.ListenConfig{DisableStartupMessage: true}); err != nil {
 			slog.Error("Server listen error", slog.Any("error", err))
 			os.Exit(1)
 		}
@@ -92,7 +82,7 @@ func main() {
 	// เคลียร์ Request ที่ค้างอยู่ให้จบภายในระยะเวลา ShutdownTimeout
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := router.ShutdownWithContext(ctx); err != nil {
 		slog.Error("Server forced to shutdown", slog.Any("error", err))
 		os.Exit(1)
 	}

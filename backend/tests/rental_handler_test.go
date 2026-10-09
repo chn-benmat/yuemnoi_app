@@ -11,7 +11,7 @@ import (
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 const rentalTestUserID = "6df692ac-40b7-4f6d-9ca1-081cf31888c9"
@@ -64,13 +64,13 @@ func (v rentalTokenVerifier) UserIDFromToken(context.Context, string) (string, e
 	return rentalTestUserID, nil
 }
 
-func newRentalRouter(repository *rentalRepositoryMock, verifier rentalTokenVerifier) *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
+func newRentalRouter(repository *rentalRepositoryMock, verifier rentalTokenVerifier) *fiber.App {
+
+	router := ports.NewHTTPApp()
 	handler := ports.NewRentalHandler(repository, verifier)
-	router.POST("/api/rentals", handler.CreateRentalOrder)
-	router.POST("/api/rentals/:id/handover", handler.HandoverRental)
-	router.POST("/api/rentals/:id/return", handler.ReturnRental)
+	router.Post("/api/rentals", handler.CreateRentalOrder)
+	router.Post("/api/rentals/:id/handover", handler.HandoverRental)
+	router.Post("/api/rentals/:id/return", handler.ReturnRental)
 	return router
 }
 
@@ -78,14 +78,14 @@ func validRentalRequest() []byte {
 	return []byte(`{"item_id":7,"start_at":"2026-09-05T02:00:00Z","end_at":"2026-09-06T02:00:00Z","rental_type":"daily","pickup_location":" บางแค ","total_price":1}`)
 }
 
-func performRentalRequest(router *gin.Engine, body []byte, withToken bool) *httptest.ResponseRecorder {
+func performRentalRequest(t *testing.T, router *fiber.App, body []byte, withToken bool) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodPost, "/api/rentals", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	if withToken {
 		request.Header.Set("Authorization", "Bearer valid-token")
 	}
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
+	performFiberRequest(t, router, response, request)
 	return response
 }
 
@@ -93,7 +93,7 @@ func TestCreateRentalRequestUsesAuthenticatedUserAndServerResult(t *testing.T) {
 	repository := &rentalRepositoryMock{rental: &domain.RentalOrder{
 		ID: 21, UserID: rentalTestUserID, ItemID: 7, TotalPrice: 1500, Status: "pending",
 	}}
-	response := performRentalRequest(
+	response := performRentalRequest(t,
 		newRentalRouter(repository, rentalTokenVerifier{}),
 		validRentalRequest(),
 		true,
@@ -120,7 +120,7 @@ func TestCreateRentalRequestUsesAuthenticatedUserAndServerResult(t *testing.T) {
 func TestCreateRentalRequestRejectsInvalidPeriod(t *testing.T) {
 	repository := &rentalRepositoryMock{}
 	body := []byte(`{"item_id":7,"start_at":"2026-09-06T02:00:00Z","end_at":"2026-09-05T02:00:00Z","rental_type":"daily","pickup_location":"บางแค"}`)
-	response := performRentalRequest(
+	response := performRentalRequest(t,
 		newRentalRouter(repository, rentalTokenVerifier{}),
 		body,
 		true,
@@ -133,7 +133,7 @@ func TestCreateRentalRequestRejectsInvalidPeriod(t *testing.T) {
 
 func TestCreateRentalRequestMapsUnavailablePeriod(t *testing.T) {
 	repository := &rentalRepositoryMock{err: domain.ErrRentalUnavailable}
-	response := performRentalRequest(
+	response := performRentalRequest(t,
 		newRentalRouter(repository, rentalTokenVerifier{}),
 		validRentalRequest(),
 		true,
@@ -146,7 +146,7 @@ func TestCreateRentalRequestMapsUnavailablePeriod(t *testing.T) {
 
 func TestCreateRentalRequestRequiresAuthentication(t *testing.T) {
 	repository := &rentalRepositoryMock{}
-	response := performRentalRequest(
+	response := performRentalRequest(t,
 		newRentalRouter(repository, rentalTokenVerifier{err: errors.New("invalid token")}),
 		validRentalRequest(),
 		false,
@@ -166,7 +166,7 @@ func TestHandoverRentalUpdatesStatusToActive(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/rentals/21/handover", nil)
 	request.Header.Set("Authorization", "Bearer valid-token")
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
+	performFiberRequest(t, router, response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
@@ -185,7 +185,7 @@ func TestReturnRentalUpdatesStatusToCompleted(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/rentals/21/return", nil)
 	request.Header.Set("Authorization", "Bearer valid-token")
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
+	performFiberRequest(t, router, response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
@@ -215,7 +215,7 @@ func TestUpdateRentalStatusErrorMappings(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/api/rentals/21/handover", nil)
 			request.Header.Set("Authorization", "Bearer valid-token")
 			response := httptest.NewRecorder()
-			router.ServeHTTP(response, request)
+			performFiberRequest(t, router, response, request)
 
 			if response.Code != tc.expectedCode {
 				t.Fatalf("expected %d, got %d: %s", tc.expectedCode, response.Code, response.Body.String())

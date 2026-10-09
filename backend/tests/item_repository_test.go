@@ -11,7 +11,6 @@ import (
 	supabaseadapter "github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
 	supabaseclient "github.com/nedpals/supabase-go"
 )
 
@@ -75,7 +74,7 @@ func TestItemRepositoryReadsRankedViewInRankPositionOrder(t *testing.T) {
 	defer server.Close()
 
 	client := supabaseclient.CreateClient(server.URL, "test-service-key")
-	repository := supabaseadapter.NewSupabaseItemRepository(client)
+	repository := supabaseadapter.NewSupabaseItemRepository(client, "test-service-key")
 	items, err := repository.FindAll(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +95,7 @@ func TestItemRepositoryReadsRankedViewInRankPositionOrder(t *testing.T) {
 }
 
 func TestGetAllItemsPreservesRankedOrderAndHidesInternalScore(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+
 	repository := &rankedItemRepositoryStub{items: []domain.RankedItem{
 		{
 			Item:             domain.Item{ID: 29, ItemName: "กล้องยอดนิยม"},
@@ -109,12 +108,12 @@ func TestGetAllItemsPreservesRankedOrderAndHidesInternalScore(t *testing.T) {
 		},
 	}}
 	handler := ports.NewItemHandler(repository, rankedItemTokenVerifierStub{})
-	router := gin.New()
-	router.GET("/api/items", handler.GetAllItems)
+	router := ports.NewHTTPApp()
+	router.Get("/api/items", handler.GetAllItems)
 
 	request := httptest.NewRequest(http.MethodGet, "/api/items", nil)
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
+	performFiberRequest(t, router, response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", response.Code, response.Body.String())

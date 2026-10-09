@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 type UserHandler struct {
@@ -35,61 +35,59 @@ func NewUserHandler(gateway domain.AuthGateway) *UserHandler {
 
 // Request DTOs สำหรับ HTTP Transport Layer
 type userLoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=6"`
 }
 
 type userRegisterRequest struct {
-	DisplayName     string `json:"display_name" form:"display_name" binding:"required,max=150"`
-	Email           string `json:"email" form:"email" binding:"required,email"`
-	Phone           string `json:"phone" form:"phone" binding:"required"`
-	Password        string `json:"password" form:"password" binding:"required,min=6"`
-	ConfirmPassword string `json:"confirm_password" form:"confirm_password" binding:"omitempty,min=6"`
+	DisplayName     string `json:"display_name" form:"display_name" validate:"required,max=150"`
+	Email           string `json:"email" form:"email" validate:"required,email"`
+	Phone           string `json:"phone" form:"phone" validate:"required"`
+	Password        string `json:"password" form:"password" validate:"required,min=6"`
+	ConfirmPassword string `json:"confirm_password" form:"confirm_password" validate:"omitempty,min=6"`
 }
 
 type userChangePasswordRequest struct {
-	NewPassword string `json:"new_password" binding:"required,min=6"`
+	NewPassword string `json:"new_password" validate:"required,min=6"`
 }
 
 type userSendOTPRequest struct {
-	Email string `json:"email" binding:"required,email"`
+	Email string `json:"email" validate:"required,email"`
 }
 
 type userVerifyOTPResetRequest struct {
-	Email   string `json:"email" binding:"required,email"`
-	OTPCode string `json:"otp_code" binding:"required,len=6,numeric"`
+	Email   string `json:"email" validate:"required,email"`
+	OTPCode string `json:"otp_code" validate:"required,len=6,numeric"`
 }
 
 type updateProfileRequest struct {
-	DisplayName *string `json:"display_name" form:"display_name" binding:"omitempty,max=150"`
-	Username    *string `json:"username" form:"username" binding:"omitempty,max=100"`
-	Bio         *string `json:"bio" form:"bio" binding:"omitempty,max=500"`
+	DisplayName *string `json:"display_name" form:"display_name" validate:"omitempty,max=150"`
+	Username    *string `json:"username" form:"username" validate:"omitempty,max=100"`
+	Bio         *string `json:"bio" form:"bio" validate:"omitempty,max=500"`
 }
 
 type updateContactRequest struct {
-	Phone string `json:"phone" binding:"required"`
+	Phone string `json:"phone" validate:"required"`
 }
 
 type updateFCMTokenRequest struct {
-	FCMToken string `json:"fcm_token" binding:"required"`
+	FCMToken string `json:"fcm_token" validate:"required"`
 }
 
 // [POST] /api/auth/login - เข้าสู่ระบบและรับ Access Token
-func (h *UserHandler) Login(c *gin.Context) {
+func (h *UserHandler) Login(c fiber.Ctx) error {
 	var req userLoginRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง หรือรูปแบบอีเมลไม่สอดคล้อง"})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง หรือรูปแบบอีเมลไม่สอดคล้อง"})
 	}
 
-	tokens, err := h.repo.Login(c.Request.Context(), req.Email, req.Password)
+	tokens, err := h.repo.Login(c.Context(), req.Email, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "อีเมลหรือรหัสผ่านไม่ถูกต้อง"})
-		return
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "อีเมลหรือรหัสผ่านไม่ถูกต้อง"})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":        http.StatusOK,
 		"message":       "เข้าสู่ระบบสำเร็จ",
 		"access_token":  tokens.AccessToken,
@@ -98,28 +96,30 @@ func (h *UserHandler) Login(c *gin.Context) {
 }
 
 // [POST] /api/auth/google-profile - บันทึกรูปโปรไฟล์จาก Google Avatar
-func (h *UserHandler) SyncGoogleProfileImage(c *gin.Context) {
+func (h *UserHandler) SyncGoogleProfileImage(c fiber.Ctx) error {
 	userToken, ok := extractToken(c)
 	if !ok {
-		return
+		return nil
 	}
 
-	imageURL, err := h.repo.SyncGoogleProfileImage(c.Request.Context(), userToken)
+	imageURL, err := h.repo.SyncGoogleProfileImage(c.Context(), userToken)
 	if err != nil {
 		status := http.StatusInternalServerError
+		message := "ไม่สามารถบันทึกรูปโปรไฟล์ Google ได้"
 		if strings.Contains(err.Error(), "invalid access token") ||
 			strings.Contains(err.Error(), "does not contain a user") {
 			status = http.StatusUnauthorized
+			message = "Access Token ไม่ถูกต้องหรือหมดอายุ"
 		} else if strings.Contains(err.Error(), "profile image URL was not found") ||
 			strings.Contains(err.Error(), "profile was not found") {
 			status = http.StatusUnprocessableEntity
+			message = "ไม่พบข้อมูลโปรไฟล์หรือรูปโปรไฟล์ Google"
 		}
 
-		c.JSON(status, gin.H{"error": err.Error()})
-		return
+		return c.Status(status).JSON(fiber.Map{"error": message})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":         http.StatusOK,
 		"message":        "บันทึกรูปโปรไฟล์ Google สำเร็จ",
 		"user_image_url": imageURL,
@@ -127,39 +127,34 @@ func (h *UserHandler) SyncGoogleProfileImage(c *gin.Context) {
 }
 
 // [POST] /api/auth/register - สมัครสมาชิกผู้ใช้ใหม่
-func (h *UserHandler) Register(c *gin.Context) {
+func (h *UserHandler) Register(c fiber.Ctx) error {
 	var req userRegisterRequest
 
-	if err := c.ShouldBind(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง หรือรูปแบบอีเมลไม่สอดคล้อง"})
-		return
+	if err := c.Bind().Body(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลไม่ถูกต้อง หรือรูปแบบอีเมลไม่สอดคล้อง"})
 	}
 
 	req.DisplayName = strings.TrimSpace(req.DisplayName)
 	req.Email = strings.TrimSpace(req.Email)
 	phone, validPhone := normalizePhone(req.Phone)
 	if req.DisplayName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ชื่อ-นามสกุลไม่ถูกต้อง"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ชื่อ-นามสกุลไม่ถูกต้อง"})
 	}
 	if !validPhone {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0"})
 	}
 	req.Phone = phone
 
 	if req.ConfirmPassword != "" && req.Password != req.ConfirmPassword {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน"})
 	}
 
 	profileImage, err := profileImageFromRequest(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	result, err := h.repo.Register(c.Request.Context(), domain.RegisterUser{
+	result, err := h.repo.Register(c.Context(), domain.RegisterUser{
 		DisplayName:  req.DisplayName,
 		Email:        req.Email,
 		Phone:        req.Phone,
@@ -168,14 +163,12 @@ func (h *UserHandler) Register(c *gin.Context) {
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "email already registered") {
-			c.JSON(http.StatusConflict, gin.H{"error": "อีเมลนี้ถูกใช้งานในระบบแล้ว โปรดใช้อีเมลอื่น"})
-			return
+			return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "อีเมลนี้ถูกใช้งานในระบบแล้ว โปรดใช้อีเมลอื่น"})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสมัครสมาชิกได้: " + err.Error()})
-		return
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถสมัครสมาชิกได้"})
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	return c.Status(http.StatusCreated).JSON(fiber.Map{
 		"status":         http.StatusCreated,
 		"message":        "สมัครสมาชิกสำเร็จ",
 		"user_id":        result.UserID,
@@ -197,20 +190,19 @@ func normalizePhone(phone string) (string, bool) {
 	return "", false
 }
 
-func profileImageFromRequest(c *gin.Context) (*domain.ProfileImage, error) {
-	if !strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
+func profileImageFromRequest(c fiber.Ctx) (*domain.ProfileImage, error) {
+	if !strings.HasPrefix(strings.ToLower(c.Get("Content-Type")), "multipart/form-data") {
 		return nil, nil
 	}
 
-	header, err := c.FormFile("image")
-	if errors.Is(err, http.ErrMissingFile) {
-		return nil, nil
-	}
+	form, err := c.MultipartForm()
 	if err != nil {
 		return nil, fmt.Errorf("ไม่สามารถอ่านรูปโปรไฟล์ได้")
 	}
-
-	return readProfileImage(header)
+	if len(form.File["image"]) == 0 {
+		return nil, nil
+	}
+	return readProfileImage(form.File["image"][0])
 }
 
 func readProfileImage(header *multipart.FileHeader) (*domain.ProfileImage, error) {
@@ -254,80 +246,75 @@ func readProfileImage(header *multipart.FileHeader) (*domain.ProfileImage, error
 }
 
 // [POST] /api/auth/change-password - เปลี่ยนรหัสผ่าน (ต้องมี Access Token)
-func (h *UserHandler) ChangePassword(c *gin.Context) {
+func (h *UserHandler) ChangePassword(c fiber.Ctx) error {
 	var req userChangePasswordRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง"})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง"})
 	}
 
 	userToken, ok := extractToken(c)
 	if !ok {
-		return
+		return nil
 	}
 
-	err := h.repo.ChangePassword(c.Request.Context(), userToken, req.NewPassword)
+	err := h.repo.ChangePassword(c.Context(), userToken, req.NewPassword)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "เปลี่ยนรหัสผ่านไม่สำเร็จ: " + err.Error()})
-		return
+		if errors.Is(err, domain.ErrInvalidAccessToken) {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Access Token ไม่ถูกต้องหรือหมดอายุ"})
+		}
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "เปลี่ยนรหัสผ่านไม่สำเร็จ"})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":  http.StatusOK,
 		"message": "เปลี่ยนรหัสผ่านสำเร็จ",
 	})
 }
 
 // [POST] /api/auth/send-otp - ส่งรหัส OTP เพื่อรีเซ็ตรหัสผ่าน (กรณีลืมรหัสผ่าน)
-func (h *UserHandler) SendOTP(c *gin.Context) {
+func (h *UserHandler) SendOTP(c fiber.Ctx) error {
 	var req userSendOTPRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบอีเมลไม่ถูกต้อง"})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "รูปแบบอีเมลไม่ถูกต้อง"})
 	}
 
-	exists, err := h.repo.IsEmailExists(c.Request.Context(), req.Email)
+	exists, err := h.repo.IsEmailExists(c.Context(), req.Email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ระบบตรวจสอบอีเมลขัดข้อง: " + err.Error()})
-		return
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ระบบตรวจสอบอีเมลขัดข้อง"})
 	}
 
 	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "ไม่พบอีเมลนี้ในระบบสมัครสมาชิก โปรดตรวจสอบความถูกต้อง",
 		})
-		return
 	}
 
-	err = h.repo.SendOTP(c.Request.Context(), req.Email)
+	err = h.repo.SendOTP(c.Context(), req.Email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ขอรหัส OTP ไม่สำเร็จ: " + err.Error()})
-		return
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ขอรหัส OTP ไม่สำเร็จ"})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":  http.StatusOK,
 		"message": "ขอรหัส OTP สำเร็จ โปรดตรวจสอบอีเมลของคุณ",
 	})
 }
 
 // [POST] /api/auth/verify-otp - ตรวจสอบรหัส OTP
-func (h *UserHandler) VerifyResetOTP(c *gin.Context) {
+func (h *UserHandler) VerifyResetOTP(c fiber.Ctx) error {
 	var req userVerifyOTPResetRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง รหัส OTP ต้องเป็นตัวเลข 6 หลัก"})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลไม่ถูกต้อง รหัส OTP ต้องเป็นตัวเลข 6 หลัก"})
 	}
 
-	tokens, err := h.repo.VerifyOTP(c.Request.Context(), req.Email, req.OTPCode)
+	tokens, err := h.repo.VerifyOTP(c.Context(), req.Email, req.OTPCode)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "การยืนยันรหัส OTP ล้มเหลว หรือรหัสหมดอายุ"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "การยืนยันรหัส OTP ล้มเหลว หรือรหัสหมดอายุ"})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":        http.StatusOK,
 		"message":       "ยืนยัน OTP เรียบร้อยแล้ว",
 		"access_token":  tokens.AccessToken,
@@ -336,45 +323,41 @@ func (h *UserHandler) VerifyResetOTP(c *gin.Context) {
 }
 
 // [GET] /api/user/profile - ดึงข้อมูลโปรไฟล์ของผู้ใช้ที่ล็อกอินอยู่
-func (h *UserHandler) GetProfile(c *gin.Context) {
+func (h *UserHandler) GetProfile(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
-		return
+		return nil
 	}
 
-	profile, err := h.repo.GetProfile(c.Request.Context(), userID)
+	profile, err := h.repo.GetProfile(c.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถโหลดข้อมูลโปรไฟล์ได้: " + err.Error()})
-		return
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถโหลดข้อมูลโปรไฟล์ได้"})
 	}
 
-	c.JSON(http.StatusOK, profile)
+	return c.Status(http.StatusOK).JSON(profile)
 }
 
 // [PUT] /api/user/profile - อัปเดตข้อมูลโปรไฟล์ (ชื่อ, ไบโอ, รูปภาพ)
-func (h *UserHandler) UpdateProfile(c *gin.Context) {
+func (h *UserHandler) UpdateProfile(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
-		return
+		return nil
 	}
 
 	var req updateProfileRequest
-	if strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
-		if err := c.ShouldBind(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลโปรไฟล์ไม่ถูกต้อง: " + err.Error()})
-			return
+	if strings.HasPrefix(strings.ToLower(c.Get("Content-Type")), "multipart/form-data") {
+		if err := c.Bind().Body(&req); err != nil {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลโปรไฟล์ไม่ถูกต้อง: " + err.Error()})
 		}
 	} else {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลโปรไฟล์ไม่ถูกต้อง: " + err.Error()})
-			return
+		if err := c.Bind().JSON(&req); err != nil {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลโปรไฟล์ไม่ถูกต้อง: " + err.Error()})
 		}
 	}
 
 	profileImage, err := profileImageFromRequest(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	domainReq := domain.UpdateProfileRequest{
@@ -383,13 +366,12 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		Bio:         req.Bio,
 	}
 
-	profile, err := h.repo.UpdateProfile(c.Request.Context(), userID, domainReq, profileImage)
+	profile, err := h.repo.UpdateProfile(c.Context(), userID, domainReq, profileImage)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถแก้ไขโปรไฟล์ได้: " + err.Error()})
-		return
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถแก้ไขโปรไฟล์ได้"})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":  http.StatusOK,
 		"message": "บันทึกข้อมูลโปรไฟล์เรียบร้อย",
 		"profile": profile,
@@ -397,30 +379,27 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 }
 
 // [PUT] /api/user/contact - อัปเดตเบอร์โทรศัพท์ติดต่อ
-func (h *UserHandler) UpdateContact(c *gin.Context) {
+func (h *UserHandler) UpdateContact(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
-		return
+		return nil
 	}
 
 	var req updateContactRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเบอร์โทรศัพท์"})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุเบอร์โทรศัพท์"})
 	}
 
 	phone, valid := normalizePhone(req.Phone)
 	if !valid {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0 หรือ +66"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0 หรือ +66"})
 	}
 
-	if err := h.repo.UpdateContact(c.Request.Context(), userID, phone); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกเบอร์โทรศัพท์ได้: " + err.Error()})
-		return
+	if err := h.repo.UpdateContact(c.Context(), userID, phone); err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถบันทึกเบอร์โทรศัพท์ได้"})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":  http.StatusOK,
 		"message": "บันทึกข้อมูลติดต่อเรียบร้อย",
 		"phone":   phone,
@@ -428,24 +407,25 @@ func (h *UserHandler) UpdateContact(c *gin.Context) {
 }
 
 // [POST] /api/user/fcm-token - อัปเดต FCM Push Token
-func (h *UserHandler) UpdateFCMToken(c *gin.Context) {
+func (h *UserHandler) UpdateFCMToken(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
-		return
+		return nil
 	}
 
 	var req updateFCMTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุ fcm_token"})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุ fcm_token"})
+	}
+	if strings.TrimSpace(req.FCMToken) == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุ fcm_token"})
 	}
 
-	if err := h.repo.UpdateFCMToken(c.Request.Context(), userID, req.FCMToken); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึก FCM Token ได้: " + err.Error()})
-		return
+	if err := h.repo.UpdateFCMToken(c.Context(), userID, req.FCMToken); err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถบันทึก FCM Token ได้"})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":  http.StatusOK,
 		"message": "บันทึก FCM Token เรียบร้อย",
 	})

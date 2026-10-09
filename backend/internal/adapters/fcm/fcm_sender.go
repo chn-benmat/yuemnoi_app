@@ -1,18 +1,9 @@
 package fcm
 
 import (
-	"bytes"
 	"context"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -21,8 +12,15 @@ import (
 	"sync"
 	"time"
 
+	"cloud.google.com/go/auth/credentials"
+	"cloud.google.com/go/auth/httptransport"
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/messaging"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
+	"google.golang.org/api/option"
 )
+
+const pushTimeout = 10 * time.Second
 
 // TokenManager จัดการการอ่านและลบ FCM Token ของผู้ใช้จากฐานข้อมูล
 type TokenManager interface {
@@ -30,102 +28,111 @@ type TokenManager interface {
 	DeleteFCMToken(ctx context.Context, userID string) error
 }
 
-// ServiceAccountKey โครงสร้างไฟล์ Service Account JSON ของ Google Cloud / Firebase
-type ServiceAccountKey struct {
-	Type                    string `json:"type"`
-	ProjectID               string `json:"project_id"`
-	PrivateKeyID            string `json:"private_key_id"`
-	PrivateKey              string `json:"private_key"`
-	ClientEmail             string `json:"client_email"`
-	ClientID                string `json:"client_id"`
-	AuthURI                 string `json:"auth_uri"`
-	TokenURI                string `json:"token_uri"`
-	AuthProviderX509CertURL string `json:"auth_provider_x509_cert_url"`
-	ClientX509CertURL       string `json:"client_x509_cert_url"`
-}
-
 type fcmCachedToken struct {
 	token     string
 	expiresAt time.Time
 }
 
-// FCMSender ทำหน้าที่เป็น Adapter ส่ง Push Notification ผ่าน Firebase Cloud Messaging HTTP v1
+// FCMSender ส่งแจ้งเตือนผ่าน Firebase Admin SDK และแคช device token ชั่วคราว
 type FCMSender struct {
-	tokenManager   TokenManager
-	httpClient     *http.Client
-	fcmEndpoint    string
-	oauthEndpoint  string
-	saKey          *ServiceAccountKey
-	tokenMu        sync.Mutex
-	cachedOAuth    string
-	oauthExpiresAt time.Time
-	fcmTokenCache  sync.Map
+	tokenManager  TokenManager
+	client        *messaging.Client
+	fcmTokenCache sync.Map
 }
 
-// NewFCMSender สร้างอินสแตนซ์ของ FCMSender สำหรับส่ง Push Notification
+// NewFCMSender ใช้ไลบรารีของ Google จัดการ credentials การเซ็น JWT และ OAuth
+// คืน sender ที่ยังเรียกใช้งานได้พร้อม error เมื่อไม่มี credentials เพื่อให้ server เริ่มได้
 func NewFCMSender(tokenManager TokenManager, saPath, saJSON string, httpClient *http.Client) (*FCMSender, error) {
-	if httpClient == nil {
-		httpClient = &http.Client{
-			Timeout: 10 * time.Second,
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 20,
-				IdleConnTimeout:     90 * time.Second,
-			},
+	sender := &FCMSender{tokenManager: tokenManager}
+	data, err := loadServiceAccount(saPath, saJSON)
+	if err != nil {
+		return sender, err
+	}
+	var account struct {
+		Type      string `json:"type"`
+		ProjectID string `json:"project_id"`
+	}
+	if err := json.Unmarshal(data, &account); err != nil {
+		return sender, fmt.Errorf("invalid Firebase service account JSON: %w", err)
+	}
+	if account.Type != "service_account" || strings.TrimSpace(account.ProjectID) == "" {
+		return sender, fmt.Errorf("Firebase service account requires type service_account and project_id")
+	}
+	baseClient := http.Client{Timeout: pushTimeout}
+	if httpClient != nil {
+		baseClient = *httpClient
+		if baseClient.Timeout <= 0 {
+			baseClient.Timeout = pushTimeout
 		}
 	}
-
-	sa, err := loadServiceAccount(saPath, saJSON)
-	if err != nil {
-		slog.Warn("ไม่สามารถโหลด Firebase Service Account (ฟังก์ชัน Push จะยังไม่สามารถส่งจริงได้)", slog.Any("error", err))
+	baseTransport := baseClient.Transport
+	if baseTransport == nil {
+		baseTransport = http.DefaultTransport
+		if standard, ok := baseTransport.(*http.Transport); ok && httpClient == nil {
+			pool := standard.Clone()
+			pool.MaxIdleConns = 100
+			pool.MaxIdleConnsPerHost = 20
+			baseTransport = pool
+		}
 	}
-
-	return &FCMSender{
-		tokenManager:  tokenManager,
-		httpClient:    httpClient,
-		oauthEndpoint: "https://oauth2.googleapis.com/token",
-		saKey:         sa,
-	}, nil
+	baseClient.Transport = baseTransport
+	// ใช้ request context ทั้งตอนแลก OAuth token และตอนส่ง FCM เพื่อยกเลิกได้ทันที
+	authClient, err := httptransport.NewClient(&httptransport.Options{
+		BaseRoundTripper: baseTransport,
+		DetectOpts: &credentials.DetectOptions{
+			CredentialsJSON:     data,
+			Scopes:              []string{"https://www.googleapis.com/auth/firebase.messaging"},
+			Client:              &baseClient,
+			DisableAsyncRefresh: true,
+		},
+	})
+	if err != nil {
+		return sender, fmt.Errorf("initialize Firebase credentials: %w", err)
+	}
+	// แยก client สำหรับ FCM ออกจาก client แลก token เพื่อไม่ให้ transport เรียกตัวเอง
+	messagingHTTPClient := baseClient
+	messagingHTTPClient.Transport = authClient.Transport
+	app, err := firebase.NewApp(context.Background(), &firebase.Config{ProjectID: account.ProjectID}, option.WithHTTPClient(&messagingHTTPClient))
+	if err != nil {
+		return sender, fmt.Errorf("initialize Firebase app: %w", err)
+	}
+	sender.client, err = app.Messaging(context.Background())
+	if err != nil {
+		return sender, fmt.Errorf("initialize Firebase messaging: %w", err)
+	}
+	return sender, nil
 }
 
-// SetEndpointsForTesting ใช้สำหรับกำหนด Mock Endpoints ในการทดสอบ
-func (s *FCMSender) SetEndpointsForTesting(oauthEndpoint, fcmEndpoint string) {
-	s.oauthEndpoint = oauthEndpoint
-	s.fcmEndpoint = fcmEndpoint
-}
-
-// SetServiceAccountForTesting ใช้สำหรับกำหนด Mock Service Account ในการทดสอบ
-func (s *FCMSender) SetServiceAccountForTesting(sa *ServiceAccountKey) {
-	s.saKey = sa
-}
-
-// ExtractCleanChatMessage สกัดเอาเฉพาะข้อความจริง ตัดคำนำหน้าตอบกลับ
+// ExtractCleanChatMessage สกัดเฉพาะข้อความจริงและตัดคำนำหน้าตอบกลับ
 func ExtractCleanChatMessage(raw string) string {
 	return extractCleanChatMessage(raw)
 }
 
-// SendChatPush ดำเนินการค้นหา FCM Token และส่ง Notification ไปยังผู้รับ
+// SendChatPush คงรูปแบบแจ้งเตือนเดิมและลบเฉพาะ token ที่ FCM ยืนยันว่าเลิกลงทะเบียนแล้ว
 func (s *FCMSender) SendChatPush(ctx context.Context, n domain.ChatPushNotification) error {
-	fcmToken, err := s.getReceiverToken(ctx, n.ReceiverID)
-	if err != nil || fcmToken == "" {
+	ctx, cancel := context.WithTimeout(ctx, pushTimeout)
+	defer cancel()
+	if s.client == nil {
+		return fmt.Errorf("Firebase messaging is not configured")
+	}
+	token, err := s.getReceiverToken(ctx, n.ReceiverID)
+	if err != nil {
 		return fmt.Errorf("receiver fcm token not found: %w", err)
 	}
-
-	err = s.sendFCMv1(ctx, fcmToken, n)
+	if token == "" {
+		return fmt.Errorf("receiver fcm token not found")
+	}
+	err = s.sendFCMv1(ctx, token, n)
 	if err != nil {
-		slog.Error("ส่ง FCM chat push ล้มเหลว", slog.String("receiver_id", n.ReceiverID), slog.Any("error", err))
-		if strings.Contains(err.Error(), "UNREGISTERED") ||
-			strings.Contains(err.Error(), "NotRegistered") ||
-			strings.Contains(err.Error(), "404") {
+		if messaging.IsUnregistered(err) {
 			s.invalidateReceiverToken(ctx, n.ReceiverID)
 		}
-		return err
+		return fmt.Errorf("send FCM chat push: %w", err)
 	}
-
 	return nil
 }
 
-// getReceiverToken ดึง token จาก cache หรือจากฐานข้อมูลผ่าน TokenManager
+// getReceiverToken ดึง token จาก cache หรือฐานข้อมูลผ่าน TokenManager
 func (s *FCMSender) getReceiverToken(ctx context.Context, receiverID string) (string, error) {
 	if val, ok := s.fcmTokenCache.Load(receiverID); ok {
 		cached := val.(fcmCachedToken)
@@ -133,277 +140,98 @@ func (s *FCMSender) getReceiverToken(ctx context.Context, receiverID string) (st
 			return cached.token, nil
 		}
 	}
-
 	if s.tokenManager == nil {
 		return "", fmt.Errorf("token manager is not configured")
 	}
-
 	token, err := s.tokenManager.GetFCMToken(ctx, receiverID)
 	if err != nil {
 		return "", err
 	}
-
 	if token != "" {
-		s.fcmTokenCache.Store(receiverID, fcmCachedToken{
-			token:     token,
-			expiresAt: time.Now().Add(5 * time.Minute),
-		})
+		s.fcmTokenCache.Store(receiverID, fcmCachedToken{token, time.Now().Add(5 * time.Minute)})
 	}
 	return token, nil
 }
 
-// invalidateReceiverToken ลบ Token ที่หมดอายุออกจาก cache และฐานข้อมูล
+// invalidateReceiverToken ลบ token ที่หมดอายุออกจาก cache และฐานข้อมูล
 func (s *FCMSender) invalidateReceiverToken(ctx context.Context, receiverID string) {
 	s.fcmTokenCache.Delete(receiverID)
 	if s.tokenManager != nil {
-		_ = s.tokenManager.DeleteFCMToken(ctx, receiverID)
-		slog.Info("ล้าง FCM token ที่หมดอายุ (UNREGISTERED) เรียบร้อยแล้ว", slog.String("receiver_id", receiverID))
+		if err := s.tokenManager.DeleteFCMToken(ctx, receiverID); err != nil {
+			slog.Warn("ล้าง FCM token ที่หมดอายุไม่สำเร็จ")
+		}
 	}
 }
 
-// sendFCMv1 จัดเตรียม Payload และยิง HTTP POST ไปยัง FCM HTTP v1 API
+// sendFCMv1 ใช้โครงสร้างของ SDK โดยคง data เสียง และ channel ของ Flutter เดิม
 func (s *FCMSender) sendFCMv1(ctx context.Context, token string, req domain.ChatPushNotification) error {
 	senderName := strings.TrimSpace(req.SenderName)
 	if senderName == "" {
 		senderName = "ข้อความใหม่"
 	}
-	bodyMsg := extractCleanChatMessage(req.Message)
-	if bodyMsg == "" {
-		bodyMsg = "ส่งข้อความถึงคุณ"
+	body := extractCleanChatMessage(req.Message)
+	if body == "" {
+		body = "ส่งข้อความถึงคุณ"
 	}
-
-	oauthToken, projectID, err := s.getOAuth2Token(ctx)
-	if err != nil {
-		return fmt.Errorf("get google oauth token failed: %w", err)
-	}
-
-	payload := map[string]interface{}{
-		"message": map[string]interface{}{
-			"token": token,
-			"notification": map[string]string{
-				"title": senderName,
-				"body":  bodyMsg,
-			},
-			"data": map[string]string{
-				"type":            "chat_message",
-				"conversation_id": req.ConversationID,
-				"message_id":      req.MessageID,
-				"sender_name":     senderName,
-				"sender_avatar":   req.SenderAvatar,
-				"message":         bodyMsg,
-				"title":           senderName,
-				"body":            bodyMsg,
-			},
-			"android": map[string]interface{}{
-				"priority": "HIGH",
-				"notification": map[string]interface{}{
-					"channel_id":   "yuemnoi_chat_messages_v3",
-					"title":        senderName,
-					"body":         bodyMsg,
-					"sound":        "message_tone",
-					"click_action": "FLUTTER_NOTIFICATION_CLICK",
-				},
-			},
-			"apns": map[string]interface{}{
-				"headers": map[string]string{
-					"apns-priority": "10",
-				},
-				"payload": map[string]interface{}{
-					"aps": map[string]interface{}{
-						"alert": map[string]string{
-							"title": senderName,
-							"body":  bodyMsg,
-						},
-						"badge":             1,
-						"sound":             "message_tone.wav",
-						"content-available": 1,
-					},
-				},
+	badge := 1
+	_, err := s.client.Send(ctx, &messaging.Message{
+		Token:        token,
+		Notification: &messaging.Notification{Title: senderName, Body: body},
+		Data: map[string]string{
+			"type": "chat_message", "conversation_id": req.ConversationID, "message_id": req.MessageID,
+			"sender_name": senderName, "sender_avatar": req.SenderAvatar, "message": body,
+			"title": senderName, "body": body,
+		},
+		Android: &messaging.AndroidConfig{
+			Priority: "high",
+			Notification: &messaging.AndroidNotification{
+				ChannelID: "yuemnoi_chat_messages_v3", Title: senderName, Body: body,
+				Sound: "message_tone", ClickAction: "FLUTTER_NOTIFICATION_CLICK",
 			},
 		},
-	}
-
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	endpoint := s.fcmEndpoint
-	if endpoint == "" {
-		endpoint = fmt.Sprintf("https://fcm.googleapis.com/v1/projects/%s/messages:send", projectID)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return err
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+oauthToken)
-
-	resp, err := s.httpClient.Do(httpReq)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("FCM v1 chat push responded with status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	slog.Info("FCM v1 chat push sent successfully", slog.String("receiver_id", req.ReceiverID))
-	return nil
-}
-
-// getOAuth2Token สร้างและแคช OAuth2 Access Token สำหรับ FCM v1 API
-func (s *FCMSender) getOAuth2Token(ctx context.Context) (string, string, error) {
-	s.tokenMu.Lock()
-	defer s.tokenMu.Unlock()
-
-	if s.saKey == nil {
-		return "", "", fmt.Errorf("firebase service account is not loaded")
-	}
-
-	if s.cachedOAuth != "" && time.Now().Before(s.oauthExpiresAt) {
-		return s.cachedOAuth, s.saKey.ProjectID, nil
-	}
-
-	block, _ := pem.Decode([]byte(s.saKey.PrivateKey))
-	if block == nil {
-		return "", "", fmt.Errorf("ไม่สามารถถอดรหัส private_key ใน service account ได้")
-	}
-
-	parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return "", "", fmt.Errorf("ParsePKCS8PrivateKey error: %w", err)
-	}
-
-	rsaKey, ok := parsedKey.(*rsa.PrivateKey)
-	if !ok {
-		return "", "", fmt.Errorf("private key ไม่ใช่ RSA")
-	}
-
-	now := time.Now().Unix()
-	exp := now + 3600
-
-	headerJSON, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT"})
-	claimJSON, _ := json.Marshal(map[string]interface{}{
-		"iss":   s.saKey.ClientEmail,
-		"scope": "https://www.googleapis.com/auth/firebase.messaging",
-		"aud":   s.oauthEndpoint,
-		"iat":   now,
-		"exp":   exp,
+		APNS: &messaging.APNSConfig{
+			Headers: map[string]string{"apns-priority": "10"},
+			Payload: &messaging.APNSPayload{Aps: &messaging.Aps{
+				Alert: &messaging.ApsAlert{Title: senderName, Body: body}, Badge: &badge,
+				Sound: "message_tone.wav", ContentAvailable: true,
+			}},
+		},
 	})
-
-	unsignedJWT := base64.RawURLEncoding.EncodeToString(headerJSON) + "." + base64.RawURLEncoding.EncodeToString(claimJSON)
-	h := sha256.New()
-	h.Write([]byte(unsignedJWT))
-	signature, err := rsa.SignPKCS1v15(rand.Reader, rsaKey, crypto.SHA256, h.Sum(nil))
-	if err != nil {
-		return "", "", fmt.Errorf("เซ็น JWT error: %w", err)
-	}
-
-	signedJWT := unsignedJWT + "." + base64.RawURLEncoding.EncodeToString(signature)
-
-	reqBody := strings.NewReader(fmt.Sprintf(
-		"grant_type=%s&assertion=%s",
-		"urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer",
-		signedJWT,
-	))
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.oauthEndpoint, reqBody)
-	if err != nil {
-		return "", "", fmt.Errorf("ขอ OAuth2 token error: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := s.httpClient.Do(httpReq)
-	if err != nil {
-		return "", "", fmt.Errorf("ขอ OAuth2 token error: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("Google OAuth2 error (%d): %s", resp.StatusCode, string(body))
-	}
-
-	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-		ExpiresIn   int    `json:"expires_in"`
-	}
-	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return "", "", err
-	}
-
-	s.cachedOAuth = tokenResp.AccessToken
-	s.oauthExpiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn-60) * time.Second)
-
-	return s.cachedOAuth, s.saKey.ProjectID, nil
+	return err
 }
 
-// loadServiceAccount โหลด Service Account จาก JSON หรือจากไฟล์ Path
-func loadServiceAccount(saPath, saJSON string) (*ServiceAccountKey, error) {
-	var data []byte
-	var err error
-
+// loadServiceAccount รองรับ JSON และตำแหน่งไฟล์ที่ระบบเดิมใช้งาน
+func loadServiceAccount(saPath, saJSON string) ([]byte, error) {
 	if saJSON != "" {
-		data = []byte(saJSON)
-	} else if saPath != "" {
-		data, err = os.ReadFile(saPath)
-		if err != nil {
-			for _, candidate := range []string{saPath, "service-account.json", "backend/service-account.json", "../service-account.json"} {
-				if d, e := os.ReadFile(candidate); e == nil {
-					data = d
-					break
-				}
-			}
-			if len(data) == 0 {
-				return nil, fmt.Errorf("ไม่สามารถอ่านไฟล์ Service Account Path: %w", err)
-			}
-		}
+		return []byte(saJSON), nil
+	}
+	candidates := []string{"service-account.json", "backend/service-account.json", "../service-account.json"}
+	if saPath != "" {
+		candidates = append([]string{saPath}, candidates...)
 	} else {
-		candidates := []string{"service-account.json", "backend/service-account.json", "../service-account.json"}
 		files, _ := filepath.Glob("*.json")
 		candidates = append(candidates, files...)
-
-		for _, f := range candidates {
-			d, err := os.ReadFile(f)
-			if err == nil && strings.Contains(string(d), "private_key") && strings.Contains(string(d), "client_email") {
-				data = d
-				slog.Info("พบ Firebase Service Account อัตโนมัติ", slog.String("file", f))
-				break
-			}
+	}
+	for _, path := range candidates {
+		data, err := os.ReadFile(path)
+		if err == nil && (saPath != "" || (strings.Contains(string(data), "private_key") && strings.Contains(string(data), "client_email"))) {
+			return data, nil
 		}
 	}
-
-	if len(data) == 0 {
-		return nil, fmt.Errorf("ไม่พบ Firebase Service Account ข้อมูล")
-	}
-
-	var sa ServiceAccountKey
-	if err := json.Unmarshal(data, &sa); err != nil {
-		return nil, fmt.Errorf("รูปแบบ Service Account JSON ไม่ถูกต้อง: %w", err)
-	}
-
-	return &sa, nil
+	return nil, fmt.Errorf("Firebase service account is not available")
 }
 
-// extractCleanChatMessage สกัดเอาเฉพาะข้อความจริง ตัดคำนำหน้าตอบกลับ
+// extractCleanChatMessage สกัดเฉพาะข้อความจริงและตัดคำนำหน้าตอบกลับ
 func extractCleanChatMessage(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if strings.HasPrefix(raw, "↩ ตอบกลับ:") || strings.HasPrefix(raw, "💬 ตอบกลับ") || strings.HasPrefix(raw, "↪ ตอบกลับ") {
 		if newlineIdx := strings.Index(raw, "\n"); newlineIdx != -1 {
-			actual := strings.TrimSpace(raw[newlineIdx+1:])
-			if actual != "" {
+			if actual := strings.TrimSpace(raw[newlineIdx+1:]); actual != "" {
 				return actual
 			}
 		}
-		parts := strings.Split(raw, "|")
-		if len(parts) >= 2 {
-			actual := strings.TrimSpace(parts[1])
-			if actual != "" {
+		if parts := strings.Split(raw, "|"); len(parts) >= 2 {
+			if actual := strings.TrimSpace(parts[1]); actual != "" {
 				return actual
 			}
 		}

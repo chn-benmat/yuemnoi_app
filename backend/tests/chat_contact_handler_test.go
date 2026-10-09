@@ -11,7 +11,6 @@ import (
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
 )
 
 type chatContactRepository struct {
@@ -41,14 +40,14 @@ func (v chatContactTokenVerifier) UserIDFromToken(context.Context, string) (stri
 }
 
 func TestGetConversationContactReturnsParticipantPhone(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+
 	repository := &chatContactRepository{phone: "0812345678"}
 	handler := ports.NewChatContactHandler(
 		repository,
 		chatContactTokenVerifier{userID: "requester-1"},
 	)
-	router := gin.New()
-	router.POST("/api/chat/contact", handler.GetConversationContact)
+	router := ports.NewHTTPApp()
+	router.Post("/api/chat/contact", handler.GetConversationContact)
 
 	body, err := json.Marshal(map[string]string{"conversation_id": "conversation-1"})
 	if err != nil {
@@ -63,7 +62,7 @@ func TestGetConversationContactReturnsParticipantPhone(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer valid-token")
 	response := httptest.NewRecorder()
 
-	router.ServeHTTP(response, request)
+	performFiberRequest(t, router, response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", response.Code, response.Body.String())
@@ -77,13 +76,13 @@ func TestGetConversationContactReturnsParticipantPhone(t *testing.T) {
 }
 
 func TestGetConversationContactMapsForbiddenError(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+
 	handler := ports.NewChatContactHandler(
 		&chatContactRepository{err: domain.ErrContactForbidden},
 		chatContactTokenVerifier{userID: "requester-1"},
 	)
-	router := gin.New()
-	router.POST("/api/chat/contact", handler.GetConversationContact)
+	router := ports.NewHTTPApp()
+	router.Post("/api/chat/contact", handler.GetConversationContact)
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -94,7 +93,7 @@ func TestGetConversationContactMapsForbiddenError(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer valid-token")
 	response := httptest.NewRecorder()
 
-	router.ServeHTTP(response, request)
+	performFiberRequest(t, router, response, request)
 
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("expected status 403, got %d: %s", response.Code, response.Body.String())
@@ -102,13 +101,13 @@ func TestGetConversationContactMapsForbiddenError(t *testing.T) {
 }
 
 func TestGetConversationContactRejectsInvalidToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+
 	handler := ports.NewChatContactHandler(
 		&chatContactRepository{},
 		chatContactTokenVerifier{err: errors.New("invalid token")},
 	)
-	router := gin.New()
-	router.POST("/api/chat/contact", handler.GetConversationContact)
+	router := ports.NewHTTPApp()
+	router.Post("/api/chat/contact", handler.GetConversationContact)
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -119,7 +118,7 @@ func TestGetConversationContactRejectsInvalidToken(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer invalid-token")
 	response := httptest.NewRecorder()
 
-	router.ServeHTTP(response, request)
+	performFiberRequest(t, router, response, request)
 
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d: %s", response.Code, response.Body.String())

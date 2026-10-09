@@ -15,7 +15,6 @@ import (
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/aiservice"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,7 +28,7 @@ func TestAIChatSharedContractThroughHandlerAndAdapter(t *testing.T) {
 		SSE      string                `json:"sse"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &fixture))
-	gin.SetMode(gin.TestMode)
+
 	for _, stream := range []bool{false, true} {
 		for _, answer := range []string{"choice", "text", "skip", "active", "legacy"} {
 			name := answer
@@ -82,20 +81,20 @@ func TestAIChatSharedContractThroughHandlerAndAdapter(t *testing.T) {
 				defer upstream.Close()
 				client := aiservice.NewClient(upstream.URL, "fixture-key", time.Second)
 				handler := ports.NewChatbotHandler(client, nil)
-				router := gin.New()
+				router := ports.NewHTTPApp()
 				path := "/api/chat-ai"
 				if stream {
 					path += "/stream"
-					router.POST(path, handler.SendMessageStream)
+					router.Post(path, handler.SendMessageStream)
 				} else {
-					router.POST(path, handler.SendMessage)
+					router.Post(path, handler.SendMessage)
 				}
 				body, err := json.Marshal(req)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
 				request.Header.Set("Content-Type", "application/json")
 				recorder := httptest.NewRecorder()
-				router.ServeHTTP(recorder, request)
+				performFiberRequest(t, router, recorder, request)
 				require.Equal(t, http.StatusOK, recorder.Code)
 				if stream {
 					require.Equal(t, fixture.SSE, recorder.Body.String())
@@ -161,12 +160,12 @@ func TestAIStageStatusesForwardedThroughHandlerAndAdapter(t *testing.T) {
 	defer upstream.Close()
 	client := aiservice.NewClient(upstream.URL, "", time.Second)
 	handler := ports.NewChatbotHandler(client, nil)
-	router := gin.New()
-	router.POST("/api/chat-ai/stream", handler.SendMessageStream)
+	router := ports.NewHTTPApp()
+	router.Post("/api/chat-ai/stream", handler.SendMessageStream)
 	request := httptest.NewRequest(http.MethodPost, "/api/chat-ai/stream", strings.NewReader(`{"query":"คำถาม"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, request)
+	performFiberRequest(t, router, recorder, request)
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, expected.String(), recorder.Body.String())
 }
