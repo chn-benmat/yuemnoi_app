@@ -5,7 +5,7 @@ from app.domain.entities.item import Item
 class ItemRepositoryInterface(Protocol):
     """Abstract port for accessing rental inventory."""
 
-    async def get_all_items(self) -> List[Item]:
+    async def get_all_items(self, *, refresh: bool = False) -> List[Item]:
         """Retrieve all active rental items from database."""
         ...
 

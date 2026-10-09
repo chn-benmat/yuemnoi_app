@@ -1,266 +1,327 @@
-# 📱 Frontend: ยืมหน่อย (Yuemnoi Mobile App)
+<div align="center">
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
-[![Dart](https://img.shields.io/badge/Dart-3.11+-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
-[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20Realtime-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
-[![BLoC](https://img.shields.io/badge/State-flutter__bloc-blueviolet?style=for-the-badge)](https://bloclibrary.dev)
+<img src="assets/images/yuemnoi.png" width="88" alt="Yuemnoi logo">
 
-แอปพลิเคชันมือถือสำหรับแพลตฟอร์ม **ยืมหน่อย (Yuemnoi)** พัฒนาด้วย **Flutter** รองรับทั้งระบบปฏิบัติการ **Android** และ **iOS** ออกแบบสถาปัตยกรรมตามหลัก **Clean Architecture** ร่วมกับ **BLoC Pattern** เพื่อการจัดการสถานะ (State Management) ที่มีประสิทธิภาพและดูแลรักษาง่าย
+# ยืมหน่อย · Mobile App
 
----
+**หาอุปกรณ์ที่ใช่ คุย นัดรับ และจัดการการเช่าในแอปเดียว**
 
-## 📑 สารบัญ (Table of Contents)
+![Flutter](https://img.shields.io/badge/Flutter-%E2%89%A53.44.0-02569B?style=flat-square&logo=flutter&logoColor=white)
+![Dart](https://img.shields.io/badge/Dart-%E2%89%A53.12.0-0175C2?style=flat-square&logo=dart&logoColor=white)
+![BLoC](https://img.shields.io/badge/State-BLoC%20%2F%20Cubit-9251D0?style=flat-square)
+![App](https://img.shields.io/badge/App-0.1.0%2B1-111827?style=flat-square)
 
-1. [ภาพรวมสถาปัตยกรรม (Architecture Overview)](#-ภาพรวมสถาปัตยกรรม-architecture-overview)
-2. [โครงสร้างไดเรกทอรี (Directory Structure)](#-โครงสร้างไดเรกทอรี-directory-structure)
-3. [ฟีเจอร์ภายในแอปพลิเคชัน (Features)](#-ฟีเจอร์ภายในแอปพลิเคชัน-features)
-4. [ข้อกำหนดเบื้องต้น (Prerequisites)](#-ข้อกำหนดเบื้องต้น-prerequisites)
-5. [การตั้งค่า Environment Variables](#-การตั้งค่า-environment-variables)
-6. [ขั้นตอนการติดตั้งและรันแอปพลิเคชัน (Getting Started)](#-ขั้นตอนการติดตั้งและรันแอปพลิเคชัน-getting-started)
-7. [วิธีการคอมไพล์และสร้างไฟล์ติดตั้ง (Build APK / App Bundle)](#-วิธีการคอมไพล์และสร้างไฟล์ติดตั้ง-build-apk--app-bundle)
-8. [การทดสอบ (Testing)](#-การทดสอบ-testing)
-9. [แนวทางการพัฒนา (Development Rules)](#-แนวทางการพัฒนา-development-rules)
+[ภาพรวม](#overview) · [Tech stack](#stack) · [ตั้งค่า](#setup) · [เริ่มรัน](#run) · [Build](#build) · [ตรวจงาน](#development) · [แก้ปัญหา](#troubleshooting)
+
+[Project](../README.md) / **Frontend** / [Backend](../backend/README.md) / [AI Service](../ai_service/README.md)
+
+</div>
 
 ---
 
-## 🏛️ ภาพรวมสถาปัตยกรรม (Architecture Overview)
+<a id="overview"></a>
 
-โครงสร้างโค้ดภายในโฟลเดอร์ `lib/features/` ถูกจัดแบ่งตามหลัก **Clean Architecture** แยกหน้าที่ของแต่ละ Layer ชัดเจน:
+## ✨ ส่วนนี้ทำอะไร
 
-```text
-features/<feature_name>/
-├── data/
-│   ├── datasources/     # เชื่อมต่อ REST API (Dio), Supabase หรือ Local Storage
-│   ├── models/          # Data Transfer Objects (DTO) และ JSON Serialization
-│   └── repositories/    # Implementation ของ Domain Repositories
-├── domain/
-│   ├── entities/        # โครงสร้างข้อมูลเชิงธุรกิจ (Pure Dart Models)
-│   ├── repositories/    # Interface สัญญาการทำงานของ Repository
-│   └── usecases/        # Business Logic Use Cases
-└── presentation/
-    ├── bloc/            # BLoC / Cubit จัดการ State, Event และ State Transitions
-    ├── pages/           # หน้าจอแสดงผล (Screens / Views)
-    └── widgets/         # Widget ย่อยที่ใช้เฉพาะภายใน Feature นี้
+Frontend คือแอป Flutter ของแพลตฟอร์มเช่าอุปกรณ์ระหว่างผู้ใช้ **Yuemnoi** มีโค้ดแอปและ native project สำหรับ Android / iOS ใช้ **Clean Architecture** แยกตามฟีเจอร์ และ **BLoC / Cubit** จัดการสถานะ
+
+| ส่วนของแอป       | สิ่งที่มีในโค้ด                                                           |
+| ---------------- | ------------------------------------------------------------------------- |
+| 🔑 Auth          | สมัครสมาชิก, Email/Password, Google OAuth, กู้รหัสผ่าน และเปิดดูแบบ Guest |
+| 🔎 Discovery     | ฟีดอุปกรณ์, ค้นหา, กรองหมวดหมู่, รายละเอียดสินค้า และรายการโปรด           |
+| 📸 Listings      | ลงประกาศ / แก้ไขอุปกรณ์, เลือกรูป และบีบอัดรูปก่อนส่ง                     |
+| 📅 Rental        | ขอเช่า, ติดตามสถานะ, หน้าส่งมอบ / รับคืน และรีวิว                         |
+| 💬 Chat          | ห้องแชตผ่าน Supabase Realtime, แนบรูป, typing และ presence                |
+| 🤖 AI Assistant  | คำตอบ JSON / SSE, การ์ดสินค้า, แบบสอบถาม และบริบทของแชตปัจจุบัน           |
+| 📍 Location      | ตำแหน่งผู้ใช้, จุดนัดพบ, แผนที่ และเส้นทาง                                |
+| 🔔 Notifications | Firebase Cloud Messaging และการแจ้งเตือนในเครื่อง                         |
+| 👤 Profile       | โปรไฟล์, อุปกรณ์ของฉัน และรายการเช่า                                      |
+
+> **สถานะที่ควรรู้:** Wallet และการเติมเงินใน [WalletCubit](lib/features/wallet/presentation/bloc/wallet_cubit.dart) ยังเป็นข้อมูลจำลองในเครื่อง ส่วน PromptPay QR ในหน้าส่งมอบยังเป็น mockup จึงยังไม่ใช่ระบบรับชำระเงินจริงที่พร้อมใช้งาน
+
+### แอปเชื่อมกับอะไรบ้าง
+
+```mermaid
+flowchart LR
+    App["Flutter App"] -->|"REST / AI SSE"| Go["Go Backend :8080"]
+    App -->|"Auth / Realtime / Storage / ข้อมูลบางฟีเจอร์"| SB["Supabase"]
+    Go -->|"Internal API"| AI["Python AI :8000"]
+    App --> FCM["Firebase Messaging"]
 ```
 
-### การเชื่อมต่อเครือข่ายและบริการภายนอก (Hybrid Integration):
+การเชื่อมต่อปัจจุบันเป็น **Hybrid**: แอปเรียก Go สำหรับ Auth บางส่วน, โปรไฟล์, ลงประกาศ, คำขอเช่า และ AI ขณะเดียวกันยังอ่าน / เขียน Supabase โดยตรงในบางฟีเจอร์ เช่น ฟีด, แชต และขั้นตอนรับคืน จึงต้องเตรียม database permissions และ RLS ให้ตรงกับโค้ดด้วย
 
-- **Core Business Logic (REST API via Dio)**: การจอง, ดึงฟีดอุปกรณ์, อัปเดตโปรไฟล์, ธุรกรรม Wallet จะเรียกไปยัง **Go Backend** (`/api/v1/...`)
-- **Realtime Chat & Auth (Supabase SDK)**: การรับส่งข้อความสดในห้องแชท (`chat_room:*`), Presence Tracking และ Google OAuth เชื่อมต่อผ่าน `supabase_flutter` โดยตรงเพื่อความรวดเร็ว
-- **AI Chatbot Streaming (SSE)**: รับข้อมูลการตอบสดของ AI ทีละโทเค็นผ่าน Backend Gateway (`/api/v1/chat-ai/stream`)
+<a id="stack"></a>
 
----
+## 🧰 Tech stack & versions
 
-## 📁 โครงสร้างไดเรกทอรี (Directory Structure)
+เวอร์ชันแพ็กเกจด้านล่างอ้างอิง [pubspec.lock](pubspec.lock) ส่วนช่วงเวอร์ชันที่อนุญาตอยู่ใน [pubspec.yaml](pubspec.yaml)
+
+| เครื่องมือ                            | เวอร์ชัน / ข้อกำหนด                                    | ใช้ทำอะไร                       |
+| ------------------------------------- | ------------------------------------------------------ | ------------------------------- |
+| Flutter                               | **≥ 3.44.0** ตาม lockfile; ไม่มีไฟล์ pin SDK รุ่นเดียว | UI และ native build             |
+| Dart                                  | **≥ 3.12.0, < 4.0.0** ตาม lockfile                     | ภาษาและ runtime ของแอป          |
+| flutter_bloc / equatable              | 8.1.6 / 2.1.0                                          | State และการเปรียบเทียบ state   |
+| go_router / app_links                 | 17.5.0 / 7.2.1                                         | Navigation และ deep links       |
+| dio                                   | 5.11.1                                                 | REST API และ SSE                |
+| supabase_flutter                      | 2.17.1                                                 | Auth, Realtime และ Storage      |
+| flutter_dotenv                        | 6.0.1                                                  | โหลด configuration จาก asset    |
+| firebase_core / firebase_messaging    | 3.15.2 / 15.2.10                                       | Firebase และ push notifications |
+| flutter_local_notifications           | 22.3.0                                                 | การแจ้งเตือนในเครื่อง           |
+| flutter_map / geolocator / latlong2   | 8.3.2 / 14.0.3 / 0.10.1                                | แผนที่และพิกัด                  |
+| image_picker / flutter_image_compress | 1.2.3 / 2.5.1                                          | เลือกและลดขนาดรูป               |
+| shared_preferences                    | 2.5.5                                                  | ข้อมูลและการตั้งค่าในเครื่อง    |
+| build_runner / json_serializable      | 2.16.1 / 6.14.1                                        | เครื่องมือสร้างโค้ด             |
+| bloc_test / mocktail / flutter_lints  | 9.1.7 / 1.0.5 / 6.0.0                                  | Tests, mocks และ lint           |
+
+แม้ manifest จะระบุ Dart เป็น `^3.11.5` แต่ dependency ชุดที่ล็อกไว้ต้องการ Dart **3.12.0 ขึ้นไป** จึงควรเลือก Flutter SDK ที่ให้ Dart ตรงตาม lockfile
+
+<details>
+<summary>ดูแพ็กเกจ UI / media และเครื่องมือ native เพิ่มเติม</summary>
+
+| แพ็กเกจ                                 | เวอร์ชัน        |
+| --------------------------------------- | --------------- |
+| cupertino_icons / font_awesome_flutter  | 1.0.9 / 11.0.0  |
+| google_fonts / google_nav_bar           | 8.2.1 / 5.0.7   |
+| cached_network_image / flutter_markdown | 3.4.1 / 0.7.7+1 |
+| intl / timezone                         | 0.20.3 / 0.11.1 |
+| audioplayers / gal                      | 6.8.1 / 2.3.3   |
+| share_plus / url_launcher               | 13.3.0 / 6.3.2  |
+| qr_flutter / mobile_scanner             | 4.1.0 / 7.4.2   |
+| permission_handler / json_annotation    | 12.0.3 / 4.12.0 |
+| flutter_launcher_icons                  | 0.14.4          |
+| Android Gradle Plugin / Gradle wrapper  | 9.0.1 / 9.1.0   |
+| Kotlin plugin / Google Services plugin  | 2.3.20 / 4.4.2  |
+| Firebase Android BoM / desugar library  | 33.10.0 / 2.1.4 |
+
+Android ตั้ง Java / Kotlin compilation target เป็น **17**; ค่า compileSdk, minSdk, targetSdk และ NDK รับจาก Flutter SDK ดู [settings.gradle.kts](android/settings.gradle.kts), [build.gradle.kts](android/app/build.gradle.kts) และ [Gradle wrapper](android/gradle/wrapper/gradle-wrapper.properties)
+
+iOS project ตั้ง deployment target เป็น **13.0** แต่ยังต้องตรวจ minimum ที่ plugins ต้องการเมื่อ build ไม่มีการ pin รุ่น Android Studio / Xcode / CocoaPods ใน repository
+
+`flutter` และ `flutter_test` เป็น SDK dependencies; ค่า `0.0.0` ใน lockfile ไม่ใช่เวอร์ชัน Flutter SDK
+
+</details>
+
+<a id="setup"></a>
+
+## ⚙️ เตรียมเครื่อง & configuration
+
+### 1. เครื่องมือที่ต้องมี
+
+- Git และ [Flutter SDK](https://docs.flutter.dev/install) ที่ผ่านข้อกำหนดด้านบน โดย Dart มากับ Flutter
+- Android: Android Studio / Android SDK, emulator หรือมือถือที่เปิด USB debugging และ JDK ที่รองรับชุด Gradle ของโปรเจกต์
+- iOS: **macOS + Xcode** และเครื่องมือ native dependencies ตาม Flutter setup
+- Supabase project ที่มี schema, views, RPCs, Storage และ permissions ของแอป
+- Go Backend ที่อุปกรณ์ปลายทางเข้าถึงได้; เปิด Python AI เพิ่มเมื่อใช้ Chatbot
+- Firebase project เมื่อ build Android หรือทดสอบ push notifications
+
+จากโฟลเดอร์ root ของ repository:
+
+```sh
+cd frontend
+flutter --version
+dart --version
+flutter doctor -v
+flutter doctor --android-licenses
+```
+
+คำสั่ง license ใช้เมื่อเตรียม Android SDK ส่วน iOS ให้ทำตาม [Flutter iOS setup / deployment](https://docs.flutter.dev/deployment/ios) การ build / รัน iOS ต้องใช้ macOS; repository นี้ไม่มี native project สำหรับ Windows / macOS / Linux desktop
+
+### 2. สร้างไฟล์ `.env.local`
+
+สร้างไฟล์ในโฟลเดอร์ `frontend/` แล้วแก้ค่าตัวอย่างให้เป็นค่าของ environment ที่ใช้:
+
+```dotenv
+API_URL=https://your-backend.example.com
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=replace-with-supabase-publishable-key
+APP_SECRET_KEY=replace-with-client-app-key
+```
+
+| ตัวแปร                     | จำเป็นเมื่อ                        | วิธีตั้งค่า                                                                                               |
+| -------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `API_URL`                  | เรียก Go Backend                   | **URL ต้นทาง ไม่เติม `/api`** เพราะโค้ดเติม path ให้แล้ว                                               |
+| `SUPABASE_URL`             | ใช้ Auth / ข้อมูล / Realtime       | URL ของ Supabase project เดียวกับ Backend                                                                 |
+| `SUPABASE_PUBLISHABLE_KEY` | เริ่ม Supabase client              | Publishable key สำหรับแอป ดู [ประเภท API keys](https://supabase.com/docs/guides/getting-started/api-keys) |
+| `APP_SECRET_KEY`           | Backend ตั้ง app key ไว้           | ต้องเป็นหนึ่งในคีย์ที่ Backend รับ; ส่งผ่าน `X-App-Secret`                                                |
+| `GOOGLE_WEB_CLIENT_ID`     | ยังไม่มี consumer ใน flow ปัจจุบัน | AppConfig อ่านได้ แต่ Google login ปัจจุบันใช้ Supabase OAuth จึงไม่ต้องใส่เพื่อเปิด flow นี้             |
+
+[AppConfig](lib/core/config/app_config.dart) อ่านค่าจาก `--dart-define` ก่อน แล้ว fallback ไปที่ dotenv ส่วน API client มี fallback เป็น `http://127.0.0.1:8080` หากไม่ได้ตั้ง API URL ค่านี้ไม่เหมาะกับมือถือจริง
+
+ไฟล์ `.env.local` ถูกประกาศเป็น **Flutter asset** ใน pubspec จึงต้องมีไฟล์แม้จะส่งค่าผ่าน dart defines ทั้งหมดแล้ว และค่าที่ติดไปกับแอปสามารถถูกอ่านได้: ใส่เฉพาะ configuration ฝั่ง client; เก็บ Supabase service role, Firebase service account และคีย์ AI ไว้ฝั่งเซิร์ฟเวอร์
+
+### 3. เลือก URL ให้ตรงกับอุปกรณ์
+
+| รันบน                    | ต้นทางของ Backend ในเครื่องพัฒนา                                          |
+| ------------------------ | ------------------------------------------------------------------------- |
+| Android Emulator มาตรฐาน | `10.0.2.2:8080`                                                           |
+| iOS Simulator            | `127.0.0.1:8080`                                                          |
+| มือถือจริง               | IP ของเครื่องพัฒนาใน LAN เดียวกัน หรือ HTTPS hostname ที่มือถือเข้าถึงได้ |
+
+**Android manifest ปัจจุบันตั้ง `usesCleartextTraffic="false"`** จึงควรใช้ HTTPS endpoint สำหรับการรันตามคู่มือนี้ หากต้องใช้ `http://10.0.2.2:8080` ระหว่างพัฒนา ต้องตั้ง native network policy สำหรับ debug ให้รองรับก่อน รวมถึงตรวจ ATS บน iOS เมื่อต้องใช้ HTTP ดู [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml) และ [Info.plist](ios/Runner/Info.plist)
+
+### 4. เตรียมบริการที่แอปใช้
+
+| บริการ            | สิ่งที่ต้องเตรียม                                                                                                                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Supabase Database | schema / views เช่น `item_tb`, `home_feed_ranked_v`, `public_profile_v`, `profile_tb`, `booking_tb`, `conversation_tb` และ `chat_message_tb` พร้อม RLS / grants; ขอ schema ฉบับของ environment จากทีม              |
+| Supabase Realtime | เปิดใช้งานตามตารางและ channels ของ chat / booking / presence                                                                                                                                                       |
+| Supabase Storage  | buckets `item_bk`, `profile_bk` และ `chat_bk`; แชตใช้ signed URLs และต้องมี policies ที่ตรงกับผู้ใช้                                                                                                               |
+| Google login      | เปิด Google provider ใน Supabase และตั้ง redirect allowlist เป็น `yuemnoi://login-callback/`; scheme นี้มีใน Android / iOS ดู [Google OAuth setup](https://supabase.com/docs/guides/auth/social-login/auth-google) |
+| Firebase Android  | เพิ่ม Android app ID `com.example.frontend` แล้ววาง `android/app/google-services.json` ที่ตรงกับ project                                                                                                           |
+| Firebase iOS      | เพิ่ม iOS app ให้ตรง bundle ID และเพิ่ม `GoogleService-Info.plist` เข้า Runner target; ตั้ง APNs / native capabilities เมื่อทดสอบ FCM                                                                              |
+
+Firebase initialization ใช้ `Firebase.initializeApp()` แบบ native และแจ้ง warning หากเริ่มไม่ได้ ดู [Firebase Flutter setup](https://firebase.google.com/docs/flutter/setup) ไฟล์ Firebase configuration ไม่ได้ติดมาใน repository และ checkout นี้ไม่มีชุด SQL migrations สำหรับสร้าง Supabase ทั้งระบบอัตโนมัติ
+
+แผนที่ปัจจุบันใช้ Google tile URL ส่วนค้นหาพิกัด / เส้นทางใช้ Nominatim และ OSRM จากโค้ด ไม่มี env สำหรับ map key ใน AppConfig
+
+<a id="run"></a>
+
+## 🚀 ติดตั้ง & เริ่มรัน
+
+คำสั่งต่อไปนี้ใช้ได้ทั้ง PowerShell และ macOS / Linux shell เมื่ออยู่ใน `frontend/` และตั้งบริการตามหัวข้อก่อนหน้าครบแล้ว:
+
+```sh
+flutter pub get
+flutter devices
+flutter run --dart-define-from-file=.env.local --dart-define-from-file=../ai_service/config/chat_client_runtime.json
+```
+
+หากต่อหลายอุปกรณ์ ให้เพิ่ม `-d <device-id>` โดยเลือก ID จาก `flutter devices`
+
+เริ่มบริการตาม [Backend README](../backend/README.md) และ [AI README](../ai_service/README.md) ใน terminal แยกกันก่อนทดสอบ AI แชต แอปอาจเปิดบางหน้าหรือ Guest mode ได้เมื่อบริการบางตัวไม่พร้อม แต่ flow ที่อ่านข้อมูลจริงยังต้องมี configuration และบริการของมันครบ
+
+### AI configuration ที่ใช้ร่วมกับ Backend
+
+[chat_client_runtime.json](../ai_service/config/chat_client_runtime.json) เป็น compile-time configuration ฝั่งแอป แก้ไฟล์แล้วต้องรัน / build ใหม่ ส่งไฟล์ JSON ตามคำสั่งด้านบนเพื่อใช้ configuration กลางร่วมกัน หากไม่ได้ส่ง แอปจะใช้ defaults ในโค้ดซึ่งตรงกับค่าในไฟล์ปัจจุบัน
+
+| ค่า                                      | ค่าในไฟล์ | ความหมาย                                                    |
+| ---------------------------------------- | --------- | ----------------------------------------------------------- |
+| `AI_CHAT_HISTORY_MAX_MESSAGES`           | 16        | ประวัติสูงสุดที่ส่ง                                         |
+| `AI_CHAT_HISTORY_MAX_CHARACTERS`         | 24000     | จำกัดขนาดประวัติ                                            |
+| `AI_CHAT_REQUEST_TIMEOUT_SECONDS`        | 45        | เวลา transport                                              |
+| `AI_CHAT_IDLE_TIMEOUT_SECONDS`           | 20        | เวลารอ stream โดยไม่มีข้อมูล                                |
+| `AI_CHAT_STREAM_UPDATE_MILLISECONDS`     | 50        | จังหวะอัปเดตข้อความ                                         |
+| `AI_CHAT_RESPONSE_READY_TIMEOUT_SECONDS` | 30        | จากส่งคำขอจนได้ validated answer ครบ                        |
+| `AI_GATEWAY_TIMEOUT_SECONDS`             | 45        | Go ใช้จากไฟล์เดียวกันเมื่อกำหนด path; Flutter ไม่อ่านค่านี้ |
+
+มี `AI_CHAT_TIMING_DIAGNOSTICS` เพิ่มเติมเป็น dart define แบบ boolean ค่าเริ่มต้น `false` สำหรับ diagnostics; ไม่ได้อยู่ใน JSON ด้านบน
+
+SSE `ready` ส่งคำตอบที่ผ่านการตรวจครบแล้ว ก่อน `metadata`, `delta` และ `done` การวัด response ready แยกจากการแสดงตัวอักษรและการ render UI ค่า timeout เป็นขอบเขตการทำงาน ไม่ใช่ผลรับรองความเร็วของระบบ
+
+เมื่อคำขอล้มเหลว แอปแยก `quota_temporarily_unavailable` เป็นโควต้าชั่วคราว, `quota_exhausted` เป็นโควต้ารายวัน และ `providers_busy` เป็นติดคิว ส่วน `providers_rate_limited` แจ้งติดโควต้าตาม provider โดยไม่เดารอบเวลา ปุ่มลองอีกครั้งเปิดตาม `retry_after_seconds` / `Retry-After` จริง; การแสดงประมาณหนึ่งนาทีอาจเป็นเวลารอ 1–60 วินาที และไม่มีการส่งซ้ำอัตโนมัติ กรณีไม่ทราบเวลารอจะไม่แสดงเวลาที่คาดเดา
+
+`structured_output_invalid` แจ้งสร้างรูปแบบคำตอบไม่สำเร็จ และ `response_quality_rejected` แจ้งคำตอบไม่ผ่านการตรวจคุณภาพ โดยไม่ใช้ข้อความเรื่องโควต้าหรือคิว แอปยังส่ง retry เฉพาะเมื่อผู้ใช้กดปุ่ม; การกู้ draft หนึ่งรอบและตรวจซ้ำทำใน Python ภายในคำขอเดิม
+
+เมื่อส่งคำตอบแบบสอบถามแล้วล้มเหลว สรุปตัวเลือกยังอยู่ในแชต หากพิมพ์ต่อ แอปส่งข้อความใหม่พร้อมบริบทและคำตอบแบบสอบถามที่ยังไม่ได้ประมวลผล โดยไม่ส่งข้อความแจ้งข้อผิดพลาดเป็นคำตอบของผู้ช่วย ปุ่มลองอีกครั้งใช้สำเนาคำขอล่าสุดเดิมทั้ง history, context และ answer IDs จึงไม่เพิ่มข้อความผู้ใช้ซ้ำ
+
+กด “พิมพ์ตอบเอง” เพื่อผูกข้อความกับคำถามที่แสดงอยู่ แอปเก็บคำตอบเป็น `text`, ไปข้อถัดไป และส่งรวมกับช้อยเมื่อตอบครบ สรุปคำตอบแสดงในกล่องเดียว การพิมพ์แชตปกติยังส่งข้อความให้ AI ปรับความต้องการได้ คำถามที่มี `branch_question_id` เลือกเวอร์ชันใน `branch_choices` / `branch_titles` ด้วยรหัสช้อยของคำถามก่อนหน้า และคงรหัสช้อยของเวอร์ชันนั้นเมื่อส่งคำตอบ
+
+สถานะขณะรอคำตอบเปลี่ยนตาม SSE `status.message` ของขั้นตอนจริง (`status.step`: `preparing`, `planning`, `evidence`, `review`, `repair`) เช่น “กำลังวิเคราะห์คำถาม”, “กำลังสร้างคำตอบ”, “กำลังตรวจคำตอบ” และ “กำลังสรุปคำคำตอบ” กรณีแก้หลังตรวจ วินาทีที่ผ่านไปนับจากเริ่มคำขอ อัปเดตทุกวินาทีและไม่เริ่มใหม่เมื่อสถานะเปลี่ยน หยุดเมื่อจบคำขอ ข้อผิดพลาด `structured_output_invalid` ใช้ข้อความ “ยืมหน่อย สร้างคำตอบไม่ได้” ข้างไอคอน
+
+### เช็กว่าพร้อมใช้งาน
+
+1. เปิด Home แล้วโหลดรายการจาก environment ที่ตั้งไว้
+2. ลอง login และเปิดโปรไฟล์
+3. ทดสอบห้องแชตด้วยผู้ใช้ทดสอบสองบัญชี
+4. ส่งข้อความหา AI ผ่าน Go และดูคำตอบ / การ์ด / แบบสอบถาม
+5. ทดสอบกล้อง, ตำแหน่ง และ notification บนอุปกรณ์เป้าหมาย
+
+<a id="build"></a>
+
+## 📦 Build สำหรับทดสอบและเตรียมเผยแพร่
+
+จากโฟลเดอร์ `frontend/`:
+
+```sh
+# Android APK
+flutter build apk --release --dart-define-from-file=.env.local --dart-define-from-file=../ai_service/config/chat_client_runtime.json
+
+# Android App Bundle
+flutter build appbundle --release --dart-define-from-file=.env.local --dart-define-from-file=../ai_service/config/chat_client_runtime.json
+
+# iOS — ใช้ macOS และตั้ง native project / signing ให้ครบก่อน
+flutter build ipa --release --dart-define-from-file=.env.local --dart-define-from-file=../ai_service/config/chat_client_runtime.json
+```
+
+| Artifact          | ตำแหน่ง                                            |
+| ----------------- | -------------------------------------------------- |
+| APK               | `build/app/outputs/flutter-apk/app-release.apk`    |
+| App Bundle        | `build/app/outputs/bundle/release/app-release.aab` |
+| iOS archive / IPA | `build/ios/archive/` และ `build/ios/ipa/`          |
+
+Android ใช้ `--split-per-abi` เพิ่มในคำสั่ง APK ได้ หากต้องการแยกไฟล์ตาม CPU
+
+> **ก่อนขึ้น Store:** Android project ปัจจุบันใช้ application ID `com.example.frontend` และ release signing ยังชี้ไปที่ **debug key** ต้องตั้ง ID, signing และ Firebase configuration ของแอปจริงก่อนเผยแพร่ ฝั่ง iOS ต้องตั้ง bundle ID, signing และ native dependencies ด้วย ดู [Android release guide](https://docs.flutter.dev/deployment/android) และ [iOS release guide](https://docs.flutter.dev/deployment/ios)
+
+<a id="development"></a>
+
+## 🧪 พัฒนา & ตรวจงาน
+
+```sh
+flutter analyze
+flutter test test/core
+flutter test test/features/chatbot/response_ready_deadline_test.dart
+flutter test test/features/wallet/wallet_cubit_test.dart
+```
+
+ชุดเต็มใช้ `flutter test` แต่มี [home_supabase_live_search_test.dart](test/features/home/home_supabase_live_search_test.dart) ที่เรียก Supabase จริงโดยไม่มี opt-in guard จึงไม่ใช่ชุด offline ทั้งหมด ส่วน chatbot live tests บางไฟล์ต้องเปิด opt-in และเตรียม Go / Python ไว้ก่อน การผ่าน unit tests หรือ smoke test ไม่ใช่การรับรองคุณภาพ AI หรือ p95 บนอุปกรณ์จริง
+
+<details>
+<summary>เครื่องมือสร้างโค้ดและไอคอน</summary>
+
+เมื่อเพิ่ม / แก้ model ที่ใช้ `@JsonSerializable`:
+
+```sh
+dart run build_runner build --delete-conflicting-outputs
+```
+
+เมื่อแก้ configuration ของ app icon:
+
+```sh
+dart run flutter_launcher_icons
+```
+
+โค้ดปัจจุบันไม่มี model ที่ใช้ annotation ดังกล่าว จึงไม่ต้องสร้างโค้ดเป็นขั้นตอนบังคับในการเริ่มโปรเจกต์
+
+</details>
+
+### โครงสร้างที่ควรรู้
 
 ```text
 frontend/
-├── assets/
-│   ├── fonts/           # ฟอนต์ Prompt สำหรับแสดงผลภาษาไทยและอังกฤษ
-│   ├── icons/           # ไอคอนของระบบ
-│   ├── images/          # โลโก้และภาพประกอบ
-│   └── sounds/          # ไฟล์เสียงแจ้งเตือน
 ├── lib/
-│   ├── core/            # โมดูลกลางที่ใช้งานร่วมกันทั้งแอปพลิเคชัน
-│   │   ├── config/      # การอ่านค่าคอนฟิกสภาพแวดล้อม (AppConfig)
-│   │   ├── constants/   # ค่าคงที่ สี ดีไซน์โทเค็น (AppColors)
-│   │   ├── errors/      # Failure & Exception classes
-│   │   ├── navigation/  # การตั้งค่า GoRouter และ Deep Links
-│   │   ├── network/     # Dio Client และ Supabase Auth Interceptor
-│   │   ├── services/    # FCM Push Notification, Location, Presence Tracker
-│   │   ├── theme/       # AppTheme & Typography
-│   │   ├── utils/       # Image Compression, Date Formatters
-│   │   └── widgets/     # Common Shared Widgets (ปุ่ม, ฟอร์ม, Dialog)
-│   ├── features/        # โมดูลตามฟังก์ชันการทำงาน (Feature Modules)
-│   │   ├── auth/        # ระบบยืนยันตัวตน (Email, Password, Google, OTP)
-│   │   ├── booking/     # การส่งคำขอจองเช่าและจัดการคำขอ
-│   │   ├── chat/        # แชทสนทนาระหว่างผู้เช่า-ผู้ให้เช่าแบบ Realtime
-│   │   ├── chatbot/     # ระบบสนทนากับ AI Rental Consultant
-│   │   ├── home/        # ฟีดรายการอุปกรณ์แนะนำ ค้นหา และกรองหมวดหมู่
-│   │   ├── item_detail/ # รายละเอียดอุปกรณ์ สเปก และเงื่อนไขการเช่า
-│   │   ├── profile/     # จัดการโปรไฟล์ ยืนยันตัวตน และเบอร์ติดต่อ
-│   │   ├── rental_item/ # การลงประกาศปล่อยเช่าอุปกรณ์และการแก้ไข
-│   │   ├── rental_return/# การส่งมอบ (Handover) และส่งคืน (Return) อุปกรณ์
-│   │   ├── review/      # การเขียนรีวิวและประเมินคะแนน
-│   │   └── wallet/      # กระเป๋าเงินดิจิทัล เติมเงิน และประวัติการทำรายการ
-│   ├── app.dart         # รูทวิดเจ็ตของแอปพลิเคชัน
-│   └── main.dart        # จุดเริ่มต้นการทำงาน (Entry Point)
-├── test/                # ชุดทดสอบ Unit Tests และ Widget Tests
-└── pubspec.yaml         # รายการ Package Dependencies
+│   ├── main.dart            # Startup, services และ session
+│   ├── app.dart             # Root widget
+│   ├── core/                # Config, network, routes, theme, services, widgets
+│   └── features/            # Auth, home, rental, chat, AI, profile, wallet ฯลฯ
+├── assets/                  # Prompt fonts, images, icons, sounds
+├── android/                 # Native Android project
+├── ios/                     # Native iOS project
+├── web/                     # Web project; ตรวจความพร้อมของแต่ละฟีเจอร์แยกจาก mobile
+├── test/                    # Unit / widget / live tests
+├── .env.local               # Client configuration — สร้างเอง
+├── pubspec.yaml             # Dependencies / assets / app version
+└── pubspec.lock             # Resolved dependency versions
 ```
+
+ภายในแต่ละ feature ส่วนใหญ่แยก `data/`, `domain/` และ `presentation/` ดูกติกาการพัฒนาเพิ่มเติมใน [AGENTS.md](AGENTS.md)
+
+<a id="troubleshooting"></a>
+
+## 🛠️ ติดตรงไหน ลองเช็กตรงนี้
+
+| อาการ                                 | เช็กอะไร                                                                          |
+| ------------------------------------- | --------------------------------------------------------------------------------- |
+| SDK / dependency resolution ไม่ผ่าน   | Dart ต้องตรงข้อกำหนด **≥ 3.12.0** และ Flutter **≥ 3.44.0** ใน lockfile            |
+| Build แจ้งว่าไม่พบ `.env.local`       | สร้างไฟล์ใน `frontend/` เพราะ pubspec ประกาศเป็น asset                            |
+| Supabase is not configured            | ตรวจ URL และ `SUPABASE_PUBLISHABLE_KEY` แล้วเริ่มแอปใหม่                          |
+| API 404 หรือ path ซ้ำ                 | ตั้ง `API_URL` เป็น origin โดยไม่ต่อ `/api`                                    |
+| Android เรียก Backend ในเครื่องไม่ได้ | ตรวจ HTTPS / cleartext policy, emulator host, LAN และ firewall                    |
+| API ตอบ 401                           | ตรวจ `APP_SECRET_KEY` ให้ตรง Backend; flow ส่วนตัวต้องมี user session ด้วย        |
+| Google login ไม่กลับแอป               | ตรวจ Google provider, Supabase redirect allowlist และ `yuemnoi://login-callback/` |
+| Google Services task ล้มเหลว          | ตรวจ `google-services.json` และ application ID ว่าตรงกัน                          |
+| ไม่มี push notification               | ตรวจ Firebase / APNs, permission, FCM token และ Backend service account           |
+| AI timeout / quota เต็ม               | ตรวจ Go → AI URL / internal key / runtime / provider quotas ตาม AI README         |
 
 ---
-
-## ✨ ฟีเจอร์ภายในแอปพลิเคชัน (Features)
-
-- **Authentication & Guest Mode**:
-  - รองรับการเข้าสู่ระบบด้วย Email/Password และ Google Sign-In (OAuth PKCE)
-  - รองรับโหมด Guest Browsing (สามารถดูรายการสินค้าได้ แต่จะติด Login Guard เมื่อกดจองหรือแชท)
-- **Discovery Feed & Catalog**:
-  - หน้าฟีดเรียงลำดับอุปกรณ์ตามความนิยม (Popularity) และความสดใหม่ (Recency)
-  - กรองตามหมวดหมู่ เช่น กล้อง, เลนส์, โน้ตบุ๊ก, แท็บเล็ต, อุปกรณ์สตูดิโอ
-  - แสดงผลด้วย Shimmer Skeleton Loading ระหว่างรอข้อมูล
-- **Rental Lifecycle Management**:
-  - สร้างคำขอเช่า ระบุวันที่ต้องการเช่า คำนวณราคาอัตโนมัติ
-  - ระบบตัดเงินค่าเช่าและเงินประกันผ่าน Wallet
-  - ยืนยันการส่งมอบแบบพบหน้าด้วย OTP / QR Code
-  - ติดตามพิกัดจุดนัดพบผ่านแผนที่ OpenStreetMap (`flutter_map`)
-  - ยืนยันการส่งคืนและปลดล็อกเงินประกัน
-  - ให้คะแนนและเขียนรีวิวผู้ให้เช่า
-- **Real-time Messaging**:
-  - ส่งข้อความและรูปภาพสภาพสินค้าแบบสดผ่าน WebSocket
-  - แสดงจำนวนข้อความที่ยังไม่ได้อ่าน
-- **AI Chatbot Interface**:
-  - สตรีมคำตอบแบบพิมพ์สด (SSE)
-  - แสดงชิปตัวเลือก (Interactive Choice Chips) เพื่อตอบคำถามเจาะจงของ AI
-  - ปุ่มแก้ไขข้อความ และปุ่มส่ง Feedback ความพึงพอใจ
-- **Push Notifications**:
-  - แจ้งเตือนข้อความแชทใหม่และสถานะการเช่าผ่าน Firebase Cloud Messaging (FCM)
-
----
-
-## 📋 ข้อกำหนดเบื้องต้น (Prerequisites)
-
-- **Flutter SDK**: `^3.11.5` (หรือเวอร์ชัน 3.29+)
-- **Dart SDK**: `^3.11.5`
-- **Android Studio** (สำหรับรัน Android Emulator หรือเชื่อมต่ออุปกรณ์จริง) หรือ **Xcode** (สำหรับ iOS Simulator บน macOS)
-- ติดตั้ง `build_runner` เพื่อคอมไพล์โค้ด Serialization
-
----
-
-## ⚙️ การตั้งค่า Environment Variables
-
-สร้างไฟล์ `.env.local` ภายในโฟลเดอร์ `frontend/`:
-
-```env
-# URL สำหรับเชื่อมต่อไปยัง Go Backend REST API
-# สำหรับ Android Emulator ใช้ 10.0.2.2
-# สำหรับ iOS Simulator หรือ Web ใช้ localhost
-# สำหรับ Physical Device ให้ใช้ IP เครื่อง Host ในเครือข่าย หรือ Tailscale URL
-API_URL=http://10.0.2.2:8080/api/v1
-
-# ข้อมูลเชื่อมต่อ Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_PUBLISHABLE_KEY=your-supabase-anon-key
-
-# กุญแจความปลอดภัยสำหรับยืนยันว่าเป็นแอปที่ถูกต้อง
-APP_SECRET_KEY=your-super-secure-app-secret-key-32chars
-
-# Google OAuth Web Client ID (สำหรับการยืนยันตัวตนผ่าน Google Sign-In)
-GOOGLE_WEB_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
-```
-
----
-
-## 🚀 ขั้นตอนการติดตั้งและรันแอปพลิเคชัน (Getting Started)
-
-### 1. ดาวน์โหลดแพ็กเกจ
-
-```bash
-cd frontend
-flutter pub get
-```
-
-### 2. รันแอปพลิเคชัน
-
-รันโดยระบุไฟล์คอนฟิกผ่าน `--dart-define-from-file`:
-
-```bash
-flutter run --dart-define-from-file=.env.local
-```
-
-หรือระบุ Device เจาะจง:
-
-```bash
-# รันบน Android
-flutter run -d android --dart-define-from-file=.env.local
-
-# รันบน iOS
-flutter run -d ios --dart-define-from-file=.env.local
-
-# รันบน Chrome (Web)
-flutter run -d chrome --dart-define-from-file=.env.local
-```
-
----
-
-## 📦 วิธีการคอมไพล์และสร้างไฟล์ติดตั้ง (Build APK / App Bundle)
-
-ก่อนเริ่มคอมไพล์ กรุณาตรวจสอบ Checklist ดังนี้:
-1. ดึง Dependencies ให้ครบถ้วน: `flutter pub get`
-2. คอมไพล์โค้ด Model Serialization: `dart run build_runner build --delete-conflicting-outputs`
-3. **ตรวจสอบ `API_URL` ใน `.env.local`**: หากนำ APK ไปติดตั้งบนสมาร์ตโฟนเครื่องจริง ให้เปลี่ยนจาก `10.0.2.2` หรือ `localhost` เป็น IP เครื่องคอมพิวเตอร์ในวง LAN เดียวกัน (เช่น `http://192.168.1.XX:8080/api/v1`) หรือใช้ Cloud/Tailscale URL ที่เครื่องภายนอกเข้าถึงได้
-
-### 1. คอมไพล์แบบ Universal Release APK (รวมทุก CPU Architecture)
-เหมาะสำหรับการนำไฟล์ไปส่งต่อหรือแชร์ให้ผู้อื่นติดตั้งได้ทันทีบนทุกเครื่อง:
-```bash
-flutter build apk --release --dart-define-from-file=.env.local
-```
-- 📁 **ไฟล์ผลลัพธ์**: `build/app/outputs/flutter-apk/app-release.apk`
-
----
-
-### 2. คอมไพล์แบบแยกสถาปัตยกรรม CPU (Split per ABI - แนะนำ)
-ช่วยลดขนาดไฟล์ APK ลงได้มากกว่า 50% เหมาะสำหรับการติดตั้งเฉพาะเครื่อง:
-```bash
-flutter build apk --release --split-per-abi --dart-define-from-file=.env.local
-```
-- 📁 **ไฟล์ผลลัพธ์** (อยู่ในโฟลเดอร์ `build/app/outputs/flutter-apk/`):
-  - `app-arm64-v8a-release.apk` : สำหรับสมาร์ตโฟน Android 64-bit รุ่นใหม่เกือบทั้งหมด (**แนะนำสำหรับเครื่องปัจจุบัน**)
-  - `app-armeabi-v7a-release.apk` : สำหรับสมาร์ตโฟน Android 32-bit รุ่นเก่า
-  - `app-x86_64-release.apk` : สำหรับอุปกรณ์ x86_64 หรือ Android Emulator
-
----
-
-### 3. คอมไพล์ Debug APK (สำหรับทดสอบด่วน)
-หากต้องการติดตั้งเพื่อทดสอบระบบอย่างรวดเร็วโดยไม่ต้องตรวจ Signing Key:
-```bash
-flutter build apk --debug --dart-define-from-file=.env.local
-```
-- 📁 **ไฟล์ผลลัพธ์**: `build/app/outputs/flutter-apk/app-debug.apk`
-
----
-
-### 4. คอมไพล์ Android App Bundle (.aab สำหรับ Google Play Store)
-สำหรับการเตรียมไฟล์นำขึ้นเผยแพร่บน Google Play Console:
-```bash
-flutter build appbundle --release --dart-define-from-file=.env.local
-```
-- 📁 **ไฟล์ผลลัพธ์**: `build/app/outputs/bundle/release/app-release.aab`
-
----
-
-### 5. วิธีการติดตั้งไฟล์ APK ลงสมาร์ตโฟนผ่าน ADB
-หากเปิดโหมด **USB Debugging** บนสมาร์ตโฟนไว้ สามารถสั่งติดตั้งได้โดยตรงผ่านคำสั่ง:
-```bash
-adb install -r build/app/outputs/flutter-apk/app-release.apk
-```
-
----
-
-## 🧪 การทดสอบ (Testing)
-
-รันชุดทดสอบทั้งหมดในโปรเจกต์:
-
-```bash
-flutter test
-```
-
-รันการทดสอบเฉพาะส่วน:
-
-```bash
-# ทดสอบ Core Logic
-flutter test test/core/
-
-# ทดสอบ Feature Bloc & Repositories
-flutter test test/features/
-```
-
----
-
-## 📝 แนวทางการพัฒนา (Development Rules)
-
-1. **Clean Architecture Strictness**: ห้ามเรียกใช้ Database/API โดยตรงจาก UI Presentation Layer ทุกอย่างต้องผ่าน Use Case และ Repository
-2. **UI Stability**: ห้ามปรับเปลี่ยน Layout หรือ Styling เดิมโดยไม่ได้รับมอบหมาย ให้คงดีไซน์ Tokens และสีเดิมใน `core/constants/colors.dart`
-3. **No Direct Sensitive DB Joins**: ห้าม Query ข้อมูลส่วนบุคคล (เบอร์โทร, ข้อมูล KYC) ข้ามผู้ใช้ผ่าน Supabase Client โดยตรง ให้เรียกผ่าน Go Backend เสมอ
-4. **Code Comments**: เขียนคอมเมนต์อธิบายโค้ดด้วยภาษาไทยที่กระชับและเข้าใจง่าย

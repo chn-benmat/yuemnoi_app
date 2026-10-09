@@ -1,0 +1,195 @@
+{
+  "$defs": {
+    "PriceRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum": {
+          "minimum": 0,
+          "title": "Maximum",
+          "type": "number"
+        },
+        "user_unit": {
+          "minLength": 1,
+          "title": "User Unit",
+          "type": "string"
+        },
+        "catalog_units": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Catalog Units",
+          "type": "array"
+        },
+        "interpretation": {
+          "minLength": 1,
+          "title": "Interpretation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "maximum",
+        "user_unit",
+        "catalog_units",
+        "interpretation"
+      ],
+      "title": "PriceRequirement",
+      "type": "object"
+    },
+    "SelectedItem": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "evidence_fields": {
+          "description": "An array of individual catalog field names used as evidence for this item. Put the field names directly in the array.",
+          "items": {
+            "enum": [
+              "name",
+              "category",
+              "description",
+              "price",
+              "type",
+              "status"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Fields",
+          "type": "array",
+          "x-provider-description": true
+        }
+      },
+      "required": [
+        "id",
+        "reason",
+        "evidence_fields"
+      ],
+      "title": "SelectedItem",
+      "type": "object"
+    },
+    "SelectionPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "items",
+            "categories",
+            "no_matches"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "purpose": {
+          "enum": [
+            "recommendation",
+            "inspection"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "selected_items": {
+          "items": {
+            "$ref": "#/$defs/SelectedItem"
+          },
+          "title": "Selected Items",
+          "type": "array"
+        },
+        "price_requirement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PriceRequirement"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoning": {
+          "minLength": 1,
+          "title": "Reasoning",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "purpose",
+        "selected_items",
+        "price_requirement",
+        "reasoning"
+      ],
+      "title": "SelectionPlan",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "speaker_register": {
+      "const": "informal_ungendered",
+      "default": "informal_ungendered",
+      "description": "Return the exact machine label informal_ungendered, never a description or translation. Answer and suggested replies use natural Thai without gendered speaker pronouns or honorifics.",
+      "title": "Speaker Register",
+      "type": "string",
+      "x-provider-description": true
+    },
+    "request_fit": {
+      "description": "Resolve suitability before prose: meets_request only when selected equipment satisfies the user's requested kind, function and every established constraint; no_supported_match when no candidate does so; not_assessed for inspection, technical information or category browsing without a justified item selection. Category membership or an eligible price alone never establishes suitability; complementary equipment does not replace the requested device. This conclusion guides writing and is not an independent review.",
+      "enum": [
+        "meets_request",
+        "no_supported_match",
+        "not_assessed"
+      ],
+      "title": "Request Fit",
+      "type": "string",
+      "x-provider-description": true
+    },
+    "selection": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SelectionPlan"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "text": {
+      "description": "Lead with the request-fit conclusion in friendly nongendered Thai. For no_supported_match explicitly explain that the requested kind/function has no supported match within the preserved constraints; describe complementary or differently constrained options only as alternatives, never as satisfying the unmet request. Do not infer incompatibility from absent evidence. Render catalog names, prices, units and status through {{item:ID:FIELD}} references to supplied rows, never rewritten literal values. For product recommendations, follow the system's presentation instructions: each product has a standalone bold name followed by a Markdown field list. Keep the name and fields on separate lines, never combine them into an inline paragraph.",
+      "minLength": 1,
+      "title": "Text",
+      "type": "string",
+      "x-provider-description": true
+    },
+    "search_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Search Ids",
+      "type": "array"
+    },
+    "suggested_replies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Suggested Replies",
+      "type": "array"
+    }
+  },
+  "required": [
+    "request_fit",
+    "selection",
+    "text",
+    "search_ids",
+    "suggested_replies"
+  ],
+  "title": "EvidenceAnswer",
+  "type": "object"
+}

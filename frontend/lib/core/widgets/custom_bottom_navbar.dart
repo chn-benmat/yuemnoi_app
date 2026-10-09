@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:google_nav_bar/google_nav_bar.dart';
 import '../constants/colors.dart';
 
 class CustomBottomNavbar extends StatelessWidget {
@@ -52,142 +51,125 @@ class CustomBottomNavbar extends StatelessWidget {
                 ],
               ),
               padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 8.0),
-              child: GNav(
-                rippleColor: AppColors.primaryColor.withValues(alpha: 0.12),
-                hoverColor: AppColors.primaryColor.withValues(alpha: 0.05),
-                gap: 5,
-                activeColor: AppColors.primaryColor,
-                iconSize: 22,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                duration: const Duration(milliseconds: 280),
-                tabBackgroundColor: const Color(0xFFF3E8FF), // เม็ดยาสีม่วงอ่อนพร้อมยืดข้อความ
-                color: const Color(0xFF64748B), // สีไอคอนเทาเข้มคมชัด ไม่จาง
-                selectedIndex: selectedIndex,
-                onTabChange: onTabChange,
-                textStyle: const TextStyle(
-                  fontFamily: 'Prompt',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12.5,
-                  color: AppColors.primaryColor,
-                ),
-                tabs: [
-                  GButton(
+              child: Row(
+                children: [
+                  _NavItem(
                     key: const ValueKey('nav-home'),
+                    label: 'หน้าหลัก',
                     icon: selectedIndex == 0
                         ? Icons.home_rounded
                         : Icons.home_outlined,
-                    text: 'หน้าหลัก',
+                    selected: selectedIndex == 0,
+                    onTap: () => onTabChange(0),
                   ),
-                  GButton(
+                  _NavItem(
                     key: const ValueKey('nav-chat'),
+                    label: 'แชท',
                     icon: selectedIndex == 1
                         ? Icons.chat_bubble_rounded
                         : Icons.chat_bubble_outline_rounded,
-                    leading: hasUnreadChat
-                        ? SizedBox(
-                            width: 26,
-                            height: 24,
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              alignment: Alignment.center,
-                              children: [
-                                Icon(
-                                  selectedIndex == 1
-                                      ? Icons.chat_bubble_rounded
-                                      : Icons.chat_bubble_outline_rounded,
-                                  size: 22,
-                                  color: selectedIndex == 1
-                                      ? AppColors.primaryColor
-                                      : const Color(0xFF64748B),
-                                ),
-                                Positioned(
-                                  top: -2,
-                                  right: -2,
-                                  child: Container(
-                                    key: const ValueKey('chat-unread-badge'),
-                                    width: 10,
-                                    height: 10,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEF4444),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: selectedIndex == 1
-                                            ? const Color(0xFFF3E8FF)
-                                            : Colors.white,
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : null,
-                    text: 'แชท',
+                    selected: selectedIndex == 1,
+                    hasUnread: hasUnreadChat,
+                    badgeKey: const ValueKey('chat-unread-badge'),
+                    onTap: () => onTabChange(1),
                   ),
-                  GButton(
+                  _NavItem(
                     key: const ValueKey('nav-notification'),
+                    label: 'แจ้งเตือน',
                     icon: selectedIndex == 2
                         ? Icons.notifications_rounded
                         : Icons.notifications_none_rounded,
-                    leading: hasUnreadNotification
-                        ? SizedBox(
-                            width: 26,
-                            height: 24,
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              alignment: Alignment.center,
-                              children: [
-                                Icon(
-                                  selectedIndex == 2
-                                      ? Icons.notifications_rounded
-                                      : Icons.notifications_none_rounded,
-                                  size: 22,
-                                  color: selectedIndex == 2
-                                      ? AppColors.primaryColor
-                                      : const Color(0xFF64748B),
-                                ),
-                                Positioned(
-                                  top: -2,
-                                  right: -2,
-                                  child: Container(
-                                    key: const ValueKey('notification-unread-badge'),
-                                    width: 10,
-                                    height: 10,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEF4444),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: selectedIndex == 2
-                                            ? const Color(0xFFF3E8FF)
-                                            : Colors.white,
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : null,
-                    text: 'แจ้งเตือน',
+                    selected: selectedIndex == 2,
+                    hasUnread: hasUnreadNotification,
+                    badgeKey: const ValueKey('notification-unread-badge'),
+                    onTap: () => onTabChange(2),
                   ),
-                  GButton(
-                    key: const ValueKey('nav-wallet'),
-                    icon: selectedIndex == 3
-                        ? Icons.account_balance_wallet_rounded
-                        : Icons.account_balance_wallet_outlined,
-                    text: 'เงินในบัญชี',
-                  ),
-                  GButton(
+                  _NavItem(
                     key: const ValueKey('nav-profile'),
-                    icon: selectedIndex == 4
+                    label: 'โปรไฟล์',
+                    icon: selectedIndex == 3
                         ? Icons.person_rounded
                         : Icons.person_outline_rounded,
-                    text: 'โปรไฟล์',
+                    selected: selectedIndex == 3,
+                    onTap: () => onTabChange(3),
                   ),
                 ],
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final bool hasUnread;
+  final Key? badgeKey;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    this.hasUnread = false,
+    this.badgeKey,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.primaryColor : const Color(0xFF64748B);
+
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(icon, size: 22, color: color),
+                    if (hasUnread)
+                      Positioned(
+                        top: -2,
+                        right: -3,
+                        child: Container(
+                          key: badgeKey,
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Prompt',
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    fontSize: 10,
+                    color: color,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

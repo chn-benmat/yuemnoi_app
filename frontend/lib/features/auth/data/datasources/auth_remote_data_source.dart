@@ -34,12 +34,12 @@ class AuthRemoteDataSource {
   AuthRemoteDataSource({ApiClient? client})
     : _client = client ?? DioApiClient();
 
-  static const _loginPath = '/api/v1/auth/login';
-  static const _registerPath = '/api/v1/auth/register';
-  static const _sendOtpPath = '/api/v1/auth/send-otp';
-  static const _verifyOtpPath = '/api/v1/auth/verify-otp';
-  static const _changePasswordPath = '/api/v1/auth/change-password';
-  static const _googleProfilePath = '/api/v1/auth/google-profile';
+  static const _loginPath = '/api/auth/login';
+  static const _registerPath = '/api/auth/register';
+  static const _sendOtpPath = '/api/auth/send-otp';
+  static const _verifyOtpPath = '/api/auth/verify-otp';
+  static const _changePasswordPath = '/api/auth/change-password';
+  static const _googleProfilePath = '/api/auth/google-profile';
 
   final ApiClient _client;
 

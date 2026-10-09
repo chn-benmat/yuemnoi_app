@@ -1,0 +1,79 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "runtime_path": {
+      "format": "path",
+      "title": "Runtime Path",
+      "type": "string"
+    },
+    "policy_path": {
+      "format": "path",
+      "title": "Policy Path",
+      "type": "string"
+    },
+    "label_review_path": {
+      "format": "path",
+      "title": "Label Review Path",
+      "type": "string"
+    },
+    "knowledge_path": {
+      "format": "path",
+      "title": "Knowledge Path",
+      "type": "string"
+    },
+    "timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Timeout Seconds",
+      "type": "number"
+    },
+    "capability_output_tokens": {
+      "exclusiveMinimum": 0,
+      "title": "Capability Output Tokens",
+      "type": "integer"
+    },
+    "batch_output_tokens": {
+      "exclusiveMinimum": 0,
+      "title": "Batch Output Tokens",
+      "type": "integer"
+    },
+    "max_http_requests": {
+      "exclusiveMinimum": 0,
+      "title": "Max Http Requests",
+      "type": "integer"
+    },
+    "batch_case_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 5,
+      "minItems": 5,
+      "title": "Batch Case Ids",
+      "type": "array"
+    },
+    "instruction": {
+      "minLength": 1,
+      "title": "Instruction",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "runtime_path",
+    "policy_path",
+    "label_review_path",
+    "knowledge_path",
+    "timeout_seconds",
+    "capability_output_tokens",
+    "batch_output_tokens",
+    "max_http_requests",
+    "batch_case_ids",
+    "instruction"
+  ],
+  "title": "PreflightConfig",
+  "type": "object"
+}

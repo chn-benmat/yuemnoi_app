@@ -11,7 +11,7 @@ import '../models/feed_category_model.dart';
 import '../models/feed_item_model.dart';
 import 'home_mock_data_source.dart';
 
-/// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงจาก Supabase และ Go Backend REST API (`/api/v1/items`)
+/// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงจาก Supabase และ Go Backend REST API (`/api/items`)
 /// พร้อม fallback ไปยัง Local Cache
 class HomeSupabaseDataSource {
   HomeSupabaseDataSource({
@@ -427,7 +427,7 @@ class HomeSupabaseDataSource {
     return _mapRawListToFeedItems(rawList, profilesMap: profilesMap);
   }
 
-  /// ดึงข้อมูลทั้งหมดผ่าน Supabase Direct, Go Backend API (`/api/v1/items`) หรือ Local Cache
+  /// ดึงข้อมูลทั้งหมดผ่าน Supabase Direct, Go Backend API (`/api/items`) หรือ Local Cache
   Future<List<FeedItemModel>> _fetchAllSupabaseItems({
     bool forceRefresh = false,
   }) async {
@@ -455,7 +455,7 @@ class HomeSupabaseDataSource {
 
     // Tier 2: Try Go Backend API
     try {
-      final response = await _apiClient.get('/api/v1/items');
+      final response = await _apiClient.get('/api/items');
       if (response.statusCode == 200 && response.data is List) {
         final rawItems = response.data as List;
         final items = _mapRawListToFeedItems(rawItems);
@@ -590,26 +590,4 @@ class HomeSupabaseDataSource {
     }
   }
 
-  static const Map<String, List<String>> _categoryKeywords = {
-    'camera': ['camera', 'กล้อง', 'กล้องถ่ายภาพ', 'เลนส์', 'photo'],
-    'camping': ['camping', 'แคมป์', 'แคมป์ปิ้ง', 'เต็นท์', 'กลางแจ้ง', 'เต้นท์'],
-    'computer': ['computer', 'คอม', 'คอมพิวเตอร์', 'โน้ตบุ๊ก', 'โน้ตบุ๊ค', 'laptop', 'macbook', 'ไอที'],
-    'music': ['music', 'ดนตรี', 'เครื่องดนตรี', 'กีตาร์', 'กีต้าร์', 'เปียโน'],
-    'gaming': ['gaming', 'เกม', 'เกมส์', 'บันเทิง', 'เกม/บันเทิง', 'playstation', 'ps5', 'nintendo'],
-    'tools': ['tools', 'ช่าง', 'อุปกรณ์ช่าง', 'เครื่องมือช่าง', 'สว่าน'],
-    'audio': ['audio', 'เสียง', 'เครื่องเสียง', 'หูฟัง', 'ลำโพง', 'speaker', 'headphone'],
-    'phone': ['phone', 'โทรศัพท์', 'โทรศัพท์/สื่อสาร', 'มือถือ', 'smartphone', 'iphone', 'ipad', 'แท็บเล็ต'],
-    'sports': ['sports', 'กีฬา', 'กีฬา/ฟิตเนส', 'ฟิตเนส', 'ออกกำลังกาย', 'จักรยาน', 'แบดมินตัน'],
-  };
-
-  static Set<String> _matchedCategoryIdsForQuery(String query) {
-    final lower = query.toLowerCase().trim();
-    final matched = <String>{};
-    for (final entry in _categoryKeywords.entries) {
-      if (entry.value.any((kw) => lower.contains(kw) || kw.contains(lower))) {
-        matched.add(entry.key);
-      }
-    }
-    return matched;
-  }
 }

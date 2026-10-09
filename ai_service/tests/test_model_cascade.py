@@ -6,8 +6,8 @@ from app.infrastructure.llm.cascade_llm_service import CascadeLLMService
 
 
 @pytest.mark.asyncio
-async def test_cascade_falls_back_when_primary_gemini_fails():
-    """Verifies that when Gemini primary fails (e.g. 429 quota), it falls back down the cascade."""
+async def test_cascade_falls_back_to_other_provider_when_primary_rate_limited(monkeypatch):
+    """One failed attempt uses one eligible fallback, without repeating the quota bucket."""
     mock_gemini = MagicMock()
     mock_groq = MagicMock()
 
@@ -19,18 +19,19 @@ async def test_cascade_falls_back_when_primary_gemini_fails():
     # Make Groq succeed on primary model
     mock_groq.generate_text = AsyncMock(return_value="คำตอบจาก Groq สำรองค่ะ")
 
-    cascade = CascadeLLMService(gemini_client=mock_gemini, groq_client=mock_groq)
+    config = settings.model_copy(update={"GROQ_PRIMARY_MODEL": "fixture-backup"})
+    cascade = CascadeLLMService(gemini_client=mock_gemini, groq_client=mock_groq, configuration=config)
+    monkeypatch.setattr(cascade, "_get_cascade_tiers", lambda: [("gemini", "fixture-primary"), ("groq", "fixture-backup")])
     result = await cascade.generate_text(prompt="สวัสดีค่ะ")
 
     assert result == "คำตอบจาก Groq สำรองค่ะ"
-    # Verify Gemini was attempted 3 times (for 3 gemini models) before switching to Groq
-    assert mock_gemini.generate_text.call_count == len(settings.gemini_models)
+    assert mock_gemini.generate_text.call_count == 1
     assert mock_groq.generate_text.call_count == 1
 
 
 @pytest.mark.asyncio
-async def test_cascade_raises_exhausted_when_all_fail():
-    """Verifies that when all 6 models fail, AllLLMProvidersExhaustedException is raised."""
+async def test_cascade_raises_exhausted_after_bounded_failed_attempts(monkeypatch):
+    """The failover bound does not expand to every configured model."""
     mock_gemini = MagicMock()
     mock_groq = MagicMock()
 
@@ -41,11 +42,12 @@ async def test_cascade_raises_exhausted_when_all_fail():
         side_effect=LLMProviderException("Groq", "groq", "Rate limited", status_code=429)
     )
 
-    cascade = CascadeLLMService(gemini_client=mock_gemini, groq_client=mock_groq)
+    config = settings.model_copy(update={"GROQ_PRIMARY_MODEL": "fixture-backup", "GROQ_FALLBACK_MODEL_1": "fixture-extra"})
+    cascade = CascadeLLMService(gemini_client=mock_gemini, groq_client=mock_groq, configuration=config)
+    monkeypatch.setattr(cascade, "_get_cascade_tiers", lambda: [("gemini", "fixture-primary"), ("groq", "fixture-backup"), ("groq", "fixture-extra")])
 
     with pytest.raises(AllLLMProvidersExhaustedException):
         await cascade.generate_text(prompt="ทดสอบ")
 
-    total_models = len(settings.gemini_models) + len(settings.groq_models)
-    assert mock_gemini.generate_text.call_count == len(settings.gemini_models)
-    assert mock_groq.generate_text.call_count == len(settings.groq_models)
+    assert mock_gemini.generate_text.call_count == 1
+    assert mock_groq.generate_text.call_count == 1

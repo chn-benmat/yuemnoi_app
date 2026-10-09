@@ -10,6 +10,42 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestRouterRegistersAPIEndpoints(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := ports.SetupRouter(nil, nil, nil, nil, nil, nil, "")
+
+	var routes []string
+	for _, route := range router.Routes() {
+		routes = append(routes, route.Method+" "+route.Path)
+	}
+
+	assert.ElementsMatch(t, []string{
+		"GET /health",
+		"POST /api/auth/register",
+		"POST /api/auth/login",
+		"POST /api/auth/google-profile",
+		"POST /api/auth/change-password",
+		"POST /api/auth/send-otp",
+		"POST /api/auth/verify-otp",
+		"GET /api/user/profile",
+		"PUT /api/user/profile",
+		"PUT /api/user/contact",
+		"POST /api/user/fcm-token",
+		"GET /api/items",
+		"POST /api/items",
+		"GET /api/items/:id",
+		"PUT /api/items/:id",
+		"DELETE /api/items/:id",
+		"POST /api/rentals",
+		"POST /api/rentals/:id/handover",
+		"POST /api/rentals/:id/return",
+		"POST /api/push/chat",
+		"POST /api/chat/contact",
+		"POST /api/chat-ai",
+		"POST /api/chat-ai/stream",
+	}, routes)
+}
+
 func TestRouterSecurityMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -24,13 +60,13 @@ func TestRouterSecurityMiddleware(t *testing.T) {
 		{
 			name:       "rejects request without app secret",
 			method:     http.MethodGet,
-			path:       "/api/v1/items",
+			path:       "/api/items",
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name:       "rejects request with incorrect app secret",
 			method:     http.MethodGet,
-			path:       "/api/v1/items",
+			path:       "/api/items",
 			appSecret:  "incorrect",
 			wantStatus: http.StatusUnauthorized,
 		},
@@ -50,7 +86,7 @@ func TestRouterSecurityMiddleware(t *testing.T) {
 		{
 			name:       "allows cors preflight without app secret",
 			method:     http.MethodOptions,
-			path:       "/api/v1/items",
+			path:       "/api/items",
 			wantStatus: http.StatusNoContent,
 		},
 		{

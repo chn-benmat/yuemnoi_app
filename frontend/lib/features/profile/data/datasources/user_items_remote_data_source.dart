@@ -69,7 +69,7 @@ class UserItemsRemoteDataSource {
           for (final p in (profiles as List)) {
             if (p is Map) {
               final uid = p['user_id']?.toString();
-              final displayName = p['display_name']?.toString()?.trim() ?? '';
+              final displayName = p['display_name']?.toString().trim() ?? '';
               final email = p['email']?.toString() ?? '';
               if (uid != null) {
                 ownerNames[uid] = displayName.isNotEmpty

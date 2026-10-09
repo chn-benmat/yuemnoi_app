@@ -1,19 +1,26 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../core/constants/colors.dart';
+import '../../../../core/widgets/responsive_app_bar_title.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/chat_turn_timing.dart';
 import '../bloc/chatbot_bloc.dart';
 import '../bloc/chatbot_event.dart';
 import '../bloc/chatbot_state.dart';
 import '../widgets/chat_message_bubble.dart';
 import '../widgets/interactive_questionnaire_card.dart';
+import '../widgets/chatbot_composer.dart';
+import '../widgets/chatbot_design.dart';
+import '../widgets/chatbot_welcome.dart';
+import '../widgets/chatbot_state_card.dart';
 
 class ChatBotScreen extends StatefulWidget {
-  const ChatBotScreen({super.key});
+  const ChatBotScreen({this.now = DateTime.now, super.key});
+  final DateTime Function() now;
 
   @override
   State<ChatBotScreen> createState() => _ChatBotScreenState();
@@ -31,9 +38,29 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
   final Set<int> _pendingAssistantAnimations = <int>{};
   final Set<int> _startedAssistantAnimations = <int>{};
   int _observedMessageCount = 0;
+  ChatTurnTiming? _questionnaireTiming;
+  final Set<String> _renderedBubbles = {};
+  final Set<String> _renderedQuestionnaires = {};
+  final Set<String> _reportedRenders = {};
+
+  void _observeRender(ChatMessage message, {bool questionnaire = false}) {
+    if (message.id.isEmpty || message.isStreaming) return;
+    (questionnaire ? _renderedQuestionnaires : _renderedBubbles).add(
+      message.id,
+    );
+    if (!_renderedBubbles.contains(message.id) ||
+        (message.questions.any((q) => q.selectedOption == null) &&
+            !_renderedQuestionnaires.contains(message.id)) ||
+        !_reportedRenders.add(message.id)) {
+      return;
+    }
+    context.read<ChatbotBloc>().add(ChatbotResponseRendered(message.id));
+  }
+
   int? _editingMessageIndex;
   bool _showScrollToBottomButton = false;
   bool _dismissedQuestionnaire = false;
+  String? _customAnswerQuestionId;
   bool _isScrollToBottomScheduled = false;
   bool _isScrollScheduled = false;
   bool _hasPendingScroll = false;
@@ -64,7 +91,11 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
       _pendingAssistantAnimations.clear();
       _startedAssistantAnimations.clear();
       context.read<ChatbotBloc>().add(
-        ChatbotMessageEdited(index: editingMessageIndex, content: query),
+        ChatbotMessageEdited(
+          index: editingMessageIndex,
+          content: query,
+          timing: ChatTurnTiming(),
+        ),
       );
       setState(() {
         _editingMessageIndex = null;
@@ -76,18 +107,41 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
           state.messages.isNotEmpty &&
           state.messages.last.role == ChatMessageRole.assistant &&
           state.messages.last.questions.isNotEmpty &&
-          state.messages.last.questions.any(
-            (q) => q.selectedOption == null,
-          );
+          state.messages.last.questions.any((q) => q.selectedOption == null);
 
       if (hasActiveQuestionnaire && _questionnaireKey.currentState != null) {
-        _questionnaireKey.currentState!.submitCustomAnswer(query);
+        final questionnaire = _questionnaireKey.currentState!;
+        if (_customAnswerQuestionId != null &&
+            _customAnswerQuestionId == questionnaire.activeQuestionId) {
+          questionnaire.suspendProgression();
+          setState(() => _customAnswerQuestionId = null);
+          _messageController.clear();
+          questionnaire.submitCustomAnswer(query);
+          _messageFocusNode.requestFocus();
+          return;
+        }
+        final answers = questionnaire.partialAnswers;
+        questionnaire.suspendProgression();
+        context.read<ChatbotBloc>().add(
+          ChatbotMessageSubmitted(
+            query,
+            activeQuestionId: questionnaire.activeQuestionId,
+            questionnaireAnswers: answers,
+            selectedOptions: {
+              for (final answer in answers)
+                answer.questionId: answer.optionId ?? answer.text!,
+            },
+            timing: ChatTurnTiming(),
+          ),
+        );
         _messageController.clear();
         _messageFocusNode.requestFocus();
         return;
       }
 
-      context.read<ChatbotBloc>().add(ChatbotMessageSubmitted(query));
+      context.read<ChatbotBloc>().add(
+        ChatbotMessageSubmitted(query, timing: ChatTurnTiming()),
+      );
       setState(() {
         _dismissedQuestionnaire = false;
       });
@@ -102,9 +156,12 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
   void _sendQuickReply(String text, ChatbotState state) {
     if (state.isSending || text.trim().isEmpty) return;
-    context.read<ChatbotBloc>().add(ChatbotMessageSubmitted(text.trim()));
+    context.read<ChatbotBloc>().add(
+      ChatbotMessageSubmitted(text.trim(), timing: ChatTurnTiming()),
+    );
     setState(() {
       _dismissedQuestionnaire = false;
+      _customAnswerQuestionId = null;
     });
     _messageController.clear();
     _scrollToBottom(force: true);
@@ -114,6 +171,8 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
     String text,
     ChatbotState state, {
     Map<String, String> selectedOptions = const {},
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
   }) {
     if (state.isSending || text.trim().isEmpty) return;
     context.read<ChatbotBloc>().add(
@@ -121,10 +180,15 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
         text.trim(),
         isVisibleInChat: false,
         selectedOptions: selectedOptions,
+        questionnaireAnswers: questionnaireAnswers,
+        questionnaireSkipped: questionnaireSkipped,
+        timing: _questionnaireTiming ?? ChatTurnTiming(),
       ),
     );
+    _questionnaireTiming = null;
     setState(() {
       _dismissedQuestionnaire = false;
+      _customAnswerQuestionId = null;
     });
     _messageController.clear();
     _scrollToBottom(force: true);
@@ -132,6 +196,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
   void _startEditingMessage(int index, ChatMessage message) {
     setState(() {
+      _customAnswerQuestionId = null;
       _editingMessageIndex = index;
       _messageController.text = message.content;
       _messageController.selection = TextSelection.collapsed(
@@ -159,87 +224,108 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
           margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF26262A),
+            color: ChatbotDesign.surface,
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: ChatbotDesign.border),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
+                color: ChatbotDesign.ink.withValues(alpha: 0.08),
                 blurRadius: 20,
                 offset: const Offset(0, 6),
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  key: const Key('chatbot-copy-message-action'),
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () {
-                    Navigator.of(modalContext).pop();
-                    Clipboard.setData(ClipboardData(text: message.content));
-                    ScaffoldMessenger.of(context)
-                      ..hideCurrentSnackBar()
-                      ..showSnackBar(
-                        const SnackBar(
-                          content: Text('คัดลอกข้อความแล้ว'),
-                          duration: Duration(seconds: 1),
-                        ),
-                      );
-                  },
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    child: Row(
-                      children: [
-                        Icon(Icons.copy_rounded, color: Colors.white, size: 20),
-                        SizedBox(width: 14),
-                        Text(
-                          'คัดลอก',
-                          style: TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    key: const Key('chatbot-copy-message-action'),
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () {
+                      Navigator.of(modalContext).pop();
+                      Clipboard.setData(ClipboardData(text: message.content));
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          const SnackBar(
+                            content: Text('คัดลอกข้อความแล้ว'),
+                            duration: Duration(seconds: 1),
                           ),
-                        ),
-                      ],
+                        );
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.copy_rounded,
+                            color: ChatbotDesign.primary,
+                            size: 20,
+                          ),
+                          SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              'คัดลอก',
+                              style: TextStyle(
+                                fontFamily: 'Prompt',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: ChatbotDesign.ink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const Divider(color: Color(0x22FFFFFF), height: 1),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  key: const Key('chatbot-edit-message-action'),
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () {
-                    Navigator.of(modalContext).pop();
-                    _startEditingMessage(index, message);
-                  },
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_rounded, color: Colors.white, size: 20),
-                        SizedBox(width: 14),
-                        Text(
-                          'แก้ไข',
-                          style: TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                const Divider(color: ChatbotDesign.border, height: 1),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    key: const Key('chatbot-edit-message-action'),
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () {
+                      Navigator.of(modalContext).pop();
+                      _startEditingMessage(index, message);
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.edit_rounded,
+                            color: ChatbotDesign.primary,
+                            size: 20,
                           ),
-                        ),
-                      ],
+                          SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              'แก้ไข',
+                              style: TextStyle(
+                                fontFamily: 'Prompt',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: ChatbotDesign.ink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -273,10 +359,13 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
         await _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 140),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
         );
         if (!mounted || !_scrollController.hasClients) return;
+        if (_showScrollToBottomButton && !force) return;
 
         final position = _scrollController.position;
         if (position.pixels != position.maxScrollExtent) {
@@ -334,244 +423,329 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
     _startedAssistantAnimations.add(messageIndex);
   }
 
+  void _prefillMessage(String text) {
+    _messageController.text = text;
+    _messageController.selection = TextSelection.collapsed(offset: text.length);
+    _messageFocusNode.requestFocus();
+  }
+
+  Widget _questionnaire(ChatbotState state) => InteractiveQuestionnaireCard(
+    key: _questionnaireKey,
+    questions: state.messages.last.questions,
+    onRequestStarted: () => _questionnaireTiming = ChatTurnTiming(),
+    onContentRendered: () =>
+        _observeRender(state.messages.last, questionnaire: true),
+    onCompleted: (summary) => _sendQuestionnaireAnswer(summary, state),
+    onCompletedWithAnswers: (summary, answers) =>
+        _sendQuestionnaireAnswer(summary, state, selectedOptions: answers),
+    onCompletedWithContext: (summary, answers, skipped) =>
+        _sendQuestionnaireAnswer(
+          summary,
+          state,
+          questionnaireAnswers: answers,
+          questionnaireSkipped: skipped,
+        ),
+    onDismiss: () => setState(() {
+      _dismissedQuestionnaire = true;
+      _customAnswerQuestionId = null;
+    }),
+    onCustomInput: () {
+      _questionnaireKey.currentState?.suspendProgression();
+      _questionnaireTiming = null;
+      setState(() {
+        _customAnswerQuestionId =
+            _questionnaireKey.currentState?.activeQuestionId;
+      });
+      _messageFocusNode.requestFocus();
+    },
+    onQuestionChanged: () {
+      if (_customAnswerQuestionId != null) {
+        setState(() => _customAnswerQuestionId = null);
+      }
+    },
+  );
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+  Widget build(BuildContext context) => Theme(
+    data: Theme.of(context).copyWith(
+      colorScheme: ColorScheme.fromSeed(seedColor: ChatbotDesign.primary),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: ChatbotDesign.primary,
+          minimumSize: ChatbotDesign.button,
+        ),
+      ),
+    ),
+    child: Scaffold(
+      backgroundColor: ChatbotDesign.canvas,
       appBar: AppBar(
-        toolbarHeight: 72,
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
-        centerTitle: true,
+        backgroundColor: ChatbotDesign.surface,
+        foregroundColor: ChatbotDesign.ink,
+        surfaceTintColor: Colors.transparent,
+        centerTitle: false,
         elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: ChatbotDesign.border),
+        ),
         leading: IconButton(
           tooltip: 'ย้อนกลับ',
           onPressed: () => AppRoutes.pop(context),
-          icon: const Icon(Icons.arrow_back_rounded, size: 30),
+          icon: const Icon(Icons.arrow_back_rounded),
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         ),
-        title: const Text(
-          'Yuemnoi AI',
-          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_awesome_rounded,
+              color: ChatbotDesign.primary,
+              size: 18,
+            ),
+            SizedBox(width: 8),
+            Flexible(
+              child: ResponsiveAppBarTitle(
+                'ยืมหน่อย AI',
+                style: TextStyle(
+                  fontFamily: 'Prompt',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  color: ChatbotDesign.ink,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       body: SafeArea(
         top: false,
         child: BlocConsumer<ChatbotBloc, ChatbotState>(
           listenWhen: (previous, current) =>
-              previous.messages.length != current.messages.length ||
-              previous.isSending != current.isSending ||
-              previous.errorMessage != current.errorMessage ||
-              (current.messages.isNotEmpty &&
-                  current.messages.last.role == ChatMessageRole.assistant &&
-                  current.messages.last.isStreaming),
+              previous.messages != current.messages ||
+              previous.isSending != current.isSending,
           listener: (context, state) {
             _trackNewAssistantMessage(state);
-            final isStreamingNow =
-                state.messages.isNotEmpty &&
-                state.messages.last.role == ChatMessageRole.assistant &&
-                state.messages.last.isStreaming;
-
-            if (isStreamingNow) {
+            if (state.messages.isNotEmpty && state.messages.last.isStreaming) {
               _keepLatestMessageVisible();
             } else {
               _scrollToBottom();
             }
-            final errorMessage = state.errorMessage;
-            if (errorMessage != null) {
-              ScaffoldMessenger.of(context)
-                ..hideCurrentSnackBar()
-                ..showSnackBar(SnackBar(content: Text(errorMessage)));
-            }
           },
           builder: (context, state) {
+            final lastMessage = state.messages.isEmpty
+                ? null
+                : state.messages.last;
             final hasActiveQuestionnaire =
                 !_dismissedQuestionnaire &&
-                state.messages.isNotEmpty &&
-                state.messages.last.role == ChatMessageRole.assistant &&
-                state.messages.last.questions.isNotEmpty &&
-                state.messages.last.questions.any(
-                  (q) => q.selectedOption == null,
-                );
-
-            final lastMessage = state.messages.isNotEmpty
-                ? state.messages.last
-                : null;
+                !state.isSending &&
+                lastMessage?.role == ChatMessageRole.assistant &&
+                lastMessage!.questions.any((q) => q.selectedOption == null);
             final isAssistantEmpty =
-                lastMessage != null &&
-                lastMessage.role == ChatMessageRole.assistant &&
-                lastMessage.content.isEmpty &&
+                lastMessage?.role == ChatMessageRole.assistant &&
+                lastMessage!.content.isEmpty &&
                 lastMessage.recommendedItems.isEmpty &&
                 lastMessage.questions.isEmpty;
-            final isWaitingForFirstChunk =
+            final waiting =
                 state.isSending &&
                 (lastMessage == null ||
                     lastMessage.role == ChatMessageRole.user ||
                     isAssistantEmpty);
-            final visibleEntries = <(int index, ChatMessage message)>[];
-            for (var i = 0; i < state.messages.length; i++) {
-              final msg = state.messages[i];
-              if (!msg.isVisibleInChat) continue;
-              if (i == state.messages.length - 1 && isAssistantEmpty) continue;
-              visibleEntries.add((i, msg));
-            }
-            final visibleMessagesCount = visibleEntries.length;
-
-            return Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                Column(
-                  children: [
-                    Expanded(
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 560),
-                          child: ListView.separated(
-                            controller: _scrollController,
-                            keyboardDismissBehavior:
-                                ScrollViewKeyboardDismissBehavior.onDrag,
-                            padding: EdgeInsets.fromLTRB(
-                              MediaQuery.sizeOf(context).width < 340 ? 16 : 28,
-                              24,
-                              MediaQuery.sizeOf(context).width < 340 ? 16 : 28,
-                              80,
-                            ),
-                            itemCount:
-                                visibleMessagesCount +
-                                (isWaitingForFirstChunk ? 1 : 0),
-                            separatorBuilder: (context, index) =>
-                                const SizedBox(height: 24),
-                            itemBuilder: (context, index) {
-                              if (index == visibleMessagesCount) {
-                                return _TypingIndicator(
-                                  statusMessage: state.currentStatusMessage,
-                                  startTime: state.requestStartTime,
-                                );
-                              }
-                              final entry = visibleEntries[index];
-                              final originalIndex = entry.$1;
-                              final message = entry.$2;
-                              return ChatMessageBubble(
-                                key: ValueKey('chat-message-$originalIndex'),
-                                message: message,
-                                onRentPressed: _showRentMessage,
-                                animateAssistantResponse:
-                                    _pendingAssistantAnimations.contains(
-                                      originalIndex,
-                                    ) &&
-                                    !_startedAssistantAnimations.contains(
-                                      originalIndex,
-                                    ),
-                                onAnimationStarted: () =>
-                                    _markAssistantAnimationStarted(
-                                      originalIndex,
-                                    ),
-                                onTextProgress: _keepLatestMessageVisible,
-                                onCardRevealed: () =>
-                                    _scrollToBottom(force: true),
-                                onEdit:
-                                    state.messages[originalIndex].role ==
-                                            ChatMessageRole.user &&
-                                        !state.isSending
-                                    ? () => _showMessageActions(
-                                        originalIndex,
-                                        state.messages[originalIndex],
-                                      )
-                                    : null,
-                                onOptionSelected: (choice) =>
-                                    _sendQuickReply(choice, state),
-                              );
-                            },
-                          ),
+            final visibleEntries = <(int, ChatMessage)>[
+              for (var i = 0; i < state.messages.length; i++)
+                if (state.messages[i].isVisibleInChat &&
+                    !(i == state.messages.length - 1 && isAssistantEmpty))
+                  (i, state.messages[i]),
+            ];
+            return LayoutBuilder(
+              builder: (context, constraints) => Column(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: ChatbotDesign.maxWidth,
                         ),
-                      ),
-                    ),
-                    if (hasActiveQuestionnaire)
-                      InteractiveQuestionnaireCard(
-                        key: _questionnaireKey,
-                        questions: state.messages.last.questions,
-                        onCompleted: (summary) =>
-                            _sendQuestionnaireAnswer(summary, state),
-                        onCompletedWithAnswers: (summary, answers) =>
-                            _sendQuestionnaireAnswer(
-                              summary,
-                              state,
-                              selectedOptions: answers,
+                        child: Stack(
+                          children: [
+                            if (state.messages.isEmpty)
+                              ChatbotWelcome(onSelect: _prefillMessage)
+                            else
+                              ListView.separated(
+                                key: const Key('chatbot-conversation'),
+                                controller: _scrollController,
+                                keyboardDismissBehavior:
+                                    ScrollViewKeyboardDismissBehavior.onDrag,
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  20,
+                                  16,
+                                  24,
+                                ),
+                                itemCount:
+                                    visibleEntries.length + (waiting ? 1 : 0),
+                                separatorBuilder: (context, index) =>
+                                    const SizedBox(height: 20),
+                                itemBuilder: (context, index) {
+                                  if (index == visibleEntries.length) {
+                                    return _TypingIndicator(
+                                      statusMessage: state.currentStatusMessage,
+                                      startedAt: state.requestStartTime,
+                                      now: widget.now,
+                                    );
+                                  }
+                                  final (originalIndex, message) =
+                                      visibleEntries[index];
+                                  final active =
+                                      hasActiveQuestionnaire &&
+                                      originalIndex ==
+                                          state.messages.length - 1;
+                                  final failure = state.failure;
+                                  return _ConversationEntry(
+                                    key: ValueKey(
+                                      'chat-message-$originalIndex',
+                                    ),
+                                    keepAlive: active,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        if (failure?.messageId == message.id)
+                                          ChatbotFailureCard(
+                                            failure: failure!,
+                                            onRetry: () =>
+                                                context.read<ChatbotBloc>().add(
+                                                  ChatbotRetryRequested(
+                                                    message.id,
+                                                    timing: ChatTurnTiming(),
+                                                  ),
+                                                ),
+                                            onRevise: () => _prefillMessage(
+                                              message.userQuery ?? '',
+                                            ),
+                                          )
+                                        else
+                                          ChatMessageBubble(
+                                            message: message,
+                                            onRentPressed: _showRentMessage,
+                                            animateAssistantResponse:
+                                                _pendingAssistantAnimations
+                                                    .contains(originalIndex) &&
+                                                !_startedAssistantAnimations
+                                                    .contains(originalIndex),
+                                            onAnimationStarted: () =>
+                                                _markAssistantAnimationStarted(
+                                                  originalIndex,
+                                                ),
+                                            onTextProgress:
+                                                _keepLatestMessageVisible,
+                                            onContentRendered: () =>
+                                                _observeRender(message),
+                                            onCardRevealed:
+                                                _keepLatestMessageVisible,
+                                            onEdit:
+                                                message.role ==
+                                                        ChatMessageRole.user &&
+                                                    !state.isSending
+                                                ? () => _showMessageActions(
+                                                    originalIndex,
+                                                    message,
+                                                  )
+                                                : null,
+                                            onReviseQuery: () =>
+                                                _prefillMessage(
+                                                  message.userQuery ?? '',
+                                                ),
+                                            onOptionSelected: (choice) =>
+                                                _sendQuickReply(choice, state),
+                                            questionnaire: active
+                                                ? _questionnaire(state)
+                                                : null,
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            Positioned(
+                              bottom: 12,
+                              right: 12,
+                              child: AnimatedScale(
+                                key: const Key(
+                                  'chatbot-scroll-to-bottom-control',
+                                ),
+                                scale: _showScrollToBottomButton ? 1 : 0,
+                                duration: ChatbotDesign.motionFor(context),
+                                child: IgnorePointer(
+                                  ignoring: !_showScrollToBottomButton,
+                                  child: Material(
+                                    key: const Key(
+                                      'chatbot-scroll-to-bottom-button',
+                                    ),
+                                    color: ChatbotDesign.surface,
+                                    elevation: 2,
+                                    shape: const CircleBorder(),
+                                    child: IconButton(
+                                      tooltip: 'เลื่อนไปข้อความล่าสุด',
+                                      onPressed: () =>
+                                          _scrollToBottom(force: true),
+                                      color: ChatbotDesign.primary,
+                                      icon: const Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                      ),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 48,
+                                        minHeight: 48,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                        onDismiss: () =>
-                            setState(() => _dismissedQuestionnaire = true),
-                        onCustomInput: () {
-                          _messageFocusNode.requestFocus();
-                          _scrollToBottom(force: true);
-                        },
-                      )
-                    else if (!state.isSending &&
-                        !state.messages.any(
-                          (m) => m.role == ChatMessageRole.user,
-                        ) &&
-                        (state.messages.isEmpty ||
-                            (state.messages.isNotEmpty &&
-                                state
-                                    .messages
-                                    .last
-                                    .suggestedReplies
-                                    .isNotEmpty)))
-                      _QuickRepliesBar(
-                        suggestions:
-                            state.messages.isNotEmpty &&
-                                state.messages.last.suggestedReplies.isNotEmpty
-                            ? state.messages.last.suggestedReplies
-                            : ChatbotState.defaultInitialSuggestions,
-                        onSelect: (text) => _sendQuickReply(text, state),
-                      ),
-                    _ChatComposer(
-                      controller: _messageController,
-                      focusNode: _messageFocusNode,
-                      isSending: state.isSending,
-                      editingMessage: _editingMessageIndex == null
-                          ? null
-                          : state.messages[_editingMessageIndex!],
-                      onCancelEdit: _cancelEditingMessage,
-                      onSend: () => _sendMessage(state),
-                      onStop: _stopGeneration,
-                    ),
-                  ],
-                ),
-                Positioned(
-                  bottom: 92,
-                  right: 16,
-                  child: AnimatedScale(
-                    key: const Key('chatbot-scroll-to-bottom-control'),
-                    scale: _showScrollToBottomButton ? 1 : 0,
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutBack,
-                    child: IgnorePointer(
-                      ignoring: !_showScrollToBottomButton,
-                      child: Material(
-                        key: const Key('chatbot-scroll-to-bottom-button'),
-                        color: Colors.white,
-                        elevation: 5,
-                        shadowColor: const Color(0x30000000),
-                        shape: const CircleBorder(),
-                        child: IconButton(
-                          tooltip: 'เลื่อนไปข้อความล่าสุด',
-                          onPressed: () => _scrollToBottom(force: true),
-                          color: AppColors.primaryColor,
-                          icon: const Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            size: 28,
-                          ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                  // ให้ช่องพิมพ์เลื่อนได้เมื่อคีย์บอร์ดและตัวอักษรใหญ่เหลือพื้นที่น้อย
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: constraints.maxHeight * .55,
+                    ),
+                    child: SingleChildScrollView(
+                      reverse: true,
+                      child: ChatbotComposer(
+                        controller: _messageController,
+                        focusNode: _messageFocusNode,
+                        isSending: state.isSending,
+                        editingMessage: _editingMessageIndex == null
+                            ? null
+                            : state.messages[_editingMessageIndex!],
+                        onCancelEdit: _cancelEditingMessage,
+                        customQuestionTitle:
+                            hasActiveQuestionnaire &&
+                                _customAnswerQuestionId ==
+                                    _questionnaireKey
+                                        .currentState
+                                        ?.activeQuestionId
+                            ? _questionnaireKey
+                                  .currentState
+                                  ?.activeQuestionTitle
+                            : null,
+                        onCancelCustomAnswer: () =>
+                            setState(() => _customAnswerQuestionId = null),
+                        onSend: () => _sendMessage(state),
+                        onStop: _stopGeneration,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             );
           },
         ),
       ),
-    );
-  }
+    ),
+  );
 
   void _showRentMessage(RecommendedItem item) {
     final itemId = item.id;
@@ -589,11 +763,14 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 }
 
 class _TypingIndicator extends StatefulWidget {
-  const _TypingIndicator({this.statusMessage, this.startTime});
-
+  const _TypingIndicator({
+    this.statusMessage,
+    this.startedAt,
+    required this.now,
+  });
   final String? statusMessage;
-  final DateTime? startTime;
-
+  final DateTime? startedAt;
+  final DateTime Function() now;
   @override
   State<_TypingIndicator> createState() => _TypingIndicatorState();
 }
@@ -601,118 +778,92 @@ class _TypingIndicator extends StatefulWidget {
 class _TypingIndicatorState extends State<_TypingIndicator>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  Timer? _secondTimer;
-  int _secondsElapsed = 0;
-
+  late final DateTime _mountedAt;
+  Timer? _elapsedTimer;
   @override
   void initState() {
     super.initState();
+    _mountedAt = widget.now();
+    _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
-    )..repeat();
-    _secondsElapsed = widget.startTime != null
-        ? DateTime.now().difference(widget.startTime!).inSeconds
-        : 0;
-    _secondTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          _updateElapsed();
-        });
-      }
-    });
+    );
   }
 
-  void _updateElapsed() {
-    if (widget.startTime != null) {
-      final diff = DateTime.now().difference(widget.startTime!).inSeconds;
-      _secondsElapsed = diff > _secondsElapsed ? diff : _secondsElapsed + 1;
-    } else {
-      _secondsElapsed += 1;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
     }
   }
 
   @override
   void dispose() {
-    _secondTimer?.cancel();
+    _elapsedTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  String get _statusText {
-    final msg = widget.statusMessage?.trim();
-    if (msg != null && msg.isNotEmpty) {
-      return msg;
-    }
-    if (_secondsElapsed < 3) return 'กำลังคิด';
-    if (_secondsElapsed < 6) return 'ค้นหาอุปกรณ์';
-    return 'สรุปคำแนะนำ';
-  }
-
-  String get _timeText {
-    if (_secondsElapsed < 60) return '$_secondsElapsed วิ';
-    final m = _secondsElapsed ~/ 60;
-    final s = _secondsElapsed % 60;
-    return '$m นาที $s วิ';
-  }
-
   @override
   Widget build(BuildContext context) {
+    final status = widget.statusMessage?.trim();
+    final elapsed = widget.now().difference(widget.startedAt ?? _mountedAt);
+    final seconds = elapsed.isNegative ? 0 : elapsed.inSeconds;
     return Align(
       alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: ChatbotDesign.subtle,
+          borderRadius: BorderRadius.circular(16),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
               Icons.auto_awesome_rounded,
-              size: 14,
-              color: Color(0xFF8E8E93),
+              size: 18,
+              color: ChatbotDesign.primary,
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Flexible(
-              child: Text(
-                '$_statusText ($_timeText)',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF757575),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  status?.isNotEmpty == true ? status! : 'กำลังประมวลผล',
+                  style: ChatbotDesign.caption.copyWith(fontSize: 14),
                 ),
               ),
             ),
-            const SizedBox(width: 2),
-            Semantics(
-              label: 'AI กำลังคิด',
+            const SizedBox(width: 4),
+            ExcludeSemantics(
               child: AnimatedBuilder(
                 animation: _controller,
                 builder: (context, child) {
-                  final dotCount = 1 + (_controller.value * 3).floor();
-                  final dots = switch (dotCount) {
-                    1 => '.',
-                    2 => '..',
-                    _ => '...',
-                  };
+                  final count = MediaQuery.disableAnimationsOf(context)
+                      ? 3
+                      : 1 + (_controller.value * 3).floor().clamp(0, 2);
                   return SizedBox(
                     width: 18,
                     child: Text(
-                      dots,
+                      '.' * count,
                       key: const Key('chatbot-thinking-dots'),
-                      textAlign: TextAlign.left,
-                      style: const TextStyle(
-                        color: Color(0xFF757575),
-                        fontSize: 14,
-                        height: 1,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
-                      ),
+                      style: ChatbotDesign.caption,
                     ),
                   );
                 },
               ),
+            ),
+            Text(
+              ' $seconds วินาที',
+              key: const Key('chatbot-analysis-elapsed'),
+              style: ChatbotDesign.caption,
             ),
           ],
         ),
@@ -721,260 +872,32 @@ class _TypingIndicatorState extends State<_TypingIndicator>
   }
 }
 
-class _ChatComposer extends StatelessWidget {
-  const _ChatComposer({
-    required this.controller,
-    required this.focusNode,
-    required this.isSending,
-    required this.onSend,
-    this.onStop,
-    this.editingMessage,
-    this.onCancelEdit,
+// รักษาการ์ดคำถามและคำตอบบางส่วนไว้เมื่อเลื่อนออกจาก viewport
+class _ConversationEntry extends StatefulWidget {
+  const _ConversationEntry({
+    required this.child,
+    required this.keepAlive,
+    super.key,
   });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final bool isSending;
-  final VoidCallback onSend;
-  final VoidCallback? onStop;
-  final ChatMessage? editingMessage;
-  final VoidCallback? onCancelEdit;
-
+  final Widget child;
+  final bool keepAlive;
   @override
-  Widget build(BuildContext context) {
-    final horizontalInset = MediaQuery.sizeOf(context).width < 340
-        ? 12.0
-        : 20.0;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        horizontalInset,
-        8,
-        horizontalInset,
-        14 + MediaQuery.viewPaddingOf(context).bottom,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (editingMessage != null)
-                Container(
-                  key: const Key('chatbot-editing-banner'),
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: AppColors.primaryColor.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.edit_rounded,
-                        size: 18,
-                        color: AppColors.primaryColor,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'กำลังแก้ไขข้อความ',
-                              style: TextStyle(
-                                color: AppColors.primaryColor,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              editingMessage!.content,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xFF6B7280),
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        key: const Key('chatbot-cancel-edit-button'),
-                        tooltip: 'ยกเลิกแก้ไข',
-                        onPressed: onCancelEdit,
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                        color: const Color(0xFF9CA3AF),
-                      ),
-                    ],
-                  ),
-                ),
-              Container(
-                key: const Key('chatbot-composer'),
-                constraints: const BoxConstraints(minHeight: 64),
-                padding: const EdgeInsets.fromLTRB(20, 6, 8, 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(32),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x17000000),
-                      blurRadius: 18,
-                      offset: Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        key: const Key('chatbot-message-field'),
-                        controller: controller,
-                        focusNode: focusNode,
-                        enabled: !isSending,
-                        maxLength: 200,
-                        minLines: 1,
-                        maxLines: 4,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => onSend(),
-                        buildCounter:
-                            (
-                              context, {
-                              required currentLength,
-                              required isFocused,
-                              required maxLength,
-                            }) => null,
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                          hintText: editingMessage != null
-                              ? 'แก้ไขข้อความ...'
-                              : 'ถามข้อมูลเกี่ยวกับอุปกรณ์...',
-                          hintStyle: const TextStyle(
-                            color: Color(0xFF8C8C94),
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      key: const Key('chatbot-send-gradient'),
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [AppColors.gradient1, AppColors.gradient2],
-                        ),
-                      ),
-                      child: IconButton(
-                        key: isSending
-                            ? const Key('chatbot-stop-button')
-                            : const Key('chatbot-send-button'),
-                        tooltip: isSending
-                            ? 'หยุดตอบ'
-                            : (editingMessage != null
-                                  ? 'บันทึกแก้ไข'
-                                  : 'ส่งข้อความ'),
-                        onPressed: isSending ? onStop : onSend,
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          disabledBackgroundColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          disabledForegroundColor: Colors.white,
-                          minimumSize: const Size.square(48),
-                        ),
-                        icon: isSending
-                            ? const Icon(
-                                Icons.stop_rounded,
-                                key: Key('chatbot-stop-icon'),
-                                size: 26,
-                                color: Colors.white,
-                              )
-                            : Icon(
-                                editingMessage != null
-                                    ? Icons.check_rounded
-                                    : Icons.arrow_upward_rounded,
-                                size: 25,
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  State<_ConversationEntry> createState() => _ConversationEntryState();
 }
 
-class _QuickRepliesBar extends StatelessWidget {
-  const _QuickRepliesBar({required this.suggestions, required this.onSelect});
-
-  final List<String> suggestions;
-  final ValueChanged<String> onSelect;
+class _ConversationEntryState extends State<_ConversationEntry>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => widget.keepAlive;
+  @override
+  void didUpdateWidget(covariant _ConversationEntry oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.keepAlive != widget.keepAlive) updateKeepAlive();
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (suggestions.isEmpty) return const SizedBox.shrink();
-
-    final horizontalInset = MediaQuery.sizeOf(context).width < 340
-        ? 12.0
-        : 20.0;
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: Container(
-          key: const Key('chatbot-quick-replies-bar'),
-          height: 38,
-          margin: const EdgeInsets.only(bottom: 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: horizontalInset),
-            child: Row(
-              children: [
-                for (var index = 0; index < suggestions.length; index++) ...[
-                  if (index > 0) const SizedBox(width: 8),
-                  ActionChip(
-                    key: Key('chatbot-quick-reply-$index'),
-                    backgroundColor: Colors.white,
-                    elevation: 1.5,
-                    shadowColor: const Color(0x18000000),
-                    surfaceTintColor: Colors.transparent,
-                    side: const BorderSide(
-                      color: Color(0xFFE9D5FF),
-                      width: 1.2,
-                    ),
-                    shape: const StadiumBorder(),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    avatar: const Icon(
-                      Icons.auto_awesome,
-                      size: 14,
-                      color: AppColors.primaryColor,
-                    ),
-                    label: Text(
-                      suggestions[index],
-                      style: const TextStyle(
-                        color: AppColors.primaryColor,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    onPressed: () => onSelect(suggestions[index]),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    super.build(context);
+    return widget.child;
   }
 }

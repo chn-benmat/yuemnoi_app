@@ -7,11 +7,32 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 )
+
+// อ่านเฉพาะรหัสตามสัญญา ไม่เปิดเผย body หรือ header ที่มีข้อมูลลับ
+func serviceError(resp *http.Response) error {
+	failure := &domain.AIServiceError{StatusCode: resp.StatusCode, Code: "service_unavailable"}
+	var payload struct {
+		Detail struct {
+			Code string `json:"error_code"`
+		} `json:"detail"`
+	}
+	if json.NewDecoder(io.LimitReader(resp.Body, 16384)).Decode(&payload) == nil {
+		switch payload.Detail.Code {
+		case "providers_rate_limited", "quota_temporarily_unavailable", "quota_exhausted", "providers_busy", "review_unavailable", "structured_output_invalid", "response_quality_rejected", "timeout", "deadline_exceeded", "providers_exhausted", "request_budget_exceeded", "logical_call_budget_exceeded", "catalog_unavailable", "knowledge_unavailable", "processing_failed":
+			failure.Code = payload.Detail.Code
+		}
+	}
+	if seconds, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && seconds >= 0 {
+		failure.RetryAfterSeconds = &seconds
+	}
+	return failure
+}
 
 // Client ทำหน้าที่เป็น HTTP Adapter ในการเชื่อมต่อไปยัง Python FastAPI AI Service
 type Client struct {
@@ -38,10 +59,14 @@ func NewClient(baseURL string, internalKey string, timeout time.Duration) *Clien
 
 // aiChatRequestDTO โครงสร้าง Request ที่ส่งไปยัง AI Service (FastAPI)
 type aiChatRequestDTO struct {
-	Message   string                   `json:"message"`
-	Query     string                   `json:"query"`
-	SessionID string                   `json:"session_id,omitempty"`
-	History   []domain.ChatMessageItem `json:"history"`
+	Message              string                       `json:"message"`
+	Query                string                       `json:"query"`
+	SessionID            string                       `json:"session_id,omitempty"`
+	History              []domain.ChatMessageItem     `json:"history,omitempty"`
+	Context              *domain.ChatSessionContext   `json:"context,omitempty"`
+	QuestionnaireAnswers []domain.QuestionnaireAnswer `json:"questionnaire_answers,omitempty"`
+	QuestionnaireSkipped bool                         `json:"questionnaire_skipped,omitempty"`
+	ActiveQuestionID     *string                      `json:"active_question_id,omitempty"`
 }
 
 // aiChoiceOptionDTO โครงสร้างตัวเลือกสำหรับคำถามถามกลับ
@@ -54,13 +79,17 @@ type aiChoiceOptionDTO struct {
 
 // aiQuestionStepDTO โครงสร้างขั้นตอนคำถามพร้อมระบบ Adaptive Branching
 type aiQuestionStepDTO struct {
-	ID            string              `json:"id"`
-	Title         string              `json:"title"`
-	Options       []string            `json:"options"`
-	Step          int                 `json:"step"`
-	TotalSteps    int                 `json:"total_steps"`
-	BranchTitles  map[string]string   `json:"branch_titles,omitempty"`
-	BranchOptions map[string][]string `json:"branch_options,omitempty"`
+	Dimension        string                             `json:"dimension"`
+	Choices          []domain.QuestionChoice            `json:"choices"`
+	ID               string                             `json:"id"`
+	Title            string                             `json:"title"`
+	Options          []string                           `json:"options"`
+	Step             int                                `json:"step"`
+	TotalSteps       int                                `json:"total_steps"`
+	BranchTitles     map[string]string                  `json:"branch_titles,omitempty"`
+	BranchOptions    map[string][]string                `json:"branch_options,omitempty"`
+	BranchQuestionID *string                            `json:"branch_question_id,omitempty"`
+	BranchChoices    map[string][]domain.QuestionChoice `json:"branch_choices,omitempty"`
 }
 
 // aiClarificationDTO โครงสร้างคำถามถามกลับเมื่อข้อมูลไม่ชัดเจน
@@ -73,18 +102,21 @@ type aiClarificationDTO struct {
 
 // aiItemDTO โครงสร้างข้อมูลสินค้าจาก AI Service
 type aiItemDTO struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	ItemName    string   `json:"item_name"`
-	Category    string   `json:"category"`
-	Price       float64  `json:"price"`
-	Type        string   `json:"type"`
-	Unit        string   `json:"unit"`
-	PriceUnit   string   `json:"price_unit"`
-	Status      string   `json:"status"`
-	ImageURLs   []string `json:"image_urls"`
-	ImageURL    string   `json:"image_url"`
-	Description string   `json:"description"`
+	PriceDisplay  string   `json:"price_display"`
+	UnitDisplay   string   `json:"unit_display"`
+	StatusDisplay string   `json:"status_display"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	ItemName      string   `json:"item_name"`
+	Category      string   `json:"category"`
+	Price         float64  `json:"price"`
+	Type          string   `json:"type"`
+	Unit          string   `json:"unit"`
+	PriceUnit     string   `json:"price_unit"`
+	Status        string   `json:"status"`
+	ImageURLs     []string `json:"image_urls"`
+	ImageURL      string   `json:"image_url"`
+	Description   string   `json:"description"`
 }
 
 // aiSearchSourceDTO โครงสร้างข้อมูลแหล่งอ้างอิงจาก AI Service
@@ -98,15 +130,23 @@ type aiSearchSourceDTO struct {
 
 // aiChatResponseDTO โครงสร้าง Response ที่ได้รับกลับมาจาก FastAPI
 type aiChatResponseDTO struct {
-	Response       string              `json:"response"`
-	Intent         string              `json:"intent"`
-	Confidence     float64             `json:"confidence"`
-	AmbiguityLevel float64             `json:"ambiguity_level"`
-	Clarification  *aiClarificationDTO `json:"clarification"`
-	Questions      []aiQuestionStepDTO `json:"questions"`
-	Items          []aiItemDTO         `json:"items"`
-	SearchQuery    string              `json:"search_query"`
-	SearchSources  []aiSearchSourceDTO `json:"search_sources"`
+	RequestScope          *string                    `json:"request_scope"`
+	InformationSufficient *bool                      `json:"information_sufficient"`
+	NextAction            *string                    `json:"next_action"`
+	ResponseFlow          *string                    `json:"response_flow"`
+	ResponseKind          *string                    `json:"response_kind"`
+	Context               *domain.ChatSessionContext `json:"context"`
+	References            []domain.EvidenceReference `json:"references"`
+	SuggestedReplies      []string                   `json:"suggested_replies"`
+	Response              string                     `json:"response"`
+	Intent                string                     `json:"intent"`
+	Confidence            float64                    `json:"confidence"`
+	AmbiguityLevel        float64                    `json:"ambiguity_level"`
+	Clarification         *aiClarificationDTO        `json:"clarification"`
+	Questions             []aiQuestionStepDTO        `json:"questions"`
+	Items                 []aiItemDTO                `json:"items"`
+	SearchQuery           string                     `json:"search_query"`
+	SearchSources         []aiSearchSourceDTO        `json:"search_sources"`
 }
 
 // SendMessage ส่งข้อความเพื่อรับคำตอบแบบสมบูรณ์รอบเดียว (Non-Streaming)
@@ -117,10 +157,14 @@ func (c *Client) SendMessage(ctx context.Context, req domain.ChatbotRequest) (*d
 	}
 
 	payload := aiChatRequestDTO{
-		Message:   effectiveMsg,
-		Query:     effectiveMsg,
-		SessionID: req.SessionID,
-		History:   req.History,
+		Message:              effectiveMsg,
+		Query:                effectiveMsg,
+		SessionID:            req.SessionID,
+		History:              req.History,
+		Context:              req.Context,
+		QuestionnaireAnswers: req.QuestionnaireAnswers,
+		QuestionnaireSkipped: req.QuestionnaireSkipped,
+		ActiveQuestionID:     req.ActiveQuestionID,
 	}
 
 	bodyBytes, err := json.Marshal(payload)
@@ -128,7 +172,7 @@ func (c *Client) SendMessage(ctx context.Context, req domain.ChatbotRequest) (*d
 		return nil, fmt.Errorf("marshal request error: %w", err)
 	}
 
-	targetURL := fmt.Sprintf("%s/api/v1/chat", c.baseURL)
+	targetURL := fmt.Sprintf("%s/api/chat", c.baseURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("create http request error: %w", err)
@@ -146,8 +190,7 @@ func (c *Client) SendMessage(ctx context.Context, req domain.ChatbotRequest) (*d
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("ai service returned status %d: %s", resp.StatusCode, string(respBody))
+		return nil, serviceError(resp)
 	}
 
 	var aiResp aiChatResponseDTO
@@ -174,21 +217,24 @@ func (c *Client) SendMessage(ctx context.Context, req domain.ChatbotRequest) (*d
 			unit = it.Type
 		}
 		recommended = append(recommended, domain.RecommendedItem{
-			ID:          it.ID,
-			Name:        name,
-			ItemName:    name,
-			Category:    it.Category,
-			Price:       it.Price,
-			PriceUnit:   unit,
-			Unit:        unit,
-			Status:      it.Status,
-			ImageURL:    imgURL,
-			Description: it.Description,
+			PriceDisplay:  it.PriceDisplay,
+			UnitDisplay:   it.UnitDisplay,
+			StatusDisplay: it.StatusDisplay,
+			ID:            it.ID,
+			Name:          name,
+			ItemName:      name,
+			Category:      it.Category,
+			Price:         it.Price,
+			PriceUnit:     unit,
+			Unit:          unit,
+			Status:        it.Status,
+			ImageURL:      imgURL,
+			Description:   it.Description,
 		})
 	}
 
 	var questions []domain.ClarificationQuestion
-	suggestedReplies := make([]string, 0)
+	suggestedReplies := append([]string{}, aiResp.SuggestedReplies...)
 	rawQuestions := aiResp.Questions
 	if len(rawQuestions) == 0 && aiResp.Clarification != nil {
 		rawQuestions = aiResp.Clarification.Questions
@@ -197,16 +243,20 @@ func (c *Client) SendMessage(ctx context.Context, req domain.ChatbotRequest) (*d
 	if len(rawQuestions) > 0 {
 		for _, q := range rawQuestions {
 			questions = append(questions, domain.ClarificationQuestion{
-				ID:            q.ID,
-				Title:         q.Title,
-				Options:       q.Options,
-				Step:          q.Step,
-				TotalSteps:    q.TotalSteps,
-				BranchTitles:  q.BranchTitles,
-				BranchOptions: q.BranchOptions,
+				ID:               q.ID,
+				Dimension:        q.Dimension,
+				Choices:          q.Choices,
+				Title:            q.Title,
+				Options:          q.Options,
+				Step:             q.Step,
+				TotalSteps:       q.TotalSteps,
+				BranchTitles:     q.BranchTitles,
+				BranchOptions:    q.BranchOptions,
+				BranchQuestionID: q.BranchQuestionID,
+				BranchChoices:    q.BranchChoices,
 			})
 		}
-		if len(questions) > 0 {
+		if len(questions) > 0 && len(suggestedReplies) == 0 && aiResp.Context == nil {
 			suggestedReplies = append(suggestedReplies, questions[0].Options...)
 		}
 	} else if aiResp.Clarification != nil && aiResp.Clarification.Question != "" {
@@ -239,13 +289,20 @@ func (c *Client) SendMessage(ctx context.Context, req domain.ChatbotRequest) (*d
 	}
 
 	return &domain.ChatbotResponse{
-		Status:           "success",
-		Answer:           aiResp.Response,
-		RecommendedItems: recommended,
-		Questions:        questions,
-		SuggestedReplies: suggestedReplies,
-		SearchQuery:      aiResp.SearchQuery,
-		SearchSources:    sources,
+		RequestScope:          aiResp.RequestScope,
+		InformationSufficient: aiResp.InformationSufficient,
+		NextAction:            aiResp.NextAction,
+		ResponseFlow:          aiResp.ResponseFlow,
+		ResponseKind:          aiResp.ResponseKind,
+		Status:                "success",
+		Answer:                aiResp.Response,
+		RecommendedItems:      recommended,
+		Questions:             questions,
+		SuggestedReplies:      suggestedReplies,
+		SearchQuery:           aiResp.SearchQuery,
+		SearchSources:         sources,
+		Context:               aiResp.Context,
+		References:            aiResp.References,
 	}, nil
 }
 
@@ -257,10 +314,14 @@ func (c *Client) SendMessageStream(ctx context.Context, req domain.ChatbotReques
 	}
 
 	payload := aiChatRequestDTO{
-		Message:   effectiveMsg,
-		Query:     effectiveMsg,
-		SessionID: req.SessionID,
-		History:   req.History,
+		Message:              effectiveMsg,
+		Query:                effectiveMsg,
+		SessionID:            req.SessionID,
+		History:              req.History,
+		Context:              req.Context,
+		QuestionnaireAnswers: req.QuestionnaireAnswers,
+		QuestionnaireSkipped: req.QuestionnaireSkipped,
+		ActiveQuestionID:     req.ActiveQuestionID,
 	}
 
 	bodyBytes, err := json.Marshal(payload)
@@ -268,7 +329,7 @@ func (c *Client) SendMessageStream(ctx context.Context, req domain.ChatbotReques
 		return nil, fmt.Errorf("marshal stream request error: %w", err)
 	}
 
-	targetURL := fmt.Sprintf("%s/api/v1/chat/stream", c.baseURL)
+	targetURL := fmt.Sprintf("%s/api/chat/stream", c.baseURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("create stream http request error: %w", err)
@@ -280,18 +341,15 @@ func (c *Client) SendMessageStream(ctx context.Context, req domain.ChatbotReques
 	}
 
 	// ใช้ Client พร้อม Timeout สำหรับการสตรีม ป้องกัน Goroutine แขวนค้าง
-	streamClient := &http.Client{
-		Timeout: 3 * time.Minute,
-	}
-	resp, err := streamClient.Do(httpReq)
+	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("call ai service stream error: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
+		err := serviceError(resp)
 		_ = resp.Body.Close()
-		return nil, fmt.Errorf("ai service stream returned status %d: %s", resp.StatusCode, string(respBody))
+		return nil, err
 	}
 
 	return resp.Body, nil

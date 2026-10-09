@@ -48,7 +48,7 @@ func TestGetConversationContactReturnsParticipantPhone(t *testing.T) {
 		chatContactTokenVerifier{userID: "requester-1"},
 	)
 	router := gin.New()
-	router.POST("/api/v1/chat/contact", handler.GetConversationContact)
+	router.POST("/api/chat/contact", handler.GetConversationContact)
 
 	body, err := json.Marshal(map[string]string{"conversation_id": "conversation-1"})
 	if err != nil {
@@ -56,7 +56,7 @@ func TestGetConversationContactReturnsParticipantPhone(t *testing.T) {
 	}
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/chat/contact",
+		"/api/chat/contact",
 		bytes.NewReader(body),
 	)
 	request.Header.Set("Content-Type", "application/json")
@@ -83,11 +83,11 @@ func TestGetConversationContactMapsForbiddenError(t *testing.T) {
 		chatContactTokenVerifier{userID: "requester-1"},
 	)
 	router := gin.New()
-	router.POST("/api/v1/chat/contact", handler.GetConversationContact)
+	router.POST("/api/chat/contact", handler.GetConversationContact)
 
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/chat/contact",
+		"/api/chat/contact",
 		bytes.NewBufferString(`{"conversation_id":"conversation-1"}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
@@ -108,11 +108,11 @@ func TestGetConversationContactRejectsInvalidToken(t *testing.T) {
 		chatContactTokenVerifier{err: errors.New("invalid token")},
 	)
 	router := gin.New()
-	router.POST("/api/v1/chat/contact", handler.GetConversationContact)
+	router.POST("/api/chat/contact", handler.GetConversationContact)
 
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/chat/contact",
+		"/api/chat/contact",
 		bytes.NewBufferString(`{"conversation_id":"conversation-1"}`),
 	)
 	request.Header.Set("Content-Type", "application/json")

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "AI_CHAT_HISTORY_MAX_MESSAGES", "AI_CHAT_HISTORY_MAX_CHARACTERS", "AI_CHAT_REQUEST_TIMEOUT_SECONDS", "AI_CHAT_IDLE_TIMEOUT_SECONDS", "AI_CHAT_STREAM_UPDATE_MILLISECONDS", "AI_GATEWAY_TIMEOUT_SECONDS"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "AI_CHAT_HISTORY_MAX_MESSAGES": {"type": "integer", "minimum": 1},
+    "AI_CHAT_HISTORY_MAX_CHARACTERS": {"type": "integer", "minimum": 1},
+    "AI_CHAT_REQUEST_TIMEOUT_SECONDS": {"type": "integer", "minimum": 1},
+    "AI_CHAT_IDLE_TIMEOUT_SECONDS": {"type": "integer", "minimum": 1},
+    "AI_CHAT_STREAM_UPDATE_MILLISECONDS": {"type": "integer", "minimum": 1},
+    "AI_GATEWAY_TIMEOUT_SECONDS": {"type": "integer", "minimum": 1}
+  }
+}

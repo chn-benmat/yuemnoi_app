@@ -1,4 +1,8 @@
 import 'package:equatable/equatable.dart';
+import 'chat_context.dart';
+import 'chat_understanding.dart';
+export 'chat_context.dart';
+export 'chat_understanding.dart';
 
 enum ChatMessageRole { user, assistant }
 
@@ -19,6 +23,9 @@ class RecommendedItem extends Equatable {
     required this.status,
     required this.category,
     required this.description,
+    this.priceDisplay,
+    this.unitDisplay,
+    this.statusDisplay,
   });
 
   final int? id;
@@ -29,6 +36,9 @@ class RecommendedItem extends Equatable {
   final String? status;
   final String? category;
   final String? description;
+  final String? priceDisplay;
+  final String? unitDisplay;
+  final String? statusDisplay;
 
   @override
   List<Object?> get props => [
@@ -40,6 +50,9 @@ class RecommendedItem extends Equatable {
     status,
     category,
     description,
+    priceDisplay,
+    unitDisplay,
+    statusDisplay,
   ];
 }
 
@@ -51,8 +64,13 @@ class ClarificationQuestion extends Equatable {
     this.step = 1,
     this.totalSteps = 2,
     this.selectedOption,
+    this.selectedOptionId,
+    this.dimension = '',
+    this.choices = const [],
     this.branchOptions,
     this.branchTitles,
+    this.branchQuestionId,
+    this.branchChoices = const {},
   });
 
   final String id;
@@ -61,8 +79,13 @@ class ClarificationQuestion extends Equatable {
   final int step;
   final int totalSteps;
   final String? selectedOption;
+  final String? selectedOptionId;
+  final String dimension;
+  final List<QuestionChoice> choices;
   final Map<String, List<String>>? branchOptions;
   final Map<String, String>? branchTitles;
+  final String? branchQuestionId;
+  final Map<String, List<QuestionChoice>> branchChoices;
 
   ClarificationQuestion copyWith({
     String? id,
@@ -71,8 +94,13 @@ class ClarificationQuestion extends Equatable {
     int? step,
     int? totalSteps,
     String? selectedOption,
+    String? selectedOptionId,
+    String? dimension,
+    List<QuestionChoice>? choices,
     Map<String, List<String>>? branchOptions,
     Map<String, String>? branchTitles,
+    String? branchQuestionId,
+    Map<String, List<QuestionChoice>>? branchChoices,
   }) {
     return ClarificationQuestion(
       id: id ?? this.id,
@@ -81,8 +109,13 @@ class ClarificationQuestion extends Equatable {
       step: step ?? this.step,
       totalSteps: totalSteps ?? this.totalSteps,
       selectedOption: selectedOption ?? this.selectedOption,
+      selectedOptionId: selectedOptionId ?? this.selectedOptionId,
+      dimension: dimension ?? this.dimension,
+      choices: choices ?? this.choices,
       branchOptions: branchOptions ?? this.branchOptions,
       branchTitles: branchTitles ?? this.branchTitles,
+      branchQuestionId: branchQuestionId ?? this.branchQuestionId,
+      branchChoices: branchChoices ?? this.branchChoices,
     );
   }
 
@@ -94,8 +127,13 @@ class ClarificationQuestion extends Equatable {
     step,
     totalSteps,
     selectedOption,
+    selectedOptionId,
+    dimension,
+    choices,
     branchOptions,
     branchTitles,
+    branchQuestionId,
+    branchChoices,
   ];
 }
 
@@ -125,12 +163,16 @@ class ChatMessage extends Equatable {
     this.recommendedItems = const [],
     this.suggestedReplies = const [],
     this.questions = const [],
+    this.understanding,
     this.responseDuration,
     this.isStreaming = false,
     this.isVisibleInChat = true,
+    this.isFailure = false,
     this.thought,
     this.searchSources = const [],
     this.searchQuery,
+    this.context,
+    this.references = const [],
     this.statusMessage,
     this.activities = const [],
     this.createdAt,
@@ -143,12 +185,17 @@ class ChatMessage extends Equatable {
   final List<RecommendedItem> recommendedItems;
   final List<String> suggestedReplies;
   final List<ClarificationQuestion> questions;
+  final ChatUnderstanding? understanding;
   final Duration? responseDuration;
   final bool isStreaming;
   final bool isVisibleInChat;
+  // แจ้งสถานะในแชตได้ แต่ไม่ใช้เป็นคำตอบของผู้ช่วยในประวัติที่ส่งให้โมเดล
+  final bool isFailure;
   final String? thought;
   final List<SearchSource> searchSources;
   final String? searchQuery;
+  final ChatSessionContext? context;
+  final List<EvidenceReference> references;
   final String? statusMessage;
   final List<String> activities;
   final DateTime? createdAt;
@@ -161,12 +208,16 @@ class ChatMessage extends Equatable {
     List<RecommendedItem>? recommendedItems,
     List<String>? suggestedReplies,
     List<ClarificationQuestion>? questions,
+    ChatUnderstanding? understanding,
     Duration? responseDuration,
     bool? isStreaming,
     bool? isVisibleInChat,
+    bool? isFailure,
     String? thought,
     List<SearchSource>? searchSources,
     String? searchQuery,
+    ChatSessionContext? context,
+    List<EvidenceReference>? references,
     String? statusMessage,
     List<String>? activities,
     DateTime? createdAt,
@@ -179,12 +230,16 @@ class ChatMessage extends Equatable {
       recommendedItems: recommendedItems ?? this.recommendedItems,
       suggestedReplies: suggestedReplies ?? this.suggestedReplies,
       questions: questions ?? this.questions,
+      understanding: understanding ?? this.understanding,
       responseDuration: responseDuration ?? this.responseDuration,
       isStreaming: isStreaming ?? this.isStreaming,
       isVisibleInChat: isVisibleInChat ?? this.isVisibleInChat,
+      isFailure: isFailure ?? this.isFailure,
       thought: thought ?? this.thought,
       searchSources: searchSources ?? this.searchSources,
       searchQuery: searchQuery ?? this.searchQuery,
+      context: context ?? this.context,
+      references: references ?? this.references,
       statusMessage: statusMessage ?? this.statusMessage,
       activities: activities ?? this.activities,
       createdAt: createdAt ?? this.createdAt,
@@ -200,12 +255,16 @@ class ChatMessage extends Equatable {
     recommendedItems,
     suggestedReplies,
     questions,
+    understanding,
     responseDuration,
     isStreaming,
     isVisibleInChat,
+    isFailure,
     thought,
     searchSources,
     searchQuery,
+    context,
+    references,
     statusMessage,
     activities,
     createdAt,
@@ -231,14 +290,16 @@ class ChatMetadataEvent extends ChatStreamEvent {
     required this.mode,
     this.recommendedItems = const [],
     this.questions = const [],
+    this.understanding,
   });
 
   final String mode;
   final List<RecommendedItem> recommendedItems;
   final List<ClarificationQuestion> questions;
+  final ChatUnderstanding? understanding;
 
   @override
-  List<Object?> get props => [mode, recommendedItems, questions];
+  List<Object?> get props => [mode, recommendedItems, questions, understanding];
 }
 
 class ChatDeltaEvent extends ChatStreamEvent {
@@ -250,15 +311,26 @@ class ChatDeltaEvent extends ChatStreamEvent {
   List<Object?> get props => [text];
 }
 
+// คำตอบทั้งชุดผ่านการตรวจและส่งมาถึงแอปแล้ว ก่อนเริ่มแสดงตัวอักษร
+class ChatReadyEvent extends ChatStreamEvent {
+  const ChatReadyEvent({required this.response});
+  final ChatResponse response;
+  @override
+  List<Object?> get props => [response];
+}
+
 class ChatDoneEvent extends ChatStreamEvent {
   const ChatDoneEvent({
     this.answer,
     this.suggestedReplies = const [],
     this.recommendedItems = const [],
     this.questions = const [],
+    this.understanding,
     this.thought,
     this.searchSources = const [],
     this.searchQuery,
+    this.context,
+    this.references = const [],
     this.activities = const [],
   });
 
@@ -266,9 +338,12 @@ class ChatDoneEvent extends ChatStreamEvent {
   final List<String> suggestedReplies;
   final List<RecommendedItem> recommendedItems;
   final List<ClarificationQuestion> questions;
+  final ChatUnderstanding? understanding;
   final String? thought;
   final List<SearchSource> searchSources;
   final String? searchQuery;
+  final ChatSessionContext? context;
+  final List<EvidenceReference> references;
   final List<String> activities;
 
   @override
@@ -277,9 +352,12 @@ class ChatDoneEvent extends ChatStreamEvent {
     suggestedReplies,
     recommendedItems,
     questions,
+    understanding,
     thought,
     searchSources,
     searchQuery,
+    context,
+    references,
     activities,
   ];
 }
@@ -290,18 +368,24 @@ class ChatResponse extends Equatable {
     this.recommendedItems = const [],
     this.suggestedReplies = const [],
     this.questions = const [],
+    this.understanding,
     this.thought,
     this.searchSources = const [],
     this.searchQuery,
+    this.context,
+    this.references = const [],
   });
 
   final String answer;
   final List<RecommendedItem> recommendedItems;
   final List<String> suggestedReplies;
   final List<ClarificationQuestion> questions;
+  final ChatUnderstanding? understanding;
   final String? thought;
   final List<SearchSource> searchSources;
   final String? searchQuery;
+  final ChatSessionContext? context;
+  final List<EvidenceReference> references;
 
   @override
   List<Object?> get props => [
@@ -309,8 +393,11 @@ class ChatResponse extends Equatable {
     recommendedItems,
     suggestedReplies,
     questions,
+    understanding,
     thought,
     searchSources,
     searchQuery,
+    context,
+    references,
   ];
 }

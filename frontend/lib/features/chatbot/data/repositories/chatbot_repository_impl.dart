@@ -11,11 +11,24 @@ class ChatbotRepositoryImpl implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async {
     try {
-      return await remoteDataSource.sendMessage(query: query, history: history);
+      return await remoteDataSource.sendMessage(
+        query: query,
+        history: history,
+        sessionId: sessionId,
+        context: context,
+        questionnaireAnswers: questionnaireAnswers,
+        questionnaireSkipped: questionnaireSkipped,
+        activeQuestionId: activeQuestionId,
+      );
     } on ChatbotRemoteException catch (error) {
-      throw ChatbotException(error.message);
+      throw _domainException(error);
     }
   }
 
@@ -23,12 +36,25 @@ class ChatbotRepositoryImpl implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) {
     return remoteDataSource
-        .sendMessageStream(query: query, history: history)
+        .sendMessageStream(
+          query: query,
+          history: history,
+          sessionId: sessionId,
+          context: context,
+          questionnaireAnswers: questionnaireAnswers,
+          questionnaireSkipped: questionnaireSkipped,
+          activeQuestionId: activeQuestionId,
+        )
         .handleError((error) {
           if (error is ChatbotRemoteException) {
-            throw ChatbotException(error.message);
+            throw _domainException(error);
           }
           throw error;
         });
@@ -38,4 +64,12 @@ class ChatbotRepositoryImpl implements ChatbotRepository {
   void close() {
     remoteDataSource.close();
   }
+
+  static ChatbotException _domainException(ChatbotRemoteException error) =>
+      ChatbotException(
+        error.message,
+        errorCode: error.errorCode,
+        statusCode: error.statusCode,
+        retryAfterSeconds: error.retryAfterSeconds,
+      );
 }

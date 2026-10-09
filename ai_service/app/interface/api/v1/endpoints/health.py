@@ -46,7 +46,11 @@ async def health_check():
 
     # Check Gemini Key
     status_report["dependencies"]["gemini"] = {
-        "status": "configured" if settings.GEMINI_API_KEY else "not_configured",
+        "status": "disabled" if not any(p.enabled and p.protocol == "gemini_json_schema" for p in container.llm_service.runtime.providers) else (
+            "configured" if settings.GEMINI_API_KEY else "not_configured"),
     }
+
+    status_report["providers"]["profiles"] = [{"id": p.id, "enabled": p.enabled,
+        "disabled_reason": p.disabled_reason} for p in container.llm_service.runtime.providers]
 
     return status_report

@@ -164,11 +164,11 @@ class RentalManagementRemoteDataSource {
 
     final String endpoint;
     if (status == 'active') {
-      endpoint = '/api/v1/rentals/$bookingId/handover';
+      endpoint = '/api/rentals/$bookingId/handover';
     } else if (status == 'completed') {
-      endpoint = '/api/v1/rentals/$bookingId/return';
+      endpoint = '/api/rentals/$bookingId/return';
     } else {
-      endpoint = '/api/v1/rentals/$bookingId/status';
+      endpoint = '/api/rentals/$bookingId/status';
     }
 
     await _backendClient.post(

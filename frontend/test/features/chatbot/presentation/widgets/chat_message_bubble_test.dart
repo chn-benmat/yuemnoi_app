@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/chatbot/domain/entities/chat_message.dart';
 import 'package:frontend/features/chatbot/presentation/widgets/chat_message_bubble.dart';
+import 'package:frontend/features/chatbot/presentation/widgets/chatbot_design.dart';
 import 'package:frontend/features/chatbot/presentation/widgets/interactive_questionnaire_card.dart';
 
 void main() {
@@ -62,37 +63,36 @@ void main() {
       expect(find.textContaining('###'), findsNothing);
     });
 
-    testWidgets(
-      'renders bold text without showing raw asterisks even with inner spaces',
-      (tester) async {
-        const markdownWithSpaces =
-            '• ** ค้นหาและแนะนำอุปกรณ์ **: บอกสเปก ทริป หรือประเภทงานที่ต้องการ\n'
-            '• ** เปรียบเทียบสเปกและความคุ้มค่า **: ช่วยวิเคราะห์จุดเด่น';
-        const message = ChatMessage(
-          id: 'assistant-bold-test',
-          role: ChatMessageRole.assistant,
-          content: markdownWithSpaces,
-        );
+    testWidgets('renders valid bold Markdown without rewriting text', (
+      tester,
+    ) async {
+      const markdownWithSpaces =
+          '- **ค้นหาและแนะนำอุปกรณ์**: บอกสเปก ทริป หรือประเภทงานที่ต้องการ\n'
+          '- **เปรียบเทียบสเปกและความคุ้มค่า**: ช่วยวิเคราะห์จุดเด่น';
+      const message = ChatMessage(
+        id: 'assistant-bold-test',
+        role: ChatMessageRole.assistant,
+        content: markdownWithSpaces,
+      );
 
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(fontFamily: 'Prompt'),
-            home: Scaffold(
-              body: ChatMessageBubble(
-                message: message,
-                onRentPressed: (_) {},
-              ),
-            ),
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(fontFamily: 'Prompt'),
+          home: Scaffold(
+            body: ChatMessageBubble(message: message, onRentPressed: (_) {}),
           ),
-        );
-        await tester.pumpAndSettle();
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        expect(find.byType(MarkdownBody), findsOneWidget);
-        expect(find.textContaining('**'), findsNothing);
-        expect(find.textContaining('ค้นหาและแนะนำอุปกรณ์'), findsOneWidget);
-        expect(find.textContaining('เปรียบเทียบสเปกและความคุ้มค่า'), findsOneWidget);
-      },
-    );
+      expect(find.byType(MarkdownBody), findsOneWidget);
+      expect(find.textContaining('**'), findsNothing);
+      expect(find.textContaining('ค้นหาและแนะนำอุปกรณ์'), findsOneWidget);
+      expect(
+        find.textContaining('เปรียบเทียบสเปกและความคุ้มค่า'),
+        findsOneWidget,
+      );
+    });
 
     testWidgets(
       'renders plain Text widget for simple message without markdown',
@@ -125,7 +125,8 @@ void main() {
         const message = ChatMessage(
           id: 'assistant-questionnaire',
           role: ChatMessageRole.assistant,
-          content: 'จะแนะนำให้ตรงจุดต้องรู้บริบทก่อน ให้เลือกตอบเร็วๆ ได้เลยนะคะ 😊',
+          content:
+              'จะแนะนำให้ตรงจุดต้องรู้บริบทก่อน ให้เลือกตอบเร็วๆ ได้เลยนะคะ 😊',
           recommendedItems: [
             RecommendedItem(
               id: 1,
@@ -166,49 +167,48 @@ void main() {
       },
     );
 
-    testWidgets(
-      'does not render AI thought or thinking duration trigger',
-      (tester) async {
-        const message = ChatMessage(
-          id: 'assistant-thought-test',
-          role: ChatMessageRole.assistant,
-          content: 'คำตอบทดสอบ',
-          responseDuration: Duration(seconds: 4),
-          thought: 'กำลังวิเคราะห์สเปกและการใช้งานของกล้อง',
-          searchSources: [
-            SearchSource(
-              title: 'Canon Official Spec',
-              url: 'https://th.canon/eos-r50',
-              domain: 'th.canon',
-            ),
-          ],
-          searchQuery: 'Canon EOS R50 spec',
-        );
-
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(fontFamily: 'Prompt'),
-            home: Scaffold(
-              body: ChatMessageBubble(message: message, onRentPressed: (_) {}),
-            ),
+    testWidgets('does not render AI thought or thinking duration trigger', (
+      tester,
+    ) async {
+      const message = ChatMessage(
+        id: 'assistant-thought-test',
+        role: ChatMessageRole.assistant,
+        content: 'คำตอบทดสอบ',
+        responseDuration: Duration(seconds: 4),
+        thought: 'กำลังวิเคราะห์สเปกและการใช้งานของกล้อง',
+        searchSources: [
+          SearchSource(
+            title: 'Canon Official Spec',
+            url: 'https://th.canon/eos-r50',
+            domain: 'th.canon',
           ),
-        );
-        await tester.pumpAndSettle();
+        ],
+        searchQuery: 'Canon EOS R50 spec',
+      );
 
-        // Trigger and details card must NOT be rendered
-        expect(
-          find.byKey(const Key('chatbot-thought-trigger-assistant-thought-test')),
-          findsNothing,
-        );
-        expect(
-          find.byKey(const Key('chatbot-thought-details-card')),
-          findsNothing,
-        );
-        expect(find.text('ค้นหาข้อมูลจากเว็บ 4 วินาที'), findsNothing);
-        expect(find.text('ใช้ความคิด 4 วินาที'), findsNothing);
-        expect(find.text('คำตอบทดสอบ'), findsOneWidget);
-      },
-    );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(fontFamily: 'Prompt'),
+          home: Scaffold(
+            body: ChatMessageBubble(message: message, onRentPressed: (_) {}),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Trigger and details card must NOT be rendered
+      expect(
+        find.byKey(const Key('chatbot-thought-trigger-assistant-thought-test')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('chatbot-thought-details-card')),
+        findsNothing,
+      );
+      expect(find.text('ค้นหาข้อมูลจากเว็บ 4 วินาที'), findsNothing);
+      expect(find.text('ใช้ความคิด 4 วินาที'), findsNothing);
+      expect(find.text('คำตอบทดสอบ'), findsOneWidget);
+    });
 
     testWidgets(
       'renders questionnaire recap card with question title and bold answer, without step badge',
@@ -261,12 +261,18 @@ void main() {
         const message = ChatMessage(
           id: 'assistant-choice-test',
           role: ChatMessageRole.assistant,
-          content: 'อยากให้ช่วยแนะนำแบบไหนครับ ขอเช็คบริบทก่อนสักนิด เพราะคำแนะนำจะต่างกันมาก',
+          content:
+              'อยากให้ช่วยแนะนำแบบไหนครับ ขอเช็คบริบทก่อนสักนิด เพราะคำแนะนำจะต่างกันมาก',
           questions: [
             ClarificationQuestion(
               id: 'q_category',
               title: 'เลือกหมวดหมู่ที่ต้องการ:',
-              options: ['กล้องและเลนส์', 'อุปกรณ์แคมป์ปิ้ง', 'เครื่องเสียง', 'คอมพิวเตอร์'],
+              options: [
+                'กล้องและเลนส์',
+                'อุปกรณ์แคมป์ปิ้ง',
+                'เครื่องเสียง',
+                'คอมพิวเตอร์',
+              ],
             ),
           ],
         );
@@ -275,10 +281,7 @@ void main() {
           MaterialApp(
             theme: ThemeData(fontFamily: 'Prompt'),
             home: Scaffold(
-              body: ChatMessageBubble(
-                message: message,
-                onRentPressed: (_) {},
-              ),
+              body: ChatMessageBubble(message: message, onRentPressed: (_) {}),
             ),
           ),
         );
@@ -316,10 +319,7 @@ void main() {
           MaterialApp(
             theme: ThemeData(fontFamily: 'Prompt'),
             home: Scaffold(
-              body: ChatMessageBubble(
-                message: message,
-                onRentPressed: (_) {},
-              ),
+              body: ChatMessageBubble(message: message, onRentPressed: (_) {}),
             ),
           ),
         );
@@ -331,14 +331,23 @@ void main() {
         expect(find.textContaining('PlayStation 5'), findsWidgets);
         expect(find.textContaining('Nintendo Switch OLED'), findsWidgets);
         // Blockquote text rendered without raw markdown > markers
-        expect(find.textContaining('>'), findsNothing);
-        expect(find.textContaining('สรุปความคุ้มค่าและคำแนะนำ'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(MarkdownBody),
+            matching: find.textContaining('>'),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.textContaining('สรุปความคุ้มค่าและคำแนะนำ'),
+          findsOneWidget,
+        );
         expect(find.textContaining('หากต้องการกราฟิกสมจริง'), findsOneWidget);
       },
     );
 
     testWidgets(
-      'synchronizes recommended item card title with AI answered bold model name',
+      'keeps the full catalog name when an answer uses a shorter model name',
       (tester) async {
         const responseContent =
             'ขอแนะนำอุปกรณ์คอมพิวเตอร์และจอภาพสำหรับใช้งานหลากหลายงานมาให้ดูนะคะ\n\n'
@@ -378,10 +387,7 @@ void main() {
           MaterialApp(
             theme: ThemeData(fontFamily: 'Prompt'),
             home: Scaffold(
-              body: ChatMessageBubble(
-                message: message,
-                onRentPressed: (_) {},
-              ),
+              body: ChatMessageBubble(message: message, onRentPressed: (_) {}),
             ),
           ),
         );
@@ -390,85 +396,87 @@ void main() {
         // Card 1 matches directly
         expect(find.text('MacBook Air M2 13 นิ้ว'), findsWidgets);
         // Card 2 title should display "Dell UltraSharp 27 นิ้ว 4K" matching the AI response, NOT "จอมอนิเตอร์ Dell UltraSharp 27 นิ้ว 4K"
-        expect(find.text('Dell UltraSharp 27 นิ้ว 4K'), findsWidgets);
-        expect(find.text('จอมอนิเตอร์ Dell UltraSharp 27 นิ้ว 4K'), findsNothing);
+        expect(find.textContaining('Dell UltraSharp 27 นิ้ว 4K'), findsWidgets);
+        expect(
+          find.text('จอมอนิเตอร์ Dell UltraSharp 27 นิ้ว 4K'),
+          findsOneWidget,
+        );
       },
     );
 
-    testWidgets(
-      'synchronizes recommended item card titles with AI extracted bold model names (e.g. PlayStation 5 and Nintendo Switch OLED)',
-      (tester) async {
-        const responseContent =
-            'ทั้งสองรุ่นตอบโจทย์การใช้งานคนละรูปแบบอย่างชัดเจนค่ะ:\n\n'
-            '### 🎮 กราฟิกและประสิทธิภาพ\n'
-            '- **PlayStation 5**: มีประสิทธิภาพประมวลผลสูงสุดสำหรับเกม AAA ภาพ 4K คมชัด\n'
-            '- **Nintendo Switch OLED**: เน้นเล่นแบบ Handheld จอ OLED สีสด เล่นเกมอินดี้สนุกค่ะ\n\n'
-            '### 🚀 การพกพา\n'
-            '- **Nintendo Switch OLED**: พกพาสะดวก น้ำหนักเบา เล่นได้ทั้งในบ้านและนอกบ้าน\n'
-            '- **PlayStation 5**: ต้องตั้งโต๊ะเชื่อมต่อจอทีวีและเสียบปลั๊กไฟในบ้านเป็นหลักค่ะ\n\n'
-            '### 👥 แนวเกมและกลุ่มผู้เล่น\n'
-            '- **PlayStation 5**: เหมาะกับคอเกมตัวยง ผู้เล่นสายกราฟิก หรือแนวแข่งขัน FPS/RPG\n'
-            '- **Nintendo Switch OLED**: เหมาะกับครอบครัว เล่นปาร์ตี้กับเพื่อน และเกมแนวผจญภัยค่ะ\n\n'
-            '💡 **คำแนะนำในการเลือก**:\n'
-            '- **PlayStation 5**: เหมาะสำหรับคุณ หากต้องการประสบการณ์เกมระดับพรีเมียมในบ้านค่ะ\n'
-            '- **Nintendo Switch OLED**: เหมาะสำหรับคุณ หากต้องการความยืดหยุ่น พกพาไปเล่นได้ทุกที่ค่ะ\n\n'
-            'คุณลูกค้าสามารถแตะดูรายละเอียดเพิ่มเติมและราคาเช่าของอุปกรณ์ได้ที่การ์ดด้านล่างได้เลยนะคะ';
+    testWidgets('keeps catalog bundle descriptions in card titles', (
+      tester,
+    ) async {
+      const responseContent =
+          'ทั้งสองรุ่นตอบโจทย์การใช้งานคนละรูปแบบอย่างชัดเจนค่ะ:\n\n'
+          '### 🎮 กราฟิกและประสิทธิภาพ\n'
+          '- **PlayStation 5**: มีประสิทธิภาพประมวลผลสูงสุดสำหรับเกม AAA ภาพ 4K คมชัด\n'
+          '- **Nintendo Switch OLED**: เน้นเล่นแบบ Handheld จอ OLED สีสด เล่นเกมอินดี้สนุกค่ะ\n\n'
+          '### 🚀 การพกพา\n'
+          '- **Nintendo Switch OLED**: พกพาสะดวก น้ำหนักเบา เล่นได้ทั้งในบ้านและนอกบ้าน\n'
+          '- **PlayStation 5**: ต้องตั้งโต๊ะเชื่อมต่อจอทีวีและเสียบปลั๊กไฟในบ้านเป็นหลักค่ะ\n\n'
+          '### 👥 แนวเกมและกลุ่มผู้เล่น\n'
+          '- **PlayStation 5**: เหมาะกับคอเกมตัวยง ผู้เล่นสายกราฟิก หรือแนวแข่งขัน FPS/RPG\n'
+          '- **Nintendo Switch OLED**: เหมาะกับครอบครัว เล่นปาร์ตี้กับเพื่อน และเกมแนวผจญภัยค่ะ\n\n'
+          '💡 **คำแนะนำในการเลือก**:\n'
+          '- **PlayStation 5**: เหมาะสำหรับคุณ หากต้องการประสบการณ์เกมระดับพรีเมียมในบ้านค่ะ\n'
+          '- **Nintendo Switch OLED**: เหมาะสำหรับคุณ หากต้องการความยืดหยุ่น พกพาไปเล่นได้ทุกที่ค่ะ\n\n'
+          'คุณลูกค้าสามารถแตะดูรายละเอียดเพิ่มเติมและราคาเช่าของอุปกรณ์ได้ที่การ์ดด้านล่างได้เลยนะคะ';
 
-        const message = ChatMessage(
-          id: 'assistant-sync-card-gaming-test',
-          role: ChatMessageRole.assistant,
-          content: responseContent,
-          recommendedItems: [
-            RecommendedItem(
-              id: 1,
-              name: 'PlayStation 5 พร้อมจอย 2 ตัวและเกม 3 แผ่น',
-              price: 450,
-              unit: 'วัน',
-              imageUrl: '',
-              status: 'available',
-              category: 'เกมและอุปกรณ์เล่นเกม',
-              description: 'เครื่องเกมคอนโซล',
-            ),
-            RecommendedItem(
-              id: 2,
-              name: 'Nintendo Switch OLED พร้อมจอย 4 ตัว',
-              price: 350,
-              unit: 'วัน',
-              imageUrl: '',
-              status: 'available',
-              category: 'เกมและอุปกรณ์เล่นเกม',
-              description: 'เครื่องเล่นเกมพกพา',
-            ),
-          ],
-        );
+      const message = ChatMessage(
+        id: 'assistant-sync-card-gaming-test',
+        role: ChatMessageRole.assistant,
+        content: responseContent,
+        recommendedItems: [
+          RecommendedItem(
+            id: 1,
+            name: 'PlayStation 5 พร้อมจอย 2 ตัวและเกม 3 แผ่น',
+            price: 450,
+            unit: 'วัน',
+            imageUrl: '',
+            status: 'available',
+            category: 'เกมและอุปกรณ์เล่นเกม',
+            description: 'เครื่องเกมคอนโซล',
+          ),
+          RecommendedItem(
+            id: 2,
+            name: 'Nintendo Switch OLED พร้อมจอย 4 ตัว',
+            price: 350,
+            unit: 'วัน',
+            imageUrl: '',
+            status: 'available',
+            category: 'เกมและอุปกรณ์เล่นเกม',
+            description: 'เครื่องเล่นเกมพกพา',
+          ),
+        ],
+      );
 
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(fontFamily: 'Prompt'),
-            home: Scaffold(
-              body: SingleChildScrollView(
-                child: ChatMessageBubble(
-                  message: message,
-                  onRentPressed: (_) {},
-                ),
-              ),
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(fontFamily: 'Prompt'),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: ChatMessageBubble(message: message, onRentPressed: (_) {}),
             ),
           ),
-        );
-        await tester.pumpAndSettle();
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        // Card 1 title displays concise model name "PlayStation 5"
-        expect(find.text('PlayStation 5'), findsWidgets);
-        expect(find.text('PlayStation 5 พร้อมจอย 2 ตัวและเกม 3 แผ่น'), findsNothing);
+      // Card 1 title displays concise model name "PlayStation 5"
+      expect(find.textContaining('PlayStation 5'), findsWidgets);
+      expect(
+        find.text('PlayStation 5 พร้อมจอย 2 ตัวและเกม 3 แผ่น'),
+        findsOneWidget,
+      );
 
-        // Card 2 title displays concise model name "Nintendo Switch OLED"
-        expect(find.text('Nintendo Switch OLED'), findsWidgets);
-        expect(find.text('Nintendo Switch OLED พร้อมจอย 4 ตัว'), findsNothing);
-      },
-    );
+      // Card 2 title displays concise model name "Nintendo Switch OLED"
+      expect(find.textContaining('Nintendo Switch OLED'), findsWidgets);
+      expect(find.text('Nintendo Switch OLED พร้อมจอย 4 ตัว'), findsOneWidget);
+    });
 
     testWidgets(
-      'renders status summary header with duration on completed assistant response',
+      'shows measured timing and a purple arrow above the avatar beside the answer',
       (tester) async {
         const message = ChatMessage(
           id: 'assistant-complete-status',
@@ -482,22 +490,47 @@ void main() {
           MaterialApp(
             theme: ThemeData(fontFamily: 'Prompt'),
             home: Scaffold(
-              body: ChatMessageBubble(
-                message: message,
-                onRentPressed: (_) {},
-              ),
+              body: ChatMessageBubble(message: message, onRentPressed: (_) {}),
             ),
           ),
         );
         await tester.pumpAndSettle();
 
-        expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
-        expect(find.text('สรุปคำแนะนำ (6 วิ)'), findsOneWidget);
+        final summary = find.text('สรุปคำแนะนำ 6 วินาที >');
+        expect(summary, findsOneWidget);
+        final label = tester.widget<Text>(summary).textSpan! as TextSpan;
+        expect(label.children!.last.style!.color, ChatbotDesign.primary);
+        final avatar = find.byKey(
+          const ValueKey('chatbot-assistant-avatar-assistant-complete-status'),
+        );
+        expect(tester.widget(avatar), isA<ClipOval>());
+        final avatarRect = tester.getRect(avatar);
+        expect(avatarRect.width, avatarRect.height);
+        expect(find.text('ยืมหน่อย AI'), findsNothing);
+        final answerRect = tester.getRect(find.text('คำแนะนำเรียบร้อยค่ะ'));
+        expect(answerRect.top, avatarRect.top);
+        expect(answerRect.left, greaterThan(avatarRect.right));
+        expect(
+          tester.getRect(summary).bottom,
+          lessThanOrEqualTo(avatarRect.top),
+        );
+        expect(find.byTooltip('คัดลอกคำตอบ'), findsNothing);
+        expect(find.byIcon(Icons.copy_outlined), findsNothing);
+        await tester.tap(
+          find.byKey(
+            const ValueKey(
+              'chatbot-status-header-button-assistant-complete-status',
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('สรุปคำแนะนำ'), findsOneWidget);
+        expect(find.textContaining('เวลาประมวลผล'), findsNothing);
       },
     );
 
     testWidgets(
-      'does not render status summary header on initial greeting assistant message',
+      'allows opening the summary for a completed greeting without sources',
       (tester) async {
         const initialGreeting = ChatMessage(
           role: ChatMessageRole.assistant,
@@ -518,7 +551,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byIcon(Icons.auto_awesome_rounded), findsNothing);
-        expect(find.textContaining('สรุปคำแนะนำ'), findsNothing);
+        expect(find.text('สรุปคำแนะนำ >'), findsOneWidget);
       },
     );
 
@@ -549,227 +582,211 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
-        expect(find.textContaining('กำลังค้นหาอุปกรณ์ในระบบ...'), findsOneWidget);
+        expect(find.text('สรุปคำแนะนำ >'), findsNothing);
+        expect(
+          find.textContaining('กำลังค้นหาอุปกรณ์ในระบบ...'),
+          findsOneWidget,
+        );
       },
     );
 
     testWidgets(
-      'periodically ticks and updates elapsed seconds in status header while response duration is null',
+      'shows fixed completion timing without a ticking stream timer',
       (tester) async {
-        final startTime = DateTime.now();
-        final inProgressMessage = ChatMessage(
+        const streaming = ChatMessage(
           id: 'assistant-timer-test',
           role: ChatMessageRole.assistant,
           content: 'กำลังพิมพ์คำตอบ...',
           userQuery: 'หาคอมพิวเตอร์',
           isStreaming: true,
           statusMessage: 'กำลังสรุปคำแนะนำ...',
-          createdAt: startTime,
         );
-
+        Widget mount(ChatMessage message) => MaterialApp(
+          home: Scaffold(
+            body: ChatMessageBubble(message: message, onRentPressed: (_) {}),
+          ),
+        );
+        await tester.pumpWidget(mount(streaming));
+        await tester.pump(const Duration(seconds: 3));
+        expect(find.text('กำลังสรุปคำแนะนำ...'), findsOneWidget);
+        expect(find.textContaining('วิ'), findsNothing);
         await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(fontFamily: 'Prompt'),
-            home: Scaffold(
-              body: ChatMessageBubble(
-                message: inProgressMessage,
-                onRentPressed: (_) {},
-              ),
+          mount(
+            streaming.copyWith(
+              isStreaming: false,
+              responseDuration: const Duration(seconds: 3),
             ),
           ),
         );
-        await tester.pump();
-
-        expect(find.textContaining('กำลังสรุปคำแนะนำ...'), findsOneWidget);
-        expect(find.textContaining('(0 วิ)..'), findsOneWidget);
-
-        // Advance 1 second
-        await tester.pump(const Duration(seconds: 1));
-        expect(find.textContaining('(1 วิ)..'), findsOneWidget);
-
-        // Advance 1 more second
-        await tester.pump(const Duration(seconds: 1));
-        expect(find.textContaining('(2 วิ)..'), findsOneWidget);
-
-        // Advance 1 more second
-        await tester.pump(const Duration(seconds: 1));
-        expect(find.textContaining('(3 วิ)..'), findsOneWidget);
-
-        // Now simulate completion by providing responseDuration
-        final completedMessage = inProgressMessage.copyWith(
-          isStreaming: false,
-          statusMessage: 'สรุปคำแนะนำ',
-          responseDuration: const Duration(seconds: 3),
-        );
-
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(fontFamily: 'Prompt'),
-            home: Scaffold(
-              body: ChatMessageBubble(
-                message: completedMessage,
-                onRentPressed: (_) {},
-              ),
-            ),
+        await tester.pumpAndSettle();
+        expect(find.text('สรุปคำแนะนำ 3 วินาที >'), findsOneWidget);
+        await tester.tap(
+          find.byKey(
+            const ValueKey('chatbot-status-header-button-assistant-timer-test'),
           ),
         );
-        await tester.pump();
-
-        expect(find.text('สรุปคำแนะนำ (3 วิ)'), findsOneWidget);
-
-        // Advance 2 more seconds - duration must remain frozen and timer stopped
+        await tester.pumpAndSettle();
+        expect(find.text('เวลาประมวลผล 3 วินาที'), findsNothing);
         await tester.pump(const Duration(seconds: 2));
-        expect(find.text('สรุปคำแนะนำ (3 วิ)'), findsOneWidget);
+        expect(find.text('เวลาประมวลผล 3 วินาที'), findsNothing);
       },
     );
+    testWidgets('renders all validated cards without matching names in answer text', (
+      tester,
+    ) async {
+      const responseContent =
+          'สำหรับหมวดหมู่แคมป์ปิงและกิจกรรมกลางแจ้ง น้องยืมหน่อยมีอุปกรณ์พร้อมแนะนำดังนี้นะคะ:\n\n'
+          '• **เต็นท์ Coleman Instant Cabin 4 คน** - กางและพับเก็บใน 1 นาที (ค่าเช่า 450 บาท ต่อ วัน)\n'
+          '• **ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว** - น้ำหนักเบาพกพาสะดวก (ค่าเช่า 250 บาท ต่อ วัน)\n\n'
+          'คุณลูกค้าสามารถแตะดูรายละเอียดเพิ่มเติมจากการ์ดอุปกรณ์ด้านล่างนี้ได้เลยนะคะ';
 
-    testWidgets(
-      'filters out recommended item cards that are NOT mentioned in the AI response text',
-      (tester) async {
-        const responseContent =
-            'สำหรับหมวดหมู่แคมป์ปิงและกิจกรรมกลางแจ้ง น้องยืมหน่อยมีอุปกรณ์พร้อมแนะนำดังนี้นะคะ:\n\n'
-            '• **เต็นท์ Coleman Instant Cabin 4 คน** - กางและพับเก็บใน 1 นาที (ค่าเช่า 450.0 บาท/วัน)\n'
-            '• **ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว** - น้ำหนักเบาพกพาสะดวก (ค่าเช่า 250.0 บาท/วัน)\n\n'
-            'คุณลูกค้าสามารถแตะดูรายละเอียดเพิ่มเติมจากการ์ดอุปกรณ์ด้านล่างนี้ได้เลยนะคะ';
+      const message = ChatMessage(
+        id: 'assistant-filter-unmentioned-card-test',
+        role: ChatMessageRole.assistant,
+        content: responseContent,
+        recommendedItems: [
+          RecommendedItem(
+            id: 19,
+            name: 'เต็นท์ Coleman Instant Cabin 4 คน',
+            price: 450,
+            unit: 'วัน',
+            imageUrl: '',
+            status: 'available',
+            category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+            description: 'เต็นท์กันฝน',
+          ),
+          RecommendedItem(
+            id: 20,
+            name: 'ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว',
+            price: 250,
+            unit: 'วัน',
+            imageUrl: '',
+            status: 'available',
+            category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+            description: 'โต๊ะสนาม',
+          ),
+          RecommendedItem(
+            id: 21,
+            name: 'ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED',
+            price: 180,
+            unit: 'วัน',
+            imageUrl: '',
+            status: 'available',
+            category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+            description: 'เตาแก๊ส',
+          ),
+        ],
+      );
 
-        const message = ChatMessage(
-          id: 'assistant-filter-unmentioned-card-test',
-          role: ChatMessageRole.assistant,
-          content: responseContent,
-          recommendedItems: [
-            RecommendedItem(
-              id: 19,
-              name: 'เต็นท์ Coleman Instant Cabin 4 คน',
-              price: 450,
-              unit: 'วัน',
-              imageUrl: '',
-              status: 'available',
-              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
-              description: 'เต็นท์กันฝน',
-            ),
-            RecommendedItem(
-              id: 20,
-              name: 'ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว',
-              price: 250,
-              unit: 'วัน',
-              imageUrl: '',
-              status: 'available',
-              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
-              description: 'โต๊ะสนาม',
-            ),
-            RecommendedItem(
-              id: 21,
-              name: 'ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED',
-              price: 180,
-              unit: 'วัน',
-              imageUrl: '',
-              status: 'available',
-              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
-              description: 'เตาแก๊ส',
-            ),
-          ],
-        );
-
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(fontFamily: 'Prompt'),
-            home: Scaffold(
-              body: SingleChildScrollView(
-                child: ChatMessageBubble(
-                  message: message,
-                  onRentPressed: (_) {},
-                ),
-              ),
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(fontFamily: 'Prompt'),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: ChatMessageBubble(message: message, onRentPressed: (_) {}),
             ),
           ),
-        );
-        await tester.pumpAndSettle();
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        // Items 1 and 2 were mentioned by AI -> must have cards rendered
-        expect(find.text('เต็นท์ Coleman Instant Cabin 4 คน'), findsWidgets);
-        expect(find.text('ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว'), findsWidgets);
+      // Items 1 and 2 were mentioned by AI -> must have cards rendered
+      expect(find.text('เต็นท์ Coleman Instant Cabin 4 คน'), findsWidgets);
+      expect(
+        find.text('ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว'),
+        findsWidgets,
+      );
 
-        // Item 3 was NOT mentioned by AI -> card MUST NOT be rendered
-        expect(find.text('ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED'), findsNothing);
-      },
-    );
+      // แสดงรายการที่ผ่านการตรวจ ID แล้ว โดยไม่จับชื่อจากคำตอบ
+      expect(
+        find.text('ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED'),
+        findsWidgets,
+      );
+      expect(find.text('available'), findsNothing);
+      expect(find.text('แคมป์ปิงและกิจกรรมกลางแจ้ง'), findsNothing);
+      expect(find.text('ดูรายละเอียด'), findsNothing);
+    });
 
-    testWidgets(
-      'renders structured device recommendation blocks cleanly and matches cards without prefix',
-      (tester) async {
-        const responseContent =
-            'ยินดีจัดหาอุปกรณ์แคมป์ปิ้งพร้อมใช้งานให้ค่ะ ขอแนะนำรายการที่มีในระบบนะคะ:\n\n'
-            '**ชื่ออุปกรณ์:** เต็นท์ Coleman Instant Cabin 4 คน\n'
-            '- **รายละเอียด:** เต็นท์กันฝนและลมแรง กางและพับเก็บเสร็จใน 1 นาที\n'
-            '- **ราคาเช่า:** 450.0 บาท/วัน\n\n'
-            '**ชื่ออุปกรณ์: ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว**\n'
-            '- **รายละเอียด:** โต๊ะพับอลูมิเนียมพร้อมเก้าอี้ 4 ตัว น้ำหนักเบาพกพาสะดวก\n'
-            '- **ราคาเช่า:** 250.0 บาท/วัน\n\n'
-            'เชิญแตะดูรายละเอียดเพิ่มเติมจากการ์ดอุปกรณ์ด้านล่างนี้ได้เลยนะคะ';
+    testWidgets('renders valid Markdown and catalog card names directly', (
+      tester,
+    ) async {
+      const responseContent =
+          'ยินดีจัดหาอุปกรณ์แคมป์ปิ้งพร้อมใช้งานให้ค่ะ ขอแนะนำรายการที่มีในระบบนะคะ:\n\n'
+          '**เต็นท์ Coleman Instant Cabin 4 คน**\n\n'
+          '- **รายละเอียด**: เต็นท์กันฝนและลมแรง กางและพับเก็บเสร็จใน 1 นาที\n'
+          '- ราคา: 450 บาทต่อวัน\n\n'
+          '**ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว**\n\n'
+          '- **รายละเอียด**: โต๊ะพับอลูมิเนียมพร้อมเก้าอี้ 4 ตัว น้ำหนักเบาพกพาสะดวก\n'
+          '- ราคา: 250 บาทต่อวัน\n\n'
+          'เชิญแตะดูรายละเอียดเพิ่มเติมจากการ์ดอุปกรณ์ด้านล่างนี้ได้เลยนะคะ';
 
-        const message = ChatMessage(
-          id: 'assistant-structured-device-format-test',
-          role: ChatMessageRole.assistant,
-          content: responseContent,
-          recommendedItems: [
-            RecommendedItem(
-              id: 19,
-              name: 'เต็นท์ Coleman Instant Cabin 4 คน',
-              price: 450,
-              unit: 'วัน',
-              imageUrl: '',
-              status: 'available',
-              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
-              description: 'เต็นท์กันฝน',
-            ),
-            RecommendedItem(
-              id: 20,
-              name: 'ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว',
-              price: 250,
-              unit: 'วัน',
-              imageUrl: '',
-              status: 'available',
-              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
-              description: 'โต๊ะสนาม',
-            ),
-            RecommendedItem(
-              id: 21,
-              name: 'ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED',
-              price: 180,
-              unit: 'วัน',
-              imageUrl: '',
-              status: 'available',
-              category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
-              description: 'เตาแก๊ส',
-            ),
-          ],
-        );
+      const message = ChatMessage(
+        id: 'assistant-structured-device-format-test',
+        role: ChatMessageRole.assistant,
+        content: responseContent,
+        recommendedItems: [
+          RecommendedItem(
+            id: 19,
+            name: 'เต็นท์ Coleman Instant Cabin 4 คน',
+            price: 450,
+            unit: 'วัน',
+            imageUrl: '',
+            status: 'available',
+            category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+            description: 'เต็นท์กันฝน',
+          ),
+          RecommendedItem(
+            id: 20,
+            name: 'ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว',
+            price: 250,
+            unit: 'วัน',
+            imageUrl: '',
+            status: 'available',
+            category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+            description: 'โต๊ะสนาม',
+          ),
+          RecommendedItem(
+            id: 21,
+            name: 'ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED',
+            price: 180,
+            unit: 'วัน',
+            imageUrl: '',
+            status: 'available',
+            category: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+            description: 'เตาแก๊ส',
+          ),
+        ],
+      );
 
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(fontFamily: 'Prompt'),
-            home: Scaffold(
-              body: SingleChildScrollView(
-                child: ChatMessageBubble(
-                  message: message,
-                  onRentPressed: (_) {},
-                ),
-              ),
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(fontFamily: 'Prompt'),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: ChatMessageBubble(message: message, onRentPressed: (_) {}),
             ),
           ),
-        );
-        await tester.pumpAndSettle();
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        // Cards must render with clean item names (without "ชื่ออุปกรณ์: " on the card)
-        expect(find.text('เต็นท์ Coleman Instant Cabin 4 คน'), findsWidgets);
-        expect(find.text('ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว'), findsWidgets);
-        expect(find.text('ชื่ออุปกรณ์: เต็นท์ Coleman Instant Cabin 4 คน'), findsNothing);
+      // Cards must render with clean item names (without "ชื่ออุปกรณ์: " on the card)
+      expect(find.text('เต็นท์ Coleman Instant Cabin 4 คน'), findsWidgets);
+      expect(
+        find.text('ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว'),
+        findsWidgets,
+      );
+      expect(
+        find.text('ชื่ออุปกรณ์: เต็นท์ Coleman Instant Cabin 4 คน'),
+        findsNothing,
+      );
 
-        // Unmentioned item 3 must not render
-        expect(find.text('ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED'), findsNothing);
-      },
-    );
+      // การ์ดใช้รายการจากผลลัพธ์แบบมีโครงสร้าง
+      expect(
+        find.text('ชุดเตาแก๊สสนามและหม้อแคมป์ปิ้ง พร้อมตะเกียง LED'),
+        findsWidgets,
+      );
+    });
 
     testWidgets(
       'renders bold device titles directly without ชื่ออุปกรณ์, formats รายละเอียด/ราคาเช่า bold, and converts units/prices to Thai integer format',
@@ -844,7 +861,7 @@ void main() {
     );
 
     testWidgets(
-      'does not render cards when response is negative even if message contains recommendedItems',
+      'card visibility follows structured IDs regardless of answer wording',
       (tester) async {
         const negativeText =
             'ขณะนี้ทางยืมหน่อยยังไม่มีบริการให้เช่าเสื้อผ้าหรือสูทสากลสำหรับออกงานค่ะ';
@@ -892,12 +909,15 @@ void main() {
         await tester.pumpAndSettle();
 
         // The negative message is rendered
-        expect(find.textContaining('ยังไม่มีบริการให้เช่าเสื้อผ้าหรือสูทสากล'), findsOneWidget);
+        expect(
+          find.textContaining('ยังไม่มีบริการให้เช่าเสื้อผ้าหรือสูทสากล'),
+          findsOneWidget,
+        );
 
-        // ZERO cards must be rendered
-        expect(find.byType(RecommendedItemCard), findsNothing);
-        expect(find.text('Dyson V12 Detect Slim'), findsNothing);
-        expect(find.text('Wanbo T2 Max New'), findsNothing);
+        // ไม่เดารายการสินค้าหรือคำปฏิเสธจากข้อความ
+        expect(find.byType(RecommendedItemCard), findsNWidgets(2));
+        expect(find.text('Dyson V12 Detect Slim'), findsOneWidget);
+        expect(find.text('Wanbo T2 Max New'), findsOneWidget);
       },
     );
 
@@ -959,10 +979,12 @@ void main() {
 
         // Cards must be rendered for both recommended alternative items
         expect(find.byType(RecommendedItemCard), findsNWidgets(2));
-        expect(find.text('PlayStation 5 พร้อมจอย 2 ตัวและเกม 3 แผ่น'), findsWidgets);
+        expect(
+          find.text('PlayStation 5 พร้อมจอย 2 ตัวและเกม 3 แผ่น'),
+          findsWidgets,
+        );
         expect(find.text('Nintendo Switch OLED พร้อมจอย 4 ตัว'), findsWidgets);
       },
     );
   });
 }
-

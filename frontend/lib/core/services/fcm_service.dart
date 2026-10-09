@@ -193,7 +193,7 @@ class FcmService {
       if (accessToken != null) {
         final apiClient = DioApiClient();
         await apiClient.post(
-          '/api/v1/user/fcm-token',
+          '/api/user/fcm-token',
           headers: {'Authorization': 'Bearer $accessToken'},
           data: {'fcm_token': token},
         );

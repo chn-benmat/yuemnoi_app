@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/chatbot_failure.dart';
 
 class ChatbotState extends Equatable {
   const ChatbotState({
@@ -9,18 +10,19 @@ class ChatbotState extends Equatable {
     this.errorMessage,
     this.currentStatusMessage,
     this.requestStartTime,
+    this.failure,
   });
 
   static const defaultInitialSuggestions = [
-    'แนะนำอุปกรณ์เช่าหน่อย',
-    'วิธีการเช่าอุปกรณ์',
-    'วิธีปล่อยเช่าอุปกรณ์',
+    'ช่วยหาอุปกรณ์สำหรับถ่ายคอนเทนต์ให้หน่อย',
+    'ช่วยหาอุปกรณ์สำหรับทำโปรเจกต์ให้หน่อย',
+    'ช่วยหาอุปกรณ์สำหรับไปทริปให้หน่อย',
+    'ช่วยหาอุปกรณ์สำหรับเล่นเกมให้หน่อย',
+    'ช่วยหาอุปกรณ์สำหรับเล่นดนตรีให้หน่อย',
   ];
 
   factory ChatbotState.initial() {
-    return const ChatbotState(
-      messages: [],
-    );
+    return const ChatbotState(messages: []);
   }
 
   final List<ChatMessage> messages;
@@ -28,6 +30,7 @@ class ChatbotState extends Equatable {
   final String? errorMessage;
   final String? currentStatusMessage;
   final DateTime? requestStartTime;
+  final ChatbotFailure? failure;
 
   ChatbotState copyWith({
     List<ChatMessage>? messages,
@@ -38,15 +41,20 @@ class ChatbotState extends Equatable {
     bool clearStatus = false,
     DateTime? requestStartTime,
     bool clearStartTime = false,
+    ChatbotFailure? failure,
+    bool clearFailure = false,
   }) {
     return ChatbotState(
       messages: messages ?? this.messages,
       isSending: isSending ?? this.isSending,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
-      currentStatusMessage:
-          clearStatus ? null : currentStatusMessage ?? this.currentStatusMessage,
-      requestStartTime:
-          clearStartTime ? null : requestStartTime ?? this.requestStartTime,
+      currentStatusMessage: clearStatus
+          ? null
+          : currentStatusMessage ?? this.currentStatusMessage,
+      requestStartTime: clearStartTime
+          ? null
+          : requestStartTime ?? this.requestStartTime,
+      failure: clearFailure ? null : failure ?? this.failure,
     );
   }
 
@@ -57,5 +65,6 @@ class ChatbotState extends Equatable {
     errorMessage,
     currentStatusMessage,
     requestStartTime,
+    failure,
   ];
 }

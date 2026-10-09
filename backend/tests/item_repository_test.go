@@ -110,9 +110,9 @@ func TestGetAllItemsPreservesRankedOrderAndHidesInternalScore(t *testing.T) {
 	}}
 	handler := ports.NewItemHandler(repository, rankedItemTokenVerifierStub{})
 	router := gin.New()
-	router.GET("/api/v1/items", handler.GetAllItems)
+	router.GET("/api/items", handler.GetAllItems)
 
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/items", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/items", nil)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 

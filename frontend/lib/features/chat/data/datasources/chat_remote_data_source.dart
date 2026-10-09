@@ -335,7 +335,7 @@ class ChatRemoteDataSource {
 
     try {
       final response = await _backendClient.post(
-        '/api/v1/chat/contact',
+        '/api/chat/contact',
         data: {'conversation_id': conversationId},
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -842,7 +842,7 @@ class ChatRemoteDataSource {
       final cleanMessageForPush = _extractCleanPushMessage(message);
 
       await _backendClient.post(
-        '/api/v1/push/chat',
+        '/api/push/chat',
         headers: {'Authorization': 'Bearer $token'},
         data: {
           'receiver_id': receiverId,

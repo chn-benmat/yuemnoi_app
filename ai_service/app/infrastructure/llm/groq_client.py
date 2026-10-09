@@ -1,137 +1,98 @@
 import json
-from typing import AsyncGenerator, Optional, Type, TypeVar
-import httpx
-from pydantic import BaseModel
-
-from app.core.config import settings
-from app.core.exceptions import LLMProviderException
-from app.core.logging import logger
-
-T = TypeVar("T", bound=BaseModel)
+from app.infrastructure.llm.provider_client import ProviderClient, native_schema, compact_schema_definitions
+from app.infrastructure.llm.reference_transport import encode_references,decode_references
 
 
-class GroqClient:
-    """Asynchronous client for Groq OpenAI-compatible REST API."""
+class GroqClient(ProviderClient):
+    protocol = "groq_json_schema"
+    provider = "groq"
+    key_setting = "GROQ_API_KEY"
 
-    URL = "https://api.groq.com/openai/v1/chat/completions"
+    def url(self, model):
+        return str(self.profile(model).endpoint)
 
-    def __init__(self, api_key: Optional[str] = None, timeout: float = 25.0):
-        self._api_key = api_key or settings.GROQ_API_KEY
-        self._timeout = timeout
+    def headers(self):
+        return {"Authorization": f"Bearer {self._api_key}"}
 
-    def _headers(self) -> dict:
-        return {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-            "User-Agent": "Yuemnoi-AI-Service/1.0",
-        }
-
-    async def generate_text(
-        self,
-        model: str,
-        prompt: str,
-        system_instruction: Optional[str] = None,
-        max_tokens: int = 1000,
-        temperature: float = 0.7,
-    ) -> str:
+    def build_payload(self, model, prompt, system_instruction=None, temperature=None, schema=None, max_tokens=None):
         messages = []
+        if schema is not None:
+            document = native_schema(schema)
+            prompt,document,_ = encode_references(prompt,document)
+            document = compact_schema_definitions(document)
+            contract = ('Emit one JSON object with every required root key: '
+                + ', '.join(document['required'])
+                + '. Complete nested fields, use exact enum labels and no extra keys. Absent facts use []; null only where allowed.')
+            # Required nested labels remain explicit even when the provider's
+            # JSON generation fails to follow a referenced schema definition.
+            definitions=document.get('$defs',{})
+            objects={}
+            for name,property_schema in document['properties'].items():
+                branches=property_schema.get('anyOf',[property_schema])
+                labels=[]
+                for branch in branches:
+                    definition=definitions.get(branch.get('$ref','').removeprefix('#/$defs/'),{})
+                    for label in definition.get('required',[]):
+                        if label not in labels:labels.append(label)
+                if labels:objects[name]=labels
+            contract+=' Nested keys: '+json.dumps(objects,ensure_ascii=False,separators=(',',':'))+'.'
+            # Referenced nullable objects (such as an established billing
+            # period) need their exact machine literals in the instruction
+            # too. Keep this structural: never translate or infer user values.
+            nested_literals = {}
+            def visit_object(spec, path, ancestors):
+                reference = spec.get('$ref')
+                if reference:
+                    if reference in ancestors:
+                        return
+                    spec = definitions.get(reference.removeprefix('#/$defs/'), {})
+                    ancestors = ancestors | {reference}
+                for branch in spec.get('anyOf', []):
+                    visit_object(branch, path, ancestors)
+                for name, child in spec.get('properties', {}).items():
+                    child_path = path + '.' + name if path else name
+                    if path.count('.') >= 1:
+                        enums = [part['enum'] for part in child.get('anyOf', [child]) if 'enum' in part]
+                        if enums:
+                            literals = nested_literals.setdefault(child_path, [])
+                            for values in enums:
+                                for value in values:
+                                    if value not in literals:
+                                        literals.append(value)
+                    visit_object(child, child_path, ancestors)
+            visit_object(document, '', set())
+            if nested_literals:
+                contract += ' Nested literals: ' + json.dumps(nested_literals,ensure_ascii=False,separators=(',',':')) + '.'
+            system_instruction = (system_instruction + '\n' if system_instruction else '') + contract
         if system_instruction:
             messages.append({"role": "system", "content": system_instruction})
         messages.append({"role": "user", "content": prompt})
+        payload = {"model": model, "messages": messages, "temperature": self.configuration.GUIDANCE_TEMPERATURE if temperature is None else temperature,
+                   "max_completion_tokens": self.configuration.STRUCTURED_MAX_OUTPUT_TOKENS if max_tokens is None else max_tokens}
+        effort = self.profile(model).reasoning_effort
+        if effort is not None:
+            payload["reasoning_effort"] = effort
+        if schema is not None:
+            payload["response_format"] = {"type": "json_schema", "json_schema": {
+                "name": schema.__name__, "strict": True, "schema": document}}
+        return payload
 
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
+    def decode_candidate(self, candidate, prompt, schema):
+        _,_,aliases = encode_references(prompt,native_schema(schema))
+        return decode_references(candidate,aliases)
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(self.URL, json=payload, headers=self._headers())
-            if resp.status_code != 200:
-                raise LLMProviderException("Groq", model, resp.text, status_code=resp.status_code)
-            data = resp.json()
-            try:
-                return data["choices"][0]["message"]["content"]
-            except (KeyError, IndexError) as exc:
-                raise LLMProviderException("Groq", model, f"Unexpected response format: {data}") from exc
+    @staticmethod
+    def content(data):
+        content = data["choices"][0]["message"]["content"]
+        if not isinstance(content, str):
+            raise ValueError("Missing text")
+        return content
 
-    async def generate_structured(
-        self,
-        model: str,
-        prompt: str,
-        schema: Type[T],
-        system_instruction: Optional[str] = None,
-        temperature: float = 0.2,
-    ) -> T:
-        schema_json = json.dumps(schema.model_json_schema(), ensure_ascii=False)
-        sys_prompt = (
-            f"{system_instruction}\n" if system_instruction else ""
-        ) + f"You MUST respond ONLY with a valid JSON object strictly matching this schema:\n{schema_json}"
-
-        messages = [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": prompt},
-        ]
-
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": 1500,
-            "response_format": {"type": "json_object"},
-        }
-
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(self.URL, json=payload, headers=self._headers())
-            if resp.status_code != 200:
-                raise LLMProviderException("Groq", model, resp.text, status_code=resp.status_code)
-            data = resp.json()
-            try:
-                raw_text = data["choices"][0]["message"]["content"]
-                return schema.model_validate_json(raw_text)
-            except Exception as exc:
-                raise LLMProviderException("Groq", model, f"Schema validation error: {exc}") from exc
-
-    async def generate_stream(
-        self,
-        model: str,
-        prompt: str,
-        system_instruction: Optional[str] = None,
-        max_tokens: int = 1500,
-        temperature: float = 0.7,
-    ) -> AsyncGenerator[str, None]:
-        messages = []
-        if system_instruction:
-            messages.append({"role": "system", "content": system_instruction})
-        messages.append({"role": "user", "content": prompt})
-
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "stream": True,
-        }
-
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            async with client.stream("POST", self.URL, json=payload, headers=self._headers()) as resp:
-                if resp.status_code != 200:
-                    err_body = await resp.aread()
-                    raise LLMProviderException("Groq", model, err_body.decode(errors="ignore"), status_code=resp.status_code)
-                async for line in resp.aiter_lines():
-                    trimmed = line.strip()
-                    if trimmed.startswith("data:"):
-                        raw_data = trimmed[5:].strip()
-                        if not raw_data or raw_data == "[DONE]":
-                            continue
-                        try:
-                            parsed = json.loads(raw_data)
-                            choices = parsed.get("choices", [])
-                            if choices:
-                                delta = choices[0].get("delta", {})
-                                text = delta.get("content", "")
-                                if text:
-                                    yield text
-                        except Exception:
-                            continue
+    @staticmethod
+    def usage(data):
+        raw = data.get("usage") or {}
+        usage = {k: raw[k] for k in ("prompt_tokens", "completion_tokens", "total_tokens") if isinstance(raw.get(k), int)}
+        details = raw.get("prompt_tokens_details") or {}
+        if isinstance(details.get("cached_tokens"), int):
+            usage["cached_tokens"] = details["cached_tokens"]
+        return usage

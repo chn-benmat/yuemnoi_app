@@ -14,7 +14,7 @@ class RentalItemRemoteDataSource {
     : _client =
           client ?? DioApiClient(requestTimeout: const Duration(seconds: 45));
 
-  static const _itemsPath = '/api/v1/items';
+  static const _itemsPath = '/api/items';
   final ApiClient _client;
 
   Future<RentalItem> create(RentalItemDraft draft) async {

@@ -13,7 +13,7 @@ These instructions apply to everything under `backend/`.
   - `internal/adapters/` implements domain ports for Supabase and external services.
   - `internal/ports/` owns Gin handlers, request/response mapping, middleware, and route registration.
 - Add dependencies through interfaces in `internal/domain/` and inject implementations from `cmd/server/main.go`.
-- Keep HTTP routes under `/api/v1` and register them in `internal/ports/router.go`. The health check remains `GET /health`.
+- Keep HTTP routes under `/api` and register them in `internal/ports/router.go`. The health check remains `GET /health`.
 - When an API contract changes, inspect and update every affected handler, domain interface, adapter, test, frontend caller, and README entry.
 
 ## Security and configuration

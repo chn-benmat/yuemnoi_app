@@ -436,7 +436,6 @@ class RentalStatusCard extends StatelessWidget {
       }
     }
 
-    final effectiveEnd = _computeEffectiveRentalEnd(item);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(

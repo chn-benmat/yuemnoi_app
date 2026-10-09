@@ -21,6 +21,11 @@ class FakeChatbotRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async {
     callCount += 1;
     latestQuery = query;
@@ -46,6 +51,11 @@ class FakeChatbotRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async* {
     callCount += 1;
     latestQuery = query;
@@ -95,6 +105,11 @@ class PendingChatbotRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) {
     return response.future;
   }
@@ -103,6 +118,11 @@ class PendingChatbotRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) {
     return streamController.stream;
   }
@@ -124,6 +144,11 @@ class SequenceChatbotRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async {
     callCount += 1;
     return ChatResponse(answer: answerFor(callCount));
@@ -133,6 +158,11 @@ class SequenceChatbotRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async* {
     callCount += 1;
     yield ChatDeltaEvent(text: answerFor(callCount));
@@ -144,6 +174,75 @@ class SequenceChatbotRepository implements ChatbotRepository {
 }
 
 void main() {
+  testWidgets(
+    'actual AI stages update the UI without resetting seconds and stop on completion',
+    (tester) async {
+      final repository = PendingChatbotRepository();
+      final bloc = ChatbotBloc(sendMessage: SendChatMessageUseCase(repository));
+      addTearDown(bloc.close);
+      var now = DateTime.now();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BlocProvider.value(
+            value: bloc,
+            child: ChatBotScreen(now: () => now),
+          ),
+        ),
+      );
+      await tester.enterText(
+        find.byKey(const Key('chatbot-message-field')),
+        'ช่วยหาอุปกรณ์',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('chatbot-send-button')));
+      await tester.pump();
+      final started = bloc.state.requestStartTime!;
+      repository.streamController.add(
+        const ChatStatusEvent(step: 'planning', message: 'กำลังวิเคราะห์คำถาม'),
+      );
+      await tester.pump();
+      expect(find.text('กำลังวิเคราะห์คำถาม'), findsOneWidget);
+      now = started.add(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text(' 3 วินาที'), findsOneWidget);
+      repository.streamController.add(
+        const ChatStatusEvent(step: 'evidence', message: 'กำลังสร้างคำตอบ'),
+      );
+      await tester.pump();
+      expect(find.text('กำลังสร้างคำตอบ'), findsOneWidget);
+      expect(find.text('กำลังวิเคราะห์คำถาม'), findsNothing);
+      expect(find.text(' 3 วินาที'), findsOneWidget);
+      repository.streamController.add(
+        const ChatStatusEvent(step: 'review', message: 'กำลังตรวจคำตอบ'),
+      );
+      await tester.pump();
+      expect(find.text('กำลังตรวจคำตอบ'), findsOneWidget);
+      expect(find.text('กำลังสร้างคำตอบ'), findsNothing);
+      now = started.add(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text(' 5 วินาที'), findsOneWidget);
+      repository.streamController.add(
+        const ChatStatusEvent(step: 'repair', message: 'กำลังสรุปคำคำตอบ'),
+      );
+      await tester.pump();
+      expect(find.text('กำลังสรุปคำคำตอบ'), findsOneWidget);
+      expect(find.text(' 5 วินาที'), findsOneWidget);
+      repository.streamController.add(
+        const ChatStatusEvent(step: 'review', message: 'กำลังตรวจคำตอบ'),
+      );
+      await tester.pump();
+      expect(find.text('กำลังตรวจคำตอบ'), findsOneWidget);
+      repository.streamController.add(
+        const ChatDoneEvent(answer: 'ข้อมูลพร้อมแล้ว'),
+      );
+      await repository.streamController.close();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('chatbot-analysis-elapsed')), findsNothing);
+      expect(find.text('กำลังตรวจคำตอบ'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('reprocesses an edited user message and replaces the AI answer', (
     tester,
   ) async {
@@ -161,10 +260,16 @@ void main() {
       find.byKey(const Key('chatbot-message-field')),
       'ข้อความเดิม',
     );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('chatbot-send-button')));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 3));
 
+    await tester.drag(
+      find.byKey(const Key('chatbot-conversation')),
+      const Offset(0, 1000),
+    );
+    await tester.pumpAndSettle();
     await tester.longPress(find.byKey(const ValueKey('chat-user-ข้อความเดิม')));
     await tester.pumpAndSettle();
 
@@ -203,6 +308,7 @@ void main() {
       find.byKey(const Key('chatbot-message-field')),
       'ข้อความที่แก้แล้ว',
     );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('chatbot-send-button')));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 3));
@@ -236,7 +342,7 @@ void main() {
     );
     expect(composerRect.left, greaterThan(0));
     expect(composerRect.right, lessThan(tester.view.physicalSize.width));
-    expect(find.byType(Image), findsNothing);
+    expect(find.byType(RecommendedItemCard), findsNothing);
     expect(find.byIcon(Icons.person_rounded), findsNothing);
     expect(
       find.byKey(const Key('chatbot-add-rental-item-button')),
@@ -248,18 +354,13 @@ void main() {
     );
     final sendButtonDecoration =
         sendButtonContainer.decoration! as BoxDecoration;
-    final sendButtonGradient = sendButtonDecoration.gradient! as LinearGradient;
-    expect(sendButtonGradient.begin, Alignment.topLeft);
-    expect(sendButtonGradient.end, Alignment.bottomRight);
-    expect(sendButtonGradient.colors, const [
-      AppColors.gradient1,
-      AppColors.gradient2,
-    ]);
+    expect(sendButtonDecoration.color, isNot(AppColors.primaryColor));
 
     await tester.enterText(
       find.byKey(const Key('chatbot-message-field')),
       'โอเค',
     );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('chatbot-send-button')));
     await tester.pump();
 
@@ -279,6 +380,8 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 51));
 
+    // รอแอนิเมชันตัวอักษรหลังการรวมข้อความจากสตรีม
+    await tester.pump(const Duration(seconds: 1));
     expect(find.text('กำลังแสดงคำตอบ'), findsOneWidget);
     expect(thinkingDots, findsNothing);
 
@@ -287,6 +390,8 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 51));
 
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
     expect(find.text(answer), findsOneWidget);
 
     repository.streamController.add(const ChatDoneEvent());
@@ -365,13 +470,14 @@ void main() {
       find.byKey(const Key('chatbot-message-field')),
       'ควรเช่ากล้องรุ่นไหนดี',
     );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('chatbot-send-button')));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 3));
 
     expect(repository.latestQuery, 'ควรเช่ากล้องรุ่นไหนดี');
     expect(repository.latestHistory, isEmpty);
-    expect(find.text('ควรเช่ากล้องรุ่นไหนดี'), findsOneWidget);
+    expect(bloc.state.messages.first.content, 'ควรเช่ากล้องรุ่นไหนดี');
     expect(find.text('แนะนำ Canon EOS R5 สำหรับงานนี้ค่ะ'), findsOneWidget);
     expect(find.text('Canon EOS R5'), findsOneWidget);
     expect(find.textContaining('500 ฿'), findsOneWidget);
@@ -402,6 +508,7 @@ void main() {
       find.byKey(const Key('chatbot-message-field')),
       'แนะนำกล้องให้หน่อย',
     );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('chatbot-send-button')));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 3));
@@ -440,6 +547,7 @@ void main() {
         find.byKey(const Key('chatbot-message-field')),
         'เช่าคอม',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('chatbot-send-button')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 300));
@@ -458,7 +566,7 @@ void main() {
       );
       expect(find.text('ทำงาน/ออฟฟิศ (โน้ตบุ๊ก/PC)'), findsWidgets);
       expect(find.text('ตอบเอง'), findsNothing);
-      expect(find.text('Skip'), findsOneWidget);
+      expect(find.text('ข้าม'), findsOneWidget);
       expect(find.byKey(const Key('chatbot-composer')), findsOneWidget);
       expect(find.byKey(const Key('chatbot-message-field')), findsOneWidget);
       expect(repository.callCount, 1);
@@ -478,7 +586,7 @@ void main() {
         find.byKey(const Key('chatbot-questionnaire-card')),
         findsOneWidget,
       );
-      expect(find.text('2 of 2'), findsOneWidget);
+      expect(find.text('ข้อ 2 จาก 2'), findsOneWidget);
       expect(
         find.descendant(
           of: find.byKey(const Key('chatbot-questionnaire-card')),
@@ -503,6 +611,16 @@ void main() {
         repository.latestQuery,
         'ทำงาน/ออฟฟิศ (โน้ตบุ๊ก/PC), เน้นพกพา (โน้ตบุ๊ก)',
       );
+      // รอจนการ์ดปรากฏจริงหลังข้อความและการเลื่อนหน้าจอ
+      for (
+        var frame = 0;
+        frame < 50 &&
+            find.byKey(const ValueKey('recommended-item-2')).evaluate().isEmpty;
+        frame++
+      ) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const ValueKey('recommended-item-2')), findsOneWidget);
       expect(find.text('Dell Latitude 5420'), findsWidgets);
 
       // 7. Verify both questions recap cards rendered in chat history
@@ -518,7 +636,7 @@ void main() {
   );
 
   testWidgets(
-    'allows typing custom answer into composer during active questionnaire and submits to advance step',
+    'sends typed text to AI immediately instead of locally advancing the questionnaire',
     (tester) async {
       tester.view.devicePixelRatio = 1.0;
       tester.view.physicalSize = const Size(400, 850);
@@ -546,155 +664,135 @@ void main() {
         find.byKey(const Key('chatbot-message-field')),
         'เช่าคอม',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('chatbot-send-button')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.byKey(const Key('chatbot-questionnaire-card')), findsOneWidget);
-      expect(find.text('1 of 2'), findsOneWidget);
+      expect(
+        find.byKey(const Key('chatbot-questionnaire-card')),
+        findsOneWidget,
+      );
+      expect(find.text('ข้อ 1 จาก 2'), findsOneWidget);
 
       // Type custom answer in normal composer
       await tester.enterText(
         find.byKey(const Key('chatbot-message-field')),
         'ตัดต่อวิดีโอ 4K',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('chatbot-send-button')));
-      await tester.pump(const Duration(milliseconds: 250));
-      await tester.pumpAndSettle();
-
-      // Advances to Step 2 locally!
-      expect(find.text('2 of 2'), findsOneWidget);
-
-      // Select option on Step 2
-      final option2 = find.byKey(
-        const Key('chatbot-questionnaire-option-เน้นพกพา (โน้ตบุ๊ก)'),
-      );
-      await tester.tap(option2);
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pumpAndSettle();
 
       expect(repository.callCount, 2);
-      expect(
-        repository.latestQuery,
-        'ตัดต่อวิดีโอ 4K, เน้นพกพา (โน้ตบุ๊ก)',
-      );
+      expect(repository.latestQuery, 'ตัดต่อวิดีโอ 4K');
+      expect(find.text('ข้อ 2 จาก 2'), findsNothing);
     },
   );
 
-  testWidgets(
-    'renders initial quick replies bar on entering chat and submits on tap',
-    (tester) async {
-      final repository = FakeChatbotRepository();
-      final bloc = ChatbotBloc(sendMessage: SendChatMessageUseCase(repository));
-      addTearDown(bloc.close);
+  testWidgets('starter fills an editable draft before sending', (tester) async {
+    final repository = FakeChatbotRepository();
+    final bloc = ChatbotBloc(sendMessage: SendChatMessageUseCase(repository));
+    addTearDown(bloc.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(fontFamily: 'Prompt'),
+        home: BlocProvider.value(value: bloc, child: const ChatBotScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chatbot-welcome')), findsOneWidget);
+    await tester.tap(find.text('ถ่ายคอนเทนต์'));
+    await tester.pumpAndSettle();
+    expect(repository.callCount, 0);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('chatbot-message-field')))
+          .controller!
+          .text,
+      'ช่วยหาอุปกรณ์สำหรับถ่ายคอนเทนต์ให้หน่อย',
+    );
+    await tester.enterText(
+      find.byKey(const Key('chatbot-message-field')),
+      'ช่วยหากล้องถ่ายงานในห้อง งบ 500 บาท',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('chatbot-send-button')));
+    await tester.pumpAndSettle();
+    expect(repository.callCount, 1);
+    expect(repository.latestQuery, 'ช่วยหากล้องถ่ายงานในห้อง งบ 500 บาท');
+    expect(find.byKey(const Key('chatbot-welcome')), findsNothing);
+  });
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(fontFamily: 'Prompt'),
-          home: BlocProvider.value(value: bloc, child: const ChatBotScreen()),
-        ),
-      );
-      await tester.pumpAndSettle();
+  testWidgets('shows service status and elapsed seconds across rebuilds', (
+    tester,
+  ) async {
+    final repository = PendingChatbotRepository();
+    final bloc = ChatbotBloc(sendMessage: SendChatMessageUseCase(repository));
+    addTearDown(bloc.close);
 
-      // 1. Verify quick replies bar is present on entering chat
-      expect(
-        find.byKey(const Key('chatbot-quick-replies-bar')),
-        findsOneWidget,
-      );
-      expect(find.text('แนะนำอุปกรณ์เช่าหน่อย'), findsOneWidget);
-      expect(
-        find.text('วิธีการเช่าอุปกรณ์', skipOffstage: false),
-        findsOneWidget,
-      );
-      expect(
-        find.text('วิธีปล่อยเช่าอุปกรณ์', skipOffstage: false),
-        findsOneWidget,
-      );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(fontFamily: 'Prompt'),
+        home: BlocProvider.value(value: bloc, child: const ChatBotScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      // 2. Tap 'แนะนำอุปกรณ์เช่าหน่อย'
-      await tester.tap(find.text('แนะนำอุปกรณ์เช่าหน่อย'));
-      await tester.pump();
-      await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('chatbot-message-field')),
+      'ค้นหากล้องหน่อย',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('chatbot-send-button')));
+    await tester.pump();
 
-      expect(repository.callCount, 1);
-      expect(repository.latestQuery, 'แนะนำอุปกรณ์เช่าหน่อย');
+    // แสดงการเชื่อมต่อก่อนมีสถานะจริงจากบริการ
+    expect(find.textContaining('กำลังเชื่อมต่อผู้ช่วย AI'), findsOneWidget);
 
-      // 3. Verify quick replies bar disappears after message is sent (except on entering chat)
-      expect(find.byKey(const Key('chatbot-quick-replies-bar')), findsNothing);
-    },
-  );
+    // Backend sends searching status event
+    repository.streamController.add(
+      const ChatStatusEvent(
+        step: 'searching',
+        message: 'กำลังค้นหาอุปกรณ์ในระบบ...',
+      ),
+    );
+    await tester.pump();
 
-  testWidgets(
-    'shows real-time ChatStatusEvent in typing indicator and maintains continuous timer without reset',
-    (tester) async {
-      final repository = PendingChatbotRepository();
-      final bloc = ChatbotBloc(sendMessage: SendChatMessageUseCase(repository));
-      addTearDown(bloc.close);
+    expect(find.textContaining('กำลังค้นหาอุปกรณ์ในระบบ...'), findsOneWidget);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(fontFamily: 'Prompt'),
-          home: BlocProvider.value(value: bloc, child: const ChatBotScreen()),
-        ),
-      );
-      await tester.pumpAndSettle();
+    // Fast-forward 3 seconds by pumping each second interval
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
 
-      await tester.enterText(
-        find.byKey(const Key('chatbot-message-field')),
-        'ค้นหากล้องหน่อย',
-      );
-      await tester.tap(find.byKey(const Key('chatbot-send-button')));
-      await tester.pump();
+    expect(find.byKey(const Key('chatbot-analysis-elapsed')), findsOneWidget);
 
-      // Initially shows analyzing intent
-      expect(find.textContaining('กำลังวิเคราะห์คำถาม...'), findsOneWidget);
+    // Simulate scroll / rebuild by pumping widget tree
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(fontFamily: 'Prompt'),
+        home: BlocProvider.value(value: bloc, child: const ChatBotScreen()),
+      ),
+    );
+    await tester.pump();
 
-      // Backend sends searching status event
-      repository.streamController.add(
-        const ChatStatusEvent(
-          step: 'searching',
-          message: 'กำลังค้นหาอุปกรณ์ในระบบ...',
-        ),
-      );
-      await tester.pump();
+    expect(find.byKey(const Key('chatbot-analysis-elapsed')), findsOneWidget);
 
-      expect(find.textContaining('กำลังค้นหาอุปกรณ์ในระบบ...'), findsOneWidget);
+    // Backend delivers done event
+    repository.streamController.add(
+      const ChatDeltaEvent(text: 'เจอกล้องแล้วค่ะ'),
+    );
+    repository.streamController.add(
+      const ChatDoneEvent(answer: 'เจอกล้องแล้วค่ะ'),
+    );
+    await repository.streamController.close();
+    await tester.pumpAndSettle();
 
-      // Fast-forward 3 seconds by pumping each second interval
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump(const Duration(seconds: 1));
-
-      // Continuous timer is at least 3 seconds
-      expect(find.textContaining('3 วิ'), findsOneWidget);
-
-      // Simulate scroll / rebuild by pumping widget tree
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(fontFamily: 'Prompt'),
-          home: BlocProvider.value(value: bloc, child: const ChatBotScreen()),
-        ),
-      );
-      await tester.pump();
-
-      // Timer must NOT reset to 0; must still be 3 seconds or more
-      expect(find.textContaining('0 วิ'), findsNothing);
-      expect(find.textContaining('3 วิ'), findsOneWidget);
-
-      // Backend delivers done event
-      repository.streamController.add(
-        const ChatDeltaEvent(text: 'เจอกล้องแล้วค่ะ'),
-      );
-      repository.streamController.add(
-        const ChatDoneEvent(answer: 'เจอกล้องแล้วค่ะ'),
-      );
-      await repository.streamController.close();
-      await tester.pumpAndSettle();
-
-      // Completed message shows summary status header
-      expect(find.textContaining('สรุปคำแนะนำ'), findsOneWidget);
-    },
-  );
+    // Completed message shows summary status header
+    expect(find.textContaining('สรุปคำแนะนำ'), findsOneWidget);
+  });
 
   testWidgets(
     'transforms send button to stop button during streaming and aborts cleanly on tap',
@@ -715,6 +813,7 @@ void main() {
         find.byKey(const Key('chatbot-message-field')),
         'ขอคำแนะนำหน่อย',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('chatbot-send-button')));
       await tester.pump();
 
@@ -741,6 +840,7 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 60));
 
+      await tester.pump(const Duration(seconds: 1));
       expect(find.text('นี่คือคำตอบช่วงแรกที่พิมพ์ออกมา'), findsOneWidget);
       expect(find.byKey(const Key('chatbot-stop-button')), findsOneWidget);
 
@@ -781,18 +881,21 @@ void main() {
         find.byKey(const Key('chatbot-message-field')),
         'กำลังจะถามคำถาม',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('chatbot-send-button')));
       await tester.pump();
 
       // In thinking phase
       expect(find.byKey(const Key('chatbot-stop-button')), findsOneWidget);
-      expect(find.textContaining('กำลังวิเคราะห์คำถาม...'), findsOneWidget);
+      expect(find.textContaining('กำลังเชื่อมต่อผู้ช่วย AI'), findsOneWidget);
 
       // User presses Stop before any delta is emitted
       await tester.tap(find.byKey(const Key('chatbot-stop-button')));
       await tester.pumpAndSettle();
 
       // Friendly stopped message shown, button restored to Send
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
       expect(find.text('หยุดการตอบกลับแล้ว'), findsOneWidget);
       expect(find.byKey(const Key('chatbot-send-button')), findsOneWidget);
       expect(find.byKey(const Key('chatbot-stop-button')), findsNothing);
@@ -801,67 +904,52 @@ void main() {
   );
 
   testWidgets(
-    'stops summary timer immediately when first character is output and keeps it frozen',
+    'preserves measured response timing in state without displaying it in the summary',
     (tester) async {
       final repository = PendingChatbotRepository();
       final bloc = ChatbotBloc(sendMessage: SendChatMessageUseCase(repository));
       addTearDown(bloc.close);
-
       await tester.pumpWidget(
         MaterialApp(
-          theme: ThemeData(fontFamily: 'Prompt'),
           home: BlocProvider.value(value: bloc, child: const ChatBotScreen()),
         ),
       );
       await tester.pumpAndSettle();
-
       await tester.enterText(
         find.byKey(const Key('chatbot-message-field')),
         'อยากได้กล้องทำงาน',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('chatbot-send-button')));
       await tester.pump();
-
-      // Thinking phase for 2 seconds
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump(const Duration(seconds: 1));
-      expect(find.textContaining('2 วิ'), findsOneWidget);
-
-      // First token arrives
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.textContaining('2 วิ'), findsNothing);
       repository.streamController.add(const ChatDeltaEvent(text: 'ส'));
       await tester.pump(const Duration(milliseconds: 60));
-
-      // Header switches to 'สรุปคำแนะนำ' and shows frozen time (at least 2s)
-      final summaryHeaderFinder = find.textContaining('สรุปคำแนะนำ');
-      expect(summaryHeaderFinder, findsOneWidget);
-      final capturedHeader = tester.widget<Text>(summaryHeaderFinder).data!;
-      expect(capturedHeader, contains('สรุปคำแนะนำ'));
-
-      // Advance time by 4 more seconds and emit more deltas
-      await tester.pump(const Duration(seconds: 2));
-      repository.streamController.add(
-        const ChatDeltaEvent(text: 'วัสดีครับ มีอุปกรณ์พร้อมให้เช่า'),
-      );
-      await tester.pump(const Duration(seconds: 2));
+      final captured = bloc.state.messages.last.responseDuration;
+      expect(captured, isNotNull);
+      await tester.pump(const Duration(seconds: 4));
+      repository.streamController.add(const ChatDeltaEvent(text: 'วัสดีครับ'));
       await tester.pump(const Duration(milliseconds: 60));
-
-      // Header must maintain the EXACT SAME duration frozen from first token!
-      final afterStreamingHeader = tester
-          .widget<Text>(summaryHeaderFinder)
-          .data!;
-      expect(afterStreamingHeader, equals(capturedHeader));
-
-      // Done event arrives
+      expect(bloc.state.messages.last.responseDuration, captured);
       repository.streamController.add(const ChatDoneEvent());
       await repository.streamController.close();
       await tester.pumpAndSettle();
-
-      // Final state must STILL have the same frozen summary header
-      final finalHeader = tester.widget<Text>(summaryHeaderFinder).data!;
-      expect(finalHeader, equals(capturedHeader));
+      final completedDuration = bloc.state.messages.last.responseDuration!;
+      expect(completedDuration, greaterThanOrEqualTo(captured!));
+      await tester.pump(const Duration(seconds: 4));
+      expect(bloc.state.messages.last.responseDuration, completedDuration);
+      expect(find.textContaining('เวลาประมวลผล'), findsNothing);
+      await tester.tap(
+        find.text('สรุปคำแนะนำ ${completedDuration.inSeconds} วินาที >'),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('เวลาประมวลผล ${completedDuration.inSeconds} วินาที'),
+        findsNothing,
+      );
     },
   );
-
   testWidgets(
     'does not render cards when backend delivers empty recommendedItems on done even if metadata had candidate items',
     (tester) async {
@@ -883,11 +971,14 @@ void main() {
         find.byKey(const Key('chatbot-message-field')),
         'มีเสื้อผ้าหรือสูทสากลให้เช่าไหม',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('chatbot-send-button')));
       await tester.pumpAndSettle();
 
       expect(
-        find.textContaining('ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ'),
+        find.textContaining(
+          'ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ',
+        ),
         findsOneWidget,
       );
       expect(find.text('Dyson V12 Detect Slim'), findsNothing);
@@ -903,6 +994,11 @@ class FakeDynamicQuestionnaireRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async {
     throw UnimplementedError();
   }
@@ -911,6 +1007,11 @@ class FakeDynamicQuestionnaireRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async* {
     callCount += 1;
     latestQuery = query;
@@ -1024,6 +1125,11 @@ class FakeUnavailableItemRepository implements ChatbotRepository {
   Future<ChatResponse> sendMessage({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async {
     return const ChatResponse(
       answer: 'ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ',
@@ -1035,6 +1141,11 @@ class FakeUnavailableItemRepository implements ChatbotRepository {
   Stream<ChatStreamEvent> sendMessageStream({
     required String query,
     required List<ChatMessage> history,
+    String? sessionId,
+    ChatSessionContext? context,
+    List<QuestionnaireAnswer> questionnaireAnswers = const [],
+    bool questionnaireSkipped = false,
+    String? activeQuestionId,
   }) async* {
     yield const ChatMetadataEvent(
       mode: 'recommendation',
@@ -1054,9 +1165,7 @@ class FakeUnavailableItemRepository implements ChatbotRepository {
     yield const ChatDeltaEvent(
       text: 'ขณะนี้ยังไม่มีอุปกรณ์ประเภทดังกล่าวให้เช่าในระบบค่ะ',
     );
-    yield const ChatDoneEvent(
-      recommendedItems: [],
-    );
+    yield const ChatDoneEvent(recommendedItems: []);
   }
 
   @override

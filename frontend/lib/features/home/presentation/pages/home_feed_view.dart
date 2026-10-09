@@ -32,10 +32,7 @@ class _HomeFeedViewState extends State<HomeFeedView> {
     final homeBloc = context.read<HomeBloc>();
     if (homeBloc.state is HomeLoaded) {
       final loaded = homeBloc.state as HomeLoaded;
-      if (loaded.selectedCategoryId != 'all') {
-        _searchController.text =
-            CategoryFilterChips.getCategoryLabel(loaded.selectedCategoryId);
-      }
+      _searchController.text = loaded.searchQuery;
     }
   }
 
@@ -59,17 +56,13 @@ class _HomeFeedViewState extends State<HomeFeedView> {
 
   /// รวมและตัดรายการสินค้าซ้ำ
   List<FeedItem> _getDisplayedItems(HomeLoaded state) {
-    final curatedList =
-        (state.hasActiveFilters || state.searchQuery.isNotEmpty) &&
-                state.selectedCategoryId != 'all'
-            ? state.curatedItems
-                .where((item) => item.categoryId == state.selectedCategoryId)
-                .toList()
-            : state.curatedItems;
+    if (state.hasActiveFilters || state.searchQuery.trim().isNotEmpty) {
+      return state.nearbyItems;
+    }
 
     final seenIds = <String>{};
     return [
-      ...curatedList.where((item) => seenIds.add(item.id)),
+      ...state.curatedItems.where((item) => seenIds.add(item.id)),
       ...state.nearbyItems.where((item) => seenIds.add(item.id)),
     ];
   }
@@ -81,11 +74,6 @@ class _HomeFeedViewState extends State<HomeFeedView> {
     int? maxPrice,
     double? minRating,
   }) {
-    if (categoryId == 'all') {
-      _searchController.clear();
-    } else {
-      _searchController.text = CategoryFilterChips.getCategoryLabel(categoryId);
-    }
     context.read<HomeBloc>().add(
       ApplyFilterRequested(
         categoryId: categoryId,
@@ -105,17 +93,8 @@ class _HomeFeedViewState extends State<HomeFeedView> {
         body: BlocConsumer<HomeBloc, HomeState>(
           listener: (context, state) {
             if (state is HomeLoaded) {
-              if (state.selectedCategoryId == 'all') {
-                if (_searchController.text.isNotEmpty) {
-                  _searchController.clear();
-                }
-              } else {
-                final label = CategoryFilterChips.getCategoryLabel(
-                  state.selectedCategoryId,
-                );
-                if (_searchController.text != label) {
-                  _searchController.text = label;
-                }
+              if (_searchController.text != state.searchQuery) {
+                _searchController.text = state.searchQuery;
               }
             }
           },
@@ -313,28 +292,17 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                   initialQuery: _searchController.text.isNotEmpty
                       ? _searchController.text
                       : null,
-                );
-                if (mounted &&
-                    (_searchController.text.isNotEmpty ||
-                        state.selectedCategoryId != 'all')) {
-                  _searchController.clear();
-                  _applyFilter(
-                    categoryId: 'all',
-                    minPrice: state.minPrice,
-                    maxPrice: state.maxPrice,
-                    minRating: state.minRating,
-                  );
-                }
-              },
-              onChanged: (query) => bloc.add(SearchQueryChanged(query)),
-              onClear: () {
-                _searchController.clear();
-                _applyFilter(
-                  categoryId: 'all',
+                  initialCategoryId: state.selectedCategoryId,
+                  categories: state.categories,
                   minPrice: state.minPrice,
                   maxPrice: state.maxPrice,
                   minRating: state.minRating,
                 );
+              },
+              onChanged: (query) => bloc.add(SearchQueryChanged(query)),
+              onClear: () {
+                _searchController.clear();
+                bloc.add(const SearchQueryChanged(''));
               },
             ),
           ),

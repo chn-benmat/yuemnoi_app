@@ -159,12 +159,20 @@ abstract final class AppRoutes {
             final extra = state.extra;
             List<FeedItem>? curatedItems;
             String? initialQuery;
+            String? initialCategoryId;
+            int? minPrice;
+            int? maxPrice;
+            double? minRating;
             List<FeedCategory>? categories;
             if (extra is List<FeedItem>) {
               curatedItems = extra;
             } else if (extra is Map<String, dynamic>) {
               curatedItems = extra['curatedItems'] as List<FeedItem>?;
               initialQuery = extra['query'] as String?;
+              initialCategoryId = extra['categoryId'] as String?;
+              minPrice = extra['minPrice'] as int?;
+              maxPrice = extra['maxPrice'] as int?;
+              minRating = extra['minRating'] as double?;
               categories = extra['categories'] as List<FeedCategory>?;
             }
             return CustomTransitionPage<void>(
@@ -172,6 +180,10 @@ abstract final class AppRoutes {
               child: EquipmentSearchScreen(
                 initialCuratedItems: curatedItems,
                 initialQuery: initialQuery,
+                initialCategoryId: initialCategoryId,
+                initialMinPrice: minPrice,
+                initialMaxPrice: maxPrice,
+                initialMinRating: minRating,
                 initialCategories: categories,
               ),
               transitionDuration: const Duration(milliseconds: 200),
@@ -626,11 +638,11 @@ abstract final class AppRoutes {
   }
 
   static void openProfile(BuildContext context) {
-    goToHome(context, initialIndex: 4);
+    goToHome(context, initialIndex: 3);
   }
 
   static void goToProfile(BuildContext context) {
-    goToHome(context, initialIndex: 4);
+    goToHome(context, initialIndex: 3);
   }
 
   static Future<void> openChatbot(BuildContext context) {
@@ -841,6 +853,10 @@ abstract final class AppRoutes {
     BuildContext context, {
     List<FeedItem>? curatedItems,
     String? initialQuery,
+    String? initialCategoryId,
+    int? minPrice,
+    int? maxPrice,
+    double? minRating,
     List<FeedCategory>? categories,
   }) {
     try {
@@ -849,6 +865,10 @@ abstract final class AppRoutes {
         extra: {
           'curatedItems': ?curatedItems,
           'query': ?initialQuery,
+          'categoryId': ?initialCategoryId,
+          'minPrice': ?minPrice,
+          'maxPrice': ?maxPrice,
+          'minRating': ?minRating,
           'categories': ?categories,
         },
       );
@@ -911,21 +931,6 @@ abstract final class AppRoutes {
   }) {
     final route = rentalId != null ? '/rental/return/$rentalId' : rentalReturnDemo;
     return context.push<void>(route, extra: isLender);
-    try {
-      return context.push<void>(route);
-    } catch (_) {
-      final navigator = Navigator.maybeOf(context, rootNavigator: true) ??
-          Navigator.maybeOf(context);
-      if (navigator != null) {
-        return navigator.push<void>(
-          MaterialPageRoute<void>(
-            settings: RouteSettings(name: route),
-            builder: (_) => RentalReturnPage(rentalId: rentalId),
-          ),
-        );
-      }
-      return Future.value();
-    }
   }
 
   static Future<void> openRentalPaymentSuccess(BuildContext context) {
