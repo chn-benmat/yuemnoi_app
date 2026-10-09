@@ -112,6 +112,20 @@
       "title": "QuestionnaireChoicePolicy",
       "type": "object"
     },
+    "QuestionnaireFlowPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "single_batch_per_goal": {
+          "title": "Single Batch Per Goal",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "single_batch_per_goal"
+      ],
+      "title": "QuestionnaireFlowPolicy",
+      "type": "object"
+    },
     "ScopeDefinitions": {
       "additionalProperties": false,
       "properties": {
@@ -170,6 +184,9 @@
     },
     "approval": {
       "$ref": "#/$defs/Approval"
+    },
+    "questionnaire_flow": {
+      "$ref": "#/$defs/QuestionnaireFlowPolicy"
     },
     "questionnaire_choices": {
       "anyOf": [
@@ -265,6 +282,7 @@
     "status",
     "production_enabled",
     "approval",
+    "questionnaire_flow",
     "catalog_presentation",
     "turn_instruction",
     "evidence_instruction",

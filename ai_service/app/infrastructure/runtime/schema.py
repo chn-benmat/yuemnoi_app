@@ -62,7 +62,12 @@ class CatalogPresentation(Strict):
     status_labels: dict[str, str]
 
 
+class QuestionnaireFlowPolicy(Strict):
+    single_batch_per_goal: bool
+
+
 class InterpretationPolicy(ApprovedDocument):
+    questionnaire_flow: QuestionnaireFlowPolicy
     questionnaire_choices: QuestionnaireChoicePolicy | None = None
     catalog_presentation: CatalogPresentation
     turn_instruction: str = Field(min_length=1)

@@ -323,7 +323,7 @@ curl http://localhost:8000/api/chat \
 | [chat_client_runtime.json](config/chat_client_runtime.json)        | History / transport / response-ready configuration ร่วมของ Flutter และ Go       |
 | [config/schemas](config/schemas/)                                  | JSON schemas ของ contracts                                                      |
 
-Runtime ใช้ version `2026-10-10-questionnaire-choices` ส่วน interpretation policy ใช้ `2026-10-10-relevant-questionnaire-choices` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
+Runtime ใช้ version `2026-10-10-questionnaire-choices` ส่วน interpretation policy ใช้ `2026-10-10-single-batch-questionnaire` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
 
 คำขอภายในใช้ `input_tables`, `input_references` และ `input_dictionary` ลดข้อมูลซ้ำแบบคืนต้นฉบับได้ Groq ใช้รหัสอ้างอิงสั้นเฉพาะคำขอ แล้วแปลงกลับก่อนตรวจ provenance คำขอ retry และ DTO หน้าแชตเก็บ IDs และคำตอบเดิม Context ละค่าเริ่มต้นที่ว่างหรือไม่ทราบ
 
@@ -334,6 +334,8 @@ Native stage ใช้ `response_mode` เป็นตัวแยกประ�
 สถานะ `next_action`, `information_sufficient` และ `missing_slots` ใน domain/API มาจาก stage และ dimension ของคำถามที่โมเดลเลือก จึงไม่สร้างข้อมูลซ้ำที่ขัดกันใน `analysis` การตรวจอิสระต้องอ้างฟิลด์จริงอย่างน้อยหนึ่งฟิลด์สำหรับ relevance, completeness และ neutral_voice ก่อนอนุมัติคำตอบ
 
 คำถามทั่วไปมี 3–4 ช้อยที่ตอบมิติของคำถามและสัมพันธ์กับเป้าหมายผู้ใช้ ไม่ใช้หมวดหมู่ที่ทราบแล้วมาเป็นตัวเลือกซ้ำ จำนวนกำหนดใน `questionnaire_choices` ของ interpretation policy และตรวจทั้งขั้นวางแผนกับขั้นแก้คำตอบ ผู้ตรวจอิสระประเมินความเกี่ยวข้องของช้อยทุกเวอร์ชันด้วย
+
+`questionnaire_flow.single_batch_per_goal` กำหนดให้รวบรวมข้อมูลสำคัญที่ยังขาดไว้ในคำถามชุดแรกภายในเพดานเดิม ใช้ conditional branches สำหรับข้อที่ขึ้นกับคำตอบก่อนหน้า แอปตอบทุกข้อในชุดได้โดยไม่เรียก AI ระหว่างข้อ เมื่อคำตอบครอบคลุมทุก ID ของคำถามปัจจุบัน service ส่ง `questionnaire_complete` ให้ planner / reviewer / repair และป้องกันการเริ่มชุดใหม่ในเป้าหมายเดิม ให้ตอบจากข้อมูลและหลักฐานที่มีโดยระบุข้อจำกัดแทนการแต่งความชอบที่ยังไม่ทราบ คำตอบพิมพ์เองนับว่าตอบแล้ว ส่วน `active_question_id` อย่างเดียวไม่นับ เป้าหมายใหม่ยังเริ่มชุดใหม่ได้ ตรวจ regression ด้วย `.\.venv\Scripts\python.exe -m pytest tests/test_single_batch_questionnaire.py -q`
 
 คำถาม `budget_max` มี 5 ช้อย: เพดานงบต่อวันสองตัว ต่อชั่วโมงสองตัว และ `unrestricted_choice` สำหรับไม่จำกัดงบ จำนวนต่อหน่วยและหน่วยกำหนดใน policy โมเดลเสนอเพดานจากบริบทราคาคลังจริง โดยเพดานงบเป็นความยินดีจ่ายของผู้ใช้ จึงต่างจากค่าเช่าจริงและอาจต่ำกว่าหรือสูงกว่าราคาสินค้าได้ ห้ามอ้างว่าเป็นข้อเสนอเช่าหรือแปลงราคาระหว่างหน่วย ส่งข้อความช้อยงบทั้งประโยคเป็น `action_value` เพื่อรักษาหน่วย และรองรับ conditional branches ครบทั้งห้าคำตอบ Native evidence ยังจำกัดรหัสสินค้าที่เลือกเป็น enum ของรายการที่ผ่านสถานะและเพดานราคาจริง แต่การพิจารณาว่าเหมาะกับงานยังเป็นการตัดสินของโมเดลและผู้ตรวจอิสระ
 

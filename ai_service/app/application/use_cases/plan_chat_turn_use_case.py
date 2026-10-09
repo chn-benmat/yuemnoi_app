@@ -84,6 +84,19 @@ class PlanChatTurnUseCase:
             raise PydanticCustomError("plan_duplicate_question_id_or_dimension", "Duplicate question ID or dimension")
         if not set(dimensions) <= set(decision.missing_slots) or set(dimensions) & known:
             raise PydanticCustomError("plan_question_must_address_an_unknown_material_dimension", "Question must address an unknown material dimension")
+        if self._interpretation['questionnaire_flow']['single_batch_per_goal']:
+            if plan.questions and set(dimensions) != set(decision.missing_slots):
+                raise PydanticCustomError('plan_questionnaire_must_cover_all_pending_dimensions',
+                    'The questionnaire must cover all material pending dimensions in one batch',
+                    {'provider_requirement': 'Include every material unknown in the initial batch within configured limits; '
+                        'use conditional branches for dependent answers, and leave optional unknowns unconstrained.'})
+            if request.questionnaire_complete and not decision.topic_changed and plan.questions:
+                raise PydanticCustomError('plan_completed_questionnaire_cannot_restart',
+                    'A completed questionnaire cannot start another batch for the same goal',
+                    {'provider_requirement': 'The current goal has completed its questionnaire. Select a ready answer stage '
+                        'with no questions. Use the established answers and authoritative evidence; '
+                        'leave other preferences unknown and explain material limitations without inventing constraints. '
+                        'Answering the planned questionnaire is not a topic change.'})
         actual_ids = {item["id"] for item in catalog["items"]}
         if decision.catalog_operation != "none" and not set(decision.categories) <= set(catalog["categories"]):
             raise PydanticCustomError("plan_unknown_catalog_category_identifier", "Unknown catalog category identifier")
@@ -254,6 +267,7 @@ class PlanChatTurnUseCase:
             "client_context": {"id": "context", "data": planning_request['context']} if request.context else None,
             "questionnaire_answers": {"id": "answers", "data": [a.model_dump() for a in request.questionnaire_answers]},
             "questionnaire_skipped": request.questionnaire_skipped,
+            "questionnaire_complete": request.questionnaire_complete,
             "active_question_id": request.active_question_id,
         }
         planning_catalog_summary = payload['catalog_summary']

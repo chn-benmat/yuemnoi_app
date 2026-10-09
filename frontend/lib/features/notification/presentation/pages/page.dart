@@ -10,6 +10,7 @@ import '../../../../core/network/supabase_client.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../profile/data/repositories/rental_management_repository_impl.dart';
 import '../../../profile/domain/entities/rental_booking.dart';
+import '../widgets/notification_loading_skeleton.dart';
 
 /// แบบจำลองข้อมูลการแจ้งเตือนระบบและการอัปเดตแอปพลิเคชัน
 class SystemNotificationItem {
@@ -226,19 +227,14 @@ class _NotificationPageState extends State<NotificationPage> {
 
             // ── Main Content Stream (2 Sections Unified) ──
             Expanded(
-              child: RefreshIndicator(
-                color: AppColors.primaryColor,
-                backgroundColor: Colors.white,
-                onRefresh: _fetchNotifications,
-                child: _isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primaryColor,
-                          strokeWidth: 2.2,
-                        ),
-                      )
-                    : _buildContent(now),
-              ),
+              child: _isLoading
+                  ? _buildContent(now)
+                  : RefreshIndicator(
+                      color: AppColors.primaryColor,
+                      backgroundColor: Colors.white,
+                      onRefresh: _fetchNotifications,
+                      child: _buildContent(now),
+                    ),
             ),
           ],
         ),
@@ -291,7 +287,9 @@ class _NotificationPageState extends State<NotificationPage> {
           onActionTap: _navigateToRentalStatus,
         ),
         const SizedBox(height: 10),
-        if (displayedRentals.isNotEmpty)
+        if (_isLoading)
+          const RentalNotificationLoadingSkeleton()
+        else if (displayedRentals.isNotEmpty)
           ...displayedRentals
               .map((item) => _buildEcommerceRentalCard(item, now))
         else
@@ -315,7 +313,9 @@ class _NotificationPageState extends State<NotificationPage> {
           onActionTap: _markSystemAsRead,
         ),
         const SizedBox(height: 10),
-        if (_systemNotifications.isNotEmpty)
+        if (_isLoading)
+          const SystemNotificationLoadingSkeleton()
+        else if (_systemNotifications.isNotEmpty)
           ..._systemNotifications.map(_buildSystemCard)
         else
           _buildCompactEmptyState(
