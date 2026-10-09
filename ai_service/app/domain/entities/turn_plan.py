@@ -21,7 +21,7 @@ class PlannedQuestion(MissingQuestion):
     unrestricted_choice: QuestionChoice | None = Field(default=None,
         description=QuestionBranch.model_fields['unrestricted_choice'].description,
         json_schema_extra={'x-provider-description': True})
-    branches: list[QuestionBranch] = Field(default_factory=list, max_length=4,
+    branches: list[QuestionBranch] = Field(default_factory=list, max_length=5,
         description='Relevant title/choices for every exact choice ID of one earlier question. Empty if independent or for unknown typed answers.',
         json_schema_extra={'x-provider-description': True})
 
@@ -35,7 +35,7 @@ class NativeQuestionChoice(QuestionChoice):
 
 
 class NativeChoiceSet(GuidanceModel):
-    choices: list[NativeQuestionChoice] = Field(min_length=1, max_length=4,
+    choices: list[NativeQuestionChoice] = Field(min_length=1, max_length=5,
         description='All displayed options: at least one specified and at most one unrestricted. Unrestricted means no constraint, never a particular answer.',
         json_schema_extra={'x-provider-description': True})
 
@@ -44,7 +44,8 @@ class NativeChoiceSet(GuidanceModel):
         unrestricted = sum(choice.choice_kind == 'unrestricted' for choice in self.choices)
         if unrestricted > 1 or unrestricted == len(self.choices):
             raise PydanticCustomError('native_choices_require_specified_and_at_most_one_unrestricted',
-                                      'At most one unrestricted option and at least one specified option are required')
+                                      'At most one unrestricted option and at least one specified option are required',
+                                      {'provider_requirement': type(self).model_fields['choices'].description})
         return self
 
     def domain_choices(self):
@@ -92,7 +93,7 @@ class NativePlannedQuestion(NativeChoiceSet):
         description='Spending ceilings or their absence use spending_ceiling; other material unknowns use other_requirement with a stable dimension ID.',
         json_schema_extra={'x-provider-description': True})
     choices: list[NativeQuestionChoice] = NativeChoiceSet.model_fields['choices']
-    branches: list[NativeQuestionBranch] = Field(default_factory=list, max_length=4,
+    branches: list[NativeQuestionBranch] = Field(default_factory=list, max_length=5,
         description=PlannedQuestion.model_fields['branches'].description,
         json_schema_extra={'x-provider-description': True})
 
@@ -112,8 +113,12 @@ class TurnPlan(GuidanceModel):
     response_mode: Literal["clarification", "documents", "conversation", "information", "catalog_overview", "equipment", "technical"] = Field(description="Select the CURRENT response stage, independent of the eventual catalog operation: clarification whenever any material question is pending; conversation only for a nonfactual social reply with no questions; documents for approved app answers without questions; catalog_overview for unfiltered category browsing; equipment for a ready catalog answer; technical for ready external verification. Clarification includes a brief introduction and stops evidence synthesis, even when a selection/inspection/comparison operation remains requested.", json_schema_extra={"x-provider-description": True})
     overview_available_only: bool = False
     understanding: RequestUnderstanding
-    knowledge_ids: list[str]
-    unverified_topic_ids: list[str]
+    knowledge_ids: list[str] = Field(
+        description='Only supplied approved articles needed for information the user actually requested. Source availability is not a request to describe the platform; omit unrelated articles from a rental preference dialogue.',
+        json_schema_extra={'x-provider-description': True})
+    unverified_topic_ids: list[str] = Field(
+        description='Only unverified information topics actually asked about. Unknown platform information is unrelated to missing rental preferences or inventory evidence.',
+        json_schema_extra={'x-provider-description': True})
     questions: list[PlannedQuestion] = Field(max_length=3)
     message: str = Field(description="Only a brief questionnaire introduction or nonfactual social reply, otherwise empty. Friendly natural Thai in a nongendered speaker voice: omit gender-associated first-person pronouns and sentence-final honorifics; express courtesy through helpful wording.", json_schema_extra={"x-provider-description": True})
 
@@ -138,7 +143,7 @@ class ClarificationStage(GuidanceModel):
     model_config = ConfigDict(extra='forbid',populate_by_name=True)
     response_mode: Literal['clarification']
     catalog_operation: CatalogOperation
-    message: str = Field(alias='text', min_length=1, description="Original assistant invitation to pending questions; never echo the user. Natural ungendered Thai.", json_schema_extra={'x-provider-description': True})
+    message: str = Field(alias='text', min_length=1, description="Original assistant invitation to material pending questions for the established rental goal; never echo the user. Natural ungendered Thai in the assistant's own voice, preserving courtesy without copying gendered speech from history.", json_schema_extra={'x-provider-description': True})
     questions: list[NativePlannedQuestion] = Field(min_length=1, max_length=3,
         description='Unique IDs and slot dimensions. One distinct unknown per question; at most one spending_ceiling.',
         json_schema_extra={'x-provider-description': True})
@@ -194,8 +199,8 @@ class NativeTurnPlan(GuidanceModel):
     overview_available_only: bool
     # Groq จัดลำดับ keys ตามตัวอักษร ให้ reasoning ออกก่อน stage และข้อความ
     understanding: NativePlanningUnderstanding = Field(alias='analysis')
-    knowledge_ids: list[str]
-    unverified_topic_ids: list[str]
+    knowledge_ids: list[str] = TurnPlan.model_fields['knowledge_ids']
+    unverified_topic_ids: list[str] = TurnPlan.model_fields['unverified_topic_ids']
 
     def to_plan(self):
         fields = self.model_dump(exclude={'stage'})

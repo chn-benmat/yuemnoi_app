@@ -11,10 +11,13 @@ import (
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/aiservice"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/fcm"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/logging"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/config"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
 	"github.com/gofiber/fiber/v3"
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 )
 
 func main() {
@@ -24,12 +27,13 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// ตั้งค่า Structured Logger (slog): JSON ใน Release mode, Text ใน Debug mode
+	// ใช้ JSON ในโหมด release และใส่สีให้ข้อความในโหมด debug เมื่อแสดงใน terminal
 	var logHandler slog.Handler
 	if cfg.Mode == "release" {
 		logHandler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
 	} else {
-		logHandler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+		useColor := isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+		logHandler = logging.NewTextHandler(colorable.NewColorableStdout(), &slog.HandlerOptions{Level: slog.LevelDebug}, useColor)
 	}
 	slog.SetDefault(slog.New(logHandler))
 

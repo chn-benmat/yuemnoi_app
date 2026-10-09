@@ -323,7 +323,7 @@ curl http://localhost:8000/api/chat \
 | [chat_client_runtime.json](config/chat_client_runtime.json)        | History / transport / response-ready configuration ร่วมของ Flutter และ Go       |
 | [config/schemas](config/schemas/)                                  | JSON schemas ของ contracts                                                      |
 
-Runtime ใช้ version `2026-10-08-groq-only` ส่วน interpretation policy ใช้ `2026-10-07-schema-recovery-reservation-concise-recommendations-product-field-list-adaptive-questionnaire` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
+Runtime ใช้ version `2026-10-10-questionnaire-choices` ส่วน interpretation policy ใช้ `2026-10-10-relevant-questionnaire-choices` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
 
 คำขอภายในใช้ `input_tables`, `input_references` และ `input_dictionary` ลดข้อมูลซ้ำแบบคืนต้นฉบับได้ Groq ใช้รหัสอ้างอิงสั้นเฉพาะคำขอ แล้วแปลงกลับก่อนตรวจ provenance คำขอ retry และ DTO หน้าแชตเก็บ IDs และคำตอบเดิม Context ละค่าเริ่มต้นที่ว่างหรือไม่ทราบ
 
@@ -333,7 +333,9 @@ Native stage ใช้ `response_mode` เป็นตัวแยกประ�
 
 สถานะ `next_action`, `information_sufficient` และ `missing_slots` ใน domain/API มาจาก stage และ dimension ของคำถามที่โมเดลเลือก จึงไม่สร้างข้อมูลซ้ำที่ขัดกันใน `analysis` การตรวจอิสระต้องอ้างฟิลด์จริงอย่างน้อยหนึ่งฟิลด์สำหรับ relevance, completeness และ neutral_voice ก่อนอนุมัติคำตอบ
 
-คำถาม `budget_max` แต่ละเวอร์ชันต้องมี `unrestricted_choice` ที่โมเดลสร้างสำหรับไม่จำกัดงบ โดยนับรวมในเพดานช้อย UI และส่งข้อความช้อยงบทั้งประโยคเป็น `action_value` เพื่อรักษาหน่วยราคา Native evidence จำกัดรหัสสินค้าที่เลือกเป็น enum ของรายการที่ผ่านสถานะและเพดานราคาจริง แต่การพิจารณาว่าเหมาะกับงานยังเป็นการตัดสินของโมเดลและผู้ตรวจอิสระ
+คำถามทั่วไปมี 3–4 ช้อยที่ตอบมิติของคำถามและสัมพันธ์กับเป้าหมายผู้ใช้ ไม่ใช้หมวดหมู่ที่ทราบแล้วมาเป็นตัวเลือกซ้ำ จำนวนกำหนดใน `questionnaire_choices` ของ interpretation policy และตรวจทั้งขั้นวางแผนกับขั้นแก้คำตอบ ผู้ตรวจอิสระประเมินความเกี่ยวข้องของช้อยทุกเวอร์ชันด้วย
+
+คำถาม `budget_max` มี 5 ช้อย: เพดานงบต่อวันสองตัว ต่อชั่วโมงสองตัว และ `unrestricted_choice` สำหรับไม่จำกัดงบ จำนวนต่อหน่วยและหน่วยกำหนดใน policy โมเดลเสนอเพดานจากบริบทราคาคลังจริง โดยเพดานงบเป็นความยินดีจ่ายของผู้ใช้ จึงต่างจากค่าเช่าจริงและอาจต่ำกว่าหรือสูงกว่าราคาสินค้าได้ ห้ามอ้างว่าเป็นข้อเสนอเช่าหรือแปลงราคาระหว่างหน่วย ส่งข้อความช้อยงบทั้งประโยคเป็น `action_value` เพื่อรักษาหน่วย และรองรับ conditional branches ครบทั้งห้าคำตอบ Native evidence ยังจำกัดรหัสสินค้าที่เลือกเป็น enum ของรายการที่ผ่านสถานะและเพดานราคาจริง แต่การพิจารณาว่าเหมาะกับงานยังเป็นการตัดสินของโมเดลและผู้ตรวจอิสระ
 
 การวางแผน รอบตรวจ และรอบกู้ใช้คำตอบแบบสอบถามที่เลือกจริงพร้อม label/value/IDs; เมื่อครบทุกคำถามจึงละตัวเลือก UI เก่าที่ไม่ได้เลือก DTO ต้นฉบับและข้อมูลสำหรับ retry ยังคงเดิม แบบสอบถามที่ยังตอบไม่ครบเก็บตัวเลือกทั้งหมด รอบตรวจสินค้าคง scalar facts ทั้งคลังและ description เต็มของทุกรายการที่ draft อ้าง `description_scope` ระบุว่ารายการอื่นยังไม่ทราบรายละเอียดใน view นี้; no_matches ที่ไม่อ้างสินค้าเก็บ description ทั้งคลัง ผู้ตรวจรอบสุดท้ายสร้าง view ใหม่ตามรายการที่คำตอบกู้อ้าง ไม่ถือรายละเอียดที่ละไว้ว่าไม่มีหรือเข้ากันไม่ได้
 
@@ -353,7 +355,7 @@ GPT-OSS ทั้งสองเป็น Production; Qwen 3.8 เป็น Prev
 
 ก่อนส่งต่อ structured output จะตรวจว่า Groq จบคำตอบด้วย `finish_reason: stop` และไม่มี refusal หรือ tool call จากนั้นอ่าน JSON โดยปฏิเสธ keys ซ้ำ, `NaN`, `Infinity` และตัวเลขที่เกินช่วง float ตรวจ JSON ต้นฉบับด้วย [jsonschema](https://python-jsonschema.readthedocs.io/en/stable/validate/) ตาม native schema ทุกระดับ รวมถึง union / `$ref`, required keys และค่าขอบเขต ก่อนตรวจ Pydantic แบบ strict และ semantic validators จึงไม่ยอมให้ default หรือการละ extra fields ของ Pydantic กลบข้อมูลที่ผิดสัญญา
 
-ผลที่ไม่ผ่านใช้ failover เดิมภายใน budgets เดิม โดยส่งเฉพาะรหัสข้อผิดพลาดให้โมเดลสำรอง เมื่อหมดทางเลือก `/api/chat` คืน HTTP 503 พร้อม `detail.error_code: structured_output_invalid` และ SSE คืน `event: error` พร้อมรหัสเดียวกัน โดยไม่ส่ง draft ที่ไม่ผ่าน การตรวจนี้รับรองเฉพาะการยอมรับผลตาม schema และ validators ที่กำหนด ไม่รับรองว่าทุกคำขอจะสำเร็จหรือข้อเท็จจริงจะถูกต้อง 100%; ไม่มี retry จาก library เพิ่มซ้อนกับ cascade
+ผลที่ไม่ผ่านใช้ failover เดิมภายใน budgets เดิม โดยส่งรหัสข้อผิดพลาดและคำอธิบายเงื่อนไขที่ validator ระบุจาก schema/policy พร้อมตำแหน่งฟิลด์ที่ปลอดภัย ไม่ส่งค่าที่ผิดหรือข้อความ exception เมื่อหมดทางเลือก `/api/chat` คืน HTTP 503 พร้อม `detail.error_code: structured_output_invalid` และ SSE คืน `event: error` พร้อมรหัสเดียวกัน โดยไม่ส่ง draft ที่ไม่ผ่าน การตรวจนี้รับรองเฉพาะการยอมรับผลตาม schema และ validators ที่กำหนด ไม่รับรองว่าทุกคำขอจะสำเร็จหรือข้อเท็จจริงจะถูกต้อง 100%; ไม่มี retry จาก library เพิ่มซ้อนกับ cascade
 
 ทดสอบขอบเขต structured output แบบ offline ได้ด้วย `.\.venv\Scripts\python.exe -m pytest tests/test_structured_output_boundary.py tests/test_provider_runtime.py tests/test_structured_failover_feedback.py -q` ครอบคลุม JSON ที่ถูกตัด, refusal, non-finite numbers, union / default fields, reference handles, domain validators และ error JSON / SSE
 
@@ -369,6 +371,8 @@ Groq ใช้แผนที่บัญชีเลือกไว้; ผู�
 - General ใช้ได้สูงสุด **4 logical calls**; equipment / technical สูงสุด **5** แต่ละ logical call มี failover ได้ไม่เกิน **1**
 - เมื่อผู้ตรวจปฏิเสธคุณภาพ สร้างคำตอบใหม่ใน response mode เดิมได้หนึ่งครั้ง แล้วตรวจทั้งคำตอบใหม่ด้วยโมเดลที่ไม่ได้เขียนคำตอบนั้น หากยังไม่ผ่านจะไม่ส่ง draft หรือการ์ดใด ๆ; โควต้าและเวลารวมยังต้องเพียงพอ
 - Native review schema ใช้ object ที่บังคับ assessment ครบทุกหัวข้อ (`relevance`, `completeness`, `neutral_voice`, `choice_equivalence`, `grounding`, `context`, `followups`) จึงส่งหัวข้อซ้ำแล้วขาดหัวข้ออื่นไม่ได้ ต่างจากการบังคับ array ให้ครบเจ็ดรายการ; domain review เดิมยังเป็นรายการพร้อมชื่อหัวข้อสำหรับ diagnostics และ repair
+- คำขอ ประวัติ และคำตอบแบบสอบถามที่เลือกส่งให้ผู้ตรวจเป็นข้อความและ object ที่อ่านได้ตรง ๆ เพื่อให้เห็นความต้องการเดิมและ label/value ครบ โดยคลังหลักฐานยังบีบอัดได้ เกณฑ์แต่ละหัวข้อแยกหน้าที่ชัดเจนและประเมินข้อความร่วมกับการ์ดคำถาม จึงไม่ต้องทวนช้อยหรืองบในข้อความเกริ่นทุกครั้ง
+- Schema วางแผนที่ผูก ID เอกสารตามคลังจริงคงคำอธิบายขอบเขตการเลือกหัวข้อไว้ ให้เลือกเฉพาะข้อมูลที่ผู้ใช้ร้องขอ และใช้ภาษาไม่ระบุเพศในคำเชิญตอบคำถาม แม้ประวัติแชตจะมีน้ำเสียงต่างกัน
 - จองผู้ตรวจเบื้องต้นตาม `initial_review_reserve_tokens` แล้วปรับตาม payload จริง ถ้าจองเผื่อได้ จะจองตรวจครั้งแรก/กู้/ตรวจครั้งสุดท้ายพร้อมกัน; ถ้าเผื่อไม่ได้ยังตรวจ draft แรกได้ ก่อนเริ่มกู้ต้องจองทั้งผู้เขียนและผู้ตรวจอิสระให้ครบใน transaction เดียว คำตอบที่ตรวจผ่านไม่ถูกกันเพียงเพราะรอบกู้ที่ยังไม่จำเป็นไม่มีโควต้า คืนเฉพาะ reservation ที่ยังไม่ส่ง HTTP และเก็บยอดที่ใช้จริงเสมอ
 - Quota ledger ใช้ OS lock และ atomic writes ร่วมกัน เก็บ `.state/llm_quota.json` ข้ามการ restart และตรวจสิทธิ์เขียนของทุก process
 - Quota / deadline เป็นการควบคุมงบการทำงาน ไม่ใช่ผลรับรองความเร็วหรือความแม่นยำ
@@ -398,7 +402,7 @@ Groq ใช้แผนที่บัญชีเลือกไว้; ผู�
 
 ### หลักฐานของคำขอและการกู้คำตอบ
 
-Log ของ chat มี `trace_id` เชื่อม planning / evidence / review / repair กับ provider/model, HTTP status, provider error code, validation path และผลตรวจแต่ละหัวข้อ โดยไม่เก็บ prompt, draft หรือเหตุผลอิสระจากโมเดลใน log ปกติ และไม่ส่งข้อมูลวินิจฉัยไปหน้าแชต
+เมื่อ chat สำเร็จจะไม่พิมพ์ log สรุปคำขอ ส่วนข้อผิดพลาดจะบันทึกเฉพาะ trace และ error code โดยไม่พิมพ์ diagnostics ของ planning / evidence / review / repair ลง console และไม่ส่งข้อมูลวินิจฉัยไปหน้าแชต รายละเอียดเหล่านี้ยังตรวจได้ผ่าน capture ที่เปิดใช้โดยตรง
 
 หากต้องตรวจ draft/assessment เต็มให้เปิด capture สำหรับคำขอทดสอบในเครื่องอย่างชัดเจน คำสั่งนี้เรียก providers และอ่านข้อมูลคลังจริง จึงนับโควต้าตามปกติและใช้ ledger เดิม:
 

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.entities.item import Item
 
@@ -60,6 +60,26 @@ class GuidanceReview(GuidanceModel):
     reasoning: str = Field(min_length=1)
 
 
+class QuestionnaireChoicePolicy(GuidanceModel):
+    regular_min: int = Field(ge=1)
+    regular_max: int = Field(ge=1)
+    budget_choices_per_period: int = Field(ge=1)
+    budget_period_labels: list[str] = Field(min_length=1)
+
+    @property
+    def budget_total(self):
+        return self.budget_choices_per_period * len(self.budget_period_labels) + 1
+
+    @model_validator(mode='after')
+    def consistent_counts(self):
+        if self.regular_min > self.regular_max:
+            raise ValueError('Minimum choices exceed maximum choices')
+        if (any(not label.strip() for label in self.budget_period_labels)
+                or len(set(self.budget_period_labels)) != len(self.budget_period_labels)):
+            raise ValueError('Budget periods must be nonempty and distinct')
+        return self
+
+
 @dataclass(frozen=True)
 class GuidancePolicy:
     max_questions: int
@@ -69,10 +89,14 @@ class GuidancePolicy:
     max_items: int
     generation_attempts: int
     temperature: float
+    choice_policy: QuestionnaireChoicePolicy | None = None
 
     def __post_init__(self):
-        if not (1 <= self.max_questions <= 3 and 1 <= self.max_options <= 4):
+        if not (1 <= self.max_questions <= 3 and 1 <= self.max_options <= 5):
             raise ValueError("Questionnaire limits exceed the supported UI contract")
+        if self.choice_policy is not None and max(self.choice_policy.regular_max,
+                                                  self.choice_policy.budget_total) > self.max_options:
+            raise ValueError('Choice policy exceeds the configured display limit')
         if min(self.title_max_characters, self.option_max_characters,
                self.max_items, self.generation_attempts) < 1:
             raise ValueError("Guidance limits must be positive")

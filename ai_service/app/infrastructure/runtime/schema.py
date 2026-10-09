@@ -6,6 +6,7 @@ import json
 from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, HttpUrl, model_validator
+from app.domain.entities.catalog_guidance import QuestionnaireChoicePolicy
 
 
 class Strict(BaseModel):
@@ -62,6 +63,7 @@ class CatalogPresentation(Strict):
 
 
 class InterpretationPolicy(ApprovedDocument):
+    questionnaire_choices: QuestionnaireChoicePolicy | None = None
     catalog_presentation: CatalogPresentation
     turn_instruction: str = Field(min_length=1)
     evidence_instruction: str = Field(min_length=1)
@@ -129,7 +131,7 @@ class Limits(Strict):
     messages: int = Field(gt=0)
     characters: int = Field(gt=0)
     questions: int = Field(ge=1, le=3)
-    choices_per_question: int = Field(ge=1, le=4)
+    choices_per_question: int = Field(ge=1, le=5)
     items: int = Field(gt=0)
     output_tokens: int = Field(gt=0)
     temperature: float = Field(ge=0, le=2)

@@ -156,7 +156,7 @@
           "type": "integer"
         },
         "choices_per_question": {
-          "maximum": 4,
+          "maximum": 5,
           "minimum": 1,
           "title": "Choices Per Question",
           "type": "integer"

@@ -311,11 +311,15 @@ class ProviderClient:
                 fields = set(document.get("properties", {}))
                 for definition in document.get("$defs", {}).values():
                     fields.update(definition.get("properties", {}))
-                observation["validation_errors"] = [
-                    {"path": [part if isinstance(part, int) or part in fields else "unknown_field"
-                              for part in entry["loc"]], "type": entry["type"]}
-                    for entry in error.errors(include_url=False, include_context=False, include_input=False)
-                ]
+                observation["validation_errors"] = []
+                for entry in error.errors(include_url=False, include_context=True, include_input=False):
+                    detail = {"path": [part if isinstance(part, int) or part in fields else "unknown_field"
+                                       for part in entry["loc"]], "type": entry["type"]}
+                    # รับเฉพาะคำอธิบายสัญญาที่ validator ระบุ ไม่ส่ง input หรือข้อความ exception
+                    requirement = entry.get('ctx', {}).get('provider_requirement')
+                    if isinstance(requirement, str):
+                        detail['requirement'] = requirement
+                    observation["validation_errors"].append(detail)
             raise LLMProviderException(self.provider, model, "Structured output failed validation", 502, error_code="structured_output_invalid") from None
         except (ValueError, TypeError, RecursionError):
             observation = self.observation()

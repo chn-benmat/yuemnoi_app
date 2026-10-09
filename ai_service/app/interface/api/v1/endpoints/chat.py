@@ -16,12 +16,8 @@ router = APIRouter()
 
 def log_chat_outcome(trace, code=None):
     record_diagnostic("outcome", error_code=code)
-    # Log ไม่รับข้อความผู้ใช้ draft หรือเหตุผลอิสระจากโมเดล
-    details = json.dumps(trace.summary(), ensure_ascii=True, separators=(",", ":"))
-    if code is None:
-        logger.info("Chat completed trace=%s diagnostics=%s", trace.trace_id, details)
-    else:
-        logger.warning("Chat failed trace=%s error_code=%s diagnostics=%s", trace.trace_id, code, details)
+    if code is not None:
+        logger.warning("Chat failed trace=%s error_code=%s", trace.trace_id, code)
 
 
 def safe_error_code(error):

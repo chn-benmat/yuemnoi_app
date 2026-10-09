@@ -1,13 +1,13 @@
 {
   "schema_version": "2",
-  "version": "2026-10-08-groq-three-models",
+  "version": "2026-10-10-questionnaire-choices",
   "status": "approved",
   "production_enabled": true,
   "approval": {
     "approved_by": "user",
-    "approved_at": "2026-10-08T11:12:05.039864+00:00",
-    "authorization": "User confirmed Q1-Q6 and explicitly authorized implementation on 2026-10-08: retire the previous LLM provider completely; use Groq only, openai/gpt-oss-120b for primary generation and openai/gpt-oss-20b for independent review, with eligible role switching. Preserve independent model review, one bounded repair and fresh review, 4/5 logical-call caps, 30-second total deadlines, provider-reported quota authority and shared quota ledger history. Return truthful errors when no independent pair is available. Update configuration, clients, schemas, health, documentation and tests; run offline checks and at most six live chat turns on the existing free quota. User explicitly authorized the proposed third-model work on 2026-10-08: retain GPT-OSS 120B as primary writer and GPT-OSS 20B as primary independent reviewer; qualify Qwen 3.8 27B with real structured chat/review and enable it as the optional writer/reviewer fallback after qualification. Retain the 30-second total deadline, one failover per logical call, distinct-model review, bounded repair and existing account-scoped quota history. The user selected Groq Developer billing with a USD 5 monthly console spend limit; this is not a billing-limit guarantee in application code. Qualification evidence: .state/groq_third_model_smoke.json; the real inventory inspection turn exercised Qwen planning, independent review of GPT-OSS 120B evidence, bounded repair and fresh review in 11.151 seconds. Earlier questionnaire and review failures are retained; this is a development qualification, not a general accuracy or p95 certification. Manual inspection still found irrelevant knowledge/editorial prose in the accepted response; the failed questionnaire case has not been revalidated. Qualification covers adapter, structured contracts and independent-review execution, not general semantic correctness.",
-    "content_sha256": "13924f89be73a867c70a8cff770f59252eaa7a4bdb3a63662b20600ba356774c"
+    "approved_at": "2026-10-09T19:01:08.931420+00:00",
+    "authorization": "User confirmed Q1-Q6 and explicitly authorized implementation on 2026-10-08: retire the previous LLM provider completely; use Groq only, openai/gpt-oss-120b for primary generation and openai/gpt-oss-20b for independent review, with eligible role switching. Preserve independent model review, one bounded repair and fresh review, 4/5 logical-call caps, 30-second total deadlines, provider-reported quota authority and shared quota ledger history. Return truthful errors when no independent pair is available. Update configuration, clients, schemas, health, documentation and tests; run offline checks and at most six live chat turns on the existing free quota. User explicitly authorized the proposed third-model work on 2026-10-08: retain GPT-OSS 120B as primary writer and GPT-OSS 20B as primary independent reviewer; qualify Qwen 3.8 27B with real structured chat/review and enable it as the optional writer/reviewer fallback after qualification. Retain the 30-second total deadline, one failover per logical call, distinct-model review, bounded repair and existing account-scoped quota history. The user selected Groq Developer billing with a USD 5 monthly console spend limit; this is not a billing-limit guarantee in application code. Qualification evidence: .state/groq_third_model_smoke.json; the real inventory inspection turn exercised Qwen planning, independent review of GPT-OSS 120B evidence, bounded repair and fresh review in 11.151 seconds. Earlier questionnaire and review failures are retained; this is a development qualification, not a general accuracy or p95 certification. Manual inspection still found irrelevant knowledge/editorial prose in the accepted response; the failed questionnaire case has not been revalidated. Qualification covers adapter, structured contracts and independent-review execution, not general semantic correctness. User explicitly requested on 2026-10-10: generate 3-4 meaningful choices for ordinary questions based on the actual request, rather than copying catalog categories; offer two daily spending ceilings, two hourly spending ceilings and an unlimited option for budget questions. These are proposed spending limits, not quoted rental rates. Expand the native/display budget-choice cap to five and sufficient output space; preserve semantic generation, independent review, bounded recovery and existing deadlines.",
+    "content_sha256": "e25fd6c26ea98523d9a418c5741754dab6f16e24ba99d3249b9b35b7aa56b94a"
   },
   "knowledge_path": "knowledge/app_knowledge.json",
   "interpretation_policy_path": "knowledge/interpretation_policy.json",
@@ -105,9 +105,9 @@
     "messages": 16,
     "characters": 24000,
     "questions": 3,
-    "choices_per_question": 4,
+    "choices_per_question": 5,
     "items": 3,
-    "output_tokens": 1200,
+    "output_tokens": 2400,
     "temperature": 0.1,
     "question_title_characters": 80,
     "choice_label_characters": 80,

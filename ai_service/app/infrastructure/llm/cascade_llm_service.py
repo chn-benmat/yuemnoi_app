@@ -561,11 +561,15 @@ class CascadeLLMService(LLMServiceInterface):
                                     observation = client.observation() or {}
                                     codes = sorted({entry['type'] for entry in observation.get('validation_errors', [])})
                                     if codes:
-                                        # ส่งเฉพาะรหัส constraint ที่ระบบตรวจพบ ไม่ส่งค่าผิดหรือข้อความ provider
+                                        # ส่งรหัสและคำอธิบายสัญญาจาก validator ไม่ส่งค่าผิดหรือข้อความ provider
                                         # ใช้ failover เดิม และคำนวณ cost จาก instruction ใหม่ก่อนจองครั้งถัดไป
+                                        requirements = [entry for entry in observation.get('validation_errors', [])
+                                                        if 'requirement' in entry]
+                                        feedback = ('\nField requirements for this retry: ' +
+                                            json.dumps(requirements, ensure_ascii=False) + '.' if requirements else '')
                                         kwargs = {**kwargs, 'system_instruction': initial_instruction +
                                             '\nMachine constraint failures from previous attempt: ' + json.dumps(codes) +
-                                            '. Correct these while preserving the request and evidence; no quality check may be relaxed.'}
+                                            '. Correct these while preserving the request and evidence; no quality check may be relaxed.' + feedback}
                                         if record is not None:
                                             record['retry_constraint_codes'] = codes
                                 primary_failed |= provider == primary_provider

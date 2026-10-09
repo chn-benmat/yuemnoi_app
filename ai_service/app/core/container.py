@@ -39,6 +39,7 @@ class Container:
             max_items=settings.GUIDANCE_MAX_ITEMS,
             generation_attempts=settings.GUIDANCE_GENERATION_ATTEMPTS,
             temperature=settings.GUIDANCE_TEMPERATURE,
+            choice_policy=self.execution_guard.policy.questionnaire_choices,
         )
         self.route_intent_use_case = RouteIntentUseCase(
             llm_service=self.llm_service,

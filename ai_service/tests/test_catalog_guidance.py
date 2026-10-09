@@ -310,7 +310,7 @@ def test_policy_limits_and_model_parameters_are_configurable():
     with pytest.raises(ValidationError):
         Settings(_env_file=None, GUIDANCE_MAX_QUESTIONS=4)
     with pytest.raises(ValidationError):
-        Settings(_env_file=None, GUIDANCE_MAX_OPTIONS=5)
+        Settings(_env_file=None, GUIDANCE_MAX_OPTIONS=6)
     smaller = replace(POLICY, max_questions=1, max_options=2, generation_attempts=1)
     assert smaller.max_questions == 1 and smaller.generation_attempts == 1
 

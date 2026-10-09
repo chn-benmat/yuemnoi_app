@@ -107,7 +107,7 @@ void main() {
         const completedMessage = ChatMessage(
           id: 'assistant-bubble-test',
           role: ChatMessageRole.assistant,
-          content: 'สวัสดีค่ะ มีอะไรให้น้องยืมหน่อยช่วยไหมคะ',
+          content: 'สวัสดีค่ะ มีอะไรให้ยืมหน่อย AI ช่วยไหมคะ',
           userQuery: 'สวัสดี',
           responseDuration: Duration(seconds: 3),
           activities: [

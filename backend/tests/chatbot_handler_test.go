@@ -128,7 +128,7 @@ func TestChatbotSendMessageGatewayError(t *testing.T) {
 	performFiberRequest(t, router, w, req)
 
 	assert.Equal(t, http.StatusBadGateway, w.Code)
-	assert.Contains(t, w.Body.String(), "ผู้ช่วย AI ขัดข้องชั่วคราว")
+	assert.Contains(t, w.Body.String(), "ยืมหน่อย AI ขัดข้องชั่วคราว")
 }
 
 func TestChatbotSendMessageStreamSuccess(t *testing.T) {

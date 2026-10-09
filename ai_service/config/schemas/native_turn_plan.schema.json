@@ -68,7 +68,7 @@
           "$ref": "#/$defs/CatalogOperation"
         },
         "text": {
-          "description": "Original assistant invitation to pending questions; never echo the user. Natural ungendered Thai.",
+          "description": "Original assistant invitation to material pending questions for the established rental goal; never echo the user. Natural ungendered Thai in the assistant's own voice, preserving courtesy without copying gendered speech from history.",
           "minLength": 1,
           "title": "Text",
           "type": "string",
@@ -324,7 +324,7 @@
           "items": {
             "$ref": "#/$defs/NativeQuestionChoice"
           },
-          "maxItems": 4,
+          "maxItems": 5,
           "minItems": 1,
           "title": "Choices",
           "type": "array",
@@ -358,7 +358,7 @@
           "items": {
             "$ref": "#/$defs/NativeQuestionBranch"
           },
-          "maxItems": 4,
+          "maxItems": 5,
           "title": "Branches",
           "type": "array",
           "x-provider-description": true
@@ -572,7 +572,7 @@
           "items": {
             "$ref": "#/$defs/NativeQuestionChoice"
           },
-          "maxItems": 4,
+          "maxItems": 5,
           "minItems": 1,
           "title": "Choices",
           "type": "array",
@@ -778,18 +778,22 @@
       "$ref": "#/$defs/NativePlanningUnderstanding"
     },
     "knowledge_ids": {
+      "description": "Only supplied approved articles needed for information the user actually requested. Source availability is not a request to describe the platform; omit unrelated articles from a rental preference dialogue.",
       "items": {
         "type": "string"
       },
       "title": "Knowledge Ids",
-      "type": "array"
+      "type": "array",
+      "x-provider-description": true
     },
     "unverified_topic_ids": {
+      "description": "Only unverified information topics actually asked about. Unknown platform information is unrelated to missing rental preferences or inventory evidence.",
       "items": {
         "type": "string"
       },
       "title": "Unverified Topic Ids",
-      "type": "array"
+      "type": "array",
+      "x-provider-description": true
     }
   },
   "required": [

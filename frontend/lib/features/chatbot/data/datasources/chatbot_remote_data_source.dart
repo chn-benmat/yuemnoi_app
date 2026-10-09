@@ -254,14 +254,14 @@ class ChatbotRemoteDataSource {
             rethrow;
           } catch (_) {
             throw const ChatbotRemoteException(
-              'ข้อมูลตอบกลับจากผู้ช่วยไม่ถูกต้อง กรุณาลองใหม่',
+              'ข้อมูลตอบกลับจากยืมหน่อย AI ไม่ถูกต้อง กรุณาลองใหม่',
             );
           }
         }
       }
     } on TimeoutException {
       throw const ChatbotRemoteException(
-        'ผู้ช่วย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง',
+        'ยืมหน่อย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง',
       );
     } on ApiClientException catch (error) {
       throw _apiException(error);
@@ -316,7 +316,7 @@ class ChatbotRemoteDataSource {
           return ChatResponseModel.fromJson(response.data).toEntity();
         } on FormatException {
           throw const ChatbotRemoteException(
-            'ข้อมูลตอบกลับจากผู้ช่วยไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง',
+            'ข้อมูลตอบกลับจากยืมหน่อย AI ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง',
           );
         }
       }
@@ -389,10 +389,10 @@ class ChatbotRemoteDataSource {
         code == 'quota_temporarily_unavailable' ||
         code == 'quota_exhausted') {
       final reason = code == 'quota_exhausted'
-          ? 'โควต้ารายวันของผู้ช่วย AI ไม่เพียงพอสำหรับคำขอนี้'
+          ? 'โควต้ารายวันของยืมหน่อย AI ไม่เพียงพอสำหรับคำขอนี้'
           : code == 'quota_temporarily_unavailable'
-          ? 'ผู้ช่วย AI ติดโควต้าชั่วคราว จึงยังตอบคำขอนี้ไม่ได้'
-          : 'ผู้ช่วย AI ติดโควต้า จึงยังตอบคำขอนี้ไม่ได้';
+          ? 'ยืมหน่อย AI ติดโควต้าชั่วคราว จึงยังตอบคำขอนี้ไม่ได้'
+          : 'ยืมหน่อย AI ติดโควต้า จึงยังตอบคำขอนี้ไม่ได้';
       if (retryAfterSeconds is! num ||
           !retryAfterSeconds.isFinite ||
           retryAfterSeconds <= 0) {
@@ -410,22 +410,22 @@ class ChatbotRemoteDataSource {
       return '$reason โปรดลองอีกครั้งในประมาณ $wait ไม่จำเป็นต้องส่งซ้ำระหว่างรอ';
     }
     if (code == 'providers_busy') {
-      return 'ผู้ช่วย AI กำลังประมวลผลคำขออื่น จึงรอคิวไม่ทัน กรุณาลองใหม่อีกครั้ง';
+      return 'ยืมหน่อย AI กำลังประมวลผลคำขออื่น จึงรอคิวไม่ทัน กรุณาลองใหม่อีกครั้ง';
     }
     if (code == 'review_unavailable') {
-      return 'ผู้ช่วย AI ยังตรวจสอบคำตอบไม่ได้ จึงยังส่งคำตอบให้ไม่ได้ กรุณาลองใหม่ภายหลัง';
+      return 'ยืมหน่อย AI ยังตรวจสอบคำตอบไม่ได้ จึงยังส่งคำตอบให้ไม่ได้ กรุณาลองใหม่ภายหลัง';
     }
     if (code == 'providers_exhausted') {
-      return 'ผู้ช่วย AI ยังไม่พร้อมตอบคำขอนี้ กรุณาลองใหม่ภายหลัง';
+      return 'ยืมหน่อย AI ยังไม่พร้อมตอบคำขอนี้ กรุณาลองใหม่ภายหลัง';
     }
     if (code == 'structured_output_invalid') {
-      return 'ผู้ช่วย AI สร้างรูปแบบคำตอบไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง';
+      return 'ยืมหน่อย AI สร้างรูปแบบคำตอบไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง';
     }
     if (code == 'response_quality_rejected') {
-      return 'คำตอบของผู้ช่วย AI ยังไม่ผ่านการตรวจสอบคุณภาพ จึงยังแสดงคำตอบไม่ได้ กรุณาลองใหม่อีกครั้ง';
+      return 'คำตอบของยืมหน่อย AI ยังไม่ผ่านการตรวจสอบคุณภาพ จึงยังแสดงคำตอบไม่ได้ กรุณาลองใหม่อีกครั้ง';
     }
     return code == 'timeout' || code == 'deadline_exceeded'
-        ? 'ผู้ช่วย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง'
+        ? 'ยืมหน่อย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง'
         : 'ยังไม่สามารถยืนยันคำตอบได้ กรุณาลองใหม่อีกครั้ง';
   }
 
@@ -457,7 +457,7 @@ class ChatbotRemoteDataSource {
       return 'คำถามไม่ถูกต้องหรือยาวเกินไป กรุณาลองพิมพ์ใหม่';
     }
     if (statusCode >= 500) {
-      return 'ผู้ช่วย AI ยังไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง';
+      return 'ยืมหน่อย AI ยังไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง';
     }
     return 'ส่งข้อความไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
   }
@@ -465,11 +465,11 @@ class ChatbotRemoteDataSource {
   String _requestErrorMessage(ApiClientErrorType type) {
     return switch (type) {
       ApiClientErrorType.timeout =>
-        'ผู้ช่วย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง',
+        'ยืมหน่อย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง',
       ApiClientErrorType.connection =>
-        'ไม่สามารถเชื่อมต่อผู้ช่วย AI ได้ กรุณาตรวจสอบอินเทอร์เน็ต',
+        'ไม่สามารถเชื่อมต่อยืมหน่อย AI ได้ กรุณาตรวจสอบอินเทอร์เน็ต',
       ApiClientErrorType.invalidResponse =>
-        'ข้อมูลตอบกลับจากผู้ช่วยไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง',
+        'ข้อมูลตอบกลับจากยืมหน่อย AI ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง',
     };
   }
 

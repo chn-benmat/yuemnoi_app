@@ -180,6 +180,8 @@ go run main.go
 
 `main.go` เปิด HTTP server ด้วย Fiber `Listen` โดยตรง เมื่อแก้โค้ด ให้หยุดด้วย `Ctrl+C` แล้วรัน `go run main.go` ใหม่
 
+ในโหมด debug เมื่อแสดง log ใน terminal ค่า `status=2xx` เป็นสีเขียว, `status=4xx` (รวม 404) เป็นสีเหลือง และ `status=5xx` เป็นสีแดง พร้อมสีเหลืองสำหรับ `level=WARN` และสีแดงสำหรับ `level=ERROR` รองรับ Windows console ด้วย เมื่อ redirect ไปไฟล์หรือ pipe จะเป็นข้อความไม่มีสี ส่วน `APP_ENV=release` ใช้ JSON log
+
 เปิด terminal อีกหน้าตรวจ HTTP server:
 
 **Windows PowerShell**

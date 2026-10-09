@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../domain/entities/chat_message.dart';
 import 'chatbot_design.dart';
 
@@ -24,6 +25,34 @@ class ChatbotComposer extends StatelessWidget {
   final VoidCallback? onCancelEdit;
   final String? customQuestionTitle;
   final VoidCallback? onCancelCustomAnswer;
+
+  void _sendIfAvailable() {
+    if (!isSending && controller.text.trim().isNotEmpty) onSend();
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    final keyboard = HardwareKeyboard.instance;
+    final isEnter =
+        event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter;
+    if (!isEnter ||
+        keyboard.isShiftPressed ||
+        keyboard.isControlPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+
+    // ให้ Enter ยืนยันคำที่กำลังสะกดก่อนส่งข้อความ
+    final composing = controller.value.composing;
+    if (composing.isValid && !composing.isCollapsed) {
+      return KeyEventResult.ignored;
+    }
+
+    // ส่งครั้งเดียวเมื่อกดปุ่ม และไม่แทรกบรรทัดใหม่เมื่อกดค้าง
+    if (event is KeyDownEvent) _sendIfAvailable();
+    return KeyEventResult.handled;
+  }
 
   @override
   Widget build(BuildContext context) => ColoredBox(
@@ -101,48 +130,51 @@ class ChatbotComposer extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Expanded(
-                          child: TextField(
-                            key: const Key('chatbot-message-field'),
-                            controller: controller,
-                            focusNode: focusNode,
-                            enabled: !isSending,
-                            minLines: 1,
-                            maxLines: 4,
-                            textInputAction: TextInputAction.send,
-                            style: ChatbotDesign.body,
-                            onSubmitted: (_) {
-                              if (!isSending && canSend) onSend();
-                            },
-                            buildCounter:
-                                (
-                                  context, {
-                                  required currentLength,
-                                  required isFocused,
-                                  required maxLength,
-                                }) => currentLength < 160
-                                ? null
-                                : Text(
-                                    '$currentLength',
-                                    key: const Key('chatbot-character-counter'),
-                                    semanticsLabel:
-                                        '$currentLength ตัวอักษร',
-                                    style: ChatbotDesign.caption,
-                                  ),
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 12,
-                              ),
-                              hintText: editingMessage != null
-                                  ? 'แก้ไขข้อความ...'
-                                  : customQuestionTitle != null
-                                  ? 'พิมพ์คำตอบของข้อนี้...'
-                                  : 'เล่างานที่อยากทำ...',
-                              hintStyle: ChatbotDesign.body.copyWith(
-                                color: ChatbotDesign.muted,
+                          child: Focus(
+                            canRequestFocus: false,
+                            onKeyEvent: _handleKeyEvent,
+                            child: TextField(
+                              key: const Key('chatbot-message-field'),
+                              controller: controller,
+                              focusNode: focusNode,
+                              enabled: !isSending,
+                              minLines: 1,
+                              maxLines: 4,
+                              textInputAction: TextInputAction.send,
+                              style: ChatbotDesign.body,
+                              onSubmitted: (_) => _sendIfAvailable(),
+                              buildCounter:
+                                  (
+                                    context, {
+                                    required currentLength,
+                                    required isFocused,
+                                    required maxLength,
+                                  }) => currentLength < 160
+                                  ? null
+                                  : Text(
+                                      '$currentLength',
+                                      key: const Key(
+                                        'chatbot-character-counter',
+                                      ),
+                                      semanticsLabel: '$currentLength ตัวอักษร',
+                                      style: ChatbotDesign.caption,
+                                    ),
+                              decoration: InputDecoration(
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                hintText: editingMessage != null
+                                    ? 'แก้ไขข้อความ...'
+                                    : customQuestionTitle != null
+                                    ? 'พิมพ์คำตอบของข้อนี้...'
+                                    : 'เล่างานที่อยากทำ...',
+                                hintStyle: ChatbotDesign.body.copyWith(
+                                  color: ChatbotDesign.muted,
+                                ),
                               ),
                             ),
                           ),

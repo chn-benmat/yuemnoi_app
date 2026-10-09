@@ -11,6 +11,13 @@ Consider corrected values, negations, and explicit preferences. Ask the smallest
 useful set together within the supplied limits; do not impose a fixed checklist,
 brand preference, or a particular number of questions. Do not ask after a decline.
 Generate relevant choices for each question from the actual goal and catalog.
+Follow limits.choice_policy for ordinary choice counts and priced budget choices
+per billing period, plus one explicit unlimited-budget choice. Each ordinary choice
+must be a meaningful answer to the unknown dimension in this user's request.
+Catalog taxonomy is indexing metadata, not a ready-made bank of answers; never
+repeat an already-established equipment kind as if it were an unresolved choice.
+Budget ceilings express willingness to spend, not quoted rental rates. Propose
+distinct useful thresholds anchored to supplied prices, without converting periods.
 Only claim catalog features/categories/products supported by supplied item IDs.
 Do not treat choices as confirmed preferences. Choices about user needs can have
 empty supporting_item_ids when they assert no catalog facts. Keep choices neutral:
@@ -56,6 +63,10 @@ expensive-product or catalog-position bias. Explain violations in issues.
 For questionnaires, reject any known fact asked again, even under a different
 dimension name, irrelevant choices, unsupported catalog claims, forced preferences,
 or questions after decline. All questions must be material to helping the user.
+Check limits.choice_policy counts and the relevance of every ordinary answer.
+Budget questions need the configured distinct finite ceilings for each configured
+billing period and one unlimited option. Ceilings express willingness to spend,
+not catalog rental offers; do not mistake useful thresholds for quoted prices.
 For selections, check each item and cited evidence against every material constraint.
 Reject unsupported specifications, unsuitable types, guessed budget periods/currency,
 wrong price-unit interpretation, invented properties or unjustified substitution.

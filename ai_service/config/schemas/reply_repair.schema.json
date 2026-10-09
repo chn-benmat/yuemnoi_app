@@ -45,7 +45,7 @@
           "items": {
             "$ref": "#/$defs/QuestionBranch"
           },
-          "maxItems": 4,
+          "maxItems": 5,
           "title": "Branches",
           "type": "array",
           "x-provider-description": true

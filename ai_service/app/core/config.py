@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     INTENT_CONTEXT_MAX_CHARACTERS: int = Field(default=24000, ge=1)
     INTENT_TEMPERATURE: float = Field(default=0.1, ge=0, le=2)
     GUIDANCE_MAX_QUESTIONS: int = Field(default=3, ge=1, le=3)
-    GUIDANCE_MAX_OPTIONS: int = Field(default=4, ge=1, le=4)
+    GUIDANCE_MAX_OPTIONS: int = Field(default=5, ge=1, le=5)
     GUIDANCE_TITLE_MAX_CHARACTERS: int = Field(default=80, ge=1)
     GUIDANCE_OPTION_MAX_CHARACTERS: int = Field(default=80, ge=1)
     GUIDANCE_MAX_ITEMS: int = Field(default=3, ge=1)

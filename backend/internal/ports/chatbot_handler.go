@@ -28,7 +28,7 @@ func writeAIError(c fiber.Ctx, err error) error {
 			c.Set("Retry-After", fmt.Sprint(*serviceErr.RetryAfterSeconds))
 		}
 	}
-	return c.Status(statusCode).JSON(fiber.Map{"status": "error", "error_code": code, "error": "ผู้ช่วย AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง"})
+	return c.Status(statusCode).JSON(fiber.Map{"status": "error", "error_code": code, "error": "ยืมหน่อย AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง"})
 }
 
 // ChatbotHandler รับคำขอ AI และส่งต่อผ่าน domain gateway

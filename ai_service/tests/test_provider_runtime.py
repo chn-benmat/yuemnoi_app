@@ -340,7 +340,11 @@ async def test_busy_primary_does_not_consume_backup_deadline_waiting_for_quota()
             await release.wait()
         return httpx.Response(200, json=envelope())
     data = RUNTIME.model_dump(mode="json")
-    next(p for p in data["providers"] if p["id"] == "groq-primary")["quota"]["tokens_per_window"] = 2000
+    # ให้โควตาจำลองรับหนึ่งคำขอได้ แต่รับสองคำขอพร้อมกันไม่ได้ แม้งบ output เปลี่ยน
+    cost = GroqClient(api_key='fixture', runtime=RUNTIME).request_cost('generate_structured',
+        settings.GROQ_PRIMARY_MODEL, dict(prompt='fixture', schema=SmallResult,
+                                         system_instruction=None, temperature=None))
+    next(p for p in data["providers"] if p["id"] == "groq-primary")["quota"]["tokens_per_window"] = cost + cost // 2
     service, http = stack(respond, signed(data))
     service._permission_confirmed.add("groq")
     first = asyncio.create_task(service.generate_structured("fixture", SmallResult))

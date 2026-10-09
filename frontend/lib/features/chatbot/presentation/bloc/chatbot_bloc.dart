@@ -140,7 +140,7 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
       deltaBuffer.clear();
       controller.addError(
         const ChatbotException(
-          'ผู้ช่วย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง',
+          'ยืมหน่อย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง',
         ),
       );
       unawaited(subscription?.cancel());
@@ -287,14 +287,14 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
             userQuery: request.query,
             isStreaming: true,
             createdAt: startTime,
-            statusMessage: 'กำลังเชื่อมต่อผู้ช่วย AI',
+            statusMessage: 'กำลังเชื่อมต่อยืมหน่อย AI',
           ),
         ],
         isSending: true,
         clearError: true,
         clearFailure: true,
         requestStartTime: startTime,
-        currentStatusMessage: 'กำลังเชื่อมต่อผู้ช่วย AI',
+        currentStatusMessage: 'กำลังเชื่อมต่อยืมหน่อย AI',
       ),
     );
     final stopwatch = Stopwatch()..start();

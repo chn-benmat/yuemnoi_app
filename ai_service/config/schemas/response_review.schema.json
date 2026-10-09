@@ -69,25 +69,37 @@
       "additionalProperties": false,
       "properties": {
         "relevance": {
-          "$ref": "#/$defs/ApplicableAssessment"
+          "$ref": "#/$defs/ApplicableAssessment",
+          "description": "Every segment must serve the actual user purpose. Approved facts do not justify unsolicited platform or implementation explanations.",
+          "x-provider-description": true
         },
         "completeness": {
-          "$ref": "#/$defs/ApplicableAssessment"
+          "$ref": "#/$defs/ApplicableAssessment",
+          "description": "Assess prose and displayed questions together. An invitation need not repeat choices or known constraints; material unknowns may require clarification.",
+          "x-provider-description": true
         },
         "ungendered_speaker": {
           "$ref": "#/$defs/NeutralVoiceAssessment"
         },
         "choice_equivalence": {
-          "$ref": "#/$defs/NamedAssessment"
+          "$ref": "#/$defs/NamedAssessment",
+          "description": "Compare displayed labels, values and periods, including branches. No prose repetition or prior selection is required. No choices: not applicable.",
+          "x-provider-description": true
         },
         "grounding": {
-          "$ref": "#/$defs/NamedAssessment"
+          "$ref": "#/$defs/NamedAssessment",
+          "description": "Verify actual factual claims. Preference invitations need no catalog citations or repeated constraints; they make no product or availability claim.",
+          "x-provider-description": true
         },
         "context": {
-          "$ref": "#/$defs/NamedAssessment"
+          "$ref": "#/$defs/NamedAssessment",
+          "description": "Check original needs and selected answers across prose, questions and context. No repeated budget/purpose is required; reasking known needs is a defect.",
+          "x-provider-description": true
         },
         "followups": {
-          "$ref": "#/$defs/NamedAssessment"
+          "$ref": "#/$defs/NamedAssessment",
+          "description": "Ask only material unknowns. Inspect displayed questions; no prose repetition or needless followup for a complete answer is required.",
+          "x-provider-description": true
         }
       },
       "required": [

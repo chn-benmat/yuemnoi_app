@@ -15,7 +15,7 @@ from app.application.services.recovery_evidence import request_evidence,catalog_
 from app.domain.entities.app_knowledge import KnowledgeTopic
 from app.domain.entities.chat_result import EvidenceReference, SessionContext
 from app.domain.entities.clarification import ChoiceOption, QuestionStep
-from app.domain.entities.turn_plan import TurnPlan, NativeTurnPlan, EvidenceAnswer, ReplyRepair, PlannedQuestion, ClarificationStage
+from app.domain.entities.turn_plan import TurnPlan, NativeTurnPlan, EvidenceAnswer, ReplyRepair, PlannedQuestion, ClarificationStage, CatalogOverviewStage
 from app.domain.entities.intent_decision import RequestUnderstanding,NativePlanningUnderstanding,NativeBudgetPeriod,NativeKnownFact
 from app.domain.entities.catalog_guidance import SelectionPlan, SelectedItem, PriceRequirement
 from app.domain.exceptions import GuidanceGenerationError
@@ -56,7 +56,8 @@ class PlanChatTurnUseCase:
         self._interpretation = interpretation_policy
         self._guard = execution_guard
         self._review = review_service if review_service is not None else ResponseReviewService(
-            llm, interpretation_policy["review_instruction"], guidance_policy.temperature, context_limits)
+            llm, interpretation_policy["review_instruction"], guidance_policy.temperature, context_limits,
+            choice_policy=guidance_policy.choice_policy)
 
     def _validate_plan(self, plan, valid_sources, request, knowledge, catalog):
         decision = plan.understanding
@@ -124,7 +125,9 @@ class PlanChatTurnUseCase:
         if plan.response_mode == "catalog_overview" and (decision.catalog_operation == "none" or
                 decision.budget_max is not None or decision.target_items or decision.user_constraints or
                 decision.excluded_items or decision.needs_external_search):
-            raise PydanticCustomError("plan_filtered_inventory_needs_evidence_selection", "Filtered inventory needs evidence selection")
+            raise PydanticCustomError("plan_filtered_inventory_needs_evidence_selection", "Filtered inventory needs evidence selection",
+                {'provider_requirement': CatalogOverviewStage.model_fields['response_mode'].description + ' ' +
+                    TurnPlan.model_fields['response_mode'].description})
         if not plan.questions and (decision.catalog_operation != "none" or decision.needs_external_search) and plan.response_mode not in ("catalog_overview", "equipment", "technical"):
             raise PydanticCustomError("plan_requested_evidence_cannot_be_bypassed", "Requested evidence cannot be bypassed")
         if plan.response_mode == "conversation" and not plan.questions:
@@ -142,6 +145,14 @@ class PlanChatTurnUseCase:
         choices = self._all_choices(question)
         if len(question.title) > self._policy.title_max_characters or not 1 <= len(choices) <= self._policy.max_options:
             raise PydanticCustomError("plan_question_exceeds_ui_bounds", "Question exceeds UI bounds")
+        policy = self._policy.choice_policy
+        if policy is not None:
+            minimum, maximum = ((policy.budget_total, policy.budget_total) if preserve_label
+                                else (policy.regular_min, policy.regular_max))
+            if not minimum <= len(choices) <= maximum:
+                raise PydanticCustomError('plan_question_choice_count_mismatch', 'Choice count violates the questionnaire policy',
+                    {'provider_requirement': 'Use the configured questionnaire choice policy: ' + policy.model_dump_json() +
+                        '. Budget choices include one unrestricted option; ordinary choices answer the actual unknown dimension.'})
         for attr in ("id", "label"):
             values = [getattr(c, attr) for c in choices]
             if len(values) != len(set(values)):
@@ -225,10 +236,12 @@ class PlanChatTurnUseCase:
             'answered_values': answered_values,
             # ใช้คำสั่งที่อนุมัติใน system แล้ว ไม่ส่งคำอธิบายขอบเขตตรวจงานซ้ำ
             "limits": {"questions": self._policy.max_questions, "choices": self._policy.max_options,
+                "choice_policy": self._policy.choice_policy.model_dump() if self._policy.choice_policy else None,
                 "title_characters": self._policy.title_max_characters, "choice_characters": self._policy.option_max_characters},
             "knowledge_index": [asdict(t) for t in knowledge.topics],
             "catalog_summary": {"categories": catalog["categories"], "item_count": len(items),
                 "currency": self._interpretation['catalog_presentation']['currency'],
+                "unit_labels": self._interpretation['catalog_presentation']['unit_labels'],
                 "available_categories": list(dict.fromkeys(i.category for i in items if i.is_available)),
                 # ขั้นถามใช้ชนิด/ชื่อจริง ส่วนคุณสมบัติเต็มอ่านในขั้นเลือกก่อนแนะนำเสมอ
                 "equipment": {"columns": ["id", "name", "category"],
@@ -256,10 +269,15 @@ class PlanChatTurnUseCase:
             known_facts=(list[fact_schema], ...), user_constraints=(list[fact_schema], ...))
         approved_ids=tuple(article.id for article in knowledge.articles)
         unverified_ids=tuple(topic.id for topic in knowledge.topics if topic.status != 'approved')
+        # ผูก ID ตามเอกสารจริงโดยคงคำอธิบายขอบเขต ไม่ให้โมเดลเลือกทุกหัวข้อ
         native_plan=create_model('CatalogNativeTurnPlan',__base__=NativeTurnPlan,
             understanding=(understanding_schema,NativeTurnPlan.model_fields['understanding']),
-            knowledge_ids=(list[Literal[approved_ids]] if approved_ids else list[None], Field(max_length=len(approved_ids))),
-            unverified_topic_ids=(list[Literal[unverified_ids]] if unverified_ids else list[None], Field(max_length=len(unverified_ids))))
+            knowledge_ids=(list[Literal[approved_ids]] if approved_ids else list[None],
+                Field(max_length=len(approved_ids), description=NativeTurnPlan.model_fields['knowledge_ids'].description,
+                      json_schema_extra={'x-provider-description': True})),
+            unverified_topic_ids=(list[Literal[unverified_ids]] if unverified_ids else list[None],
+                Field(max_length=len(unverified_ids), description=NativeTurnPlan.model_fields['unverified_topic_ids'].description,
+                      json_schema_extra={'x-provider-description': True})))
         schema = validated_schema(native_plan, lambda p: self._validate_plan(p.to_plan(), sources, request, knowledge, catalog))
         # Overlap a real read with remote planning to keep the pooled connection warm.
         # Its snapshot is not used to approve the answer: the final fresh read remains.
@@ -495,6 +513,7 @@ class PlanChatTurnUseCase:
             "approved_articles": articles, "search_evidence": [dict(id=key, **source.model_dump(mode="json"))
                 for key, source in web_map.items()],
             "limits": {"questions": self._policy.max_questions, "choices": self._policy.max_options,
+                "choice_policy": self._policy.choice_policy.model_dump() if self._policy.choice_policy else None,
                 "title_characters": self._policy.title_max_characters, "choice_characters": self._policy.option_max_characters},
             "catalog_presentation": self._interpretation['catalog_presentation']}
         # แบบสอบถามใช้สรุปเดิม ส่วนคำตอบสินค้าใช้ scalar facts ทั้งคลังและรายละเอียดที่อ้าง

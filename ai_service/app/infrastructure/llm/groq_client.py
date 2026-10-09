@@ -46,8 +46,7 @@ class GroqClient(ProviderClient):
                     if required not in alternatives:
                         alternatives.append(required)
                 # root arrays เป็นรายการหลักฐานที่อนุญาต ไม่ใช่รายการที่ต้องเลือกทั้งหมด
-                if ('.' in path and not path.endswith('[]')
-                        and ('[]' in path or path.count('.') >= 2) and 'enum' in spec):
+                if '.' in path and not path.endswith('[]') and 'enum' in spec:
                     literals = nested_literals.setdefault(path, [])
                     for value in spec['enum']:
                         if value not in literals:
@@ -60,10 +59,10 @@ class GroqClient(ProviderClient):
                     child_path = path + '.' + name if path else name
                     visit_object(child, child_path, ancestors)
             visit_object(document, '', set())
-            # สรุปเฉพาะแบบฟอร์มใน array ชั้นแรกและ union ที่มี keys ต่างกัน
+            # สรุป object ชั้นแรก แบบฟอร์มใน array และ union ที่มี keys ต่างกัน
             # รายละเอียดอื่นยังอยู่ใน native schema เพื่อลดการส่งสัญญาเดิมซ้ำ
             objects = {path: alternatives for path, alternatives in objects.items()
-                       if path.count('[]') == 1 or len(alternatives) > 1}
+                       if '.' not in path or path.count('[]') == 1 or len(alternatives) > 1}
             shared_meanings, moved_descriptions = {}, set()
             for path, descriptions in meanings.items():
                 if '[]' not in path and path + '[]' not in objects and len(objects.get(path, [])) <= 1:
