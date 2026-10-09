@@ -205,6 +205,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
               avatarUrl: _avatarUrl,
               onProfileTap: _openUserProfile,
             ),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ProfileQuickActionsRow(
+                items: [
+                  ProfileQuickActionData(
+                    icon: Icons.inventory_2_outlined,
+                    label: 'อุปกรณ์ของฉัน',
+                    onTap: _handleMyItems,
+                  ),
+                  ProfileQuickActionData(
+                    icon: Icons.monetization_on_outlined,
+                    label: 'รายได้',
+                    onTap: _handleRentalIncome,
+                  ),
+                  ProfileQuickActionData(
+                    icon: Icons.local_shipping_outlined,
+                    label: 'สถานะการเช่า',
+                    onTap: _handleRentalStatus,
+                  ),
+                  ProfileQuickActionData(
+                    icon: Icons.calendar_today_outlined,
+                    label: 'ประวัติการเช่า',
+                    onTap: _handleRentalHistory,
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: _currentUser == null ? 14 : 20),
             Expanded(
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(
@@ -213,36 +242,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 20),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: ProfileQuickActionsRow(
-                        items: [
-                          ProfileQuickActionData(
-                            icon: Icons.inventory_2_outlined,
-                            label: 'อุปกรณ์ของฉัน',
-                            onTap: _handleMyItems,
-                          ),
-                          ProfileQuickActionData(
-                            icon: Icons.monetization_on_outlined,
-                            label: 'รายได้',
-                            onTap: _handleRentalIncome,
-                          ),
-                          ProfileQuickActionData(
-                            icon: Icons.local_shipping_outlined,
-                            label: 'สถานะการเช่า',
-                            onTap: _handleRentalStatus,
-                          ),
-                          ProfileQuickActionData(
-                            icon: Icons.calendar_today_outlined,
-                            label: 'ประวัติการเช่า',
-                            onTap: _handleRentalHistory,
-                          ),
-                        ],
-                      ),
-                    ),
                     if (_currentUser == null) ...[
-                      const SizedBox(height: 14),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Container(
@@ -319,8 +319,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 20),
                     ],
-                    const SizedBox(height: 20),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Column(
