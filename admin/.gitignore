@@ -1,0 +1,38 @@
+# Dependencies
+/node_modules/
+
+# Build output and caches
+/.next/
+/out/
+/build/
+/dist/
+/.cache/
+/.turbo/
+*.tsbuildinfo
+.eslintcache
+
+# Test output
+/coverage/
+/.nyc_output/
+
+# Environment variables and local credentials
+.env*
+!.env.example
+/.setup-token.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs and diagnostic reports
+*.log
+*.log.*
+report.*.json
+
+# Local deployment settings
+/.vercel/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
