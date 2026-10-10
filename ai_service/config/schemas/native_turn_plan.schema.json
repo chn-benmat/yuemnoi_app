@@ -139,7 +139,7 @@
       "properties": {
         "response_mode": {
           "const": "documents",
-          "description": "Ready app information uses supplied approved articles.",
+          "description": "Ready information about using this rental app is in scope. Choose documents with catalog_operation.kind=none, text empty and only relevant knowledge_ids for approved app facts. Do not choose information/conversation or generate factual prose when approved app articles answer the request.",
           "title": "Response Mode",
           "type": "string",
           "x-provider-description": true
@@ -480,11 +480,13 @@
           "type": "string"
         },
         "additional_goals": {
+          "description": "Additional independently requested purposes from the actual user, separate from equipment requirements. A catalog operation with app topics requires a separately requested app explanation here. Available knowledge topics and rental preferences do not create additional app goals.",
           "items": {
             "type": "string"
           },
           "title": "Additional Goals",
-          "type": "array"
+          "type": "array",
+          "x-provider-description": true
         },
         "request_scope": {
           "enum": [
@@ -776,6 +778,21 @@
     },
     "analysis": {
       "$ref": "#/$defs/NativePlanningUnderstanding"
+    },
+    "evidence_goal": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "For equipment/technical stages, the complete equipment task still to answer, preserving every requested property, comparison and constraint. Exclude app information answered separately by knowledge_ids/unverified_topic_ids. Null for other stages.",
+      "title": "Evidence Goal",
+      "x-provider-description": true
     },
     "knowledge_ids": {
       "description": "Only supplied approved articles needed for information the user actually requested. Source availability is not a request to describe the platform; omit unrelated articles from a rental preference dialogue.",

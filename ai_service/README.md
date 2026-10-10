@@ -323,9 +323,13 @@ curl http://localhost:8000/api/chat \
 | [chat_client_runtime.json](config/chat_client_runtime.json)        | History / transport / response-ready configuration ร่วมของ Flutter และ Go       |
 | [config/schemas](config/schemas/)                                  | JSON schemas ของ contracts                                                      |
 
-Runtime ใช้ version `2026-10-10-questionnaire-choices` ส่วน interpretation policy ใช้ `2026-10-10-single-batch-questionnaire` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
+Runtime ใช้ version `2026-10-10-questionnaire-choices` ส่วน interpretation policy ใช้ `2026-10-10-relevant-public-app-information` เอกสารเหล่านี้มี validation และ approval digest การแก้เนื้อหาต้องผ่าน workflow ที่รักษา approval ให้ตรงกับเนื้อหา เมื่อ runtime / policy เปลี่ยนหลังโหลดต้อง restart service
 
 คำขอภายในใช้ `input_tables`, `input_references` และ `input_dictionary` ลดข้อมูลซ้ำแบบคืนต้นฉบับได้ Groq ใช้รหัสอ้างอิงสั้นเฉพาะคำขอ แล้วแปลงกลับก่อนตรวจ provenance คำขอ retry และ DTO หน้าแชตเก็บ IDs และคำตอบเดิม Context ละค่าเริ่มต้นที่ว่างหรือไม่ทราบ
+
+ข้อมูลแอปใช้เฉพาะเรื่องที่ผู้ใช้ถาม การเลือกบทความร่วมกับงานคลังต้องสอดคล้องกับคำขอแอปเพิ่มเติมใน `additional_goals` ไม่สร้างเป้าหมายจากตัวเลือกในดัชนีความรู้ หากผู้ใช้ถามทั้งสินค้าและแอป ระบบแสดงข้อเท็จจริงฉบับผู้ใช้ที่อนุมัติแล้วเฉพาะเรื่องที่ถาม แผน AI ต้องแยกงานสินค้าที่ยังต้องตอบใน `evidence_goal` ขั้น evidence รับเฉพาะงานนี้พร้อมข้อกำหนดและหลักฐานสินค้า โดยทราบผ่าน `app_information_projected` ว่าส่วนแอปแสดงแล้ว รอบ repair แก้เฉพาะส่วนสินค้าและรักษาข้อเท็จจริงแอปเดิม ส่วนรอบ review ยังเห็นคำขอและคำตอบครบทั้งชุดเพื่อตรวจความเกี่ยวข้องของทุกย่อหน้า แม้ต้นฉบับจะเป็นข้อมูลที่อนุมัติแล้วก็ตาม
+
+`knowledge/app_knowledge.json` version `3-public-app-facts-2026-10-10` ใช้ข้อความข้อเท็จจริงสำหรับผู้ใช้ พร้อมคงหลักฐานอ้างอิงและ approval digest ของแต่ละบทความ รายละเอียดการพัฒนาไม่อยู่ในข้อความที่จะนำไปตอบ ส่วนข้อจำกัดจริงของฟีเจอร์ยังคงอยู่ ตรวจ regression ด้วย `.\.venv\Scripts\python.exe -m pytest tests/test_unsolicited_app_documents.py -q`
 
 Native planning ใช้ `analysis` และ `budget_period` ซึ่งแยกช่วงเวลาที่ผู้ใช้ระบุออกจาก `catalog_unit` ที่จำกัด enum ตามคลังจริง ถ้าหน่วยไม่ตรงกันต้องคงช่วงเวลาผู้ใช้และไม่แปลงราคา ข้อเท็จจริงเชิงปริมาณรับ JSON number แล้วแปลง representation เป็น string ใน domain เดิม Provider decoding ตรวจฟิลด์บังคับทุกระดับและรับเฉพาะชื่อฟิลด์จาก native schema ก่อนเติม domain defaults แล้วตรวจชนิดข้อมูลแบบ strict; JSON ผิด schema ไม่ผ่านด้วยการ coercion และไม่ถูกแจ้งเป็นโควต้าหรือคิวเพียงเพราะ JSON ผิด
 

@@ -113,6 +113,10 @@ class TurnPlan(GuidanceModel):
     response_mode: Literal["clarification", "documents", "conversation", "information", "catalog_overview", "equipment", "technical"] = Field(description="Select the CURRENT response stage, independent of the eventual catalog operation: clarification whenever any material question is pending; conversation only for a nonfactual social reply with no questions; documents for approved app answers without questions; catalog_overview for unfiltered category browsing; equipment for a ready catalog answer; technical for ready external verification. Clarification includes a brief introduction and stops evidence synthesis, even when a selection/inspection/comparison operation remains requested.", json_schema_extra={"x-provider-description": True})
     overview_available_only: bool = False
     understanding: RequestUnderstanding
+    evidence_goal: str | None = Field(default=None, min_length=1,
+        description='For equipment/technical stages, the complete equipment task still to answer, preserving every requested property, comparison and constraint. '
+                    'Exclude app information answered separately by knowledge_ids/unverified_topic_ids. Null for other stages.',
+        json_schema_extra={'x-provider-description': True})
     knowledge_ids: list[str] = Field(
         description='Only supplied approved articles needed for information the user actually requested. Source availability is not a request to describe the platform; omit unrelated articles from a rental preference dialogue.',
         json_schema_extra={'x-provider-description': True})
@@ -173,7 +177,9 @@ class TechnicalStage(EvidenceStage):
 
 
 class DocumentStage(EvidenceStage):
-    response_mode: Literal['documents'] = Field(description='Ready app information uses supplied approved articles.',
+    response_mode: Literal['documents'] = Field(description='Ready information about using this rental app is in scope. '
+        'Choose documents with catalog_operation.kind=none, text empty and only relevant knowledge_ids for approved app facts. '
+        'Do not choose information/conversation or generate factual prose when approved app articles answer the request.',
         json_schema_extra={'x-provider-description': True})
     catalog_operation: NoCatalogOperation
 
@@ -199,6 +205,7 @@ class NativeTurnPlan(GuidanceModel):
     overview_available_only: bool
     # Groq จัดลำดับ keys ตามตัวอักษร ให้ reasoning ออกก่อน stage และข้อความ
     understanding: NativePlanningUnderstanding = Field(alias='analysis')
+    evidence_goal: str | None = TurnPlan.model_fields['evidence_goal']
     knowledge_ids: list[str] = TurnPlan.model_fields['knowledge_ids']
     unverified_topic_ids: list[str] = TurnPlan.model_fields['unverified_topic_ids']
 
@@ -217,7 +224,7 @@ class EvidenceAnswer(GuidanceModel):
     speaker_register: Literal["informal_ungendered"] = Field(default="informal_ungendered", description="Return the exact machine label informal_ungendered, never a description or translation. Answer and suggested replies use natural Thai without gendered speaker pronouns or honorifics.", json_schema_extra={"x-provider-description": True})
     request_fit: Literal["meets_request", "no_supported_match", "not_assessed"] = Field(description="Resolve suitability before prose: meets_request only when selected equipment satisfies the user's requested kind, function and every established constraint; no_supported_match when no candidate does so; not_assessed for inspection, technical information or category browsing without a justified item selection. Category membership or an eligible price alone never establishes suitability; complementary equipment does not replace the requested device. This conclusion guides writing and is not an independent review.", json_schema_extra={"x-provider-description": True})
     selection: SelectionPlan | None
-    answer: str = Field(alias='text',min_length=1, description="Lead with the request-fit conclusion in friendly nongendered Thai. For no_supported_match explicitly explain that the requested kind/function has no supported match within the preserved constraints; describe complementary or differently constrained options only as alternatives, never as satisfying the unmet request. Do not infer incompatibility from absent evidence. Render catalog names, prices, units and status through {{item:ID:FIELD}} references to supplied rows, never rewritten literal values. For product recommendations, follow the system's presentation instructions: each product has a standalone bold name followed by a Markdown field list. Keep the name and fields on separate lines, never combine them into an inline paragraph.", json_schema_extra={"x-provider-description": True})
+    answer: str = Field(alias='text',min_length=1, description="Answer only the catalog/technical task; requested app facts are projected separately, so never generate or repeat app workflows here. Lead with the request-fit conclusion in friendly nongendered Thai. For no_supported_match explicitly explain that the requested kind/function has no supported match within the preserved constraints; describe complementary or differently constrained options only as alternatives, never as satisfying the unmet request. Do not infer incompatibility from absent evidence. Render catalog names, prices, units and status through {{item:ID:FIELD}} references to supplied rows, never rewritten literal values. For product recommendations, follow the system's presentation instructions: each product has a standalone bold name followed by a Markdown field list. Keep the name and fields on separate lines, never combine them into an inline paragraph.", json_schema_extra={"x-provider-description": True})
     search_ids: list[str]
     suggested_replies: list[str]
 

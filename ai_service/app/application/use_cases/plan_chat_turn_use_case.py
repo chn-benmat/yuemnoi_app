@@ -74,6 +74,23 @@ class PlanChatTurnUseCase:
                 {key for key, topic in topics.items() if topic.status != "approved"})):
             if len(ids) != len(set(ids)) or not set(ids) <= valid:
                 raise PydanticCustomError("plan_unknown__duplicate_or_unapproved_topic_id", "Unknown, duplicate or unapproved topic ID")
+        # งานคลังกับข้อมูลแอปเป็นคนละเป้าหมาย ต้องมีคำขอเพิ่มเติมที่โมเดลระบุจริง
+        if (plan.knowledge_ids or plan.unverified_topic_ids) and decision.catalog_operation != 'none' and not decision.additional_goals:
+            raise PydanticCustomError('plan_app_information_requires_a_requested_goal',
+                'Catalog answers require separately requested app information before selecting app topics',
+                {'provider_requirement': 'A catalog request alone does not request app information. '
+                    'Use empty knowledge_ids and unverified_topic_ids unless the actual user also requested a separate app explanation. '
+                    'Do not invent additional_goals from available knowledge topics or equipment preferences.'})
+        if (plan.knowledge_ids or plan.unverified_topic_ids) and plan.response_mode in ('equipment', 'technical') and not plan.evidence_goal:
+            raise PydanticCustomError('plan_mixed_answer_requires_an_equipment_goal',
+                'Mixed answers require a separate equipment goal',
+                {'provider_requirement': TurnPlan.model_fields['evidence_goal'].description})
+        if plan.evidence_goal is not None and not plan.questions and plan.response_mode not in ('equipment', 'technical'):
+            raise PydanticCustomError('plan_equipment_goal_requires_evidence',
+                'A remaining equipment task requires an evidence stage',
+                {'provider_requirement': 'The declared evidence_goal still needs a catalog/technical answer. '
+                    'Use the corresponding ready evidence stage, not a document-only or other non-evidence reply. '
+                    'Use null only when no equipment task remains.'})
         if bool(plan.questions) != decision.requires_clarification:
             raise PydanticCustomError("plan_questions_disagree_with_action", "Questions disagree with action")
         if len(plan.questions) > self._policy.max_questions:
@@ -325,7 +342,9 @@ class PlanChatTurnUseCase:
         references = [EvidenceReference(id=key, kind="app_knowledge", title=s.title, reference=s.reference,
             reviewed_at=article_map[key].reviewed_at.isoformat(), content_sha256=article_map[key].content_sha256)
             for key in plan.knowledge_ids for s in article_map[key].sources]
-        blocks = [article_map[key].content for key in plan.knowledge_ids]
+        articles = [{"id": key, "content": article_map[key].content} for key in plan.knowledge_ids]
+        # ข้อมูลแอปใช้ข้อเท็จจริงฉบับผู้ใช้ที่อนุมัติแล้ว เฉพาะเรื่องที่ร้องขอ
+        blocks = [article['content'] for article in articles]
         if plan.unverified_topic_ids or (plan.response_mode == "documents" and not blocks and not questions):
             blocks.append(self._interpretation["unavailable_notice"])
         prefix_blocks = list(blocks)
@@ -406,7 +425,9 @@ class PlanChatTurnUseCase:
             response_schema = validated_schema(grounded_schema, validate_answer)
             with generation_stage("evidence", downstream=("review",)) as evidence_writer:
                 answer = await self._generate_evidence(decision, response_schema, allowed_purposes, fresh_items,
-                    evidence_catalog, candidate_ids, category_items, candidates, price_filter_applied, web_map, established_unit)
+                    evidence_catalog, candidate_ids, category_items, candidates, price_filter_applied, web_map, established_unit,
+                    understanding=self._evidence_understanding(plan), app_information_projected=bool(prefix_blocks),
+                    questionnaire_complete=request.questionnaire_complete)
             # Equipment/technical branches publish evidence prose, not the
             # planning message. Exclude only actual visible-text writers.
             writers = [evidence_writer.provenance]
@@ -444,7 +465,6 @@ class PlanChatTurnUseCase:
             items=[ItemDTO.from_entity(i, self._interpretation['catalog_presentation']) for i in selected_items],
             search_query=decision.search_query or "", search_sources=[SearchSourceDTO.from_entity(s) for s in cited_search],
             suggested_replies=replies, context=context, references=references)
-        articles = [{"id": key, "content": article_map[key].content} for key in plan.knowledge_ids]
         web_evidence = [source.model_dump(mode="json") for source in web]
         recovery_request = await self._repair_draft(request, plan, draft, {'issues': [], 'assessments': []},
             review_catalog, articles, web, knowledge, sources, prefix_blocks, selection, response_schema,
@@ -516,15 +536,23 @@ class PlanChatTurnUseCase:
         if projected_mode:
             fields["answer"] = (Literal[draft.response], Field(alias='text'))
         schema = validated_schema(create_model("BoundedReplyRepair", __base__=ReplyRepair, **fields), validate_repair)
-        request_data = request_evidence(request,self._limits)
+        scoped_evidence = evidence_mode and bool(prefix_blocks)
+        request_data = ({'equipment_goal': plan.evidence_goal} if scoped_evidence
+                        else request_evidence(request,self._limits))
         # คงข้อความที่มองเห็นทุกฟิลด์ ส่วน metadata ใช้ understanding เดิมที่ส่งแยกไว้
-        projected, references = compact_review_draft(draft.model_dump(mode="json",include=VISIBLE_TEXT_SURFACES))
+        generated_surfaces = draft.model_dump(mode="json",include=VISIBLE_TEXT_SURFACES)
+        if scoped_evidence:
+            # ลบเฉพาะ prefix ที่ระบบประกอบเอง ไม่จำแนก/ตัดข้อความด้วยคำสำคัญ
+            generated_surfaces['response'] = draft.response.removeprefix('\n\n'.join(prefix_blocks) + '\n\n')
+        projected, references = compact_review_draft(generated_surfaces)
         payload = {"request": request_data, "response_mode": plan.response_mode,
-            "understanding": plan.understanding.model_dump(mode="json"),
+            "app_information_projected": evidence_mode and bool(prefix_blocks),
+            "questionnaire_complete": request.questionnaire_complete,
+            "understanding": self._evidence_understanding(plan) if scoped_evidence else plan.understanding.model_dump(mode="json"),
             "rejected_draft": projected, "draft_references": references,
             "issues": review["issues"],
             "failed_checks": [assessment['check'] for assessment in review.get('assessments',[]) if not assessment['passed']],
-            "approved_articles": articles, "search_evidence": [dict(id=key, **source.model_dump(mode="json"))
+            "approved_articles": [] if scoped_evidence else articles, "search_evidence": [dict(id=key, **source.model_dump(mode="json"))
                 for key, source in web_map.items()],
             "limits": {"questions": self._policy.max_questions, "choices": self._policy.max_options,
                 "choice_policy": self._policy.choice_policy.model_dump() if self._policy.choice_policy else None,
@@ -577,9 +605,21 @@ class PlanChatTurnUseCase:
             "suggested_replies": replies, "search_sources": search_sources, "references": references, "context": context})
         return result, selection, writer.provenance
 
+    @staticmethod
+    def _evidence_understanding(plan):
+        if plan.evidence_goal is None:
+            return plan.understanding.model_dump(mode='json')
+        # แผน AI แยกงานที่ยังต้องตอบไว้แล้ว คงข้อกำหนดและหลักฐานสินค้าเดิม
+        return {**plan.understanding.model_dump(mode='json', exclude={
+            'user_goal', 'additional_goals', 'decision_reason', 'reference_resolution'}),
+            'user_goal': plan.evidence_goal}
+
     async def _generate_evidence(self, decision, response_schema, allowed_purposes, fresh_items,
-                               evidence_catalog, candidate_ids, category_items, candidates, price_filter_applied, web_map, established_unit):
+                               evidence_catalog, candidate_ids, category_items, candidates, price_filter_applied, web_map, established_unit,
+                               *, understanding, app_information_projected, questionnaire_complete):
         return await self._llm.generate_structured(prompt=json.dumps(compact_planning_input({
+                "app_information_projected": app_information_projected,
+                "questionnaire_complete": questionnaire_complete,
                 "selection_required": decision.catalog_operation != "none",
                 "allowed_selection_purposes": allowed_purposes,
                 "allowed_search_ids": list(web_map),
@@ -588,7 +628,7 @@ class PlanChatTurnUseCase:
                                    "catalog_periods": sorted({i.type for i in fresh_items}),
                                    "permitted_catalog_periods": [established_unit] if established_unit else [],
                                    "conversion_allowed": False},
-                "understanding": decision.model_dump(), "catalog": compact_catalog(evidence_catalog),
+                "understanding": understanding, "catalog": compact_catalog(evidence_catalog),
                 "catalog_scope": {
                     "inventory_item_count": len(fresh_items), "category_item_count": len(category_items),
                     "available_category_item_count": sum(i.is_available for i in category_items),

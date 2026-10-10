@@ -17,13 +17,19 @@ from test_provider_runtime import envelope, stack
 
 
 def recorded_failures():
-    return json.loads((Path(__file__).parent / 'fixtures/native_computer_rental_failures.json')
-                      .read_text(encoding='utf-8'))
+    captures = json.loads((Path(__file__).parent / 'fixtures/native_computer_rental_failures.json')
+                         .read_text(encoding='utf-8'))
+    for capture in captures:
+        # Historical pure-equipment captures predate the separate mixed-answer task.
+        capture.setdefault('evidence_goal', None)
+    return captures
 
 
 def replay_schema():
     case = PlanChatTurnUseCase.__new__(PlanChatTurnUseCase)
     case._policy = SimpleNamespace(max_questions=3)
+    from test_fast_turn import INTERPRETATION
+    case._interpretation = INTERPRETATION
     request = ChatRequestDTO(message='อยากเช่าคอม')
     knowledge = SimpleNamespace(topics=[], articles=[])
     catalog = {'categories': recorded_failures()[1]['analysis']['categories'], 'items': []}
