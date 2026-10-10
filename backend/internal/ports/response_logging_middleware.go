@@ -71,7 +71,9 @@ func ResponseLoggingMiddleware() fiber.Handler {
 		err := c.Next()
 		// ไม่อ่าน body stream เพื่อคงการส่งข้อมูลทันทีและไม่เก็บข้อความสนทนาใน log
 		body := "<stream omitted>"
-		if !c.Response().IsBodyStream() {
+		if strings.HasPrefix(c.Path(), "/api/identity/") || strings.HasPrefix(c.Path(), "/api/admin/") {
+			body = "<identity data omitted>"
+		} else if !c.Response().IsBodyStream() {
 			body = safeBodyForLog(c.Response().Body())
 		}
 

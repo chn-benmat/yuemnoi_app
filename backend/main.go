@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/aiservice"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/fcm"
@@ -57,7 +60,43 @@ func main() {
 	allAppSecretKeys := strings.Join(cfg.GetAppSecretKeys(), ",")
 
 	// ตั้งค่า Router และฉีด Dependencies ทั้งหมดผ่าน DI
-	router := ports.SetupRouter(
+	var ops domain.OperationsOptions
+	if cfg.OperationsEnabled {
+		encryption, decodeErr := base64.StdEncoding.DecodeString(cfg.IdentityEncryptionKey)
+		if decodeErr != nil || len(encryption) != 32 {
+			log.Fatal("IDENTITY_ENCRYPTION_KEY must be base64 of 32 random bytes")
+		}
+		hmacKey, decodeErr := base64.StdEncoding.DecodeString(cfg.IdentityHMACKey)
+		if decodeErr != nil || len(hmacKey) < 32 {
+			log.Fatal("IDENTITY_HMAC_KEY must be base64 of at least 32 random bytes")
+		}
+		if cfg.GetPrimaryInternalServiceKey() == "" {
+			log.Fatal("INTERNAL_SERVICE_KEY is required for identity")
+		}
+		ops = domain.OperationsOptions{Store: supabase.NewOperationsRepository(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey), Analyzer: aiservice.NewIdentityClient(cfg.AIServiceURL, cfg.GetPrimaryInternalServiceKey(), cfg.AIServiceTimeout), EncryptionKey: encryption, HMACKey: hmacKey, CleanupInterval: cfg.IdentityCleanupInterval, OCRMinConfidence: cfg.IdentityOCRMinConfidence}
+	}
+	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
+	defer stopCleanup()
+	if ops.Store != nil {
+		go func() {
+			ticker := time.NewTicker(ops.CleanupInterval)
+			defer ticker.Stop()
+			for {
+				ctx, cancel := context.WithTimeout(cleanupCtx, 2*time.Minute)
+				err := ports.CleanupIdentity(ctx, ops.Store)
+				cancel()
+				if err != nil && cleanupCtx.Err() == nil {
+					slog.Warn("Identity cleanup incomplete; retry scheduled")
+				}
+				select {
+				case <-cleanupCtx.Done():
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+	}
+	router := ports.SetupRouterWithOperations(ops,
 		itemRepo,
 		authGateway,
 		contactRepository,

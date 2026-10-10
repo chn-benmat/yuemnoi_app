@@ -35,7 +35,9 @@ Python service ของ **Yuemnoi** ใช้ FastAPI เป็น API ให�
 | ✅ Response review | ให้ actual model คนละตัวตรวจคำตอบก่อนเผยแพร่                       |
 | ⚡ JSON / SSE      | ส่งผลที่ผ่านการตรวจเป็น JSON หรือ SSE พร้อมการ์ดและ references     |
 
-Service ใช้ **Cloud APIs** ไม่มี local model / Ollama / GPU เป็น dependency ของการติดตั้ง และใช้ HTTPX adapters โดยตรง จึงไม่ต้องติดตั้ง SDK ของ Groq, Tavily หรือ Supabase เพิ่มนอก requirements
+ส่วน Chatbot ใช้ **Cloud APIs** ผ่าน HTTPX adapters โดยตรง ส่วน Identity ใช้ EasyOCR, OpenCV และ PyTorch ประมวลผลภาพในเครื่อง ติดตั้งไลบรารีของทั้งสองส่วนจาก `requirements.txt` ไฟล์เดียว และต้องเตรียมไฟล์โมเดลก่อนเปิดใช้งาน Identity
+
+Identity รองรับ `POST /api/identity/read-card` สำหรับอ่าน `card` ก่อนส่งคำขอ คืนเฉพาะข้อความ OCR พร้อม confidence และตำแหน่งให้ Go แปลงเป็นข้อมูลช่วยกรอก ใช้ internal service key และข้อจำกัดภาพ/จำนวนงานพร้อมกัน/เวลาเดียวกับ analyze ไม่เก็บภาพรอบนี้และไม่เรียก Cloud API ดู [ขั้นตอน UX และการเชื่อมต่อ](../docs/IDENTITY_PUBLIC_ROLLOUT.md)
 
 ### คำตอบเดินทางอย่างไร
 
@@ -61,7 +63,7 @@ SSE ส่งคำตอบฉบับครบใน event `ready` แล้�
 
 ## 🧰 Tech stack & versions
 
-[requirements.txt](requirements.txt) ระบุ **เวอร์ชันขั้นต่ำแบบ `>=`** และไม่มี dependency lockfile จึงอาจติดตั้งได้คนละ patch / minor version ในแต่ละเครื่อง
+[requirements.txt](requirements.txt) รวมไลบรารีของ Chatbot และ Identity โดยมีทั้ง **เวอร์ชันขั้นต่ำแบบ `>=`** และ **เวอร์ชันที่ตรึงด้วย `==`** และไม่มี dependency lockfile จึงอาจติดตั้ง dependency ที่ไม่ได้ตรึงได้คนละ patch / minor version ในแต่ละเครื่อง
 
 | เครื่องมือ         | ข้อกำหนดในโปรเจกต์     | Snapshot metadata ในเครื่องที่ตรวจ\* | หน้าที่                       |
 | ------------------ | ---------------------- | ------------------------------------ | ----------------------------- |

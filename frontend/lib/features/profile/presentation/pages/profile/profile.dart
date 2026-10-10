@@ -12,6 +12,7 @@ import '../../../../../core/network/auth_session.dart';
 import '../../../../../core/utils/auth_guard.dart';
 import '../../../../auth/presentation/bloc/auth_event.dart';
 import 'user_profile_view_screen.dart';
+import '../../../../identity/data/identity_api_repository.dart';
 import '../../widgets/profile/profile_widgets.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -116,6 +117,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     final meta = user.userMetadata ?? {};
     final bio = (meta['bio'] as String?)?.trim();
+    var verified = false;
+    final identity = IdentityApiRepository();
+    try {
+      verified = (await identity.status()).verified;
+    } catch (_) {
+    } finally {
+      identity.close();
+    }
+    if (!mounted) return;
     AppRoutes.openUserProfile(
       context,
       args: UserProfileViewArgs(
@@ -123,7 +133,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         displayName: _displayName,
         avatarUrl: _avatarUrl,
         rating: 4.9,
-        isVerified: true,
+        isVerified: verified,
         bio: (bio != null && bio.isNotEmpty)
             ? bio
             : 'สนใจกล้องตัวไหนโปรดติดต่อฉัน',
@@ -263,7 +273,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primaryColor.withValues(alpha: 0.1),
+                                  color: AppColors.primaryColor.withValues(
+                                    alpha: 0.1,
+                                  ),
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: const Icon(
@@ -298,13 +310,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               FilledButton(
-                                onPressed: () => AppRoutes.openAddRentalItem(context),
+                                onPressed: () =>
+                                    AppRoutes.openAddRentalItem(context),
                                 style: FilledButton.styleFrom(
                                   backgroundColor: AppColors.primaryColor,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
                                 ),
                                 child: const Text(
                                   'ปล่อยเช่า',
@@ -355,7 +371,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          const ProfileSection(
+                          ProfileSection(
                             icon: Icons.security_outlined,
                             title: 'หมวดหมู่ความปลอดภัย',
                             items: [
@@ -363,6 +379,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 icon: Icons.verified_user_outlined,
                                 title: 'การยืนยันตัวตน',
                                 showDivider: false,
+                                onTap: () => AppRoutes.openIdentity(context),
                               ),
                             ],
                           ),
@@ -394,8 +411,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               onPressed: _currentUser != null
                                   ? _logout
                                   : () async {
-                                      final authed = await AppRoutes.pushLogin(context);
-                                      if (authed == true && mounted) setState(() {});
+                                      final authed = await AppRoutes.pushLogin(
+                                        context,
+                                      );
+                                      if (authed == true && mounted) {
+                                        setState(() {});
+                                      }
                                     },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primaryColor,
@@ -406,7 +427,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               child: Text(
-                                _currentUser != null ? 'ออกจากระบบ' : 'เข้าสู่ระบบ / สมัครสมาชิก',
+                                _currentUser != null
+                                    ? 'ออกจากระบบ'
+                                    : 'เข้าสู่ระบบ / สมัครสมาชิก',
                                 style: const TextStyle(
                                   fontFamily: AppTextStyles.fontFamily,
                                   fontSize: 16,

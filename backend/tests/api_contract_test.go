@@ -112,7 +112,7 @@ func TestAllAPIEndpointsSuccess(t *testing.T) {
 	for _, route := range fixture.app().GetRoutes(true) {
 		registered = append(registered, route.Method+" "+route.Path)
 	}
-	for _, tc := range apiContractCases() {
+	for _, tc := range append(apiContractCases(), operationsContractCases()...) {
 		covered = append(covered, tc.method+" "+tc.pattern)
 		t.Run(tc.method+" "+tc.pattern, func(t *testing.T) {
 			f := newAPIContractFixture(t)
@@ -144,7 +144,7 @@ func TestAllAPIEndpointsSuccess(t *testing.T) {
 		})
 	}
 	require.ElementsMatch(t, registered, covered)
-	require.Len(t, covered, 23)
+	require.Len(t, covered, 32)
 }
 
 func TestAllAPIEndpointsAppKey(t *testing.T) {
@@ -279,5 +279,19 @@ func TestAPIDomainErrorMappings(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func operationsContractCases() []apiContractCase {
+	return []apiContractCase{
+		{http.MethodGet, "/api/identity/status", "/api/identity/status", "", "", 503, true, map[string]any{"error": "ระบบเจ้าหน้าที่และยืนยันตัวตนยังไม่เปิดใช้งาน"}},
+		{http.MethodPost, "/api/identity/sessions", "/api/identity/sessions", "", "", 503, true, map[string]any{"error": "ระบบเจ้าหน้าที่และยืนยันตัวตนยังไม่เปิดใช้งาน"}},
+		{http.MethodPost, "/api/identity/sessions/:id/submit", "/api/identity/sessions/test/submit", "", "", 503, true, map[string]any{"error": "ระบบเจ้าหน้าที่และยืนยันตัวตนยังไม่เปิดใช้งาน"}},
+		{http.MethodPost, "/api/identity/sessions/:id/read-card", "/api/identity/sessions/test/read-card", "", "", 503, true, map[string]any{"error": "ระบบเจ้าหน้าที่และยืนยันตัวตนยังไม่เปิดใช้งาน"}},
+		{http.MethodPost, "/api/identity/guardians", "/api/identity/guardians", "", "", 503, true, map[string]any{"error": "ระบบเจ้าหน้าที่และยืนยันตัวตนยังไม่เปิดใช้งาน"}},
+		{http.MethodPost, "/api/complaints", "/api/complaints", "", "", 503, true, map[string]any{"error": "ระบบเจ้าหน้าที่และยืนยันตัวตนยังไม่เปิดใช้งาน"}},
+		{http.MethodGet, "/api/admin/evidence/:id", "/api/admin/evidence/test", "", "", 503, true, map[string]any{"error": "ระบบเจ้าหน้าที่และยืนยันตัวตนยังไม่เปิดใช้งาน"}},
+		{http.MethodGet, "/api/admin/:module", "/api/admin/overview", "", "", 503, true, map[string]any{"error": "ระบบเจ้าหน้าที่และยืนยันตัวตนยังไม่เปิดใช้งาน"}},
+		{http.MethodPost, "/api/admin/actions/:action/:target", "/api/admin/actions/hide-item/7", "", "", 503, true, map[string]any{"error": "ระบบเจ้าหน้าที่และยืนยันตัวตนยังไม่เปิดใช้งาน"}},
 	}
 }

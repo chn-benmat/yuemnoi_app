@@ -18,6 +18,11 @@ class AppTextFormField extends StatelessWidget {
   final Key? fieldKey;
   final int maxLines;
   final int? minLines;
+  final bool readOnly;
+  final bool enabled;
+  final VoidCallback? onTap;
+  final ValueChanged<String>? onChanged;
+  final TextInputAction? textInputAction;
 
   const AppTextFormField({
     super.key,
@@ -34,6 +39,11 @@ class AppTextFormField extends StatelessWidget {
     this.fieldKey,
     this.maxLines = 1,
     this.minLines,
+    this.readOnly = false,
+    this.enabled = true,
+    this.onTap,
+    this.onChanged,
+    this.textInputAction,
   }) : assert(prefixIcon == null || prefix == null);
 
   @override
@@ -44,6 +54,11 @@ class AppTextFormField extends StatelessWidget {
         AppFieldLabel(text: label),
         TextFormField(
           key: fieldKey,
+          readOnly: readOnly,
+          enabled: enabled,
+          onTap: onTap,
+          onChanged: onChanged,
+          textInputAction: textInputAction,
           controller: controller,
           obscureText: obscureText,
           validator: validator,

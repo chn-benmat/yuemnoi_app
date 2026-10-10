@@ -13,6 +13,7 @@ from app.domain.entities.item import Item
 def test_openapi_endpoint_paths():
     assert set(app.openapi()["paths"]) == {
         "/health", "/api/items", "/api/chat", "/api/chat/stream",
+        "/api/identity/health", "/api/identity/analyze", "/api/identity/read-card",
     }
 
 

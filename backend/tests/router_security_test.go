@@ -42,6 +42,15 @@ func TestRouterRegistersAPIEndpoints(t *testing.T) {
 		"POST /api/chat/contact",
 		"POST /api/chat-ai",
 		"POST /api/chat-ai/stream",
+		"GET /api/identity/status",
+		"POST /api/identity/sessions",
+		"POST /api/identity/sessions/:id/submit",
+		"POST /api/identity/sessions/:id/read-card",
+		"POST /api/identity/guardians",
+		"POST /api/complaints",
+		"GET /api/admin/evidence/:id",
+		"GET /api/admin/:module",
+		"POST /api/admin/actions/:action/:target",
 	}, routes)
 }
 

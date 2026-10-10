@@ -11,7 +11,8 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/recover"
 )
 
-func SetupRouter(
+func SetupRouterWithOperations(
+	operations domain.OperationsOptions,
 	itemRepo domain.ItemRepository,
 	authGateway domain.AuthGateway,
 	contactRepository domain.ConversationContactRepository,
@@ -52,6 +53,7 @@ func SetupRouter(
 		return c.Next()
 	})
 	router.Use(verifyAppSecret(appSecretKey))
+	router.Use(operationsBusinessGuard(operations, authGateway))
 
 	// Health check สำหรับ Docker และระบบเฝ้าระวัง โดยไม่เปิดเผยข้อมูลภายใน
 	router.Get("/health", func(c fiber.Ctx) error {
@@ -149,6 +151,17 @@ func SetupRouter(
 		}
 	}
 
+	operationsHandler := NewOperationsHandler(operations, authGateway)
+	identityLimit := RateLimitMiddleware(NewRateLimiter(5.0/60.0, 5), "ส่งคำขอถี่เกินไป กรุณารอสักครู่")
+	router.Get("/api/identity/status", operationsHandler.Status)
+	router.Post("/api/identity/sessions", identityLimit, operationsHandler.Begin)
+	router.Post("/api/identity/sessions/:id/submit", identityLimit, operationsHandler.Submit)
+	router.Post("/api/identity/sessions/:id/read-card", identityLimit, operationsHandler.ReadCard)
+	router.Post("/api/identity/guardians", identityLimit, operationsHandler.Guardian)
+	router.Post("/api/complaints", identityLimit, operationsHandler.Complaint)
+	router.Get("/api/admin/evidence/:id", operationsHandler.Evidence)
+	router.Get("/api/admin/:module", operationsHandler.Read)
+	router.Post("/api/admin/actions/:action/:target", operationsHandler.Action)
 	return router
 }
 
@@ -253,4 +266,9 @@ func verifyAppSecret(expectedSecret string) fiber.Handler {
 
 		return c.Next()
 	}
+}
+
+// SetupRouter คง constructor เดิมสำหรับบริการที่ยังไม่เปิดใช้งานระบบเจ้าหน้าที่
+func SetupRouter(itemRepo domain.ItemRepository, authGateway domain.AuthGateway, contactRepository domain.ConversationContactRepository, rentalRepository domain.RentalRepository, pushSender domain.PushNotificationSender, aiGateway domain.AIChatbotGateway, appSecretKey string, options ...fiber.Config) *fiber.App {
+	return SetupRouterWithOperations(domain.OperationsOptions{}, itemRepo, authGateway, contactRepository, rentalRepository, pushSender, aiGateway, appSecretKey, options...)
 }
