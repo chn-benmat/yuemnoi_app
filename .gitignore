@@ -1,0 +1,15 @@
+admin/node_modules/
+admin/.next/
+admin/.env*
+!admin/.env.example
+admin/tsconfig.tsbuildinfo
+supabase/.temp/
+ai_service/models/
+ai_service/vendor/
+.qa/
+admin/.setup-token.json
+ai_service/identity-install.log
+ai_service/identity-provision.log
+frontend/identity-analyze.log
+frontend/identity-tests.log
+backend/test-results.log
