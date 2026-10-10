@@ -137,34 +137,20 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 	if len(items) > 0 {
 		var profiles []struct {
 			UserID       string `json:"user_id"`
-			Email        string `json:"email"`
+			DisplayName  string `json:"display_name"`
 			UserImageURL string `json:"user_image_url"`
+			IsVerified   bool   `json:"is_verified"`
 		}
-		_ = r.client.DB.From("profile_tb").Select("user_id,email,user_image_url").ExecuteWithContext(ctx, &profiles)
-		profilesMap := make(map[string]struct {
-			Email        string
-			UserImageURL string
-		})
-		for _, p := range profiles {
-			profilesMap[p.UserID] = struct {
-				Email        string
-				UserImageURL string
-			}{Email: p.Email, UserImageURL: p.UserImageURL}
-		}
-
+		_ = r.client.DB.From("public_profile_v").Select("user_id,display_name,user_image_url,is_verified").ExecuteWithContext(ctx, &profiles)
 		for i := range items {
-			if p, ok := profilesMap[items[i].UserID]; ok {
-				ownerName := p.Email
-				if idx := strings.Index(ownerName, "@"); idx != -1 {
-					ownerName = ownerName[:idx]
+			items[i].OwnerName = "ผู้ใช้งาน"
+			for _, p := range profiles {
+				if p.UserID == items[i].UserID {
+					items[i].OwnerName = p.DisplayName
+					items[i].OwnerAvatarURL = p.UserImageURL
+					items[i].IsVerified = p.IsVerified
+					break
 				}
-				if ownerName == "" {
-					ownerName = "Yuemnoi Verified"
-				}
-				items[i].OwnerName = ownerName
-				items[i].OwnerAvatarURL = p.UserImageURL
-			} else {
-				items[i].OwnerName = "Yuemnoi Verified"
 			}
 		}
 	}
@@ -176,7 +162,7 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domain.Item, error) {
 	var items []domain.Item
 
-	err := r.client.DB.From("item_tb").Select("*").Eq("id", strconv.FormatInt(id, 10)).ExecuteWithContext(ctx, &items)
+	err := r.client.DB.From("item_tb").Select("*").Eq("id", strconv.FormatInt(id, 10)).Eq("moderation_hidden", "false").ExecuteWithContext(ctx, &items)
 	if err != nil {
 		return nil, fmt.Errorf("supabase find by id failed: %w", err)
 	}
@@ -187,24 +173,16 @@ func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domai
 
 	item := &items[0]
 	var profiles []struct {
-		UserID       string `json:"user_id"`
-		Email        string `json:"email"`
+		DisplayName  string `json:"display_name"`
 		UserImageURL string `json:"user_image_url"`
+		IsVerified   bool   `json:"is_verified"`
 	}
-	_ = r.client.DB.From("profile_tb").Select("user_id,email,user_image_url").Eq("user_id", item.UserID).ExecuteWithContext(ctx, &profiles)
+	_ = r.client.DB.From("public_profile_v").Select("display_name,user_image_url,is_verified").Eq("user_id", item.UserID).ExecuteWithContext(ctx, &profiles)
+	item.OwnerName = "ผู้ใช้งาน"
 	if len(profiles) > 0 {
-		p := profiles[0]
-		ownerName := p.Email
-		if idx := strings.Index(ownerName, "@"); idx != -1 {
-			ownerName = ownerName[:idx]
-		}
-		if ownerName == "" {
-			ownerName = "Yuemnoi Verified"
-		}
-		item.OwnerName = ownerName
-		item.OwnerAvatarURL = p.UserImageURL
-	} else {
-		item.OwnerName = "Yuemnoi Verified"
+		item.OwnerName = profiles[0].DisplayName
+		item.OwnerAvatarURL = profiles[0].UserImageURL
+		item.IsVerified = profiles[0].IsVerified
 	}
 
 	return item, nil

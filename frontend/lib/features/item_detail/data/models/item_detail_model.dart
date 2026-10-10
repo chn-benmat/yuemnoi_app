@@ -51,6 +51,7 @@ abstract final class ItemDetailModel {
       userId: ownerId,
       displayName: _fallbackString(item['owner_name'], 'ผู้ใช้งาน Yuemnoi'),
       imageUrl: _string(item['owner_avatar_url']),
+      isVerified: item['is_verified'] == true,
     );
 
     return ItemDetail(
@@ -79,6 +80,7 @@ abstract final class ItemDetailModel {
       userId: userId,
       displayName: name,
       imageUrl: _string(profile?['user_image_url']),
+      isVerified: profile?['is_verified'] == true,
     );
   }
 

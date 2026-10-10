@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/network/auth_session.dart';
+import 'package:frontend/core/services/favorite_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:frontend/features/item_detail/domain/entities/item_detail.dart';
 import 'package:frontend/features/item_detail/domain/repositories/item_detail_repository.dart';
 import 'package:frontend/features/item_detail/domain/usecases/get_item_detail_usecase.dart';
@@ -13,6 +15,10 @@ import 'package:mocktail/mocktail.dart';
 class _MockItemDetailRepository extends Mock implements ItemDetailRepository {}
 
 void main() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    await FavoriteService.instance.init();
+  });
   ItemDetail item({required bool isOwner, List<String> imageUrls = const []}) =>
       ItemDetail(
         id: 7,
@@ -101,7 +107,7 @@ void main() {
 
       // Tap favorite to toggle state
       await tester.tap(find.byIcon(Icons.favorite_border_rounded));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
 
       // Tap report flag to open bottom sheet
@@ -110,6 +116,13 @@ void main() {
 
       expect(find.text('รายงานปัญหาอุปกรณ์นี้'), findsOneWidget);
       expect(find.text('เนื้อหาไม่เหมาะสม / หลอกลวง'), findsOneWidget);
+      await tester.tap(find.text('เนื้อหาไม่เหมาะสม / หลอกลวง'));
+      await tester.pumpAndSettle();
+      expect(find.text('เข้าสู่ระบบเพื่อรายงานปัญหา'), findsOneWidget);
+      expect(
+        find.text('ส่งรายงานปัญหาให้ทีมงานตรวจสอบเรียบร้อยแล้ว'),
+        findsNothing,
+      );
     },
   );
 

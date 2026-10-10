@@ -7,6 +7,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/utils/auth_guard.dart';
 import '../../../../core/navigation/item_deep_link.dart';
@@ -45,8 +47,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _handleFavoriteToggle() async {
-    final isFav =
-        await FavoriteService.instance.toggleFavorite(widget.itemId);
+    final isFav = await FavoriteService.instance.toggleFavorite(widget.itemId);
     if (!mounted) return;
     setState(() => _isFavorite = isFav);
     ScaffoldMessenger.of(context)
@@ -59,8 +60,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           ),
           duration: const Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
   }
@@ -275,7 +277,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   ),
                   onTap: () {
                     Navigator.of(ctx).pop();
-                    _showReportSuccess();
+                    _submitComplaint();
                   },
                 ),
                 ListTile(
@@ -290,7 +292,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   ),
                   onTap: () {
                     Navigator.of(ctx).pop();
-                    _showReportSuccess();
+                    _submitComplaint();
                   },
                 ),
                 ListTile(
@@ -305,7 +307,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   ),
                   onTap: () {
                     Navigator.of(ctx).pop();
-                    _showReportSuccess();
+                    _submitComplaint();
                   },
                 ),
                 ListTile(
@@ -320,7 +322,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   ),
                   onTap: () {
                     Navigator.of(ctx).pop();
-                    _showReportSuccess();
+                    _submitComplaint();
                   },
                 ),
               ],
@@ -331,14 +333,68 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     );
   }
 
-  void _showReportSuccess() {
+  Future<void> _submitComplaint() async {
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบเพื่อรายงานปัญหา',
+      message: 'กรุณาเข้าสู่ระบบก่อนส่งเรื่องให้เจ้าหน้าที่ตรวจสอบ',
+    );
+    if (!authed || !mounted) return;
+    final controller = TextEditingController();
+    final description = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('รายละเอียดปัญหา'),
+        content: TextField(
+          controller: controller,
+          maxLength: 2000,
+          minLines: 3,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            hintText:
+                'อธิบายปัญหาอย่างน้อย 5 ตัวอักษร ไม่ใส่เลขบัตรหรือข้อมูลส่วนตัว',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('ยกเลิก'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.trim().length >= 5) {
+                Navigator.pop(ctx, controller.text.trim());
+              }
+            },
+            child: const Text('ส่งรายงาน'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (description == null || !mounted) return;
+    final api = DioApiClient();
+    String message;
+    try {
+      final response = await api.post(
+        '/api/complaints',
+        headers: {'Authorization': 'Bearer ${AuthSession.accessToken}'},
+        data: {'item_id': widget.itemId, 'description': description},
+      );
+      message = response.statusCode >= 200 && response.statusCode < 300
+          ? 'ส่งรายงานปัญหาให้ทีมงานตรวจสอบเรียบร้อยแล้ว'
+          : response.data is Map && response.data['error'] is String
+          ? response.data['error']
+          : 'ส่งรายงานไม่สำเร็จ กรุณาลองใหม่';
+    } catch (_) {
+      message = 'เชื่อมต่อระบบไม่ได้ กรุณาลองใหม่';
+    } finally {
+      api.close();
+    }
+    if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('ส่งรายงานปัญหาให้ทีมงานตรวจสอบเรียบร้อยแล้ว'),
-        ),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -874,7 +930,7 @@ class _OwnerCard extends StatelessWidget {
             displayName: owner.displayName,
             avatarUrl: owner.imageUrl,
             rating: item.averageRating,
-            isVerified: true,
+            isVerified: owner.isVerified,
             bio: 'สนใจกล้องตัวไหนโปรดติดต่อฉัน',
           ),
         );
@@ -886,63 +942,66 @@ class _OwnerCard extends StatelessWidget {
           color: const Color(0xFFF0F1F2),
           borderRadius: BorderRadius.circular(30),
         ),
-      child: Row(
-        children: [
-          _Avatar(imageUrl: owner.imageUrl, size: 64),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  owner.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF2D2D30),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Text(
-                  'ผู้ปล่อยเช่า',
-                  style: TextStyle(
-                    color: Color(0xFF6B6B70),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (item.reviews.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.all(Radius.circular(18)),
-              ),
-              child: Row(
+        child: Row(
+          children: [
+            _Avatar(imageUrl: owner.imageUrl, size: 64),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.star_rounded,
-                    color: AppColors.primaryColor,
-                    size: 19,
-                  ),
-                  const SizedBox(width: 3),
                   Text(
-                    item.averageRating.toStringAsFixed(1),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                    owner.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF2D2D30),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Text(
+                    'ผู้ปล่อยเช่า',
+                    style: TextStyle(
+                      color: Color(0xFF6B6B70),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
             ),
-        ],
+            if (item.reviews.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 13,
+                  vertical: 8,
+                ),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(Radius.circular(18)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.star_rounded,
+                      color: AppColors.primaryColor,
+                      size: 19,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      item.averageRating.toStringAsFixed(1),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 class _ReviewCard extends StatelessWidget {

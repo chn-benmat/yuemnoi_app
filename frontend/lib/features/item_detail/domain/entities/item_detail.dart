@@ -7,14 +7,16 @@ class ItemOwner extends Equatable {
     required this.userId,
     required this.displayName,
     required this.imageUrl,
+    this.isVerified = false,
   });
 
   final String userId;
   final String displayName;
   final String imageUrl;
+  final bool isVerified;
 
   @override
-  List<Object?> get props => [userId, displayName, imageUrl];
+  List<Object?> get props => [userId, displayName, imageUrl, isVerified];
 }
 
 class ItemReview extends Equatable {

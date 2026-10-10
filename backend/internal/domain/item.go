@@ -23,6 +23,7 @@ type Item struct {
 	Status         string    `json:"status"` // เช่น "pending", "verified", "rejected"
 	Type           string    `json:"type"`   // เช่น "รายวัน", "รายชั่วโมง"
 	OwnerName      string    `json:"owner_name,omitempty"`
+	IsVerified     bool      `json:"is_verified"`
 	OwnerAvatarURL string    `json:"owner_avatar_url,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`

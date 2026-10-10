@@ -62,10 +62,13 @@ func TestItemRepositoryReadsRankedViewInRankPositionOrder(t *testing.T) {
 				{"id":29,"user_id":"owner-a","item_name":"popular","item_image_url":[],"description":"","category":"camera","price":900,"status":"available","type":"รายวัน","rating":4.8,"review_count":12,"paid_booking_count":7},
 				{"id":8,"user_id":"owner-b","item_name":"fresh","item_image_url":[],"description":"","category":"audio","price":500,"status":"available","type":"รายวัน","rating":0,"review_count":0,"paid_booking_count":0}
 			]`))
-		case "/rest/v1/profile_tb":
-			_ = json.NewEncoder(w).Encode([]map[string]string{
-				{"user_id": "owner-a", "email": "alice@example.test", "user_image_url": "avatar-a"},
-				{"user_id": "owner-b", "email": "bob@example.test", "user_image_url": "avatar-b"},
+		case "/rest/v1/public_profile_v":
+			if strings.Contains(r.URL.Query().Get("select"), "email") {
+				t.Error("feed must not request private email")
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"user_id": "owner-a", "display_name": "alice", "user_image_url": "avatar-a", "is_verified": true},
+				{"user_id": "owner-b", "display_name": "bob", "user_image_url": "avatar-b", "is_verified": false},
 			})
 		default:
 			http.NotFound(w, r)
@@ -91,6 +94,9 @@ func TestItemRepositoryReadsRankedViewInRankPositionOrder(t *testing.T) {
 	}
 	if items[0].OwnerName != "alice" || items[1].OwnerName != "bob" {
 		t.Fatalf("expected owner profiles, got %#v", items)
+	}
+	if !items[0].IsVerified || items[1].IsVerified {
+		t.Fatal("expected actual verification flags")
 	}
 }
 

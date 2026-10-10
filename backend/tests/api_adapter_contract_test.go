@@ -81,6 +81,8 @@ func newAPIContractUpstream(t *testing.T, tc apiContractCase, requests chan cont
 			response = rental
 		case "/rest/v1/profile_tb":
 			response = []any{profile}
+		case "/rest/v1/public_profile_v":
+			response = []any{map[string]any{"user_id": "verified-user", "display_name": "Verified name", "user_image_url": "https://example.test/avatar.png", "is_verified": false}}
 		case "/rest/v1/home_feed_ranked_v":
 			response = []any{item}
 		case "/rest/v1/item_tb":
