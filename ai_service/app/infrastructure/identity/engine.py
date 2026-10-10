@@ -79,20 +79,53 @@ class VisionIdentityEngine:
     def read_card(self, card: bytes) -> dict:
         # ส่งผลตัวอักษรและตำแหน่งจาก OCR ให้ backend จัดรูปแบบ ไม่ส่งไปบริการภายนอก
         with self.lock:
-            image = self.decode(card)
-            height, width = image.shape[:2]
+            return self._read_card_image(self.decode(card))
+
+    def _read_card_image(self, image) -> dict:
+        height, width = image.shape[:2]
+        config = self.settings
+
+        def recognize(candidate):
             blocks = []
-            for box, text, confidence in self.reader.readtext(image, detail=1, paragraph=False):
+            readings = self.reader.readtext(
+                candidate, detail=1, paragraph=False,
+                decoder=config.IDENTITY_OCR_DECODER,
+                beamWidth=config.IDENTITY_OCR_BEAM_WIDTH,
+                canvas_size=config.IDENTITY_OCR_CANVAS_SIZE,
+                mag_ratio=config.IDENTITY_OCR_MAG_RATIO,
+                min_size=config.IDENTITY_OCR_MIN_SIZE,
+                add_margin=config.IDENTITY_OCR_MARGIN,
+                width_ths=config.IDENTITY_OCR_WIDTH_THRESHOLD,
+                height_ths=config.IDENTITY_OCR_HEIGHT_THRESHOLD,
+                contrast_ths=config.IDENTITY_OCR_CONTRAST_THRESHOLD,
+            )
+            for box, text, confidence in readings:
                 xs, ys = [float(p[0]) for p in box], [float(p[1]) for p in box]
-                blocks.append({"text":text, "confidence":float(confidence),
-                    "x":min(xs)/width, "y":min(ys)/height,
-                    "width":(max(xs)-min(xs))/width, "height":(max(ys)-min(ys))/height})
-            return {"blocks":blocks}
+                blocks.append({"text": text, "confidence": float(confidence),
+                    "x": min(xs)/width, "y": min(ys)/height,
+                    "width": (max(xs)-min(xs))/width, "height": (max(ys)-min(ys))/height})
+            return blocks
+
+        result = {"blocks": recognize(image)}
+        if config.IDENTITY_OCR_ENHANCE:
+            gray = self.cv.cvtColor(image, self.cv.COLOR_BGR2GRAY)
+            gray = self.cv.normalize(gray, None, 0, 255, self.cv.NORM_MINMAX)
+            grid = config.IDENTITY_OCR_CLAHE_GRID
+            enhanced = self.cv.createCLAHE(
+                clipLimit=config.IDENTITY_OCR_CLAHE_CLIP, tileGridSize=(grid, grid),
+            ).apply(gray)
+            # แยกผลแต่ละรอบไว้ให้ backend ตรวจความขัดแย้ง ไม่ต่อข้อความซ้ำเป็นบรรทัดเดียว
+            result["alternatives"] = [recognize(enhanced)]
+        return result
 
     def analyze(self, card: bytes, selfie: bytes) -> IdentityAnalysis:
         with self.lock:
             card_img,face_img = self.decode(card),self.decode(selfie)
-            text = "\n".join(self.reader.readtext(card_img,detail=0,paragraph=False))
+            reading = self._read_card_image(card_img)
+            # แนบข้อความทั้งสองรอบเพื่อให้เจ้าหน้าที่ตรวจข้อมูลที่อ่านไม่ตรงกัน
+            texts = dict.fromkeys(block["text"] for blocks in
+                [reading["blocks"], *reading.get("alternatives", [])] for block in blocks)
+            text = "\n".join(texts)
             card_faces, selfie_faces = self.faces(card_img),self.faces(face_img)
             warnings=["คะแนนโมเดลยังไม่ได้สอบเทียบกับผู้ใช้จริง ห้ามใช้อนุมัติอัตโนมัติ",
                       "ภาพนิ่งไม่ยืนยันการมีชีวิตหรือความแท้ของบัตร ต้องตรวจโดยเจ้าหน้าที่"]

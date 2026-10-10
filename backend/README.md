@@ -335,6 +335,8 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 
 `POST /api/identity/sessions/:id/read-card` อ่านภาพ `card` ก่อนส่งคำขอเพื่อช่วยกรอกแบบฟอร์ม ตรวจเจ้าของ รอบถ่ายภาพ เวลา และผู้ปกครองก่อนเรียก OCR ภายในระบบ ไม่บันทึกภาพในขั้นตอนนี้ ข้อมูลยังต้องให้ผู้ใช้ตรวจและให้เจ้าหน้าที่อนุมัติ ค่า `IDENTITY_OCR_MIN_CONFIDENCE` เริ่มต้น `0.55`
 
+ผลภายในจาก AI มี `blocks` และ `alternatives` (รายการกล่องของแต่ละรอบ OCR เพิ่ม) โดย API ของแอปยังคืน `fields` และ `requires_confirmation` ตามเดิม ตัวแยกข้อมูลรองรับหัวข้อไทยที่ OCR ทำสระ/วรรณยุกต์หล่น ช่องว่างในหัวข้อหรือชื่อย่อเดือน และวันที่เหนือหัวข้อในคอลัมน์เดียวกัน ไม่รวมวันออกบัตรกับวันหมดอายุเป็นบรรทัดเดียว รวมผลแต่ละรอบเฉพาะค่าที่ไม่ขัดแย้งกัน ตรวจ checksum เลขบัตรและวันที่จริง และคงช่องที่ไม่มั่นใจให้ผู้ใช้กรอกเอง
+
 ตารางภายในแยกเป็น `identity_private` และ `ops_private` โดย Go ยังเรียก RPC ชื่อเดิมใน `public` ด้วย service role ดู [แผนผังฐานข้อมูลและสิทธิ์](../docs/DATABASE_SCHEMAS.md)
 
 `GET /api/identity/status` ส่ง `available` เพื่อบอกสิทธิ์เริ่มยืนยัน โดย `pilot` ยังคงหมายถึงสมาชิกกลุ่มทดลองเท่านั้น `POST /api/admin/actions/settings/identity` รับ `identity_open_to_all` และ/หรือ `enforce_identity` เป็น boolean พร้อม `reason` และคงค่าที่ไม่ได้ส่งมา หากส่งชนิดข้อมูลไม่ถูกต้องจะได้ HTTP 400 พร้อม `code: invalid_settings`

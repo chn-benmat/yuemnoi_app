@@ -39,6 +39,18 @@ Python service ของ **Yuemnoi** ใช้ FastAPI เป็น API ให�
 
 Identity รองรับ `POST /api/identity/read-card` สำหรับอ่าน `card` ก่อนส่งคำขอ คืนเฉพาะข้อความ OCR พร้อม confidence และตำแหน่งให้ Go แปลงเป็นข้อมูลช่วยกรอก ใช้ internal service key และข้อจำกัดภาพ/จำนวนงานพร้อมกัน/เวลาเดียวกับ analyze ไม่เก็บภาพรอบนี้และไม่เรียก Cloud API ดู [ขั้นตอน UX และการเชื่อมต่อ](../docs/IDENTITY_PUBLIC_ROLLOUT.md)
 
+การอ่านบัตรไทยใช้ EasyOCR สองรอบ: ภาพต้นฉบับและภาพ grayscale ที่ขยายช่วงคอนทราสต์พร้อม CLAHE ปรับ magnification และระยะรวมกล่องข้อความสำหรับตัวอักษรเล็ก/สระบนล่าง คืน `blocks` ของรอบแรกและ `alternatives` เป็นรายการกล่องของแต่ละรอบเพิ่ม เพื่อให้ Go รวมเฉพาะค่าที่ไม่ขัดแย้งกัน การส่งคำขอ `analyze` ใช้ OCR ชุดเดียวกัน ตัวเลือกปรับได้ผ่าน `identity.env.example` ตาม [EasyOCR API](https://www.jaided.ai/easyocr/documentation/).
+
+ค่าเริ่มต้นใช้ decoder แบบ greedy: การเปรียบเทียบกับ beam search ในชุดจำลองนี้เติมฟอร์มได้เท่ากัน ขณะที่ beam search ของ EasyOCR ที่ติดตั้งมีคำเตือน numeric overflow จึงเก็บเป็นตัวเลือกให้ทดสอบก่อนเปลี่ยนค่า ค่าเริ่มต้นของ pipeline ใหม่นี้ใช้ประมาณ 15–23 วินาทีต่อภาพในเครื่องที่ทดสอบ (ภาพกว้าง 650–1,000 พิกเซล) ภาพจากกล้องจริงอาจใช้เวลาต่างกัน
+
+วัดผลด้วยภาพจำลองที่ไม่มีข้อมูลบุคคลจริง (ต้องเตรียมโมเดลใน manifest แล้ว):
+
+```powershell
+.venv/Scripts/python.exe -m tests.benchmark_identity_ocr --font ../frontend/assets/fonts/Prompt-Regular.ttf --output ../backend/tests/testdata/identity_ocr_benchmark.json
+```
+
+ไฟล์ผลทดสอบเก็บข้อความจากภาพจำลองเท่านั้น ใช้ตรวจต่อด้วย `go test ./tests -run TestCardReadingWithRealModelSyntheticCaptures -v` จาก backend ห้ามนำบัตรจริงมาแทน fixture ที่เข้า Git คะแนน token ที่อ่านถูกไม่ใช่คะแนนการเติมฟอร์ม: ต้องตรวจ confidence และความขัดแย้งด้วย ชุดจำลองนี้ยังอ่านวันเกิดได้ไม่มั่นใจพอ จึงเว้นช่องไว้ ผลนี้ไม่ใช่การสอบเทียบความแม่นยำกับบัตรจริงหรือภาพจากกล้องมือถือ
+
 ### คำตอบเดินทางอย่างไร
 
 ```mermaid

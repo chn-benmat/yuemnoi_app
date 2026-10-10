@@ -79,7 +79,9 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
       if (matches.isEmpty) throw CameraException('NoCamera', '');
       candidate = CameraController(
         matches.first,
-        ResolutionPreset.high,
+        widget.kind == IdentityCaptureKind.card
+            ? ResolutionPreset.veryHigh
+            : ResolutionPreset.high,
         enableAudio: false,
       );
       await candidate.initialize();
