@@ -70,10 +70,7 @@ func main() {
 		if decodeErr != nil || len(hmacKey) < 32 {
 			log.Fatal("IDENTITY_HMAC_KEY must be base64 of at least 32 random bytes")
 		}
-		if cfg.GetPrimaryInternalServiceKey() == "" {
-			log.Fatal("INTERNAL_SERVICE_KEY is required for identity")
-		}
-		ops = domain.OperationsOptions{Store: supabase.NewOperationsRepository(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey), Analyzer: aiservice.NewIdentityClient(cfg.AIServiceURL, cfg.GetPrimaryInternalServiceKey(), cfg.AIServiceTimeout), EncryptionKey: encryption, HMACKey: hmacKey, CleanupInterval: cfg.IdentityCleanupInterval, OCRMinConfidence: cfg.IdentityOCRMinConfidence}
+		ops = domain.OperationsOptions{Store: supabase.NewOperationsRepository(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey), EncryptionKey: encryption, HMACKey: hmacKey, CleanupInterval: cfg.IdentityCleanupInterval}
 	}
 	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
 	defer stopCleanup()

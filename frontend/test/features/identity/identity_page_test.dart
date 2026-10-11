@@ -1,23 +1,28 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/identity/domain/identity_repository.dart';
 import 'package:frontend/features/identity/presentation/identity_cubit.dart';
 import 'package:frontend/features/identity/presentation/identity_page.dart';
+import 'package:frontend/features/identity/presentation/widgets/identity_camera_page.dart';
 
 class RolloutRepository implements IdentityRepository {
   RolloutRepository({Map<String, dynamic>? data})
     : data = data ?? {'available': true};
   Map<String, dynamic> data;
-  int begins = 0, reads = 0, submits = 0;
-  bool failSubmit = false, failRead = false;
+  int begins = 0, submits = 0;
+  String? beganWithBirthDate;
+  bool failSubmit = false, failBegin = false;
+  Map<String, String>? submittedFields;
   @override
   Future<IdentityStatus> status() async => IdentityStatus(data);
   @override
-  Future<Map<String, dynamic>> begin(bool minor) async {
+  Future<Map<String, dynamic>> begin(String birthDate) async {
     begins++;
+    beganWithBirthDate = birthDate;
+    if (failBegin) throw const IdentityFailure('เริ่มคำขอไม่สำเร็จ');
     final session = {
       'id': 'test-session',
       'capture_until': DateTime.now()
@@ -33,18 +38,6 @@ class RolloutRepository implements IdentityRepository {
   }
 
   @override
-  Future<Map<String, String>> readCard(String session, Uint8List card) async {
-    reads++;
-    if (failRead) throw const IdentityFailure('OCR unavailable');
-    return {
-      'legal_name': 'ทดสอบ ระบบ',
-      'citizen_id': '0000000000001',
-      'birth_date': '2000-01-01',
-      'expires_on': '2035-01-01',
-    };
-  }
-
-  @override
   Future<void> submit(
     String session,
     Map<String, String> fields,
@@ -52,6 +45,7 @@ class RolloutRepository implements IdentityRepository {
     Uint8List selfie,
   ) async {
     submits++;
+    submittedFields = Map.of(fields);
     if (failSubmit) throw const IdentityFailure('ส่งไม่สำเร็จ ข้อมูลยังอยู่');
     data = {
       ...data,
@@ -60,12 +54,6 @@ class RolloutRepository implements IdentityRepository {
   }
 
   @override
-  Future<void> guardian(
-    String child,
-    String relationship,
-    Uint8List authority,
-  ) async {}
-  @override
   void close() {}
 }
 
@@ -73,6 +61,8 @@ Future<RolloutRepository> showPage(
   WidgetTester tester, {
   RolloutRepository? repository,
   double scale = 1,
+  IdentityCapture? capture,
+  bool acceptConsent = true,
 }) async {
   final repo = repository ?? RolloutRepository();
   final cubit = IdentityCubit(repo);
@@ -89,14 +79,20 @@ Future<RolloutRepository> showPage(
       home: BlocProvider.value(
         value: cubit,
         child: IdentityPage(
-          capture: (context, kind) async => base64Decode(
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jL1sAAAAASUVORK5CYII=',
-          ),
+          capture:
+              capture ??
+              (context, kind) async => base64Decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY7h8+fJ/AAhvA3nL6ibXAAAAAElFTkSuQmCC',
+              ),
         ),
       ),
     ),
   );
   await tester.pumpAndSettle();
+  if (acceptConsent &&
+      find.text('ยินยอมและดำเนินการต่อ').evaluate().isNotEmpty) {
+    await tapText(tester, 'ยินยอมและดำเนินการต่อ');
+  }
   return repo;
 }
 
@@ -107,36 +103,227 @@ Future<void> tapText(WidgetTester tester, String text) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> selectAge(WidgetTester tester, String age) async {
-  await tester.ensureVisible(find.byType(DropdownButtonFormField<bool>));
-  await tester.tap(find.byType(DropdownButtonFormField<bool>));
+Future<void> selectBirthDate(
+  WidgetTester tester, {
+  int year = 2000,
+  int month = 1,
+  int day = 1,
+}) async {
+  final field = find.byKey(const ValueKey('pick_birth_date'));
+  await tester.ensureVisible(field);
+  await tester.tap(field);
   await tester.pumpAndSettle();
-  await tester.tap(find.text(age).last);
-  await tester.pumpAndSettle();
+  for (final change in {2: year, 1: month, 0: day}.entries) {
+    tester
+        .widget<DropdownButtonFormField<int>>(
+          find.byType(DropdownButtonFormField<int>).at(change.key),
+        )
+        .onChanged!(change.value);
+    await tester.pumpAndSettle();
+  }
+  await tapText(tester, 'ใช้วันที่นี้');
 }
 
-Future<void> begin(WidgetTester tester) async {
-  await selectAge(tester, 'อายุ 20 ปีขึ้นไป');
-  await tester.ensureVisible(find.byType(CheckboxListTile));
-  await tester.tap(find.byType(CheckboxListTile));
-  await tester.pumpAndSettle();
-  await tapText(tester, 'ยินยอมและเริ่มยืนยัน');
+Future<void> begin(WidgetTester tester, {int birthYear = 2000}) async {
+  if (find.text('ยินยอมและดำเนินการต่อ').evaluate().isNotEmpty) {
+    await tapText(tester, 'ยินยอมและดำเนินการต่อ');
+  }
+  await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+  await selectBirthDate(tester, year: birthYear);
 }
 
 Future<void> photos(WidgetTester tester) async {
-  await tapText(tester, 'ถ่ายบัตรประชาชน');
-  await tapText(tester, 'ถัดไป: ถ่ายใบหน้า');
-  await tapText(tester, 'ถ่ายใบหน้า');
-  await tapText(tester, 'ถัดไป: ตรวจข้อมูล');
+  expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
+}
+
+Future<void> confirm(WidgetTester tester) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
+  final tile = find.byKey(const ValueKey('identity_confirmation'));
+  await tester.ensureVisible(tile);
+  if (!tester.widget<CheckboxListTile>(tile).value!) {
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+  }
+  expect(tester.widget<CheckboxListTile>(tile).value, true);
+}
+
+Uint8List testPhoto() => base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY7h8+fJ/AAhvA3nL6ibXAAAAAElFTkSuQmCC',
+);
+
+Future<void> fillAddress(WidgetTester tester) async {
+  for (final entry in {
+    'address_detail': '99/1 หมู่ 2 ถนนทดสอบ',
+    'postal_code': '10200',
+    'province': 'กรุงเทพมหานคร',
+    'district': 'พระนคร',
+    'subdistrict': 'บวรนิเวศ',
+  }.entries) {
+    final field = find.byKey(ValueKey(entry.key));
+    await tester.ensureVisible(field);
+    await tester.enterText(field, entry.value);
+  }
+  await tester.pumpAndSettle();
+}
+
+Future<void> fillIdentity(
+  WidgetTester tester, {
+  String prefix = 'นาย',
+  int birthYear = 2000,
+  bool includeBirthDate = true,
+}) async {
+  await tapText(tester, prefix);
+  for (final entry in {
+    'first_name': 'ทดสอบ',
+    'last_name': 'ระบบ',
+    'citizen_id': '0000000000001',
+  }.entries) {
+    final field = find.byKey(ValueKey(entry.key));
+    await tester.ensureVisible(field);
+    await tester.enterText(field, entry.value);
+  }
+  if (includeBirthDate) await selectBirthDate(tester, year: birthYear);
+  await fillAddress(tester);
 }
 
 void main() {
-  testWidgets('ตัวเลือกวันที่ปรับวันให้ตรงเดือนและปีที่เลือก', (tester) async {
+  testWidgets('กล้องถูกปฏิเสธสิทธิ์มีปุ่มตั้งค่าและลองใหม่', (tester) async {
+    const camera = MethodChannel('plugins.flutter.io/camera');
+    const permission = MethodChannel(
+      'flutter.baseflow.com/permissions/methods',
+    );
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(camera, (call) async {
+      throw PlatformException(code: 'CameraAccessDenied');
+    });
+    messenger.setMockMethodCallHandler(permission, (call) async => false);
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(camera, null);
+      messenger.setMockMethodCallHandler(permission, null);
+    });
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: IdentityCameraPage(kind: IdentityCaptureKind.card),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('บัตรประชาชน · รูปที่ 1 จาก 2'), findsOneWidget);
+    expect(find.text('ลองเปิดกล้องอีกครั้ง'), findsOneWidget);
+    await tapText(tester, 'เปิดการตั้งค่ากล้อง');
+    expect(find.textContaining('เปิดตั้งค่าไม่ได้'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('เริ่มจากฟอร์มถ่ายบัตรต่อใบหน้าแล้วกลับฟอร์มเดิม ไม่มี OCR', (
+    tester,
+  ) async {
+    final captures = <IdentityCaptureKind>[];
+    final repo = await showPage(
+      tester,
+      capture: (context, kind) async {
+        captures.add(kind);
+        return testPhoto();
+      },
+    );
+    await begin(tester);
+    expect(repo.begins, 0);
+    expect(find.text('1 ม.ค. 2543'), findsOneWidget);
+    expect(find.text('อายุครบ 20 ปีหรือยัง?'), findsNothing);
+    expect(captures, [IdentityCaptureKind.card, IdentityCaptureKind.selfie]);
+    expect(find.text('ขั้นตอน 3 / 3'), findsNothing);
+    expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
+    expect(find.text('ตรวจสรุปก่อนส่ง'), findsNothing);
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const ValueKey('first_name')))
+          .controller!
+          .text,
+      isEmpty,
+    );
+    expect(find.text('ลองอ่านข้อมูลอีกครั้ง'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('ยกเลิกถ่ายใบหน้าแล้วทำต่อได้โดยไม่ถ่ายบัตรซ้ำ', (tester) async {
+    final captures = <IdentityCaptureKind>[];
+    var cancelFace = true;
+    await showPage(
+      tester,
+      capture: (context, kind) async {
+        captures.add(kind);
+        if (kind == IdentityCaptureKind.selfie && cancelFace) return null;
+        return testPhoto();
+      },
+    );
+    await begin(tester);
+    expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+    cancelFace = false;
+    await tapText(tester, 'ถ่ายใบหน้า');
+    expect(captures, [
+      IdentityCaptureKind.card,
+      IdentityCaptureKind.selfie,
+      IdentityCaptureKind.selfie,
+    ]);
+    expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('ยกเลิกถ่ายบัตรไม่เปิดกล้องหน้าและกลับมาถ่ายต่อได้', (
+    tester,
+  ) async {
+    final captures = <IdentityCaptureKind>[];
+    var cancelled = true;
+    await showPage(
+      tester,
+      capture: (context, kind) async {
+        captures.add(kind);
+        return cancelled ? null : testPhoto();
+      },
+    );
+    await begin(tester);
+    expect(captures, [IdentityCaptureKind.card]);
+    expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
+    cancelled = false;
+    await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+    expect(captures, [
+      IdentityCaptureKind.card,
+      IdentityCaptureKind.card,
+      IdentityCaptureKind.selfie,
+    ]);
+    expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('กล้องผิดพลาดแสดงทางทำต่อโดยไม่เริ่ม session ใหม่', (
+    tester,
+  ) async {
+    var fail = true;
+    final repo = await showPage(
+      tester,
+      capture: (context, kind) async {
+        if (fail) throw Exception('camera');
+        return testPhoto();
+      },
+    );
+    await begin(tester);
+    expect(find.textContaining('เปิดกล้องไม่สำเร็จ'), findsOneWidget);
+    fail = false;
+    await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+    expect(repo.begins, 0);
+    expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('วันเกิดหลังถ่ายภาพปรับวันให้ตรงเดือนและปีที่เลือก', (
+    tester,
+  ) async {
     await showPage(tester);
     await begin(tester);
-    await photos(tester);
-    await tester.ensureVisible(find.byType(OutlinedButton).first);
-    await tester.tap(find.byType(OutlinedButton).first);
+    await tester.ensureVisible(find.byKey(const ValueKey('pick_birth_date')));
+    await tester.tap(find.byKey(const ValueKey('pick_birth_date')));
     await tester.pumpAndSettle();
     tester
         .widget<DropdownButtonFormField<int>>(
@@ -169,43 +356,410 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('บัญชีทั่วไปเริ่มได้เมื่อเลือกอายุและยินยอมเท่านั้น', (
+
+  testWidgets('เปิดฟอร์มทันทีพร้อมป๊อปอัพและยินยอมแล้วไม่เปิดกล้อง', (
     tester,
   ) async {
-    final repo = await showPage(tester);
-    final button = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'ยินยอมและเริ่มยืนยัน'),
+    final captures = <IdentityCaptureKind>[];
+    final repo = await showPage(
+      tester,
+      acceptConsent: false,
+      capture: (context, kind) async {
+        captures.add(kind);
+        return testPhoto();
+      },
     );
-    expect(button.onPressed, isNull);
-    await begin(tester);
-    expect(repo.begins, 1);
-    expect(find.text('เริ่มจากบัตรประชาชน'), findsOneWidget);
-    expect(find.textContaining('ขั้นตอน 1 / 4'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox());
-  });
-  testWidgets('ผู้เยาว์ไม่มีผู้ปกครองยังไม่เริ่มเก็บภาพ', (tester) async {
-    final repo = await showPage(tester);
-    await selectAge(tester, 'อายุต่ำกว่า 20 ปี');
     expect(
-      find.textContaining('ระหว่างนี้ยังไม่เก็บภาพของคุณ'),
+      find.byKey(const ValueKey('identity_consent_dialog')),
       findsOneWidget,
     );
-    expect(find.text('คัดลอกรหัสให้ผู้ปกครอง'), findsOneWidget);
-    await tester.ensureVisible(find.byType(CheckboxListTile));
-    await tester.tap(find.byType(CheckboxListTile));
-    await tester.pumpAndSettle();
     expect(
-      tester
-          .widget<ElevatedButton>(
-            find.widgetWithText(ElevatedButton, 'ยินยอมและเริ่มยืนยัน'),
-          )
-          .onPressed,
-      isNull,
+      find.textContaining('เพื่อให้เจ้าหน้าที่ที่ได้รับสิทธิ์ตรวจสอบ'),
+      findsOneWidget,
     );
+    expect(find.text('ยืนยันตัวตนให้พร้อมปล่อยเช่า'), findsNothing);
+    expect(find.text('อายุครบ 20 ปีหรือยัง?'), findsNothing);
+    expect(repo.begins, 0);
+    expect(captures, isEmpty);
+    await tapText(tester, 'ยินยอมและดำเนินการต่อ');
+    expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pick_birth_date')), findsOneWidget);
+    expect(repo.begins, 0);
+    expect(captures, isEmpty);
+    await tester.tap(find.byTooltip('โหลดสถานะใหม่'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('identity_consent_dialog')), findsNothing);
+    await tapText(tester, 'เงื่อนไขการใช้ข้อมูล');
+    expect(find.text('เข้าใจแล้ว'), findsOneWidget);
+    await tapText(tester, 'เข้าใจแล้ว');
     expect(repo.begins, 0);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('ปิด public availability ยังจำกัดบัญชีทั่วไป', (tester) async {
+
+  testWidgets('ปิดป๊อปอัพข้ามความยินยอมไม่ได้และไว้ก่อนกลับหน้าบัญชี', (
+    tester,
+  ) async {
+    var captures = 0;
+    final repo = RolloutRepository();
+    final cubit = IdentityCubit(repo);
+    addTearDown(cubit.close);
+    await cubit.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => BlocProvider.value(
+                    value: cubit,
+                    child: IdentityPage(
+                      capture: (context, kind) async {
+                        captures++;
+                        return testPhoto();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              child: const Text('เปิดจากหน้าบัญชี'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tapText(tester, 'เปิดจากหน้าบัญชี');
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('identity_consent_dialog')),
+      findsOneWidget,
+    );
+    await tapText(tester, 'ไว้ก่อน');
+    expect(find.text('เปิดจากหน้าบัญชี'), findsOneWidget);
+    expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsNothing);
+    expect(repo.begins, 0);
+    expect(captures, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('กรอกก่อนถ่ายได้โดยยังไม่เริ่มคำขอและไม่ล้างช่องกรอก', (
+    tester,
+  ) async {
+    final repo = await showPage(tester);
+    await fillIdentity(tester);
+    await confirm(tester);
+    expect(repo.begins, 0);
+    await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+    expect(repo.begins, 0);
+    expect(find.text('ทดสอบ'), findsOneWidget);
+    expect(find.text('10200'), findsOneWidget);
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const ValueKey('identity_confirmation')),
+          )
+          .value,
+      false,
+    );
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.begins, 1);
+    expect(repo.beganWithBirthDate, '2000-01-01');
+    expect(repo.submits, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('ถ่ายต่อเนื่องและถ่ายใหม่จากช่องภาพได้ก่อนกรอกวันเกิด', (
+    tester,
+  ) async {
+    final captures = <IdentityCaptureKind>[];
+    final repo = await showPage(
+      tester,
+      capture: (context, kind) async {
+        captures.add(kind);
+        return testPhoto();
+      },
+    );
+    await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+    expect(captures, [IdentityCaptureKind.card, IdentityCaptureKind.selfie]);
+    expect(find.text('กรุณาเลือกวันที่'), findsNothing);
+    for (final tile in ['card_photo', 'selfie_photo']) {
+      final capture = find.descendant(
+        of: find.byKey(ValueKey(tile)),
+        matching: find.byType(TextButton),
+      );
+      await tester.ensureVisible(capture);
+      await tester.tap(capture);
+      await tester.pumpAndSettle();
+    }
+    expect(captures, [
+      IdentityCaptureKind.card,
+      IdentityCaptureKind.selfie,
+      IdentityCaptureKind.card,
+      IdentityCaptureKind.selfie,
+    ]);
+    expect(repo.begins, 0);
+    expect(repo.submits, 0);
+    expect(find.byType(Image), findsNWidgets(2));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('กรอกวันเกิดหลังถ่ายภาพแล้วเริ่มและส่งคำขอในครั้งเดียว', (
+    tester,
+  ) async {
+    final repo = await showPage(tester);
+    await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+    await fillIdentity(tester);
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.begins, 1);
+    expect(repo.beganWithBirthDate, '2000-01-01');
+    expect(repo.submits, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('ถ่ายภาพก่อนได้แต่ต้องกรอกวันเกิดให้ครบเมื่อส่ง', (tester) async {
+    final repo = await showPage(tester);
+    await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+    await fillIdentity(tester, includeBirthDate: false);
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(find.text('กรุณาเลือกวันที่'), findsOneWidget);
+    expect(repo.begins, 0);
+    expect(repo.submits, 0);
+    expect(find.byType(Image), findsNWidgets(2));
+    await selectBirthDate(tester);
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.begins, 1);
+    expect(repo.submits, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  for (final age in [0, 5, 13, 19, 20, 80]) {
+    testWidgets('อายุ $age ยืนยันตัวตนได้โดยไม่ต้องเชื่อมผู้ปกครอง', (
+      tester,
+    ) async {
+      final repo = await showPage(
+        tester,
+        repository: RolloutRepository(
+          data: {
+            'available': true,
+            'control': {'is_minor': true, 'suspended': false},
+          },
+        ),
+      );
+      final year = DateTime.now().year - age;
+      await fillIdentity(tester, birthYear: year);
+      expect(find.text('คัดลอกรหัสให้ผู้ปกครอง'), findsNothing);
+      await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+      await confirm(tester);
+      await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+      expect(repo.begins, 1);
+      expect(repo.submits, 1);
+      expect(repo.submittedFields!['birth_date'], '$year-01-01');
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  testWidgets('ผู้เยาว์ส่งคำขอได้โดยไม่มีข้อมูลผู้ปกครอง', (tester) async {
+    final year = DateTime.now().year - 10;
+    final repo = await showPage(
+      tester,
+      repository: RolloutRepository(data: {'available': true}),
+    );
+    await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+    expect(repo.begins, 0);
+    await fillIdentity(tester, birthYear: year);
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.begins, 1);
+    expect(repo.beganWithBirthDate, '$year-01-01');
+    expect(repo.submits, 1);
+    expect(repo.submittedFields!['birth_date'], '$year-01-01');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('แก้วันเกิดเก็บภาพและใช้คำขอเดิมเมื่อส่งอีกครั้ง', (
+    tester,
+  ) async {
+    final repo = await showPage(
+      tester,
+      repository: RolloutRepository(data: {'available': true})
+        ..failSubmit = true,
+    );
+    await begin(tester);
+    await fillIdentity(tester);
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.begins, 1);
+    final year = DateTime.now().year - 10;
+    await selectBirthDate(tester, year: year);
+    expect(find.byType(Image), findsNWidgets(2));
+    expect(find.text('ทดสอบ'), findsOneWidget);
+    expect(find.text('10200'), findsOneWidget);
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const ValueKey('identity_confirmation')),
+          )
+          .value,
+      false,
+    );
+    repo.failSubmit = false;
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.begins, 1);
+    expect(repo.submits, 2);
+    expect(repo.submittedFields!['birth_date'], '$year-01-01');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('วันเกิดอนาคตยังเลือกใช้ไม่ได้', (tester) async {
+    final now = DateTime.now().toUtc();
+    final future = DateTime(now.year, 12, 31);
+    await showPage(tester);
+    await begin(tester);
+    await tapText(tester, '1 ม.ค. 2543');
+    for (final change in {
+      2: future.year,
+      1: future.month,
+      0: future.day,
+    }.entries) {
+      tester
+          .widget<DropdownButtonFormField<int>>(
+            find.byType(DropdownButtonFormField<int>).at(change.key),
+          )
+          .onChanged!(change.value);
+      await tester.pumpAndSettle();
+    }
+    final years = tester.widget<DropdownButton<int>>(
+      find.descendant(
+        of: find.byType(DropdownButtonFormField<int>).at(2),
+        matching: find.byType(DropdownButton<int>),
+      ),
+    );
+    expect(years.items!.any((item) => item.value! > now.year), false);
+    if (future.isAfter(DateUtils.dateOnly(now))) {
+      expect(
+        tester
+            .widget<ElevatedButton>(
+              find.widgetWithText(ElevatedButton, 'ใช้วันที่นี้'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(find.textContaining('ไม่อยู่ในอนาคต'), findsOneWidget);
+    }
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('backend ไม่ให้เริ่มคำขอไม่อัปโหลดและเก็บภาพกับข้อมูลให้ส่งซ้ำ', (
+    tester,
+  ) async {
+    final captures = <IdentityCaptureKind>[];
+    final repo = RolloutRepository()..failBegin = true;
+    await showPage(
+      tester,
+      repository: repo,
+      capture: (context, kind) async {
+        captures.add(kind);
+        return testPhoto();
+      },
+    );
+    await fillIdentity(tester);
+    await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+    expect(repo.begins, 0);
+    expect(captures, [IdentityCaptureKind.card, IdentityCaptureKind.selfie]);
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.begins, 1);
+    expect(repo.submits, 0);
+    expect(find.byType(Image), findsNWidgets(2));
+    expect(find.text('1 ม.ค. 2543'), findsOneWidget);
+    expect(find.text('ทดสอบ'), findsOneWidget);
+    expect(find.text('เริ่มคำขอไม่สำเร็จ'), findsOneWidget);
+    repo.failBegin = false;
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.begins, 2);
+    expect(captures, [IdentityCaptureKind.card, IdentityCaptureKind.selfie]);
+    expect(repo.submittedFields!['postal_code'], '10200');
+    expect(repo.submits, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  for (final knownAge in [true, false]) {
+    testWidgets(
+      'กลับเข้ารอบเดิมถ่ายก่อนได้โดยไม่สนใจข้อมูลช่วงอายุเดิม $knownAge ตอนส่ง',
+      (tester) async {
+        final captures = <IdentityCaptureKind>[];
+        final repo = await showPage(
+          tester,
+          repository: RolloutRepository(
+            data: {
+              'available': true,
+              'request': {
+                'id': 'test-session',
+                'status': 'capture',
+                if (knownAge) 'is_minor': false,
+                'capture_until': DateTime.now()
+                    .add(const Duration(minutes: 15))
+                    .toUtc()
+                    .toIso8601String(),
+              },
+            },
+          ),
+          capture: (context, kind) async {
+            captures.add(kind);
+            return testPhoto();
+          },
+        );
+        expect(find.byKey(const ValueKey('pick_birth_date')), findsOneWidget);
+        expect(find.text('อายุครบ 20 ปีหรือยัง?'), findsNothing);
+        await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+        expect(captures, [
+          IdentityCaptureKind.card,
+          IdentityCaptureKind.selfie,
+        ]);
+        expect(repo.begins, 0);
+        await fillIdentity(tester);
+        await confirm(tester);
+        await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+        expect(repo.begins, 0);
+        expect(repo.submits, 1);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+
+  testWidgets(
+    'แก้วันเกิดในหน้าตรวจใช้ค่าใหม่และต้องยืนยันความถูกต้องอีกครั้ง',
+    (tester) async {
+      final repo = await showPage(tester);
+      await begin(tester);
+      await fillIdentity(tester);
+      await confirm(tester);
+      await selectBirthDate(tester, year: 2001, month: 2, day: 3);
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('identity_confirmation')),
+            )
+            .value,
+        false,
+      );
+      await confirm(tester);
+      await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+      expect(repo.submittedFields!['birth_date'], '2001-02-03');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets('ปิด availability ยังจำกัดบัญชีทั่วไป', (tester) async {
     await showPage(
       tester,
       repository: RolloutRepository(data: {'available': false}),
@@ -214,66 +768,213 @@ void main() {
     expect(find.text('ยินยอมและเริ่มยืนยัน'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets(
-    'OCR เติมแบบฟอร์ม ย้อนกลับและ refresh ไม่ล้าง แล้วส่งเข้ารอตรวจ',
-    (tester) async {
-      final repo = await showPage(tester);
-      await begin(tester);
-      await photos(tester);
-      expect(repo.reads, 1);
-      expect(find.text('ทดสอบ ระบบ'), findsOneWidget);
-      await tester.enterText(find.byType(TextFormField).first, 'แก้ไข ชื่อ');
-      await tapText(tester, 'ตรวจสรุปก่อนส่ง');
-      expect(find.text('แก้ไข ชื่อ'), findsOneWidget);
-      expect(
-        tester
-            .widget<ElevatedButton>(
-              find.widgetWithText(ElevatedButton, 'ส่งคำขอยืนยันตัวตน'),
-            )
-            .onPressed,
-        isNull,
-      );
-      await tapText(tester, 'แก้ไขข้อมูล');
-      expect(find.text('แก้ไข ชื่อ'), findsOneWidget);
-      await tester.tap(find.byTooltip('โหลดสถานะใหม่'));
-      await tester.pumpAndSettle();
-      expect(find.text('แก้ไข ชื่อ'), findsOneWidget);
-      expect(find.text('ตรวจข้อมูลให้ตรงบัตร'), findsOneWidget);
-      expect(repo.submits, 0);
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
-  testWidgets('ส่งล้มเหลวยังเก็บรูปและชื่อที่กรอกเพื่อส่งซ้ำ', (tester) async {
+
+  testWidgets('ย้อนกลับและโหลดสถานะไม่ล้างข้อมูลหรือรูป', (tester) async {
+    final repo = await showPage(tester);
+    await begin(tester);
+    await fillIdentity(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('first_name')));
+    await tester.enterText(find.byKey(const ValueKey('first_name')), 'แก้ไข');
+    await tester.tap(find.byTooltip('ย้อนกลับ'));
+    await tester.pumpAndSettle();
+    expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
+    await tapText(tester, 'ทำต่อ');
+    await tester.tap(find.byTooltip('โหลดสถานะใหม่'));
+    await tester.pumpAndSettle();
+    expect(find.text('แก้ไข'), findsOneWidget);
+    expect(find.text('10200'), findsOneWidget);
+    expect(find.byType(Image), findsNWidgets(2));
+    expect(repo.submits, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('ถ่ายบัตรใหม่จากหน้าข้อมูลไม่ล้างช่องกรอกและต้องยืนยันใหม่', (
+    tester,
+  ) async {
+    final captures = <IdentityCaptureKind>[];
+    await showPage(
+      tester,
+      capture: (context, kind) async {
+        captures.add(kind);
+        return testPhoto();
+      },
+    );
+    await begin(tester);
+    await fillIdentity(tester);
+    await confirm(tester);
+    final retake = find.descendant(
+      of: find.byKey(const ValueKey('card_photo')),
+      matching: find.byType(TextButton),
+    );
+    await tester.ensureVisible(retake);
+    await tester.tap(retake);
+    await tester.pumpAndSettle();
+    expect(captures.last, IdentityCaptureKind.card);
+    expect(captures.length, 3);
+    expect(find.text('ทดสอบ'), findsOneWidget);
+    expect(find.text('10200'), findsOneWidget);
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const ValueKey('identity_confirmation')),
+          )
+          .value,
+      false,
+    );
+    expect(
+      tester
+          .widget<ElevatedButton>(
+            find.widgetWithText(ElevatedButton, 'ส่งคำขอยืนยันตัวตน'),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('แก้ข้อมูลหลังยืนยันแล้วต้องยืนยันความถูกต้องใหม่', (
+    tester,
+  ) async {
+    await showPage(tester);
+    await begin(tester);
+    await fillIdentity(tester);
+    await confirm(tester);
+    final field = find.byKey(const ValueKey('first_name'));
+    await tester.ensureVisible(field);
+    await tester.enterText(field, 'แก้ไข');
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const ValueKey('identity_confirmation')),
+          )
+          .value,
+      false,
+    );
+    expect(
+      tester
+          .widget<ElevatedButton>(
+            find.widgetWithText(ElevatedButton, 'ส่งคำขอยืนยันตัวตน'),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('ส่งล้มเหลวเก็บข้อมูลและรูปเพื่อส่งซ้ำด้วย contract เดิม', (
+    tester,
+  ) async {
     final repo = RolloutRepository()..failSubmit = true;
     await showPage(tester, repository: repo);
     await begin(tester);
-    await photos(tester);
-    await tapText(tester, 'ตรวจสรุปก่อนส่ง');
-    await tester.ensureVisible(find.byType(CheckboxListTile));
-    await tester.tap(find.byType(CheckboxListTile));
-    await tester.pumpAndSettle();
+    await fillIdentity(tester);
+    await confirm(tester);
     await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
     expect(repo.submits, 1);
-    expect(find.text('ทดสอบ ระบบ'), findsOneWidget);
+    expect(find.text('ทดสอบ'), findsOneWidget);
+    expect(find.text('99/1 หมู่ 2 ถนนทดสอบ'), findsOneWidget);
     expect(find.textContaining('ส่งไม่สำเร็จ'), findsOneWidget);
     expect(find.byType(Image), findsNWidgets(2));
     repo.failSubmit = false;
     await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
     expect(repo.submits, 2);
+    expect(repo.submittedFields, {
+      'name_prefix': 'นาย',
+      'legal_name': 'นาย ทดสอบ ระบบ',
+      'first_name': 'ทดสอบ',
+      'last_name': 'ระบบ',
+      'citizen_id': '0000000000001',
+      'birth_date': '2000-01-01',
+      'address_detail': '99/1 หมู่ 2 ถนนทดสอบ',
+      'postal_code': '10200',
+      'province': 'กรุงเทพมหานคร',
+      'district': 'พระนคร',
+      'subdistrict': 'บวรนิเวศ',
+    });
     expect(find.text('รับคำขอของคุณแล้ว'), findsOneWidget);
     expect(find.byType(Image), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('OCR ล้มเหลวกรอกเองได้และแสดง validation ชัดเจน', (tester) async {
-    await showPage(tester, repository: RolloutRepository()..failRead = true);
+
+  testWidgets('ข้อมูลอื่นยังว่างไม่ส่งและเลื่อนไปข้อผิดพลาดแรก', (
+    tester,
+  ) async {
+    final repo = await showPage(tester);
     await begin(tester);
-    await photos(tester);
-    await tapText(tester, 'ตรวจสรุปก่อนส่ง');
-    expect(find.text('กรุณากรอกข้อมูลช่องนี้'), findsOneWidget);
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.submits, 0);
+    expect(find.text('กรุณาเลือกคำนำหน้าชื่อ'), findsOneWidget);
+    expect(find.text('กรุณากรอกข้อมูลช่องนี้'), findsNWidgets(6));
+    expect(find.text('กรุณากรอกรหัสไปรษณีย์ 5 หลักให้ถูกต้อง'), findsOneWidget);
     expect(find.text('กรอกเลขบัตร 13 หลักให้ครบ'), findsOneWidget);
-    expect(find.text('กรุณาเลือกวันที่'), findsNWidgets(2));
+    expect(find.text('กรุณาเลือกวันที่'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('กรุณาเลือกคำนำหน้าชื่อ')).dy,
+      lessThan(400),
+    );
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('รหัสไปรษณีย์รับตัวเลขห้าหลักและตรวจข้อมูลก่อนส่ง', (
+    tester,
+  ) async {
+    final repo = await showPage(tester);
+    await begin(tester);
+    await fillIdentity(tester);
+    final postal = find.byKey(const ValueKey('postal_code'));
+    await tester.ensureVisible(postal);
+    await tester.enterText(postal, '1a020056');
+    expect(tester.widget<TextFormField>(postal).controller!.text, '10200');
+    await tester.enterText(postal, '1020');
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.submits, 0);
+    expect(find.text('กรุณากรอกรหัสไปรษณีย์ 5 หลักให้ถูกต้อง'), findsOneWidget);
+    await tester.ensureVisible(postal);
+    await tester.enterText(postal, '10200');
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.submits, 1);
+    expect(repo.submittedFields, isNot(contains('expires_on')));
+    expect(repo.submittedFields, isNot(contains('lifetime')));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  for (final prefix in ['นาย', 'นางสาว', 'นาง']) {
+    testWidgets('เลือกคำนำหน้า $prefix ได้โดยแตะครั้งเดียว', (tester) async {
+      await showPage(tester);
+      await begin(tester);
+      await fillIdentity(tester, prefix: prefix);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, prefix))
+            .selected,
+        true,
+      );
+      expect(find.text('ทดสอบ'), findsOneWidget);
+      expect(find.text('ระบบ'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  testWidgets('บัญชีที่ผ่านแล้วไม่มีเมนูผู้ปกครอง', (tester) async {
+    await showPage(
+      tester,
+      repository: RolloutRepository(
+        data: {
+          'available': true,
+          'can_list': true,
+          'profile': {'status': 'approved', 'lifetime': true, 'is_minor': true},
+        },
+      ),
+    );
+    expect(find.text('ดูแลบัญชีผู้เยาว์'), findsNothing);
+    expect(find.text('ผ่านการอนุมัติ'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   for (final kind in [
     'pending',
     'corrections',
@@ -281,7 +982,7 @@ void main() {
     'expired',
     'approved',
   ]) {
-    testWidgets('หน้าสถานะ $kind มีคำสั่งถัดไป', (tester) async {
+    testWidgets('สถานะ $kind แสดงผลและคำสั่งถัดไป', (tester) async {
       await showPage(
         tester,
         repository: RolloutRepository(
@@ -302,25 +1003,24 @@ void main() {
         'approved': 'ยืนยันตัวตนแล้ว',
       };
       expect(find.text(expected[kind]!), findsOneWidget);
-      expect(find.text('ถ่ายบัตรประชาชน'), findsNothing);
-      if (kind == 'approved') {
-        await tapText(tester, 'ดูแลบัญชีผู้เยาว์');
-        expect(find.text('รหัสบัญชีผู้เยาว์'), findsOneWidget);
-        expect(find.byTooltip('วางรหัสบัญชี'), findsOneWidget);
-      }
+      expect(find.text('ดูแลบัญชีผู้เยาว์'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     });
   }
+
   for (final width in [320.0, 375.0, 414.0, 768.0]) {
-    testWidgets('ขนาดหน้าจอ $width และตัวอักษรขยายไม่ล้น', (tester) async {
+    testWidgets('จอ $width และตัวอักษรขยายไม่ล้นทั้งป๊อปอัพและฟอร์ม', (
+      tester,
+    ) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = Size(width, 850);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      await showPage(tester, scale: 1.3);
+      await showPage(tester, scale: 1.3, acceptConsent: false);
       expect(tester.takeException(), isNull);
       await begin(tester);
-      await photos(tester);
+      await fillIdentity(tester);
+      await confirm(tester);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });

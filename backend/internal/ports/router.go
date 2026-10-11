@@ -156,8 +156,6 @@ func SetupRouterWithOperations(
 	router.Get("/api/identity/status", operationsHandler.Status)
 	router.Post("/api/identity/sessions", identityLimit, operationsHandler.Begin)
 	router.Post("/api/identity/sessions/:id/submit", identityLimit, operationsHandler.Submit)
-	router.Post("/api/identity/sessions/:id/read-card", identityLimit, operationsHandler.ReadCard)
-	router.Post("/api/identity/guardians", identityLimit, operationsHandler.Guardian)
 	router.Post("/api/complaints", identityLimit, operationsHandler.Complaint)
 	router.Get("/api/admin/evidence/:id", operationsHandler.Evidence)
 	router.Get("/api/admin/:module", operationsHandler.Read)

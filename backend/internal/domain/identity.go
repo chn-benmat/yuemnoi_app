@@ -50,7 +50,7 @@ func EncryptIdentity(data, key []byte) (string, error) {
 }
 func IdentityAge(birth string, now time.Time) (bool, error) {
 	dob, err := time.Parse("2006-01-02", birth)
-	if err != nil || dob.After(now) || dob.Before(now.AddDate(-125, 0, 0)) {
+	if err != nil || dob.Year() < 1 || dob.After(now) {
 		return false, errors.New("invalid_birth_date")
 	}
 	return dob.AddDate(20, 0, 0).After(now), nil

@@ -10,7 +10,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/stretchr/testify/require"
 	"io"
-	"mime/multipart"
+	"log/slog"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -49,17 +49,6 @@ func (opsVerifier) UserIDFromToken(_ context.Context, token string) (string, err
 	return "", domain.ErrInvalidAccessToken
 }
 
-type forbiddenAnalyzer struct{ calls int }
-
-func (a *forbiddenAnalyzer) ReadIdentityCard(context.Context, []byte) (*domain.IdentityOCR, error) {
-	a.calls++
-	return &domain.IdentityOCR{}, nil
-}
-
-func (a *forbiddenAnalyzer) AnalyzeIdentity(context.Context, []byte, []byte) (*domain.IdentityAnalysis, error) {
-	a.calls++
-	return &domain.IdentityAnalysis{}, nil
-}
 func TestIdentityEncryptionAndChecksum(t *testing.T) {
 	key := bytes.Repeat([]byte{7}, 32)
 	a, err := domain.EncryptIdentity([]byte("synthetic private data"), key)
@@ -88,31 +77,65 @@ func TestIdentityEncryptionAndChecksum(t *testing.T) {
 	_, err = domain.IdentityAge("2027-01-01", now)
 	require.Error(t, err)
 }
-func TestIdentityRejectsMinorBeforeInference(t *testing.T) {
-	id := "00000000-0000-4000-8000-000000000002"
-	store := &opsStore{call: func(name string, args map[string]any) (json.RawMessage, error) {
-		require.Equal(t, "identity_status", name)
-		return json.Marshal(map[string]any{"request": map[string]any{"id": id, "status": "capture", "is_minor": false, "capture_until": time.Now().Add(time.Minute)}})
-	}}
-	analyzer := &forbiddenAnalyzer{}
-	h := ports.NewOperationsHandler(domain.OperationsOptions{Store: store, Analyzer: analyzer, EncryptionKey: bytes.Repeat([]byte{1}, 32), HMACKey: bytes.Repeat([]byte{2}, 32)}, opsVerifier{})
-	app := fiber.New()
-	app.Post("/identity/:id", h.Submit)
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	for k, v := range map[string]string{"citizen_id": "0000000000001", "legal_name": "Synthetic Test", "birth_date": "2015-01-01", "lifetime": "true"} {
-		require.NoError(t, writer.WriteField(k, v))
+func TestIdentityBeginAllowsAllAges(t *testing.T) {
+	now := time.Now().UTC()
+	for _, tc := range []struct {
+		name   string
+		body   map[string]any
+		minor  bool
+		status int
+	}{
+		{name: "adult birthday today", body: map[string]any{"birth_date": now.AddDate(-20, 0, 0).Format("2006-01-02")}, status: 200},
+		{name: "one day before twenty", body: map[string]any{"birth_date": now.AddDate(-20, 0, 1).Format("2006-01-02")}, minor: true, status: 200},
+		{name: "age thirteen", body: map[string]any{"birth_date": now.AddDate(-13, 0, 0).Format("2006-01-02")}, minor: true, status: 200},
+		{name: "newborn", body: map[string]any{"birth_date": now.Format("2006-01-02")}, minor: true, status: 200},
+		{name: "false minor claim ignored", body: map[string]any{"birth_date": "2015-01-01", "is_minor": false}, minor: true, status: 200},
+		{name: "true minor claim ignored", body: map[string]any{"birth_date": "2000-01-01", "is_minor": true}, status: 200},
+		{name: "explicit adult without birthday", body: map[string]any{"is_minor": false}, status: 200},
+		{name: "minor without guardian", body: map[string]any{"is_minor": true}, minor: true, status: 200},
+		{name: "legacy minor category without birthday", body: map[string]any{"is_minor": true}, minor: true, status: 200},
+		{name: "consent without birth date", body: map[string]any{}, status: 200},
+		{name: "null legacy age", body: map[string]any{"is_minor": nil}, status: 200},
+		{name: "age is not boolean", body: map[string]any{"is_minor": "false"}, status: 400},
+		{name: "blank birthday", body: map[string]any{"birth_date": " "}, status: 400},
+		{name: "invalid calendar day", body: map[string]any{"birth_date": "2001-02-29"}, status: 400},
+		{name: "buddhist year rejected", body: map[string]any{"birth_date": "2543-01-01"}, status: 400},
+		{name: "future", body: map[string]any{"birth_date": now.AddDate(0, 0, 1).Format("2006-01-02")}, status: 400},
+		{name: "no maximum age", body: map[string]any{"birth_date": now.AddDate(-126, 0, 0).Format("2006-01-02")}, status: 200},
+		{name: "missing consent", body: map[string]any{"birth_date": "2000-01-01", "consent_version": ""}, status: 400},
+		{name: "wrong consent", body: map[string]any{"birth_date": "2000-01-01", "consent_version": "other"}, status: 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &opsStore{call: func(name string, args map[string]any) (json.RawMessage, error) {
+				require.Equal(t, "identity_begin", name)
+				require.Equal(t, tc.minor, args["p_minor"])
+				require.Equal(t, "identity-v1", args["p_consent"])
+				require.Equal(t, "00000000-0000-4000-8000-000000000001", args["p_actor"])
+				return json.RawMessage(`{"id":"test-session","capture_until":"2030-01-01T00:00:00Z"}`), nil
+			}}
+			app := ports.NewHTTPApp()
+			app.Post("/identity", ports.NewOperationsHandler(domain.OperationsOptions{
+				Store: store, EncryptionKey: bytes.Repeat([]byte{1}, 32), HMACKey: bytes.Repeat([]byte{2}, 32),
+			}, opsVerifier{}).Begin)
+			if _, exists := tc.body["consent_version"]; !exists {
+				tc.body["consent_version"] = "identity-v1"
+			}
+			body, err := json.Marshal(tc.body)
+			require.NoError(t, err)
+			request := httptest.NewRequest("POST", "/identity", bytes.NewReader(body))
+			request.Header.Set("Authorization", "Bearer test-token")
+			request.Header.Set("Content-Type", "application/json")
+			response, err := app.Test(request)
+			require.NoError(t, err)
+			defer response.Body.Close()
+			require.Equal(t, tc.status, response.StatusCode)
+			if tc.status == 400 {
+				require.Empty(t, store.events)
+			} else {
+				require.Equal(t, []string{"identity_begin"}, store.events)
+			}
+		})
 	}
-	require.NoError(t, writer.Close())
-	request := httptest.NewRequest("POST", "/identity/"+id, &body)
-	request.Header.Set("Authorization", "Bearer test-token")
-	request.Header.Set("Content-Type", writer.FormDataContentType())
-	response, err := app.Test(request)
-	require.NoError(t, err)
-	defer response.Body.Close()
-	require.Equal(t, 409, response.StatusCode)
-	require.Zero(t, analyzer.calls)
-	require.Equal(t, []string{"identity_status"}, store.events)
 }
 func TestStaffErrorIsPrivate(t *testing.T) {
 	for _, failure := range []string{"staff_required", "raw SQL citizen_id secret"} {
@@ -191,4 +214,22 @@ func TestCleanupDoesNotEraseBeforeStorageDelete(t *testing.T) {
 			require.Equal(t, []string{"identity_cleanup", "delete", "identity_cleanup", "identity_cleanup"}, store.events)
 		}
 	}
+}
+
+func TestIdentityResponseBodyIsNeverLogged(t *testing.T) {
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	app := fiber.New()
+	app.Use(ports.ResponseLoggingMiddleware())
+	app.Get("/api/identity/fixture", func(c fiber.Ctx) error {
+		return c.JSON(fiber.Map{"citizen_id": "sensitive-fixture", "legal_name": "private-fixture"})
+	})
+	res, err := app.Test(httptest.NewRequest("GET", "/api/identity/fixture", nil))
+	require.NoError(t, err)
+	res.Body.Close()
+	require.NotContains(t, logs.String(), "sensitive-fixture")
+	require.NotContains(t, logs.String(), "private-fixture")
+	require.Contains(t, logs.String(), "identity data omitted")
 }

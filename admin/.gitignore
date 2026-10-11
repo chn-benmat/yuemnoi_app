@@ -1,5 +1,6 @@
 # Dependencies
 /node_modules/
+.next
 
 # Build output and caches
 /.next/
@@ -10,17 +11,40 @@
 /.turbo/
 *.tsbuildinfo
 .eslintcache
+/next-env.d.ts
 
 # Test output
 /coverage/
 /.nyc_output/
+/test-results/
+/playwright-report/
+/blob-report/
 
 # Environment variables and local credentials
 .env*
+*.env
+*.env.*
 !.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+!.env.*.sample
+!.env.*.template
+!*.env.example
+!*.env.sample
+!*.env.template
+!*.env.*.example
+!*.env.*.sample
+!*.env.*.template
 /.setup-token.json
+service-account*.json
+service_account*.json
+*firebase-adminsdk*.json
+credentials.json
+credentials.*.json
 *.pem
 *.key
+*.p8
 *.p12
 *.pfx
 

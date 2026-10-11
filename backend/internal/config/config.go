@@ -13,11 +13,10 @@ import (
 
 // Config โครงสร้างเก็บคอนฟิกูเรชันทั้งหมดของระบบ Backend ผ่าน Struct Tag
 type Config struct {
-	OperationsEnabled        bool          `env:"OPERATIONS_ENABLED" envDefault:"false"`
-	IdentityEncryptionKey    string        `env:"IDENTITY_ENCRYPTION_KEY"`
-	IdentityHMACKey          string        `env:"IDENTITY_HMAC_KEY"`
-	IdentityCleanupInterval  time.Duration `env:"IDENTITY_CLEANUP_INTERVAL" envDefault:"15m"`
-	IdentityOCRMinConfidence float64       `env:"IDENTITY_OCR_MIN_CONFIDENCE" envDefault:"0.55"`
+	OperationsEnabled       bool          `env:"OPERATIONS_ENABLED" envDefault:"false"`
+	IdentityEncryptionKey   string        `env:"IDENTITY_ENCRYPTION_KEY"`
+	IdentityHMACKey         string        `env:"IDENTITY_HMAC_KEY"`
+	IdentityCleanupInterval time.Duration `env:"IDENTITY_CLEANUP_INTERVAL" envDefault:"15m"`
 
 	Port                   string        `env:"PORT" envDefault:"8080"`
 	Mode                   string        `env:"APP_ENV"`
@@ -66,9 +65,6 @@ func (c *Config) GetPrimaryInternalServiceKey() string {
 
 // Validate ตรวจสอบค่าคอนฟิกที่จำเป็นทั้งหมด
 func (c *Config) Validate() error {
-	if c.IdentityOCRMinConfidence < 0 || c.IdentityOCRMinConfidence > 1 {
-		return fmt.Errorf("IDENTITY_OCR_MIN_CONFIDENCE must be between zero and one")
-	}
 	if c.IdentityCleanupInterval <= 0 {
 		return fmt.Errorf("IDENTITY_CLEANUP_INTERVAL must be positive")
 	}

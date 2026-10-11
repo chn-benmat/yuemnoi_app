@@ -45,8 +45,6 @@ func TestRouterRegistersAPIEndpoints(t *testing.T) {
 		"GET /api/identity/status",
 		"POST /api/identity/sessions",
 		"POST /api/identity/sessions/:id/submit",
-		"POST /api/identity/sessions/:id/read-card",
-		"POST /api/identity/guardians",
 		"POST /api/complaints",
 		"GET /api/admin/evidence/:id",
 		"GET /api/admin/:module",

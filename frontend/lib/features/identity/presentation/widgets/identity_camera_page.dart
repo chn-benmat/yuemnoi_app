@@ -3,11 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../data/camera_file_cleanup.dart';
 import 'identity_widgets.dart';
 
-enum IdentityCaptureKind { card, selfie, authority }
+enum IdentityCaptureKind { card, selfie }
 
 typedef IdentityCapture =
     Future<Uint8List?> Function(BuildContext context, IdentityCaptureKind kind);
@@ -43,14 +44,10 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
   CameraController? _camera;
   Uint8List? _preview;
   String? _error;
-  bool _starting = false, _taking = false;
+  bool _starting = false, _taking = false, _permissionDenied = false;
   int _generation = 0;
   bool get _face => widget.kind == IdentityCaptureKind.selfie;
-  String get _title => _face
-      ? 'ถ่ายใบหน้าของคุณ'
-      : widget.kind == IdentityCaptureKind.card
-      ? 'ถ่ายด้านหน้าบัตร'
-      : 'ถ่ายหลักฐานผู้ปกครอง';
+  String get _title => _face ? 'ถ่ายใบหน้าของคุณ' : 'ถ่ายด้านหน้าบัตร';
   @override
   void initState() {
     super.initState();
@@ -69,6 +66,7 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
     setState(() {
       _starting = true;
       _error = null;
+      _permissionDenied = false;
     });
     CameraController? candidate;
     try {
@@ -99,7 +97,8 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
       if (mounted && generation == _generation) {
         setState(() {
           _starting = false;
-          _error = e.code.contains('Access')
+          _permissionDenied = e.code.contains('Access');
+          _error = _permissionDenied
               ? 'ยังเข้าใช้กล้องไม่ได้ กรุณาอนุญาตกล้องให้แอปในตั้งค่า แล้วลองอีกครั้ง'
               : 'เปิดกล้องไม่ได้ กรุณาลองใหม่บนอุปกรณ์ที่มีกล้อง';
         });
@@ -182,14 +181,23 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
       child: Column(
         children: [
           Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _face
+                  ? 'ใบหน้า · รูปที่ 2 จาก 2'
+                  : 'บัตรประชาชน · รูปที่ 1 จาก 2',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
             child: Text(
               _preview != null
-                  ? 'เห็นครบ ชัดเจน และไม่มีแสงสะท้อน'
+                  ? _face
+                        ? 'เห็นใบหน้าครบและชัดเจน ไม่มืดหรือย้อนแสง'
+                        : 'เห็นเอกสารครบ ข้อความชัด และไม่มีแสงสะท้อน'
                   : _face
                   ? 'มองตรง ให้ใบหน้าอยู่ในกรอบ\nถอดหน้ากากและแว่นกันแดด'
-                  : widget.kind == IdentityCaptureKind.authority
-                  ? 'วางเอกสารให้เห็นครบทุกมุม\nข้อความชัดเจนและไม่มีสิ่งบดบัง'
                   : 'วางแนวนอนให้ครบทุกมุม\nใช้แสงสว่างพอดี ไม่ปิดข้อมูลบนบัตร',
               textAlign: TextAlign.center,
               style: const TextStyle(
@@ -224,12 +232,7 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
                               child: FractionallySizedBox(
                                 widthFactor: _face ? 0.72 : 0.92,
                                 child: AspectRatio(
-                                  aspectRatio: _face
-                                      ? 0.75
-                                      : widget.kind ==
-                                            IdentityCaptureKind.authority
-                                      ? 0.707
-                                      : 1.586,
+                                  aspectRatio: _face ? 0.75 : 1.586,
                                   child: Container(
                                     decoration: BoxDecoration(
                                       border: Border.all(
@@ -287,9 +290,34 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
                     ),
                   ),
                 ] else if (_error != null && _camera == null)
-                  AppPrimaryButton(
-                    text: 'ลองเปิดกล้องอีกครั้ง',
-                    onPressed: _starting ? null : _start,
+                  Column(
+                    children: [
+                      if (_permissionDenied)
+                        TextButton(
+                          onPressed: () async {
+                            var opened = false;
+                            try {
+                              opened = await openAppSettings();
+                            } catch (_) {
+                              // หากเปิดตั้งค่าไม่ได้ ยังให้ผู้ใช้ลองเปิดกล้องซ้ำได้
+                            }
+                            if (!opened && mounted) {
+                              setState(
+                                () => _error =
+                                    'เปิดตั้งค่าไม่ได้ กรุณาเปิดสิทธิ์กล้องในการตั้งค่าของอุปกรณ์',
+                              );
+                            }
+                          },
+                          child: const Text(
+                            'เปิดการตั้งค่ากล้อง',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      AppPrimaryButton(
+                        text: 'ลองเปิดกล้องอีกครั้ง',
+                        onPressed: _starting ? null : _start,
+                      ),
+                    ],
                   )
                 else
                   SizedBox(

@@ -331,13 +331,21 @@ backend/
 
 Domain ไม่ควร import Fiber หรือ infrastructure ส่วน composition อยู่ที่ root `main.go` กติกาเพิ่มเติมอยู่ใน [AGENTS.md](AGENTS.md)
 
-ระบบเจ้าหน้าที่และตัวตนเปิดผ่าน `OPERATIONS_ENABLED` ดู [การตั้งค่า การเปิดทุกบัญชี และ cleanup](../docs/IDENTITY_PUBLIC_ROLLOUT.md) และตัวอย่าง environment ใน `identity.env.example`
+ระบบเจ้าหน้าที่และตัวตนเปิดผ่าน `OPERATIONS_ENABLED` พร้อม `IDENTITY_ENCRYPTION_KEY` (base64 ของคีย์ 32 bytes), `IDENTITY_HMAC_KEY` (base64 ของคีย์อย่างน้อย 32 bytes) และ `IDENTITY_CLEANUP_INTERVAL` (ค่าเริ่มต้น 15m) โดยไม่ต้องมี AI Service สำหรับขั้นตอนยืนยันตัวตน
 
-`POST /api/identity/sessions/:id/read-card` อ่านภาพ `card` ก่อนส่งคำขอเพื่อช่วยกรอกแบบฟอร์ม ตรวจเจ้าของ รอบถ่ายภาพ เวลา และผู้ปกครองก่อนเรียก OCR ภายในระบบ ไม่บันทึกภาพในขั้นตอนนี้ ข้อมูลยังต้องให้ผู้ใช้ตรวจและให้เจ้าหน้าที่อนุมัติ ค่า `IDENTITY_OCR_MIN_CONFIDENCE` เริ่มต้น `0.55`
+`POST /api/identity/sessions` รับ `consent_version: "identity-v1"` และวันเกิด `birth_date` แบบ ค.ศ. YYYY-MM-DD เมื่อส่งวันเกิดมาต้องเป็นวันที่จริงและไม่อยู่ในอนาคต ใช้คำขอทุกวัยแบบเดียวกัน ไม่มีเงื่อนไขผู้ปกครองหรืออายุขั้นต่ำ ยังรับ `is_minor` จากแอปรุ่นเก่าและส่ง `p_minor` เป็นข้อมูลประกอบใน schema เดิมเท่านั้น ไม่ใช้กำหนดสิทธิ์ ค่าอายุที่ขาดหรือ null ไม่ขัดขวาง Begin แต่ Submit ยังต้องมีวันเกิดตามบัตร แอปเก็บภาพชั่วคราวและเริ่มคำขอเมื่อกดส่ง จึงถ่ายภาพก่อนกรอกวันเกิดได้
 
-ผลภายในจาก AI มี `blocks` และ `alternatives` (รายการกล่องของแต่ละรอบ OCR เพิ่ม) โดย API ของแอปยังคืน `fields` และ `requires_confirmation` ตามเดิม ตัวแยกข้อมูลรองรับหัวข้อไทยที่ OCR ทำสระ/วรรณยุกต์หล่น ช่องว่างในหัวข้อหรือชื่อย่อเดือน และวันที่เหนือหัวข้อในคอลัมน์เดียวกัน ไม่รวมวันออกบัตรกับวันหมดอายุเป็นบรรทัดเดียว รวมผลแต่ละรอบเฉพาะค่าที่ไม่ขัดแย้งกัน ตรวจ checksum เลขบัตรและวันที่จริง และคงช่องที่ไม่มั่นใจให้ผู้ใช้กรอกเอง
+`POST /api/identity/sessions/:id/submit` รับ multipart `legal_name`, `citizen_id`, `birth_date` และภาพ `card`/`selfie` แบบฟอร์มเพิ่ม `name_prefix` (นาย / นางสาว / นาง), `first_name`, `last_name`, `address_detail`, `postal_code` (ตัวเลข ASCII 5 หลัก ไม่ขึ้นต้นด้วย 0), `province`, `district`, `subdistrict` เมื่อส่งช่องใหม่อย่างน้อยหนึ่งช่องต้องกรอกครบทุกช่อง ระบบตัดช่องว่างหัวท้ายและประกอบชื่อรวม ชื่อแต่ละช่องจำกัด 150 ตัวอักษร ที่อยู่ 500 ตัวอักษร จังหวัด/อำเภอ/ตำบลช่องละ 100 ตัวอักษร และชื่อรวมไม่เกิน 450 bytes ข้อมูลเก็บใน `raw_encrypted` ร่วมกับเลขบัตรและวันเกิด เปิดอ่านได้ผ่าน `identity-detail` ที่ตรวจสิทธิ์เจ้าหน้าที่ ยังรองรับแอปรุ่นเดิมที่ส่งเฉพาะชื่อรวม
 
-ตารางภายในแยกเป็น `identity_private` และ `ops_private` โดย Go ยังเรียก RPC ชื่อเดิมใน `public` ด้วย service role ดู [แผนผังฐานข้อมูลและสิทธิ์](../docs/DATABASE_SCHEMAS.md)
+ผู้ใช้กรอกข้อมูลตามบัตรเองและส่งรูปบัตรกับใบหน้าเพื่อรอพนักงานตรวจ Go ตรวจ checksum เลขบัตร วันเกิด รูปแบบ/ขนาดภาพ ก่อนส่งสถานะ `pending` ไม่มี OCR หรือการส่งภาพเข้าบริการ AI และลบ route `read-card` แล้ว
+
+แบบฟอร์มและหน้าสรุปของผู้ใช้ไม่มีช่องบัตรตลอดชีพหรือวันหมดอายุ Go ไม่รับค่าอายุบัตรจาก client โดยคำขอรอตรวจมี `expires_on = null`, `lifetime = false`, `analysis = {"review_mode":"manual"}` หน้าพนักงานให้ระบุวันหมดอายุหรือบัตรตลอดชีพจากภาพเมื่ออนุมัติ ส่ง `decision`, `checked: true`, `reason`, `lifetime` (boolean) และ `expires_on` (YYYY-MM-DD เมื่อไม่ใช่บัตรตลอดชีพ) ผ่าน `identity-review` ขาดข้อมูลอายุบัตรได้ `409 card_validity_required` บัตรหมดอายุได้ `409 card_expired` การปฏิเสธ/ขอข้อมูลเพิ่มไม่ต้องระบุอายุบัตร
+
+ติดตั้ง [migration สำหรับทุกวัย](../supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql) ก่อนใช้งาน Backend และ Admin รุ่นนี้ การอนุมัติยังตรวจสิทธิ์พนักงาน ห้ามตรวจคำขอตนเอง ตรวจข้อมูลซ้ำ พร้อมบันทึก audit และคงการตรวจอายุบัตรของบัญชีที่อนุมัติแล้ว
+
+การส่งคำขอยืนยันลงทะเบียนหลักฐานก่อนอัปโหลดภาพบัตรและใบหน้าพร้อมกัน โดยใช้คนละ object path รอทั้งสองงานจบก่อนเรียก `identity_submit` หรือ rollback หากอัปโหลดงานหนึ่งล้มเหลวจะรออีกงานจบก่อนลบทั้งสอง path เพื่อไม่ให้ cleanup แข่งกับ worker ที่ยังอัปโหลดอยู่ คง context และ timeout ของ Storage เดิม รวมถึงงาน cleanup ตามกำหนดเผื่อ remote upload ที่หมดเวลาฝั่ง client การตรวจสิทธิ์ การเข้ารหัส และการอนุมัติโดยเจ้าหน้าที่คงเดิม ฝั่ง Flutter แสดงรับคำขอเมื่อ submit สำเร็จและโหลดสถานะล่าสุดต่อเบื้องหลัง
+
+ตารางภายในแยกเป็น `identity_private` และ `ops_private` โดย Go ยังเรียก RPC ชื่อเดิมใน `public` ด้วย service role ดู [migration และการตรวจสอบฐานข้อมูล](../supabase/README.md)
 
 `GET /api/identity/status` ส่ง `available` เพื่อบอกสิทธิ์เริ่มยืนยัน โดย `pilot` ยังคงหมายถึงสมาชิกกลุ่มทดลองเท่านั้น `POST /api/admin/actions/settings/identity` รับ `identity_open_to_all` และ/หรือ `enforce_identity` เป็น boolean พร้อม `reason` และคงค่าที่ไม่ได้ส่งมา หากส่งชนิดข้อมูลไม่ถูกต้องจะได้ HTTP 400 พร้อม `code: invalid_settings`
 
@@ -359,3 +367,5 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 | Rental 409                     | ตรวจสถานะ / ช่วงเวลา / ผู้มีสิทธิ์ตาม booking                         |
 
 ---
+
+นโยบายทุกวัยใช้ migration `supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql` ยกเลิกการใช้ `is_minor` จำกัดลงประกาศ/จอง/อนุมัติตัวตนทั้ง Go guard และ database triggers รวมถึงถอด API `/api/identity/guardians`, คิวและคำสั่งผู้ปกครองจากระบบเจ้าหน้าที่ ข้อมูลประวัติผู้ปกครองและหลักฐานเก่ายังเก็บตามรอบลบเดิม การตรวจตัวตนโดยเจ้าหน้าที่ บัตรหมดอายุ และการระงับบัญชียังทำงานทุกวัย

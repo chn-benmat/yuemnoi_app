@@ -42,30 +42,15 @@ class IdentityApiRepository implements IdentityRepository {
     ),
   );
   @override
-  Future<Map<String, dynamic>> begin(bool minor) => _call(
+  Future<Map<String, dynamic>> begin(String birthDate) => _call(
     () async => _result(
       await _client.post(
         '/api/identity/sessions',
         headers: _headers,
-        data: {'is_minor': minor, 'consent_version': 'identity-v1'},
+        data: {'birth_date': birthDate, 'consent_version': 'identity-v1'},
       ),
     ),
   );
-  @override
-  Future<Map<String, String>> readCard(String session, Uint8List card) =>
-      _call(() async {
-        final response = _result(
-          await _client.postMultipart(
-            '/api/identity/sessions/$session/read-card',
-            headers: _headers,
-            fields: const {},
-            files: [
-              ApiUpload(fieldName: 'card', bytes: card, fileName: 'card.jpg'),
-            ],
-          ),
-        );
-        return Map<String, String>.from(response['fields'] as Map? ?? {});
-      });
   @override
   Future<void> submit(
     String session,
@@ -81,31 +66,6 @@ class IdentityApiRepository implements IdentityRepository {
         files: [
           ApiUpload(fieldName: 'card', bytes: card, fileName: 'card.jpg'),
           ApiUpload(fieldName: 'selfie', bytes: selfie, fileName: 'selfie.jpg'),
-        ],
-      ),
-    );
-  });
-  @override
-  Future<void> guardian(
-    String child,
-    String relationship,
-    Uint8List authority,
-  ) => _call(() async {
-    _result(
-      await _client.postMultipart(
-        '/api/identity/guardians',
-        headers: _headers,
-        fields: {
-          'child_id': child,
-          'relationship': relationship,
-          'consent_version': 'guardian-v1',
-        },
-        files: [
-          ApiUpload(
-            fieldName: 'authority',
-            bytes: authority,
-            fileName: 'authority.jpg',
-          ),
         ],
       ),
     );

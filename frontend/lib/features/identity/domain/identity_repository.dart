@@ -1,5 +1,22 @@
 import 'dart:typed_data';
 
+bool identityValidBirthDate(String value, {DateTime? today}) {
+  final birth = DateTime.tryParse(value);
+  final now = (today ?? DateTime.now()).toUtc();
+  final date = DateTime.utc(now.year, now.month, now.day);
+  final birthday = birth == null
+      ? null
+      : DateTime.utc(birth.year, birth.month, birth.day);
+  if (birth == null ||
+      birth.year < 1 ||
+      value !=
+          '${birth.year.toString().padLeft(4, '0')}-${birth.month.toString().padLeft(2, '0')}-${birth.day.toString().padLeft(2, '0')}' ||
+      birthday!.isAfter(date)) {
+    return false;
+  }
+  return true;
+}
+
 class IdentityFailure implements Exception {
   const IdentityFailure(this.message);
   final String message;
@@ -20,10 +37,9 @@ class IdentityStatus {
   bool get enforcement => data['enforcement'] == true;
   bool get restricted {
     final control = data['control'] as Map?;
-    return control?['suspended'] == true || control?['is_minor'] == true;
+    return control?['suspended'] == true;
   }
 
-  bool get guardianReady => data['guardian_id'] != null;
   bool get verified {
     if (profile['status'] != 'approved') return false;
     if (profile['lifetime'] == true) return true;
@@ -36,14 +52,12 @@ class IdentityStatus {
 
 abstract interface class IdentityRepository {
   Future<IdentityStatus> status();
-  Future<Map<String, dynamic>> begin(bool minor);
-  Future<Map<String, String>> readCard(String session, Uint8List card);
+  Future<Map<String, dynamic>> begin(String birthDate);
   Future<void> submit(
     String session,
     Map<String, String> fields,
     Uint8List card,
     Uint8List selfie,
   );
-  Future<void> guardian(String child, String relationship, Uint8List authority);
   void close();
 }

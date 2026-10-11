@@ -25,14 +25,13 @@ func operationsBusinessGuard(o domain.OperationsOptions, v domain.TokenVerifier)
 			Enforcement bool `json:"enforcement"`
 			Control     *struct {
 				Suspended bool `json:"suspended"`
-				Minor     bool `json:"is_minor"`
 			} `json:"control"`
 		}
 		if json.Unmarshal(raw, &state) != nil {
 			return c.SendStatus(503)
 		}
-		if state.Control != nil && (state.Control.Suspended || state.Control.Minor) {
-			return c.Status(403).JSON(fiber.Map{"error": "บัญชีนี้ไม่สามารถทำธุรกรรมใหม่ได้ ผู้เยาว์ใช้บัญชีผู้ปกครอง", "code": "transaction_restricted"})
+		if state.Control != nil && state.Control.Suspended {
+			return c.Status(403).JSON(fiber.Map{"error": "บัญชีนี้ถูกจำกัดการทำธุรกรรมใหม่", "code": "transaction_restricted"})
 		}
 		if c.Path() == "/api/items" && state.Enforcement && !state.CanList {
 			return c.Status(403).JSON(fiber.Map{"error": "กรุณายืนยันตัวตนก่อนปล่อยเช่าสินค้า", "code": "identity_required"})

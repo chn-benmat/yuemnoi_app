@@ -9,7 +9,11 @@ build/
 coverage/
 .fvm/flutter_sdk/
 .fvm/versions/
+.fvm/cache/
+.android/
+.ios/
 *.log
+*.log.*
 *.tmp
 
 # Android Specific
@@ -28,6 +32,9 @@ android/captures/
 key.properties
 *.apk
 *.aab
+*.apks
+*.idsig
+*.hprof
 
 # iOS Specific
 ios/Pods/
@@ -38,24 +45,37 @@ ios/Flutter/Flutter.podspec
 *.ipa
 *.dSYM/
 *.xcarchive/
+*.xcresult/
 *.mobileprovision
+*.provisionprofile
+*.p8
 *.p12
 *.pfx
 
 # Secrets & Environment Variables
 .env
 .env.*
+*.env
+*.env.*
 !.env.example
 !.env.sample
 !.env.template
 !.env.*.example
 !.env.*.sample
 !.env.*.template
+!*.env.example
+!*.env.sample
+!*.env.template
+!*.env.*.example
+!*.env.*.sample
+!*.env.*.template
 google-services.json
 GoogleService-Info.plist
 service-account*.json
+service_account*.json
 *firebase-adminsdk*.json
 credentials.json
+credentials.*.json
 *.pem
 *.key
 

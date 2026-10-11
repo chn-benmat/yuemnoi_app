@@ -1,5 +1,7 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/widgets/app_primary_button.dart';
 
 class IdentityColors {
   IdentityColors._();
@@ -11,6 +13,7 @@ class IdentityColors {
   static const tint = Color(0xFFF1E7FC);
   static const success = Color(0xFF18734E);
   static const warning = Color(0xFF926012);
+  static const danger = Color(0xFFB23B3B);
 }
 
 class IdentityHeading extends StatelessWidget {
@@ -35,7 +38,7 @@ class IdentityHeading extends StatelessWidget {
       Text(
         title,
         style: const TextStyle(
-          fontSize: 26,
+          fontSize: 24,
           height: 1.35,
           fontWeight: FontWeight.w700,
           color: IdentityColors.ink,
@@ -65,15 +68,17 @@ class IdentityPanel extends StatelessWidget {
   final Color color;
   final double padding;
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
-    padding: EdgeInsets.all(padding),
-    decoration: BoxDecoration(
+    child: Material(
       color: color,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: IdentityColors.line),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: IdentityColors.line),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: EdgeInsets.all(padding), child: child),
     ),
-    child: child,
   );
 }
 
@@ -130,7 +135,7 @@ class IdentityProgress extends StatelessWidget {
   const IdentityProgress({
     super.key,
     required this.step,
-    this.labels = const ['บัตรประชาชน', 'ใบหน้า', 'ข้อมูล', 'ส่งคำขอ'],
+    this.labels = const ['เตรียมพร้อม', 'ถ่ายภาพ', 'ข้อมูลและส่ง'],
   });
   final int step;
   final List<String> labels;
@@ -288,6 +293,171 @@ class IdentityTip extends StatelessWidget {
               height: 1.6,
               color: IdentityColors.ink,
             ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class IdentitySectionTitle extends StatelessWidget {
+  const IdentitySectionTitle(this.title, {super.key, required this.icon});
+  final String title;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Icon(icon, size: 20, color: IdentityColors.primary),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: IdentityColors.ink,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class IdentityConsentDialog extends StatelessWidget {
+  const IdentityConsentDialog({super.key, this.previouslyAccepted = false});
+  final bool previouslyAccepted;
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: previouslyAccepted,
+    child: Dialog(
+      key: const ValueKey('identity_consent_dialog'),
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: const BoxDecoration(
+                    color: IdentityColors.tint,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.privacy_tip_outlined,
+                    color: IdentityColors.primary,
+                    size: 28,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const IdentityHeading(
+                'การใช้ข้อมูลยืนยันตัวตน',
+                'ใช้ภาพบัตรประชาชน ภาพใบหน้า และข้อมูลที่กรอก เพื่อให้เจ้าหน้าที่ที่ได้รับสิทธิ์ตรวจสอบและยืนยันตัวตนสำหรับการปล่อยเช่า',
+              ),
+              const SizedBox(height: 16),
+              const IdentityTip(
+                Icons.phone_android_outlined,
+                'ภาพเก็บชั่วคราวในหน้านี้ และส่งให้เจ้าหน้าที่เมื่อคุณกดส่งคำขอเท่านั้น',
+              ),
+              const IdentityTip(
+                Icons.lock_outline_rounded,
+                'หลักฐานเข้าถึงได้โดยเจ้าหน้าที่ที่ได้รับสิทธิ์ตรวจสอบ',
+              ),
+              const IdentityTip(
+                Icons.auto_delete_outlined,
+                'ภาพถูกลบตามกำหนดหลังพิจารณาคำขอ',
+              ),
+              const IdentityTip(
+                Icons.exit_to_app_rounded,
+                'รูปและข้อมูลที่ยังไม่ส่งจะถูกล้างเมื่อออกจากหน้านี้',
+              ),
+              const SizedBox(height: 20),
+              AppPrimaryButton(
+                text: previouslyAccepted
+                    ? 'เข้าใจแล้ว'
+                    : 'ยินยอมและดำเนินการต่อ',
+                onPressed: () => Navigator.pop(context, true),
+              ),
+              if (!previouslyAccepted) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('ไว้ก่อน'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class IdentityPhotoTile extends StatelessWidget {
+  const IdentityPhotoTile({
+    super.key,
+    required this.title,
+    required this.icon,
+    required this.bytes,
+    required this.onRetake,
+  });
+  final String title;
+  final IconData icon;
+  final Uint8List? bytes;
+  final VoidCallback? onRetake;
+
+  @override
+  Widget build(BuildContext context) => IdentityPanel(
+    padding: 12,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            height: 100,
+            color: IdentityColors.canvas,
+            child: bytes == null
+                ? Icon(icon, size: 36, color: IdentityColors.muted)
+                : Image.memory(
+                    bytes!,
+                    fit: BoxFit.contain,
+                    excludeFromSemantics: true,
+                  ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: IdentityColors.ink,
+          ),
+        ),
+        TextButton(
+          onPressed: onRetake,
+          style: TextButton.styleFrom(
+            foregroundColor: IdentityColors.primary,
+            minimumSize: const Size(44, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+          ),
+          child: Text(
+            bytes == null ? 'ถ่ายภาพ' : 'ถ่ายใหม่',
+            maxLines: 1,
+            style: const TextStyle(fontSize: 13),
           ),
         ),
       ],
