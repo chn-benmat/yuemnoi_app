@@ -106,7 +106,11 @@ class RequestUnderstanding(IntentDecision):
     catalog_operation: Literal["none", "selection", "inspection", "comparison"] = Field(
         description="Selection recommends equipment for a need; inspection answers properties of referred equipment; comparison contrasts equipment; none needs no catalog evidence. Independent of intent.",
         json_schema_extra={'x-provider-description': True})
-    additional_goals: List[str]
+    additional_goals: List[str] = Field(
+        description='Additional independently requested purposes from the actual user, separate from equipment requirements. '
+                    'A catalog operation with app topics requires a separately requested app explanation here. '
+                    'Available knowledge topics and rental preferences do not create additional app goals.',
+        json_schema_extra={'x-provider-description': True})
     request_scope: Literal["broad", "specific", "not_applicable"]
     information_sufficient: bool
     next_action: Literal["answer", "clarify"]

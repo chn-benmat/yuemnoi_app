@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"net"
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -12,7 +11,7 @@ import (
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/aiservice"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/config"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 var aiSmokeConfig = flag.String("ai-smoke-config", "", "ไฟล์คอนฟิกสำหรับทดสอบการส่งต่อจริงแบบ opt-in")
@@ -38,11 +37,11 @@ func TestAILiveEvaluationGateway(t *testing.T) {
 	if err != nil {
 		t.Fatal("gateway configuration unavailable")
 	}
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
+
+	router := ports.NewHTTPApp(fiber.Config{ReadTimeout: cfg.ReadTimeout, WriteTimeout: cfg.WriteTimeout})
 	handler := ports.NewChatbotHandler(aiservice.NewClient(run.AIURL, cfg.GetPrimaryInternalServiceKey(), cfg.AIServiceTimeout), nil)
-	router.POST("/api/chat-ai", handler.SendMessage)
-	router.POST("/api/chat-ai/stream", handler.SendMessageStream)
+	router.Post("/api/chat-ai", handler.SendMessage)
+	router.Post("/api/chat-ai/stream", handler.SendMessageStream)
 	listener, err := net.Listen("tcp", run.Bind)
 	if err != nil {
 		t.Fatal("cannot listen for smoke")
@@ -51,9 +50,8 @@ func TestAILiveEvaluationGateway(t *testing.T) {
 		listener.Close()
 		t.Fatal("loopback required")
 	}
-	server := &http.Server{Handler: router, ReadTimeout: cfg.ReadTimeout, WriteTimeout: cfg.WriteTimeout}
-	defer server.Close()
-	go server.Serve(listener)
+	defer router.ShutdownWithTimeout(time.Second)
+	go router.Listener(listener, fiber.ListenConfig{DisableStartupMessage: true})
 	ready, _ := json.Marshal(map[string]string{"url": "http://" + listener.Addr().String()})
 	if os.WriteFile(run.Ready, ready, 0600) != nil {
 		t.Fatal("cannot publish smoke readiness")

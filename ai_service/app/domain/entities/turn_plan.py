@@ -1,6 +1,7 @@
 """One semantic planning call, followed only by evidence synthesis when needed."""
 from typing import Literal
 from pydantic import Field, ConfigDict, model_validator
+from pydantic_core import PydanticCustomError
 from app.domain.entities.catalog_guidance import GuidanceModel, MissingQuestion, QuestionChoice, SelectionPlan
 from app.domain.entities.intent_decision import RequestUnderstanding, NativePlanningUnderstanding
 
@@ -20,27 +21,31 @@ class PlannedQuestion(MissingQuestion):
     unrestricted_choice: QuestionChoice | None = Field(default=None,
         description=QuestionBranch.model_fields['unrestricted_choice'].description,
         json_schema_extra={'x-provider-description': True})
-    branches: list[QuestionBranch] = Field(default_factory=list, max_length=4,
-        description='Adapt to one earlier question: cover each source choice ID with relevant title/choices. Empty if independent or for unknown typed answers.',
+    branches: list[QuestionBranch] = Field(default_factory=list, max_length=5,
+        description='Relevant title/choices for every exact choice ID of one earlier question. Empty if independent or for unknown typed answers.',
         json_schema_extra={'x-provider-description': True})
 
 
 class NativeQuestionChoice(QuestionChoice):
+    model_config = ConfigDict(extra='forbid', populate_by_name=True)
     choice_kind: Literal['specified', 'unrestricted'] = Field(
-        description='specified establishes a preference or finite ceiling; unrestricted leaves that preference unconstrained. A maximum-budget question includes one unrestricted option explicitly removing the ceiling.',
+        alias='value_kind',
+        description='specified: preference/finite ceiling; unrestricted: no constraint. Spending-ceiling questions include one explicit no-ceiling option.',
         json_schema_extra={'x-provider-description': True})
 
 
 class NativeChoiceSet(GuidanceModel):
-    choices: list[NativeQuestionChoice] = Field(min_length=1, max_length=4,
-        description='All displayed options in one array, including the unrestricted option when applicable. At most four total.',
+    choices: list[NativeQuestionChoice] = Field(min_length=1, max_length=5,
+        description='All displayed options: at least one specified and at most one unrestricted. Unrestricted means no constraint, never a particular answer.',
         json_schema_extra={'x-provider-description': True})
 
     @model_validator(mode='after')
     def valid_choice_kinds(self):
         unrestricted = sum(choice.choice_kind == 'unrestricted' for choice in self.choices)
         if unrestricted > 1 or unrestricted == len(self.choices):
-            raise ValueError('At most one unrestricted option and at least one specified option are required')
+            raise PydanticCustomError('native_choices_require_specified_and_at_most_one_unrestricted',
+                                      'At most one unrestricted option and at least one specified option are required',
+                                      {'provider_requirement': type(self).model_fields['choices'].description})
         return self
 
     def domain_choices(self):
@@ -55,19 +60,50 @@ class NativeChoiceSet(GuidanceModel):
 
 
 class NativeQuestionBranch(NativeChoiceSet):
+    model_config = ConfigDict(extra='forbid', populate_by_name=True)
     source_question_id: str = Field(min_length=1)
     source_option_id: str = Field(min_length=1)
-    title: str = Field(min_length=1)
+    title: str = Field(alias='ask', min_length=1)
 
 
-class NativePlannedQuestion(MissingQuestion, NativeChoiceSet):
+class NativeSpendingCeilingSlot(GuidanceModel):
+    kind: Literal['spending_ceiling']
+
+    @property
+    def dimension(self):
+        return 'budget_max'
+
+
+class NativeOtherRequirementSlot(GuidanceModel):
+    kind: Literal['other_requirement']
+    dimension: str = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def canonical_spending_slot_is_reserved(self):
+        if self.dimension == 'budget_max':
+            raise ValueError('The canonical spending dimension requires the spending_ceiling slot kind')
+        return self
+
+
+class NativePlannedQuestion(NativeChoiceSet):
+    model_config = ConfigDict(extra='forbid', populate_by_name=True)
+    id: str = Field(min_length=1)
+    title: str = Field(alias='ask', min_length=1)
+    slot: NativeSpendingCeilingSlot | NativeOtherRequirementSlot = Field(
+        description='Spending ceilings or their absence use spending_ceiling; other material unknowns use other_requirement with a stable dimension ID.',
+        json_schema_extra={'x-provider-description': True})
     choices: list[NativeQuestionChoice] = NativeChoiceSet.model_fields['choices']
-    branches: list[NativeQuestionBranch] = Field(default_factory=list, max_length=4,
+    branches: list[NativeQuestionBranch] = Field(default_factory=list, max_length=5,
         description=PlannedQuestion.model_fields['branches'].description,
         json_schema_extra={'x-provider-description': True})
 
+    @property
+    def dimension(self):
+        return self.slot.dimension
+
     def to_question(self):
-        value = self.model_dump(exclude={'choices', 'branches'})
+        value = self.model_dump(exclude={'choices', 'branches', 'slot'})
+        value['dimension'] = self.dimension
         branches = [{**branch.model_dump(exclude={'choices'}), **branch.domain_choices()} for branch in self.branches]
         return PlannedQuestion.model_validate({**value, **self.domain_choices(), 'branches': branches})
 
@@ -77,8 +113,16 @@ class TurnPlan(GuidanceModel):
     response_mode: Literal["clarification", "documents", "conversation", "information", "catalog_overview", "equipment", "technical"] = Field(description="Select the CURRENT response stage, independent of the eventual catalog operation: clarification whenever any material question is pending; conversation only for a nonfactual social reply with no questions; documents for approved app answers without questions; catalog_overview for unfiltered category browsing; equipment for a ready catalog answer; technical for ready external verification. Clarification includes a brief introduction and stops evidence synthesis, even when a selection/inspection/comparison operation remains requested.", json_schema_extra={"x-provider-description": True})
     overview_available_only: bool = False
     understanding: RequestUnderstanding
-    knowledge_ids: list[str]
-    unverified_topic_ids: list[str]
+    evidence_goal: str | None = Field(default=None, min_length=1,
+        description='For equipment/technical stages, the complete equipment task still to answer, preserving every requested property, comparison and constraint. '
+                    'Exclude app information answered separately by knowledge_ids/unverified_topic_ids. Null for other stages.',
+        json_schema_extra={'x-provider-description': True})
+    knowledge_ids: list[str] = Field(
+        description='Only supplied approved articles needed for information the user actually requested. Source availability is not a request to describe the platform; omit unrelated articles from a rental preference dialogue.',
+        json_schema_extra={'x-provider-description': True})
+    unverified_topic_ids: list[str] = Field(
+        description='Only unverified information topics actually asked about. Unknown platform information is unrelated to missing rental preferences or inventory evidence.',
+        json_schema_extra={'x-provider-description': True})
     questions: list[PlannedQuestion] = Field(max_length=3)
     message: str = Field(description="Only a brief questionnaire introduction or nonfactual social reply, otherwise empty. Friendly natural Thai in a nongendered speaker voice: omit gender-associated first-person pronouns and sentence-final honorifics; express courtesy through helpful wording.", json_schema_extra={"x-provider-description": True})
 
@@ -91,6 +135,10 @@ class EvidenceCatalogOperation(CatalogOperation):
     kind: Literal['selection', 'inspection', 'comparison']
 
 
+class SelectionCatalogOperation(CatalogOperation):
+    kind: Literal['selection']
+
+
 class NoCatalogOperation(CatalogOperation):
     kind: Literal['none']
 
@@ -99,18 +147,27 @@ class ClarificationStage(GuidanceModel):
     model_config = ConfigDict(extra='forbid',populate_by_name=True)
     response_mode: Literal['clarification']
     catalog_operation: CatalogOperation
-    message: str = Field(alias='text', min_length=1, description="Original assistant invitation to pending questions; never echo the user. Natural ungendered Thai.", json_schema_extra={'x-provider-description': True})
-    questions: list[NativePlannedQuestion] = Field(min_length=1, max_length=3)
+    message: str = Field(alias='text', min_length=1, description="Original assistant invitation to material pending questions for the established rental goal; never echo the user. Natural ungendered Thai in the assistant's own voice, preserving courtesy without copying gendered speech from history.", json_schema_extra={'x-provider-description': True})
+    questions: list[NativePlannedQuestion] = Field(min_length=1, max_length=3,
+        description='Unique IDs and slot dimensions. One distinct unknown per question; at most one spending_ceiling.',
+        json_schema_extra={'x-provider-description': True})
 
 
 class EvidenceStage(GuidanceModel):
     model_config = ConfigDict(extra='forbid',populate_by_name=True)
-    response_mode: Literal['equipment', 'catalog_overview'] = Field(
-        description='equipment: ready named-item, comparison or filtered requests. catalog_overview: unfiltered category browsing only, without targets, spending ceiling, user constraints, exclusions or external verification.',
+    response_mode: Literal['equipment'] = Field(
+        description='Ready named-item, comparison or filtered catalog requests.',
         json_schema_extra={'x-provider-description': True})
     catalog_operation: EvidenceCatalogOperation
     message: Literal[''] = Field(alias='text')
     questions: list[None] = Field(max_length=0)
+
+
+class CatalogOverviewStage(EvidenceStage):
+    response_mode: Literal['catalog_overview'] = Field(
+        description='Unfiltered category browsing only, without targets, spending ceiling, user constraints, exclusions or external verification.',
+        json_schema_extra={'x-provider-description': True})
+    catalog_operation: SelectionCatalogOperation
 
 
 class TechnicalStage(EvidenceStage):
@@ -120,7 +177,9 @@ class TechnicalStage(EvidenceStage):
 
 
 class DocumentStage(EvidenceStage):
-    response_mode: Literal['documents'] = Field(description='Ready app information uses supplied approved articles.',
+    response_mode: Literal['documents'] = Field(description='Ready information about using this rental app is in scope. '
+        'Choose documents with catalog_operation.kind=none, text empty and only relevant knowledge_ids for approved app facts. '
+        'Do not choose information/conversation or generate factual prose when approved app articles answer the request.',
         json_schema_extra={'x-provider-description': True})
     catalog_operation: NoCatalogOperation
 
@@ -140,14 +199,15 @@ class NativeTurnPlan(GuidanceModel):
     model_config = ConfigDict(extra='forbid',populate_by_name=True)
     speaker_register: Literal['informal_ungendered'] = Field(description=TurnPlan.model_fields['speaker_register'].description,
         json_schema_extra={'x-provider-description': True})
-    stage: ClarificationStage | EvidenceStage | TechnicalStage | DocumentStage | ConversationStage = Field(
+    stage: ClarificationStage | EvidenceStage | CatalogOverviewStage | TechnicalStage | DocumentStage | ConversationStage = Field(
         description='Select the current stage using its response_mode semantics, not the eventual rental operation alone.',
         json_schema_extra={'x-provider-description': True})
     overview_available_only: bool
     # Groq จัดลำดับ keys ตามตัวอักษร ให้ reasoning ออกก่อน stage และข้อความ
     understanding: NativePlanningUnderstanding = Field(alias='analysis')
-    knowledge_ids: list[str]
-    unverified_topic_ids: list[str]
+    evidence_goal: str | None = TurnPlan.model_fields['evidence_goal']
+    knowledge_ids: list[str] = TurnPlan.model_fields['knowledge_ids']
+    unverified_topic_ids: list[str] = TurnPlan.model_fields['unverified_topic_ids']
 
     def to_plan(self):
         fields = self.model_dump(exclude={'stage'})
@@ -164,7 +224,7 @@ class EvidenceAnswer(GuidanceModel):
     speaker_register: Literal["informal_ungendered"] = Field(default="informal_ungendered", description="Return the exact machine label informal_ungendered, never a description or translation. Answer and suggested replies use natural Thai without gendered speaker pronouns or honorifics.", json_schema_extra={"x-provider-description": True})
     request_fit: Literal["meets_request", "no_supported_match", "not_assessed"] = Field(description="Resolve suitability before prose: meets_request only when selected equipment satisfies the user's requested kind, function and every established constraint; no_supported_match when no candidate does so; not_assessed for inspection, technical information or category browsing without a justified item selection. Category membership or an eligible price alone never establishes suitability; complementary equipment does not replace the requested device. This conclusion guides writing and is not an independent review.", json_schema_extra={"x-provider-description": True})
     selection: SelectionPlan | None
-    answer: str = Field(alias='text',min_length=1, description="Lead with the request-fit conclusion in friendly nongendered Thai. For no_supported_match explicitly explain that the requested kind/function has no supported match within the preserved constraints; describe complementary or differently constrained options only as alternatives, never as satisfying the unmet request. Do not infer incompatibility from absent evidence. Render catalog names, prices, units and status through {{item:ID:FIELD}} references to supplied rows, never rewritten literal values. For product recommendations, follow the system's presentation instructions: each product has a standalone bold name followed by a Markdown field list. Keep the name and fields on separate lines, never combine them into an inline paragraph.", json_schema_extra={"x-provider-description": True})
+    answer: str = Field(alias='text',min_length=1, description="Answer only the catalog/technical task; requested app facts are projected separately, so never generate or repeat app workflows here. Lead with the request-fit conclusion in friendly nongendered Thai. For no_supported_match explicitly explain that the requested kind/function has no supported match within the preserved constraints; describe complementary or differently constrained options only as alternatives, never as satisfying the unmet request. Do not infer incompatibility from absent evidence. Render catalog names, prices, units and status through {{item:ID:FIELD}} references to supplied rows, never rewritten literal values. For product recommendations, follow the system's presentation instructions: each product has a standalone bold name followed by a Markdown field list. Keep the name and fields on separate lines, never combine them into an inline paragraph.", json_schema_extra={"x-provider-description": True})
     search_ids: list[str]
     suggested_replies: list[str]
 

@@ -199,6 +199,35 @@ async def test_nonquality_failure_does_not_enter_recovery():
 
 
 @pytest.mark.asyncio
+async def test_questionnaire_repair_exposes_only_existing_pending_dimensions_to_provider():
+    from app.infrastructure.llm.provider_client import native_schema
+    use_case, llm, stages, _ = stack()
+    original = llm.generate_structured.side_effect
+
+    async def inspect_repair(**kwargs):
+        if CURRENT_GENERATION.get().name == 'repair':
+            document = native_schema(kwargs['schema'])
+            questions_schema = document['properties']['questions']
+            reference = questions_schema['items']['$ref'].removeprefix('#/$defs/')
+            dimension = document['$defs'][reference]['properties']['dimension']
+            assert dimension.get('enum') == ['budget']
+            # รหัสที่ใช้ต่อบทสนทนาต้องไม่กลายเป็นชื่อใหม่เมื่อแก้ข้อความ
+            from pydantic import ValidationError
+            invalid = dict(speaker_register='informal_ungendered', answer='repaired invitation',
+                questions=[questions()[0].model_dump() | {'dimension': 'budget_option'}],
+                request_fit='not_assessed', selection=None, search_ids=[], suggested_replies=[])
+            with pytest.raises(ValidationError) as failure:
+                kwargs['schema'].model_validate(invalid)
+            assert any(entry['type'] == 'literal_error' for entry in failure.value.errors())
+        return await original(**kwargs)
+
+    llm.generate_structured.side_effect = inspect_repair
+    result = await use_case.execute(ChatRequestDTO(message=QUERY))
+    assert stages == ['planning', 'review', 'repair', 'review']
+    assert [question.dimension for question in result.questions] == ['budget']
+
+
+@pytest.mark.asyncio
 async def test_repair_is_cancelled_by_total_turn_deadline_before_sse_ready():
     import asyncio
     from app.infrastructure.runtime.execution import RuntimeExecutionGuard

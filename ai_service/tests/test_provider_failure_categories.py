@@ -7,7 +7,6 @@ import pytest
 from app.core.exceptions import AllLLMProvidersExhaustedException
 from app.domain.interfaces.generation_stage import generation_stage
 from app.infrastructure.llm.cascade_llm_service import CascadeLLMService
-from app.infrastructure.llm.gemini_client import GeminiClient
 from app.infrastructure.llm.groq_client import GroqClient
 from app.infrastructure.llm.quota import QuotaGovernor
 from app.infrastructure.runtime.execution import TURN_RESOURCES
@@ -16,34 +15,34 @@ from test_turn_reservation import Result, stack
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure", [403, 429, 500, "connection", "timeout", "invalid_output"])
-async def test_gemini_failure_switches_provider_before_another_gemini_model(failure):
+@pytest.mark.parametrize('failure', [403, 429, 503, 'connection', 'timeout', 'invalid_output'])
+async def test_groq_failure_switches_models_except_provider_auth_denial(failure):
     calls = []
-    runtime = RUNTIME.model_copy(update={"providers": [
-        profile.model_copy(update={"enabled": True}) for profile in RUNTIME.providers]})
-
-    async def respond(request):
-        provider = "gemini" if "contents" in json.loads(request.content) else "groq"
-        calls.append(provider)
-        if provider == "gemini":
-            if failure == "connection":
-                raise httpx.ConnectError("fixture", request=request)
-            if failure == "timeout":
-                raise httpx.ReadTimeout("fixture", request=request)
-            if failure == "invalid_output":
-                return httpx.Response(200, json={"candidates": [{"content": {
-                    "parts": [{"text": '{"unexpected":true}'}]}}]})
-            return httpx.Response(failure, json={"error": {"status": "fixture"}})
+    def respond(request):
+        model = json.loads(request.content)['model']
+        calls.append(model)
+        if model == RUNTIME.providers[0].proposed_model:
+            if failure == 'connection':
+                raise httpx.ConnectError('fixture', request=request)
+            if failure == 'timeout':
+                raise httpx.ReadTimeout('fixture', request=request)
+            if failure == 'invalid_output':
+                return httpx.Response(200, json=envelope('{"unexpected":true}'))
+            return httpx.Response(failure, json={'error': {'code': 'fixture'}})
         return httpx.Response(200, json=envelope())
-
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
-        service = CascadeLLMService(runtime=runtime,
-            gemini_client=GeminiClient(api_key="fixture", runtime=runtime, http_client=http),
-            groq_client=GroqClient(api_key="fixture", runtime=runtime, http_client=http))
+        service = CascadeLLMService(runtime=RUNTIME,
+            groq_client=GroqClient(api_key='fixture', runtime=RUNTIME, http_client=http))
         try:
-            result = await service.generate_structured("fixture", SmallResult)
-            assert result.value == "valid"
-            assert calls == ["gemini", "groq"]
+            if failure == 403:
+                with pytest.raises(AllLLMProvidersExhaustedException):
+                    await service.generate_structured('fixture', SmallResult)
+                assert calls == [service.configuration.GROQ_PRIMARY_MODEL]
+                assert service._auth_blocked == {'groq'}
+            else:
+                result = await service.generate_structured('fixture', SmallResult)
+                assert result.value == 'valid'
+                assert calls == list(service.configuration.groq_models[:2])
         finally:
             await service.aclose()
 
@@ -68,34 +67,28 @@ async def test_occupied_processing_slots_report_queue_without_claiming_quota():
 
 
 @pytest.mark.asyncio
-async def test_groq_review_can_use_another_groq_model_when_gemini_is_blocked():
+async def test_review_failure_cannot_fall_back_to_the_draft_writer():
+    from app.domain.interfaces.generation_stage import Provenance
     calls = []
-    runtime = RUNTIME.model_copy(update={"stages": RUNTIME.stages.model_copy(update={
-        "review": RUNTIME.stages.review.model_copy(update={"profiles": (
-            "groq-primary", "gemini-primary", "groq-fallback-1", "groq-fallback-2")})})})
-
     def respond(request):
-        payload = json.loads(request.content)
-        calls.append(payload["model"])
-        return httpx.Response(200, json=envelope(
-            '{"unexpected":true}' if len(calls) == 1 else '{"value":"valid"}'))
-
+        calls.append(json.loads(request.content)['model'])
+        return httpx.Response(200, json=envelope('{"unexpected":true}'))
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
-        service = CascadeLLMService(runtime=runtime,
-            groq_client=GroqClient(api_key="fixture", runtime=runtime, http_client=http))
-        service._auth_blocked.add("gemini")
+        service = CascadeLLMService(runtime=RUNTIME,
+            groq_client=GroqClient(api_key='fixture', runtime=RUNTIME, http_client=http))
         try:
-            with generation_stage("review"):
-                assert (await service.generate_structured("fixture", SmallResult)).value == "valid"
-            assert calls == [service.configuration.GROQ_PRIMARY_MODEL,
-                             service.configuration.GROQ_FALLBACK_MODEL_1]
+            writer = Provenance('groq', service.configuration.GROQ_PRIMARY_MODEL)
+            with generation_stage('review', excluded_models=[writer]):
+                with pytest.raises(AllLLMProvidersExhaustedException):
+                    await service.generate_structured('fixture', SmallResult)
+            assert calls == [service.configuration.GROQ_FALLBACK_MODEL_1, service.configuration.GROQ_FALLBACK_MODEL_2]
         finally:
             await service.aclose()
 
 
 @pytest.mark.asyncio
 async def test_no_independent_reviewer_is_not_a_quota_or_queue_failure(tmp_path):
-    service, gemini, groq = stack(tmp_path)
+    service, groq = stack(tmp_path)
     service._review_candidates = lambda _: []
     token = TURN_RESOURCES.set({"cleanup": []})
     try:
@@ -104,7 +97,6 @@ async def test_no_independent_reviewer_is_not_a_quota_or_queue_failure(tmp_path)
                 await service.generate_structured("fixture", Result)
         assert failed.value.code == "review_unavailable"
         assert failed.value.retry_after is None
-        gemini.generate_structured.assert_not_awaited()
         groq.generate_structured.assert_not_awaited()
     finally:
         TURN_RESOURCES.reset(token)
@@ -114,7 +106,7 @@ async def test_no_independent_reviewer_is_not_a_quota_or_queue_failure(tmp_path)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("daily", [False, True])
 async def test_local_usage_limit_is_classified_and_retry_admits_again(tmp_path, daily):
-    service, gemini, groq = stack(tmp_path)
+    service, groq = stack(tmp_path)
     clock = [0.0]
     policies = [state.policy for state in service.governor._buckets.values()]
     service.governor = QuotaGovernor(policies, clock=lambda: clock[0])
@@ -134,7 +126,6 @@ async def test_local_usage_limit_is_classified_and_retry_admits_again(tmp_path, 
         assert failed.value.retry_after == (
             min(policy.day_seconds for policy in policies) if daily
             else min(policy.window_seconds for policy in policies))
-        gemini.generate_structured.assert_not_awaited()
         groq.generate_structured.assert_not_awaited()
     finally:
         TURN_RESOURCES.reset(token)

@@ -20,6 +20,42 @@
       "title": "CatalogOperation",
       "type": "object"
     },
+    "CatalogOverviewStage": {
+      "additionalProperties": false,
+      "properties": {
+        "response_mode": {
+          "const": "catalog_overview",
+          "description": "Unfiltered category browsing only, without targets, spending ceiling, user constraints, exclusions or external verification.",
+          "title": "Response Mode",
+          "type": "string",
+          "x-provider-description": true
+        },
+        "catalog_operation": {
+          "$ref": "#/$defs/SelectionCatalogOperation"
+        },
+        "text": {
+          "const": "",
+          "title": "Text",
+          "type": "string"
+        },
+        "questions": {
+          "items": {
+            "type": "null"
+          },
+          "maxItems": 0,
+          "title": "Questions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "response_mode",
+        "catalog_operation",
+        "text",
+        "questions"
+      ],
+      "title": "CatalogOverviewStage",
+      "type": "object"
+    },
     "ClarificationStage": {
       "additionalProperties": false,
       "properties": {
@@ -32,20 +68,22 @@
           "$ref": "#/$defs/CatalogOperation"
         },
         "text": {
-          "description": "Original assistant invitation to pending questions; never echo the user. Natural ungendered Thai.",
+          "description": "Original assistant invitation to material pending questions for the established rental goal; never echo the user. Natural ungendered Thai in the assistant's own voice, preserving courtesy without copying gendered speech from history.",
           "minLength": 1,
           "title": "Text",
           "type": "string",
           "x-provider-description": true
         },
         "questions": {
+          "description": "Unique IDs and slot dimensions. One distinct unknown per question; at most one spending_ceiling.",
           "items": {
             "$ref": "#/$defs/NativePlannedQuestion"
           },
           "maxItems": 3,
           "minItems": 1,
           "title": "Questions",
-          "type": "array"
+          "type": "array",
+          "x-provider-description": true
         }
       },
       "required": [
@@ -101,7 +139,7 @@
       "properties": {
         "response_mode": {
           "const": "documents",
-          "description": "Ready app information uses supplied approved articles.",
+          "description": "Ready information about using this rental app is in scope. Choose documents with catalog_operation.kind=none, text empty and only relevant knowledge_ids for approved app facts. Do not choose information/conversation or generate factual prose when approved app articles answer the request.",
           "title": "Response Mode",
           "type": "string",
           "x-provider-description": true
@@ -155,11 +193,8 @@
       "additionalProperties": false,
       "properties": {
         "response_mode": {
-          "description": "equipment: ready named-item, comparison or filtered requests. catalog_overview: unfiltered category browsing only, without targets, spending ceiling, user constraints, exclusions or external verification.",
-          "enum": [
-            "equipment",
-            "catalog_overview"
-          ],
+          "const": "equipment",
+          "description": "Ready named-item, comparison or filtered catalog requests.",
           "title": "Response Mode",
           "type": "string",
           "x-provider-description": true
@@ -260,15 +295,36 @@
       "title": "NativeKnownFact",
       "type": "object"
     },
+    "NativeOtherRequirementSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "other_requirement",
+          "title": "Kind",
+          "type": "string"
+        },
+        "dimension": {
+          "minLength": 1,
+          "title": "Dimension",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "dimension"
+      ],
+      "title": "NativeOtherRequirementSlot",
+      "type": "object"
+    },
     "NativePlannedQuestion": {
       "additionalProperties": false,
       "properties": {
         "choices": {
-          "description": "All displayed options in one array, including the unrestricted option when applicable. At most four total.",
+          "description": "All displayed options: at least one specified and at most one unrestricted. Unrestricted means no constraint, never a particular answer.",
           "items": {
             "$ref": "#/$defs/NativeQuestionChoice"
           },
-          "maxItems": 4,
+          "maxItems": 5,
           "minItems": 1,
           "title": "Choices",
           "type": "array",
@@ -279,22 +335,30 @@
           "title": "Id",
           "type": "string"
         },
-        "dimension": {
+        "ask": {
           "minLength": 1,
-          "title": "Dimension",
+          "title": "Ask",
           "type": "string"
         },
-        "title": {
-          "minLength": 1,
-          "title": "Title",
-          "type": "string"
+        "slot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeSpendingCeilingSlot"
+            },
+            {
+              "$ref": "#/$defs/NativeOtherRequirementSlot"
+            }
+          ],
+          "description": "Spending ceilings or their absence use spending_ceiling; other material unknowns use other_requirement with a stable dimension ID.",
+          "title": "Slot",
+          "x-provider-description": true
         },
         "branches": {
-          "description": "Adapt to one earlier question: cover each source choice ID with relevant title/choices. Empty if independent or for unknown typed answers.",
+          "description": "Relevant title/choices for every exact choice ID of one earlier question. Empty if independent or for unknown typed answers.",
           "items": {
             "$ref": "#/$defs/NativeQuestionBranch"
           },
-          "maxItems": 4,
+          "maxItems": 5,
           "title": "Branches",
           "type": "array",
           "x-provider-description": true
@@ -303,8 +367,8 @@
       "required": [
         "choices",
         "id",
-        "dimension",
-        "title"
+        "ask",
+        "slot"
       ],
       "title": "NativePlannedQuestion",
       "type": "object"
@@ -416,11 +480,13 @@
           "type": "string"
         },
         "additional_goals": {
+          "description": "Additional independently requested purposes from the actual user, separate from equipment requirements. A catalog operation with app topics requires a separately requested app explanation here. Available knowledge topics and rental preferences do not create additional app goals.",
           "items": {
             "type": "string"
           },
           "title": "Additional Goals",
-          "type": "array"
+          "type": "array",
+          "x-provider-description": true
         },
         "request_scope": {
           "enum": [
@@ -504,11 +570,11 @@
       "additionalProperties": false,
       "properties": {
         "choices": {
-          "description": "All displayed options in one array, including the unrestricted option when applicable. At most four total.",
+          "description": "All displayed options: at least one specified and at most one unrestricted. Unrestricted means no constraint, never a particular answer.",
           "items": {
             "$ref": "#/$defs/NativeQuestionChoice"
           },
-          "maxItems": 4,
+          "maxItems": 5,
           "minItems": 1,
           "title": "Choices",
           "type": "array",
@@ -524,9 +590,9 @@
           "title": "Source Option Id",
           "type": "string"
         },
-        "title": {
+        "ask": {
           "minLength": 1,
-          "title": "Title",
+          "title": "Ask",
           "type": "string"
         }
       },
@@ -534,7 +600,7 @@
         "choices",
         "source_question_id",
         "source_option_id",
-        "title"
+        "ask"
       ],
       "title": "NativeQuestionBranch",
       "type": "object"
@@ -548,14 +614,14 @@
           "type": "string"
         },
         "label": {
-          "description": "Complete answer. Budget maximum: closed ceiling with billing period or explicitly unlimited; never a lower bound.",
+          "description": "Complete answer. Spending maximum: ceiling with billing period or explicitly unlimited, never a lower bound.",
           "minLength": 1,
           "title": "Label",
           "type": "string",
           "x-provider-description": true
         },
         "value": {
-          "description": "Exact label meaning, including ceiling/absence of ceiling and billing period. Preserve distinctions between choices.",
+          "description": "Same full meaning as label: ceiling/absence and billing period. Keep choices distinct.",
           "minLength": 1,
           "title": "Value",
           "type": "string",
@@ -568,13 +634,13 @@
           "title": "Supporting Item Ids",
           "type": "array"
         },
-        "choice_kind": {
-          "description": "specified establishes a preference or finite ceiling; unrestricted leaves that preference unconstrained. A maximum-budget question includes one unrestricted option explicitly removing the ceiling.",
+        "value_kind": {
+          "description": "specified: preference/finite ceiling; unrestricted: no constraint. Spending-ceiling questions include one explicit no-ceiling option.",
           "enum": [
             "specified",
             "unrestricted"
           ],
-          "title": "Choice Kind",
+          "title": "Value Kind",
           "type": "string",
           "x-provider-description": true
         }
@@ -584,9 +650,24 @@
         "label",
         "value",
         "supporting_item_ids",
-        "choice_kind"
+        "value_kind"
       ],
       "title": "NativeQuestionChoice",
+      "type": "object"
+    },
+    "NativeSpendingCeilingSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "spending_ceiling",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "NativeSpendingCeilingSlot",
       "type": "object"
     },
     "NoCatalogOperation": {
@@ -602,6 +683,21 @@
         "kind"
       ],
       "title": "NoCatalogOperation",
+      "type": "object"
+    },
+    "SelectionCatalogOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "selection",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "SelectionCatalogOperation",
       "type": "object"
     },
     "TechnicalStage": {
@@ -660,6 +756,9 @@
           "$ref": "#/$defs/EvidenceStage"
         },
         {
+          "$ref": "#/$defs/CatalogOverviewStage"
+        },
+        {
           "$ref": "#/$defs/TechnicalStage"
         },
         {
@@ -680,19 +779,38 @@
     "analysis": {
       "$ref": "#/$defs/NativePlanningUnderstanding"
     },
+    "evidence_goal": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "For equipment/technical stages, the complete equipment task still to answer, preserving every requested property, comparison and constraint. Exclude app information answered separately by knowledge_ids/unverified_topic_ids. Null for other stages.",
+      "title": "Evidence Goal",
+      "x-provider-description": true
+    },
     "knowledge_ids": {
+      "description": "Only supplied approved articles needed for information the user actually requested. Source availability is not a request to describe the platform; omit unrelated articles from a rental preference dialogue.",
       "items": {
         "type": "string"
       },
       "title": "Knowledge Ids",
-      "type": "array"
+      "type": "array",
+      "x-provider-description": true
     },
     "unverified_topic_ids": {
+      "description": "Only unverified information topics actually asked about. Unknown platform information is unrelated to missing rental preferences or inventory evidence.",
       "items": {
         "type": "string"
       },
       "title": "Unverified Topic Ids",
-      "type": "array"
+      "type": "array",
+      "x-provider-description": true
     }
   },
   "required": [

@@ -3,13 +3,16 @@ package ports
 import (
 	"crypto/subtle"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/recover"
 )
 
-func SetupRouter(
+func SetupRouterWithOperations(
+	operations domain.OperationsOptions,
 	itemRepo domain.ItemRepository,
 	authGateway domain.AuthGateway,
 	contactRepository domain.ConversationContactRepository,
@@ -17,55 +20,48 @@ func SetupRouter(
 	pushSender domain.PushNotificationSender,
 	aiGateway domain.AIChatbotGateway,
 	appSecretKey string,
-) *gin.Engine {
+	options ...fiber.Config,
+) *fiber.App {
 
 	// ใช้ Logger และ Recovery Middleware (ป้องกันเซิร์ฟเวอร์พังเวลาเกิด Panic โค้ดเอ๋อ)
-	router := gin.New()
-	router.Use(gin.Logger())
-	router.Use(gin.Recovery())
+	router := NewHTTPApp(options...)
+	router.Use(accessLoggingMiddleware())
+	router.Use(recover.New())
+	router.Use(redirectTrailingSlash())
 	router.Use(blockScannerPaths())
 
 	// ตั้งค่า CORS แบบปลอดภัย ไม่อนุญาตให้สะท้อน Arbitrary Origin ควบคู่กับ Credentials
-	router.Use(func(c *gin.Context) {
-		origin := c.Request.Header.Get("Origin")
-		isAllowed := false
-		if origin != "" {
-			// ตรวจสอบ Whitelist สำหรับ Origin ที่อนุญาต
-			if strings.HasPrefix(origin, "http://localhost") ||
-				strings.HasPrefix(origin, "http://127.0.0.1") ||
-				strings.HasSuffix(origin, ".ts.net") ||
-				strings.HasSuffix(origin, "yuemnoi.com") {
-				isAllowed = true
-			}
-		}
+	router.Use(func(c fiber.Ctx) error {
+		origin := c.Get("Origin")
+		isAllowed := isAllowedOrigin(origin)
 
 		if isAllowed {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			c.Set("Access-Control-Allow-Origin", origin)
+			c.Set("Access-Control-Allow-Credentials", "true")
 		} else if origin == "" {
 			// สำหรับ Mobile Native App ที่ไม่ได้ส่ง Origin Header มา
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			c.Set("Access-Control-Allow-Origin", "*")
 		}
 
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-App-Secret")
+		c.Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
+		c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-App-Secret")
 
 		// ถ้าระบบส่ง OPTIONS มาถามทาง ให้ตอบกลับ 204 แล้วจบงานตรงนี้เลย
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
+		if c.Method() == "OPTIONS" {
+			return c.SendStatus(http.StatusNoContent)
 		}
-		c.Next()
+		return c.Next()
 	})
 	router.Use(verifyAppSecret(appSecretKey))
+	router.Use(operationsBusinessGuard(operations, authGateway))
 
 	// Health check สำหรับ Docker และระบบเฝ้าระวัง โดยไม่เปิดเผยข้อมูลภายใน
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	router.Get("/health", func(c fiber.Ctx) error {
+		return c.JSON(fiber.Map{"status": "ok"})
 	})
 
 	// ติดตั้ง Rate Limiters เพื่อป้องกัน Brute-Force และ DoS
-	authRateLimiter := NewRateLimiter(5.0/60.0, 5.0)  // 5 ครั้งต่อนาทีสำหรับ Auth
+	authRateLimiter := NewRateLimiter(5.0/60.0, 5.0) // 5 ครั้งต่อนาทีสำหรับ Auth
 	aiRateLimiter := NewRateLimiter(15.0/60.0, 15.0) // 15 ครั้งต่อนาทีสำหรับ AI
 
 	// นำเข้าคอนโทรลเลอร์ต่างๆ
@@ -81,98 +77,160 @@ func SetupRouter(
 	{
 		// ทุกอย่างเกี่ยวกับการยืนยันตัวตน (Authentication) - มี Rate Limit ป้องกัน Brute-force
 		user := api.Group("/auth")
-		user.Use(RateLimitMiddleware(authRateLimiter, "คุณส่งคำขอยืนยันตัวตนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่"))
+		authRateLimit := RateLimitMiddleware(authRateLimiter, "คุณส่งคำขอยืนยันตัวตนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่")
 		{
 			// POST /api/auth/register
-			user.POST("/register", userController.Register)
+			user.Post("/register", authRateLimit, userController.Register)
 			// POST /api/auth/login
-			user.POST("/login", userController.Login)
+			user.Post("/login", authRateLimit, userController.Login)
 			// POST /api/auth/google-profile
-			user.POST("/google-profile", userController.SyncGoogleProfileImage)
+			user.Post("/google-profile", authRateLimit, userController.SyncGoogleProfileImage)
 			// POST /api/auth/change-password
-			user.POST("/change-password", userController.ChangePassword)
+			user.Post("/change-password", authRateLimit, userController.ChangePassword)
 			// POST /api/auth/send-otp
-			user.POST("/send-otp", userController.SendOTP)
+			user.Post("/send-otp", authRateLimit, userController.SendOTP)
 			// POST /api/auth/verify-otp
-			user.POST("/verify-otp", userController.VerifyResetOTP)
+			user.Post("/verify-otp", authRateLimit, userController.VerifyResetOTP)
 		}
 
 		// จัดการโปรไฟล์และข้อมูลผู้ใช้ (User Profile & Settings)
 		profile := api.Group("/user")
 		{
 			// GET /api/user/profile
-			profile.GET("/profile", userController.GetProfile)
+			profile.Get("/profile", userController.GetProfile)
 			// PUT /api/user/profile
-			profile.PUT("/profile", userController.UpdateProfile)
+			profile.Put("/profile", userController.UpdateProfile)
 			// PUT /api/user/contact
-			profile.PUT("/contact", userController.UpdateContact)
+			profile.Put("/contact", userController.UpdateContact)
 			// POST /api/user/fcm-token
-			profile.POST("/fcm-token", userController.UpdateFCMToken)
+			profile.Post("/fcm-token", userController.UpdateFCMToken)
 		}
 		// ทุกอย่างเกี่ยวกับ Items ปล่อยเช่า
 		items := api.Group("/items")
 		{
 			// GET /api/items
-			items.GET("", itemController.GetAllItems)
+			items.Get("", itemController.GetAllItems)
 			// POST /api/items
-			items.POST("", itemController.CreateItem)
+			items.Post("", itemController.CreateItem)
 			// GET /api/items/:id
-			items.GET("/:id", itemController.GetItemByID)
+			items.Get("/:id", itemController.GetItemByID)
 			// PUT /api/items/:id
-			items.PUT("/:id", itemController.UpdateItem)
+			items.Put("/:id", itemController.UpdateItem)
 			// DELETE /api/items/:id
-			items.DELETE("/:id", itemController.DeleteItem)
+			items.Delete("/:id", itemController.DeleteItem)
 		}
 
 		// ทุกอย่างเกี่ยวกับการจอง (Rentals)
 		rentals := api.Group("/rentals")
 		{
-			rentals.POST("", rentalController.CreateRentalOrder)
-			rentals.POST("/:id/handover", rentalController.HandoverRental)
-			rentals.POST("/:id/return", rentalController.ReturnRental)
+			rentals.Post("", rentalController.CreateRentalOrder)
+			rentals.Post("/:id/handover", rentalController.HandoverRental)
+			rentals.Post("/:id/return", rentalController.ReturnRental)
 		}
 
 		// Push Notification - ป้องกันด้วย Authentication ภายใน Handler
 		push := api.Group("/push")
 		{
-			push.POST("/chat", pushController.SendChatPush)
+			push.Post("/chat", pushController.SendChatPush)
 		}
 
 		chat := api.Group("/chat")
 		{
 			// POST /api/chat/contact
-			chat.POST("/contact", chatContactController.GetConversationContact)
+			chat.Post("/contact", chatContactController.GetConversationContact)
 		}
 
 		// ระบบแชทสนทนากับ AI Chatbot (Stateless AI Gateway) - มี Rate Limit ป้องกัน GPU DoS
 		chatAI := api.Group("/chat-ai")
-		chatAI.Use(RateLimitMiddleware(aiRateLimiter, "คำขอสนทนากับ AI ถี่เกินไป กรุณารอสักครู่แล้วลองใหม่"))
+		aiRateLimit := RateLimitMiddleware(aiRateLimiter, "คำขอสนทนากับ AI ถี่เกินไป กรุณารอสักครู่แล้วลองใหม่")
 		{
 			// POST /api/chat-ai (Non-Streaming)
-			chatAI.POST("", chatbotController.SendMessage)
+			chatAI.Post("", aiRateLimit, chatbotController.SendMessage)
 			// POST /api/chat-ai/stream (SSE Streaming)
-			chatAI.POST("/stream", chatbotController.SendMessageStream)
+			chatAI.Post("/stream", aiRateLimit, chatbotController.SendMessageStream)
 		}
 	}
 
+	operationsHandler := NewOperationsHandler(operations, authGateway)
+	identityLimit := RateLimitMiddleware(NewRateLimiter(5.0/60.0, 5), "ส่งคำขอถี่เกินไป กรุณารอสักครู่")
+	router.Get("/api/identity/status", operationsHandler.Status)
+	router.Post("/api/identity/sessions", identityLimit, operationsHandler.Begin)
+	router.Post("/api/identity/sessions/:id/submit", identityLimit, operationsHandler.Submit)
+	router.Post("/api/complaints", identityLimit, operationsHandler.Complaint)
+	router.Get("/api/admin/evidence/:id", operationsHandler.Evidence)
+	router.Get("/api/admin/:module", operationsHandler.Read)
+	router.Post("/api/admin/actions/:action/:target", operationsHandler.Action)
 	return router
 }
 
-func blockScannerPaths() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		path := strings.ToLower(c.Request.URL.Path)
+// ตรวจ hostname จริง เพื่อไม่ให้โดเมนที่เลียนแบบชื่อหรือใส่ชื่อไว้ใน path ผ่าน CORS
+func isAllowedOrigin(origin string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
+		parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "localhost" || host == "127.0.0.1" ||
+		host == "yuemnoi.com" || strings.HasSuffix(host, ".yuemnoi.com") || strings.HasSuffix(host, ".ts.net")
+}
+
+func blockScannerPaths() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		path := strings.ToLower(c.Path())
 		if strings.Contains(path, ".env") ||
 			strings.Contains(path, ".git") ||
 			strings.Contains(path, ".php") {
-			c.AbortWithStatus(http.StatusNotFound)
-			return
+			c.Status(http.StatusNotFound)
+			return nil
 		}
 
-		c.Next()
+		return c.Next()
 	}
 }
 
-func verifyAppSecret(expectedSecret string) gin.HandlerFunc {
+// คง HTTP redirect ของเส้นทางเดิม เมื่อ client เติม slash หลัง endpoint ที่มีอยู่จริง
+func redirectTrailingSlash() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		path := c.Path()
+		if path == "/" || !strings.HasSuffix(path, "/") {
+			return c.Next()
+		}
+		target := strings.TrimSuffix(path, "/")
+		for _, route := range c.App().GetRoutes(true) {
+			if route.Method != c.Method() {
+				continue
+			}
+			pattern, segments := strings.Split(route.Path, "/"), strings.Split(target, "/")
+			if len(pattern) != len(segments) {
+				continue
+			}
+			matched := true
+			for i, segment := range pattern {
+				if strings.HasPrefix(segment, ":") && segments[i] != "" {
+					continue
+				}
+				if segment != segments[i] {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				if query := string(c.Request().URI().QueryString()); query != "" {
+					target += "?" + query
+				}
+				status := http.StatusTemporaryRedirect
+				if c.Method() == http.MethodGet {
+					status = http.StatusMovedPermanently
+				}
+				return c.Redirect().Status(status).To(target)
+			}
+		}
+		return c.Next()
+	}
+}
+
+func verifyAppSecret(expectedSecret string) fiber.Handler {
 	// แยกคีย์ที่รองรับ (รองรับทั้งแบบเดี่ยวและแบบ Comma-separated สำหรับการหมุนเวียนกุญแจแบบไร้สะดุด)
 	var validKeys []string
 	for _, k := range strings.Split(expectedSecret, ",") {
@@ -182,16 +240,14 @@ func verifyAppSecret(expectedSecret string) gin.HandlerFunc {
 		}
 	}
 
-	return func(c *gin.Context) {
-		if len(validKeys) == 0 || c.Request.Method == http.MethodOptions || c.Request.URL.Path == "/health" {
-			c.Next()
-			return
+	return func(c fiber.Ctx) error {
+		if len(validKeys) == 0 || c.Method() == http.MethodOptions || c.Path() == "/health" {
+			return c.Next()
 		}
 
-		providedSecret := c.GetHeader("X-App-Secret")
+		providedSecret := c.Get("X-App-Secret")
 		if providedSecret == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-			return
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 		}
 
 		matched := false
@@ -203,10 +259,14 @@ func verifyAppSecret(expectedSecret string) gin.HandlerFunc {
 		}
 
 		if !matched {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-			return
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 		}
 
-		c.Next()
+		return c.Next()
 	}
+}
+
+// SetupRouter คง constructor เดิมสำหรับบริการที่ยังไม่เปิดใช้งานระบบเจ้าหน้าที่
+func SetupRouter(itemRepo domain.ItemRepository, authGateway domain.AuthGateway, contactRepository domain.ConversationContactRepository, rentalRepository domain.RentalRepository, pushSender domain.PushNotificationSender, aiGateway domain.AIChatbotGateway, appSecretKey string, options ...fiber.Config) *fiber.App {
+	return SetupRouterWithOperations(domain.OperationsOptions{}, itemRepo, authGateway, contactRepository, rentalRepository, pushSender, aiGateway, appSecretKey, options...)
 }

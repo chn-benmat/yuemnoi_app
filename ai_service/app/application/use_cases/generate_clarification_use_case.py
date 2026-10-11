@@ -41,6 +41,12 @@ class GenerateClarificationUseCase:
                     raise ValueError("Question title exceeds configured UI limit")
                 if not 1 <= len(question.choices) <= self._policy.max_options:
                     raise ValueError("Choice count outside configured bounds")
+                policy = self._policy.choice_policy
+                if policy is not None:
+                    minimum, maximum = ((policy.budget_total, policy.budget_total) if question.dimension == 'budget_max'
+                                        else (policy.regular_min, policy.regular_max))
+                    if not minimum <= len(question.choices) <= maximum:
+                        raise ValueError('Choice count violates the questionnaire policy')
                 ids = [choice.id for choice in question.choices]
                 labels = [choice.label for choice in question.choices]
                 if len(ids) != len(set(ids)) or len(labels) != len(set(labels)):
@@ -56,6 +62,7 @@ class GenerateClarificationUseCase:
             "understanding": decision.model_dump(), "catalog": snapshot,
             "limits": {"max_questions": self._policy.max_questions,
                        "max_options": self._policy.max_options,
+                       "choice_policy": self._policy.choice_policy.model_dump() if self._policy.choice_policy else None,
                        "title_max_characters": self._policy.title_max_characters,
                        "option_max_characters": self._policy.option_max_characters},
         }, validated_schema(QuestionnairePlan, validate), QUESTIONNAIRE_PROMPT)

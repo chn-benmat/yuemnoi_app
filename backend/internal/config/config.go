@@ -13,8 +13,14 @@ import (
 
 // Config โครงสร้างเก็บคอนฟิกูเรชันทั้งหมดของระบบ Backend ผ่าน Struct Tag
 type Config struct {
+	OperationsEnabled       bool          `env:"OPERATIONS_ENABLED" envDefault:"false"`
+	IdentityEncryptionKey   string        `env:"IDENTITY_ENCRYPTION_KEY"`
+	IdentityHMACKey         string        `env:"IDENTITY_HMAC_KEY"`
+	IdentityCleanupInterval time.Duration `env:"IDENTITY_CLEANUP_INTERVAL" envDefault:"15m"`
+
 	Port                   string        `env:"PORT" envDefault:"8080"`
-	GinMode                string        `env:"GIN_MODE" envDefault:"debug"`
+	Mode                   string        `env:"APP_ENV"`
+	LegacyMode             string        `env:"GIN_MODE" envDefault:"debug"`
 	SupabaseURL            string        `env:"SUPABASE_URL,notEmpty"`
 	SupabaseServiceRoleKey string        `env:"SUPABASE_SERVICE_ROLE_KEY,notEmpty"`
 	FirebaseSAPath         string        `env:"FIREBASE_SERVICE_ACCOUNT_PATH"`
@@ -59,6 +65,9 @@ func (c *Config) GetPrimaryInternalServiceKey() string {
 
 // Validate ตรวจสอบค่าคอนฟิกที่จำเป็นทั้งหมด
 func (c *Config) Validate() error {
+	if c.IdentityCleanupInterval <= 0 {
+		return fmt.Errorf("IDENTITY_CLEANUP_INTERVAL must be positive")
+	}
 	if c.AIServiceTimeout <= 0 {
 		return fmt.Errorf("AI_SERVICE_TIMEOUT must be positive")
 	}
@@ -70,7 +79,7 @@ func (c *Config) Validate() error {
 	}
 
 	// ในโหมด Release (Production) ต้องบังคับให้มีกุญแจความปลอดภัยที่แข็งแกร่ง
-	if c.GinMode == "release" {
+	if c.Mode == "release" {
 		if len(c.GetAppSecretKeys()) == 0 {
 			return fmt.Errorf("APP_SECRET_KEY is required in release mode")
 		}
@@ -95,6 +104,10 @@ func Load() (*Config, error) {
 	var cfg Config
 	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("parse config error: %w", err)
+	}
+	// รองรับ environment ของ deployment เดิม โดย APP_ENV ที่กำหนดชัดเจนมีสิทธิ์สูงกว่า
+	if cfg.Mode == "" {
+		cfg.Mode = cfg.LegacyMode
 	}
 	if err := cfg.ApplyAIClientRuntime(); err != nil {
 		return nil, err

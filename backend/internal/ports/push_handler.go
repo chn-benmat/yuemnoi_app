@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 // PushHandler จัดการคำขอ HTTP สำหรับการส่ง Push Notification
@@ -28,8 +28,8 @@ func NewPushHandler(sender domain.PushNotificationSender, authGateway domain.Aut
 
 // SendChatPushRequest เป็น request body สำหรับส่ง push notification ของข้อความแชท
 type SendChatPushRequest struct {
-	ReceiverID     string `json:"receiver_id" binding:"required"`
-	ConversationID string `json:"conversation_id" binding:"required"`
+	ReceiverID     string `json:"receiver_id" validate:"required"`
+	ConversationID string `json:"conversation_id" validate:"required"`
 	MessageID      string `json:"message_id"`
 	SenderName     string `json:"sender_name"`
 	SenderAvatar   string `json:"sender_avatar"`
@@ -37,28 +37,31 @@ type SendChatPushRequest struct {
 }
 
 // SendChatPush รับคำขอส่ง Push Notification ของข้อความแชทและประมวลผลใน Background (Non-blocking)
-func (h *PushHandler) SendChatPush(c *gin.Context) {
+func (h *PushHandler) SendChatPush(c fiber.Ctx) error {
 	senderID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
-		return
+		return nil
 	}
 
 	var req SendChatPushRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน: " + err.Error()})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลไม่ครบถ้วน: " + err.Error()})
+	}
+	req.ReceiverID = strings.TrimSpace(req.ReceiverID)
+	req.ConversationID = strings.TrimSpace(req.ConversationID)
+	if req.ReceiverID == "" || req.ConversationID == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุผู้รับและห้องสนทนา"})
 	}
 
 	if senderID == req.ReceiverID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ไม่สามารถส่งแจ้งเตือนหาตนเองได้"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ไม่สามารถส่งแจ้งเตือนหาตนเองได้"})
 	}
 
 	// ค้นหาชื่อและรูปของผู้ส่งตัวจริงจากฐานข้อมูลเพื่อป้องกันการปลอมแปลงชื่อผู้ส่ง (Sender Spoofing)
 	senderName := "ผู้ใช้งาน Yuemnoi"
 	senderAvatar := ""
 	if h.auth != nil {
-		if profile, err := h.auth.GetProfile(c.Request.Context(), senderID); err == nil && profile != nil {
+		if profile, err := h.auth.GetProfile(c.Context(), senderID); err == nil && profile != nil {
 			if profile.DisplayName != "" {
 				senderName = profile.DisplayName
 			} else if profile.Email != "" {
@@ -71,10 +74,12 @@ func (h *PushHandler) SendChatPush(c *gin.Context) {
 	}
 
 	// ตอบกลับ 200 OK ให้ Client ทันทีแบบ Non-blocking Fast Response
-	c.JSON(http.StatusOK, gin.H{"status": "queued"})
+	if err := c.Status(http.StatusOK).JSON(fiber.Map{"status": "queued"}); err != nil {
+		return err
+	}
 
 	if h.sender == nil {
-		return
+		return nil
 	}
 
 	// ประมวลผลและยิง Push Notification ใน Background Goroutine โดยใช้ชื่อและรูปที่ตรวจสอบแล้ว
@@ -95,4 +100,5 @@ func (h *PushHandler) SendChatPush(c *gin.Context) {
 			)
 		}
 	}(req, senderName, senderAvatar)
+	return nil
 }

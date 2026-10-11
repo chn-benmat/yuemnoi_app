@@ -6,9 +6,12 @@ import time
 from collections import Counter
 from copy import deepcopy
 from contextvars import ContextVar
+from typing import Any, NoReturn
 
 import httpx
+from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ValidationError
+from pydantic_core import PydanticCustomError
 
 from app.core.config import settings
 from app.core.exceptions import LLMProviderException
@@ -100,67 +103,45 @@ def compact_schema_definitions(document):
     return visit(document)
 
 
-def decode_structured(raw, schema):
-    return schema.model_validate(json.loads(raw, object_pairs_hook=unique_pairs))
+def _reject_json_constant(value: str) -> NoReturn:
+    raise ValueError("Non-finite JSON number")
 
 
-def validate_native_keys(candidate, schema):
-    """Enforce wire-required keys before domain defaults or aliases can fill them.
+def _finite_json_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("Non-finite JSON number")
+    return number
 
-    Pydantic handles types, bounds and semantic validators afterwards. This
-    guard keeps the stricter provider schema's object shape at every depth.
+
+def load_structured_json(raw: str) -> Any:
+    return json.loads(raw, object_pairs_hook=unique_pairs,
+                      parse_constant=_reject_json_constant, parse_float=_finite_json_float)
+
+
+def validate_native_output(candidate: Any, schema: type[BaseModel]) -> None:
+    """Validate the original JSON, including every union branch and wire-required key.
+
+    Domain defaults and ignored extras must never make an invalid wire object
+    admissible. Error messages contain neither generated values nor schema enums.
+    Pydantic still checks strict Python types and semantic validators afterwards.
     """
-    document = native_schema(schema)
-    definitions = document.get('$defs', {})
-
-    def resolve(spec):
-        return definitions.get(spec.get('$ref', '').removeprefix('#/$defs/'), spec)
-
-    def compatible(value, spec):
-        spec = resolve(spec)
-        kind = spec.get('type')
-        if kind == 'null':
-            return value is None
-        if kind == 'array':
-            return isinstance(value, list)
-        if kind == 'string':
-            return isinstance(value, str)
-        if kind == 'boolean':
-            return type(value) is bool
-        if kind in ('number', 'integer'):
-            return type(value) in ((int, float) if kind == 'number' else (int,))
-        if kind == 'object':
-            if not isinstance(value, dict):
-                return False
-            # Choose discriminated object unions using their actual literals.
-            return all(name not in value or 'enum' not in child or value[name] in child['enum']
-                       for name, child in spec.get('properties', {}).items())
-        return True
-
-    def inspect(value, spec, path):
-        spec = resolve(spec)
-        if 'anyOf' in spec:
-            branches = [inspect(value, branch, path) for branch in spec['anyOf'] if compatible(value, branch)]
-            return min(branches, key=len) if branches else []
-        errors = []
-        if isinstance(value, dict) and spec.get('type') == 'object':
-            properties = spec.get('properties', {})
-            errors.extend({'type': 'missing', 'loc': (*path, name), 'input': value}
-                          for name in spec.get('required', []) if name not in value)
-            if spec.get('additionalProperties') is False:
-                errors.extend({'type': 'extra_forbidden', 'loc': (*path, name), 'input': value[name]}
-                              for name in value if name not in properties)
-            for name, child in properties.items():
-                if name in value:
-                    errors.extend(inspect(value[name], child, (*path, name)))
-        elif isinstance(value, list) and spec.get('type') == 'array':
-            for index, child in enumerate(value):
-                errors.extend(inspect(child, spec.get('items', {}), (*path, index)))
-        return errors
-
-    errors = inspect(candidate, document, ())
+    errors = []
+    for error in Draft202012Validator(native_schema(schema)).iter_errors(candidate):
+        code = "literal_error" if error.validator == "enum" else "json_schema_" + error.validator
+        path = tuple(error.absolute_path)
+        if error.validator == "additionalProperties":
+            path += ("unknown_field",)
+        errors.append({"type": PydanticCustomError(code, "Output violates JSON Schema"),
+                       "loc": path, "input": None})
     if errors:
         raise ValidationError.from_exception_data(schema.__name__, errors)
+
+
+def decode_structured(raw: str, schema: type[BaseModel]) -> BaseModel:
+    candidate = load_structured_json(raw)
+    validate_native_output(candidate, schema)
+    return schema.model_validate(candidate, strict=True, by_alias=True, by_name=False)
 
 
 class ProviderClient:
@@ -244,12 +225,26 @@ class ProviderClient:
             except (ValueError, AttributeError):
                 pass
             retry = self.rate_limit_retry(response.headers, error) if response.status_code == 429 else None
+            error_code = "provider_http_error"
+            if response.status_code == 429:
+                error_code = "provider_rate_limited"
+            elif (self.provider == "groq" and response.status_code == 403
+                    and observation.get("error_code") in (
+                        "model_permission_blocked_org", "model_permission_blocked_project")):
+                error_code = "model_permission_denied"
+            elif observation.get("error_code") == "json_validate_failed":
+                error_code = "structured_output_invalid"
             raise LLMProviderException(self.provider, model, "Provider rejected request", response.status_code,
-                                       retry_after=retry, error_code="provider_rate_limited" if response.status_code == 429 else (
-                                           "structured_output_invalid" if observation.get("error_code") == "json_validate_failed" else "provider_http_error"))
+                                       retry_after=retry, error_code=error_code)
         try:
             data = response.json()
             observation["usage"] = self.usage(data)
+            if payload.get("response_format", {}).get("type") == "json_schema":
+                failure = self.structured_completion_error(data)
+                if failure is not None:
+                    observation["validation_errors"] = [{"path": [], "type": failure}]
+                    raise LLMProviderException(self.provider, model, "Structured completion is not usable", 502,
+                                               error_code="structured_output_invalid")
             return self.content(data)
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             raise LLMProviderException(self.provider, model, "Invalid provider envelope", 502, error_code="provider_envelope_invalid") from None
@@ -295,7 +290,7 @@ class ProviderClient:
         raw = await self.post(model, payload)
         typed_event=None
         try:
-            candidate=json.loads(raw,object_pairs_hook=unique_pairs)
+            candidate=load_structured_json(raw)
             recording=GENERATION_RECORDING.get();stage=CURRENT_GENERATION.get()
             if recording is not None and stage is not None:
                 current=next((r for r in reversed(recording) if r.get('phase')==stage.name),None)
@@ -305,7 +300,7 @@ class ProviderClient:
                     typed_event={'provider':self.provider,'model':model,'native_output':candidate,'validated':False}
                     current.setdefault('typed_outputs',[]).append(typed_event)
             candidate = self.decode_candidate(candidate,prompt,schema)
-            validate_native_keys(candidate, schema)
+            validate_native_output(candidate, schema)
             result=schema.model_validate(candidate,strict=True,by_alias=True,by_name=False)
             if typed_event is not None:typed_event['validated']=True
             return result
@@ -316,13 +311,17 @@ class ProviderClient:
                 fields = set(document.get("properties", {}))
                 for definition in document.get("$defs", {}).values():
                     fields.update(definition.get("properties", {}))
-                observation["validation_errors"] = [
-                    {"path": [part if isinstance(part, int) or part in fields else "unknown_field"
-                              for part in entry["loc"]], "type": entry["type"]}
-                    for entry in error.errors(include_url=False, include_context=False, include_input=False)
-                ]
+                observation["validation_errors"] = []
+                for entry in error.errors(include_url=False, include_context=True, include_input=False):
+                    detail = {"path": [part if isinstance(part, int) or part in fields else "unknown_field"
+                                       for part in entry["loc"]], "type": entry["type"]}
+                    # รับเฉพาะคำอธิบายสัญญาที่ validator ระบุ ไม่ส่ง input หรือข้อความ exception
+                    requirement = entry.get('ctx', {}).get('provider_requirement')
+                    if isinstance(requirement, str):
+                        detail['requirement'] = requirement
+                    observation["validation_errors"].append(detail)
             raise LLMProviderException(self.provider, model, "Structured output failed validation", 502, error_code="structured_output_invalid") from None
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, RecursionError):
             observation = self.observation()
             if observation is not None:
                 observation["validation_errors"] = [{"path": [], "type": "structured_decode_failed"}]

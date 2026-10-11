@@ -33,10 +33,15 @@ Runner/GeneratedPluginRegistrant.*
 # ไฟล์เซ็นแอป, archive และ configuration ของ Firebase เฉพาะสภาพแวดล้อม
 *.p12
 *.pfx
+*.p8
+*.pem
+*.key
 *.mobileprovision
+*.provisionprofile
 *.ipa
 *.dSYM/
 *.xcarchive/
+*.xcresult/
 GoogleService-Info.plist
 
 # Exceptions to above rules.

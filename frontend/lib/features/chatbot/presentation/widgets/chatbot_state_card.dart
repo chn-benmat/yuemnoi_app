@@ -10,7 +10,6 @@ class ChatbotStateCard extends StatelessWidget {
     required this.icon,
     required this.actionLabel,
     this.onAction,
-    this.inlineHeader = false,
     super.key,
   });
   final String title;
@@ -18,7 +17,6 @@ class ChatbotStateCard extends StatelessWidget {
   final IconData icon;
   final String actionLabel;
   final VoidCallback? onAction;
-  final bool inlineHeader;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -31,38 +29,21 @@ class ChatbotStateCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (inlineHeader)
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: ChatbotDesign.surface,
-                child: Icon(icon, color: ChatbotDesign.primary),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  title,
-                  style: ChatbotDesign.body.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          )
-        else ...[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: CircleAvatar(
+        Row(
+          children: [
+            CircleAvatar(
               backgroundColor: ChatbotDesign.surface,
               child: Icon(icon, color: ChatbotDesign.primary),
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: ChatbotDesign.body.copyWith(fontWeight: FontWeight.w600),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: ChatbotDesign.body.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 6),
         Text(
           description,
@@ -151,17 +132,15 @@ class _ChatbotFailureCardState extends State<ChatbotFailureCard> {
         .padLeft(2, '0');
     return ChatbotStateCard(
       key: const Key('chatbot-failure-card'),
-      inlineHeader:
-          failure.isQuota || failure.errorCode == 'structured_output_invalid',
       title: switch (failure.errorCode) {
-        'quota_exhausted' => 'โควต้ารายวันของผู้ช่วย AI ไม่เพียงพอ',
-        'quota_temporarily_unavailable' => 'ผู้ช่วย AI ติดโควต้าชั่วคราว',
-        'providers_busy' => 'ผู้ช่วย AI ติดคิวชั่วคราว',
-        'review_unavailable' => 'ผู้ช่วย AI ยังตรวจสอบคำตอบไม่ได้',
-        'structured_output_invalid' => 'ยืมหน่อย สร้างคำตอบไม่ได้',
+        'quota_exhausted' => 'โควต้ารายวันของยืมหน่อย AI ไม่เพียงพอ',
+        'quota_temporarily_unavailable' => 'ยืมหน่อย AI ติดโควต้าชั่วคราว',
+        'providers_busy' => 'ยืมหน่อย AI ติดคิวชั่วคราว',
+        'review_unavailable' => 'ยืมหน่อย AI ยังตรวจสอบคำตอบไม่ได้',
+        'structured_output_invalid' => 'ยืมหน่อย AI สร้างคำตอบไม่ได้',
         'response_quality_rejected' =>
-          'คำตอบของผู้ช่วย AI ยังไม่ผ่านการตรวจสอบ',
-        _ => failure.isQuota ? 'ผู้ช่วย AI ติดโควต้า' : 'ส่งคำขอไม่สำเร็จ',
+          'คำตอบของยืมหน่อย AI ยังไม่ผ่านการตรวจสอบ',
+        _ => failure.isQuota ? 'ยืมหน่อย AI ติดโควต้า' : 'ส่งคำขอไม่สำเร็จ',
       },
       description: failure.message,
       icon: switch (failure.errorCode) {

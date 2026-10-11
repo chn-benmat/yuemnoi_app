@@ -55,7 +55,9 @@ class _HomeFeedViewState extends State<HomeFeedView> {
   }
 
   /// รวมและตัดรายการสินค้าซ้ำ
-  List<FeedItem> _getDisplayedItems(HomeLoaded state) {
+  List<FeedItem> _getDisplayedItems(HomeLoaded? state) {
+    if (state == null) return const [];
+
     if (state.hasActiveFilters || state.searchQuery.trim().isNotEmpty) {
       return state.nearbyItems;
     }
@@ -100,7 +102,7 @@ class _HomeFeedViewState extends State<HomeFeedView> {
           },
           builder: (context, state) {
             if (state is HomeInitial || state is HomeLoading) {
-              return const _HomeLoadingView();
+              return _buildFeedContent(null);
             }
             if (state is HomeError) {
               return _HomeErrorView(
@@ -110,7 +112,7 @@ class _HomeFeedViewState extends State<HomeFeedView> {
               );
             }
             if (state is HomeLoaded) {
-              return _buildLoadedContent(state);
+              return _buildFeedContent(state);
             }
             return const SizedBox.shrink();
           },
@@ -119,7 +121,7 @@ class _HomeFeedViewState extends State<HomeFeedView> {
     );
   }
 
-  Widget _buildLoadedContent(HomeLoaded state) {
+  Widget _buildFeedContent(HomeLoaded? state) {
     final displayedItems = _getDisplayedItems(state);
 
     return Column(
@@ -128,8 +130,8 @@ class _HomeFeedViewState extends State<HomeFeedView> {
         ListenableBuilder(
           listenable: _scrollController,
           builder: (context, _) {
-            final isScrolled = _scrollController.hasClients &&
-                _scrollController.offset > 4.0;
+            final isScrolled =
+                _scrollController.hasClients && _scrollController.offset > 4.0;
 
             return Container(
               decoration: BoxDecoration(
@@ -171,46 +173,48 @@ class _HomeFeedViewState extends State<HomeFeedView> {
 
         // ── 2. Scrollable Product Feed Layer (Pull to Refresh) ──
         Expanded(
-          child: RefreshIndicator(
-            color: AppColors.primaryColor,
-            backgroundColor: Colors.white,
-            onRefresh: () async {
-              context.read<HomeBloc>().add(const RefreshHomeFeedRequested());
-              await Future<void>.delayed(const Duration(milliseconds: 400));
-            },
-            child: CustomScrollView(
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
-              ),
-              slivers: [
-                // ระยะห่างก่อนถึงการ์ดสินค้า
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 10),
-                ),
+          child: state == null
+              ? const _HomeLoadingView()
+              : RefreshIndicator(
+                  color: AppColors.primaryColor,
+                  backgroundColor: Colors.white,
+                  onRefresh: () async {
+                    context.read<HomeBloc>().add(
+                      const RefreshHomeFeedRequested(),
+                    );
+                    await Future<void>.delayed(
+                      const Duration(milliseconds: 400),
+                    );
+                  },
+                  child: CustomScrollView(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    slivers: [
+                      // ระยะห่างก่อนถึงการ์ดสินค้า
+                      const SliverToBoxAdapter(child: SizedBox(height: 10)),
 
-                // รายการสินค้า
-                _buildProductGridSliver(displayedItems, state.searchQuery),
+                      // รายการสินค้า
+                      _buildProductGridSliver(
+                        displayedItems,
+                        state.searchQuery,
+                      ),
 
-                // ระยะห่างด้านล่างสำหรับ FloatingActionButton & Bottom Navigation Bar
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 110),
+                      // ระยะห่างด้านล่างสำหรับ FloatingActionButton & Bottom Navigation Bar
+                      const SliverToBoxAdapter(child: SizedBox(height: 110)),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
         ),
       ],
     );
   }
 
   /// แถบ navbar ของอุปกรณ์ประเภทต่างๆ (Category Filter Chips) ตรึงอยู่กับที่ใน Top Control Deck
-  Widget _buildCategoryNavbarSection(HomeLoaded state) {
+  Widget _buildCategoryNavbarSection(HomeLoaded? state) {
     return Container(
-      margin: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 4,
-      ),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -236,36 +240,35 @@ class _HomeFeedViewState extends State<HomeFeedView> {
       clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: CategoryFilterChips(
-        categories: state.categories,
-        selectedCategoryId: state.selectedCategoryId,
+        categories: state?.categories ?? const [],
+        selectedCategoryId: state?.selectedCategoryId ?? 'all',
         onCategorySelected: (categoryId) async {
           if (categoryId == 'all') {
             _applyFilter(
               categoryId: 'all',
-              minPrice: state.minPrice,
-              maxPrice: state.maxPrice,
-              minRating: state.minRating,
+              minPrice: state?.minPrice,
+              maxPrice: state?.maxPrice,
+              minRating: state?.minRating,
             );
             return;
           }
 
-          final label =
-              CategoryFilterChips.getCategoryLabel(categoryId);
+          final label = CategoryFilterChips.getCategoryLabel(categoryId);
           await AppRoutes.openSearch(
             context,
             initialQuery: label,
             curatedItems: _getDisplayedItems(state),
-            categories: state.categories,
+            categories: state?.categories ?? const [],
           );
           if (mounted &&
-              (state.selectedCategoryId != 'all' ||
+              ((state?.selectedCategoryId ?? 'all') != 'all' ||
                   _searchController.text.isNotEmpty)) {
             _searchController.clear();
             _applyFilter(
               categoryId: 'all',
-              minPrice: state.minPrice,
-              maxPrice: state.maxPrice,
-              minRating: state.minRating,
+              minPrice: state?.minPrice,
+              maxPrice: state?.maxPrice,
+              minRating: state?.minRating,
             );
           }
         },
@@ -274,7 +277,7 @@ class _HomeFeedViewState extends State<HomeFeedView> {
   }
 
   /// แถบค้นหา + ปุ่มหัวใจไปยังหน้าอุปกรณ์ที่ถูกใจ
-  Widget _buildSearchAndFilterSection(HomeLoaded state) {
+  Widget _buildSearchAndFilterSection(HomeLoaded? state) {
     final bloc = context.read<HomeBloc>();
 
     return Padding(
@@ -292,11 +295,11 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                   initialQuery: _searchController.text.isNotEmpty
                       ? _searchController.text
                       : null,
-                  initialCategoryId: state.selectedCategoryId,
-                  categories: state.categories,
-                  minPrice: state.minPrice,
-                  maxPrice: state.maxPrice,
-                  minRating: state.minRating,
+                  initialCategoryId: state?.selectedCategoryId ?? 'all',
+                  categories: state?.categories ?? const [],
+                  minPrice: state?.minPrice,
+                  maxPrice: state?.maxPrice,
+                  minRating: state?.minRating,
                 );
               },
               onChanged: (query) => bloc.add(SearchQueryChanged(query)),
@@ -381,81 +384,31 @@ class _HomeLoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SkeletonShimmer(
-      child: Column(
+      child: Container(
         key: const ValueKey('home-feed-skeleton'),
-        children: [
-          // ── Top Control Deck Skeleton ──
-          SafeArea(
-            bottom: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: SkeletonBox(height: 48, borderRadius: 16),
-                      ),
-                      SizedBox(width: 10),
-                      SkeletonBox(width: 48, height: 48, borderRadius: 16),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                // แถบหมวดหมู่จำลองตอนกำลังโหลด (กล่องสี่เหลี่ยมจัตุรัส 52x52 + ข้อความด้านล่าง)
-                SizedBox(
-                  height: 84,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: 6,
-                    separatorBuilder: (_, _) => const SizedBox(width: 10),
-                    itemBuilder: (context, index) => const Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SkeletonBox(width: 52, height: 52, borderRadius: 16),
-                        SizedBox(height: 6),
-                        SkeletonBox(width: 48, height: 10, borderRadius: 5),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(28),
+            topRight: Radius.circular(28),
           ),
-
-          // ── Grid Skeleton ด้านล่างใน Sheet Card ขอบโค้งมน ──
-          Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(28),
-                  topRight: Radius.circular(28),
-                ),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: GridView.builder(
-                  padding: EdgeInsets.zero,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 0.61,
-                  ),
-                  itemCount: 6,
-                  itemBuilder: (context, index) => const _ProductCardSkeleton(),
-                ),
-              ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: GridView.builder(
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 0.61,
             ),
+            itemCount: 6,
+            itemBuilder: (context, index) => const _ProductCardSkeleton(),
           ),
-        ],
+        ),
       ),
     );
   }

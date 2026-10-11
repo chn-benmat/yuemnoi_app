@@ -93,7 +93,7 @@ void main() {
         isA<ChatbotRemoteException>().having(
           (error) => error.message,
           'message',
-          'ผู้ช่วย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง',
+          'ยืมหน่อย AI ใช้เวลาตอบนานเกินไป กรุณาลองใหม่อีกครั้ง',
         ),
       ),
     );

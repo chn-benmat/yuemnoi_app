@@ -2,7 +2,10 @@ package domain
 
 import (
 	"context"
+	"errors"
 )
+
+var ErrInvalidAccessToken = errors.New("invalid access token")
 
 // RegisterUser contains all data required to create an Auth user and an
 // optional profile image. DisplayName is stored as Auth user metadata, Phone

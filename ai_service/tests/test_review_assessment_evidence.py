@@ -79,22 +79,38 @@ def test_voice_failure_does_not_duplicate_or_change_semantic_assessment():
     with pytest.raises(ValidationError):NativeResponseReview.model_validate({**value,'semantic_pass':False})
 
 
-def test_both_actual_provider_payloads_keep_review_pointer_contract():
+def test_all_groq_model_payloads_keep_review_pointer_contract():
     from app.domain.entities.response_review import NativeResponseReview
-    from app.infrastructure.llm.gemini_client import GeminiClient
     from app.infrastructure.llm.groq_client import GroqClient
     from app.core.config import settings
     from app.infrastructure.llm.provider_client import compact_schema_definitions
-    gemini=GeminiClient(api_key='fixture').build_payload(settings.GEMINI_PRIMARY_MODEL,'fixture',schema=NativeResponseReview)
-    groq=GroqClient(api_key='fixture').build_payload(settings.GROQ_PRIMARY_MODEL,'fixture',schema=NativeResponseReview)
-    schemas=[gemini['generationConfig']['responseJsonSchema'],groq['response_format']['json_schema']['schema']]
+    schemas=[GroqClient(api_key='fixture').build_payload(model,'fixture',schema=NativeResponseReview)['response_format']['json_schema']['schema'] for model in settings.groq_models]
     assert compact_schema_definitions(schemas[0]) == schemas[1]
+    assert schemas[1] == schemas[2]
     for schema in schemas:
         ref = schema['properties']['issues']['items']['$ref'].removeprefix('#/$defs/')
         issue=schema['$defs'][ref]['properties']
         assert 'relative to the restored draft root' in issue['field_path']['description']
         assert 'Exact unchanged substring' in issue['quoted_text']['description']
         assert list(schema['properties'])[0]=='assessments'
+
+
+@pytest.mark.asyncio
+async def test_review_prompt_supplies_actual_surface_paths_without_request_paths():
+    import json
+    from app.application.services.response_review import VISIBLE_TEXT_SURFACES
+    from app.application.services.review_input import restore_planning_input
+    from review_fixture import assessed
+    value = assessed(dict(semantic_pass=True, neutral_voice_pass=True, issues=[],
+        reviewed_surface_groups=['response']))
+    review, llm = stack(value, assessments=False)
+    draft = ChatResponseDTO(response='actual draft')
+    await review.execute(ChatRequestDTO(message='different request'), draft,
+        [Provenance('fixture', 'writer')], [], [], [])
+    payload = restore_planning_input(json.loads(llm.generate_structured.call_args.kwargs['prompt']))
+    assert set(payload['assessment_field_paths']) == {'/' + name for name in VISIBLE_TEXT_SURFACES
+        if name in draft.model_dump(mode='json')}
+    assert '/request/message' not in payload['assessment_field_paths']
 
 
 @pytest.mark.asyncio

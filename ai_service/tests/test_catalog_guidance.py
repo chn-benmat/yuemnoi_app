@@ -25,7 +25,6 @@ from app.domain.entities.intent_decision import KnownFact
 from app.domain.entities.item import Item
 from app.domain.exceptions import GuidanceGenerationError
 from app.infrastructure.llm.cascade_llm_service import CascadeLLMService
-from app.infrastructure.llm.gemini_client import GeminiClient
 from app.infrastructure.llm.groq_client import GroqClient
 from app.infrastructure.supabase.supabase_repository import SupabaseRepository
 from app.core.exceptions import DatabaseException
@@ -256,32 +255,27 @@ async def test_same_semantic_decision_survives_catalog_order_and_brand_changes()
 
 
 @pytest.mark.asyncio
-async def test_runtime_validator_inside_real_adapter_triggers_backup_provider(monkeypatch):
+async def test_runtime_validator_inside_real_adapter_triggers_backup_model(monkeypatch):
     requests = []
-    good = selection_plan(["camera"])
-    bad = selection_plan(["invented"])
-    review = GuidanceReview(approved=True, issues=[], reasoning="fixture independent review")
+    good = selection_plan(['camera'])
+    bad = selection_plan(['invented'])
+    review = GuidanceReview(approved=True, issues=[], reasoning='fixture independent review')
+    config = Settings(_env_file=None, GROQ_PRIMARY_MODEL='fixture-primary', GROQ_FALLBACK_MODEL_1='fixture-backup')
     def respond(request):
         payload = json.loads(request.content)
         requests.append(payload)
-        if "contents" in payload:
-            schema = payload["generationConfig"]["responseJsonSchema"]
-            text = review.model_dump_json() if "approved" in schema["properties"] else bad.model_dump_json()
-            return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": text}]}}], "usageMetadata": {"totalTokenCount": 100}})
-        schema = payload["response_format"]["json_schema"]["schema"]
-        text = review.model_dump_json() if "approved" in schema["properties"] else good.model_dump_json()
-        return httpx.Response(200, json={"choices": [{"message": {"content": text}}], "usage": {"total_tokens": 100}})
+        schema = payload['response_format']['json_schema']['schema']
+        candidate = bad if payload['model'] == config.GROQ_PRIMARY_MODEL else good
+        text = review.model_dump_json() if 'approved' in schema['properties'] else candidate.model_dump_json()
+        return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': text}}], 'usage': {'total_tokens': 100}})
     original = httpx.AsyncClient
-    monkeypatch.setattr(httpx, "AsyncClient", lambda *args, **kwargs: original(transport=httpx.MockTransport(respond), **kwargs))
-    config = Settings(_env_file=None, GROQ_PRIMARY_MODEL="fixture")
-    cascade = CascadeLLMService(GeminiClient(api_key="fixture", configuration=config),
-                               GroqClient(api_key="fixture", configuration=config), configuration=config)
-    monkeypatch.setattr(cascade, "_get_cascade_tiers", lambda: [("gemini", "fixture"), ("groq", "fixture")])
+    monkeypatch.setattr(httpx, 'AsyncClient', lambda *args, **kwargs: original(transport=httpx.MockTransport(respond), **kwargs))
+    cascade = CascadeLLMService(groq_client=GroqClient(api_key='fixture', configuration=config), configuration=config)
     result = await QueryItemsUseCase(repository(), cascade, POLICY).execute(understanding())
-    assert result[0].id == "camera"
+    assert result[0].id == 'camera'
     assert len(requests) == 3
-    assert requests[0]["generationConfig"]["maxOutputTokens"] == Settings().STRUCTURED_MAX_OUTPUT_TOKENS
-    assert requests[1]["max_completion_tokens"] == Settings().STRUCTURED_MAX_OUTPUT_TOKENS
+    assert [p['model'] for p in requests[:2]] == list(config.groq_models[:2])
+    assert all(p['max_completion_tokens'] == config.STRUCTURED_MAX_OUTPUT_TOKENS for p in requests)
     await cascade.aclose()
 
 
@@ -316,7 +310,7 @@ def test_policy_limits_and_model_parameters_are_configurable():
     with pytest.raises(ValidationError):
         Settings(_env_file=None, GUIDANCE_MAX_QUESTIONS=4)
     with pytest.raises(ValidationError):
-        Settings(_env_file=None, GUIDANCE_MAX_OPTIONS=5)
+        Settings(_env_file=None, GUIDANCE_MAX_OPTIONS=6)
     smaller = replace(POLICY, max_questions=1, max_options=2, generation_attempts=1)
     assert smaller.max_questions == 1 and smaller.generation_attempts == 1
 

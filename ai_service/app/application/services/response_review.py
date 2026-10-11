@@ -30,9 +30,10 @@ def visible_text_fields(draft):
 
 
 class ResponseReviewService:
-    def __init__(self, llm, instruction, temperature, context_limits=None):
+    def __init__(self, llm, instruction, temperature, context_limits=None, *, choice_policy=None):
         self.llm, self.instruction, self.temperature = llm, instruction, temperature
         self.context_limits = context_limits
+        self.choice_policy = choice_policy
 
     async def execute(self, request, draft, writers, catalog, articles, web, *, recovery_request=None, catalog_summary=None):
         if not writers or any(writer is None for writer in writers):
@@ -55,6 +56,7 @@ class ResponseReviewService:
         if restore_review_draft(projected, draft_references) != data:
             raise GuidanceGenerationError("review_input_projection_invalid")
         request_data = request_evidence(request,self.context_limits)
+        # ให้ผู้ตรวจอ่านข้อความผู้ใช้และคำตอบที่เลือกได้โดยไม่ต้องถอดพจนานุกรม
         def validate(review):
             for assessment in review.assessments:
                 if any(path not in draft_paths for path in assessment.field_paths):
@@ -73,11 +75,13 @@ class ResponseReviewService:
         with generation_stage("review", excluded_models=writers, recovery_request=recovery_request) as capture:
             review = await self.llm.generate_structured(prompt=json.dumps(compact_planning_input({
                 "request": request_data, "draft": projected, "draft_references": draft_references, 'surface_groups': groups,
-                "issue_path_format": "Assess only the current restored draft. Request history is evidence, never part of the current assistant answer. Paths start at the restored draft root, never /draft. An issue cites an exact original substring, not a paraphrase or text from history. draft.questions is displayed separately from the introduction; assess both and their aliased duplicates. Inspect every string in every surface group against actual user purpose with specific reasons before deciding verdicts.",
+                "questionnaire_choice_policy": self.choice_policy.model_dump() if self.choice_policy else None,
+                "assessment_field_paths": sorted('/' + name for name in VISIBLE_TEXT_SURFACES if name in data),
+                "issue_path_format": "Review only the current restored draft; request/history are evidence. Assessments cite applicable original fields or collections; issues cite exact original strings and spans. Pointers start at the draft root without /draft. Inspect every visible string, assessing prose and separately displayed questions together, including aliased copies. Give specific evidence for every check.",
                 **({'catalog_summary': catalog_summary} if catalog_summary is not None
                    else {'catalog': catalog_evidence(catalog,draft)}),
                 "approved_articles": articles, "search_evidence": web,
-            }, literal_paths=('/draft', '/draft_references')), ensure_ascii=False, separators=(",", ":")), schema=schema,
+            }, literal_paths=('/request', '/draft', '/draft_references')), ensure_ascii=False, separators=(",", ":")), schema=schema,
                 system_instruction=self.instruction, temperature=self.temperature)
             review = schema.model_validate(review.model_dump())
             record_diagnostic("review", provider=capture.provenance.provider if capture.provenance else None,

@@ -76,6 +76,56 @@
       "title": "CatalogPresentation",
       "type": "object"
     },
+    "QuestionnaireChoicePolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "regular_min": {
+          "minimum": 1,
+          "title": "Regular Min",
+          "type": "integer"
+        },
+        "regular_max": {
+          "minimum": 1,
+          "title": "Regular Max",
+          "type": "integer"
+        },
+        "budget_choices_per_period": {
+          "minimum": 1,
+          "title": "Budget Choices Per Period",
+          "type": "integer"
+        },
+        "budget_period_labels": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Budget Period Labels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "regular_min",
+        "regular_max",
+        "budget_choices_per_period",
+        "budget_period_labels"
+      ],
+      "title": "QuestionnaireChoicePolicy",
+      "type": "object"
+    },
+    "QuestionnaireFlowPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "single_batch_per_goal": {
+          "title": "Single Batch Per Goal",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "single_batch_per_goal"
+      ],
+      "title": "QuestionnaireFlowPolicy",
+      "type": "object"
+    },
     "ScopeDefinitions": {
       "additionalProperties": false,
       "properties": {
@@ -134,6 +184,20 @@
     },
     "approval": {
       "$ref": "#/$defs/Approval"
+    },
+    "questionnaire_flow": {
+      "$ref": "#/$defs/QuestionnaireFlowPolicy"
+    },
+    "questionnaire_choices": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/QuestionnaireChoicePolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "catalog_presentation": {
       "$ref": "#/$defs/CatalogPresentation"
@@ -218,6 +282,7 @@
     "status",
     "production_enabled",
     "approval",
+    "questionnaire_flow",
     "catalog_presentation",
     "turn_instruction",
     "evidence_instruction",

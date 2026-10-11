@@ -33,16 +33,14 @@ class FeedItemModel extends FeedItem {
           json['category'] as String? ??
           'all',
       rawCategory:
-          json['raw_category'] as String? ??
-          json['category'] as String? ??
-          '',
+          json['raw_category'] as String? ?? json['category'] as String? ?? '',
       price: (json['price'] as num?)?.toInt() ?? 0,
       priceUnit: json['price_unit'] as String? ?? '/ วัน',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
       distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 1.0,
-      isVerified: json['is_verified'] as bool? ?? true,
-      ownerName: json['owner_name'] as String? ?? 'Yuemnoi Verified',
+      isVerified: json['is_verified'] == true,
+      ownerName: json['owner_name'] as String? ?? 'ผู้ใช้งาน',
       ownerAvatarUrl: json['owner_avatar_url'] as String?,
       imageUrl:
           json['image_url'] as String? ??

@@ -43,7 +43,7 @@ async def test_route_intent_passes_history_and_active_items_context():
         ChatMessage(
             role="assistant",
             content=json.dumps({
-                "answer": "น้องยืมหน่อยขอแนะนำกล้อง Sony Alpha A7 IV นะคะ",
+                "answer": "ยืมหน่อย AI ขอแนะนำกล้อง Sony Alpha A7 IV นะคะ",
                 "items": [{"id": "1", "name": "กล้อง Sony Alpha A7 IV"}],
             }),
         ),

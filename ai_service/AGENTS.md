@@ -9,10 +9,9 @@ This document provides definitive instructions, architectural principles, and op
 - **Repository**: `ai_service` (Backend for Mobile Rental Chatbot)
 - **Role**: AI Assistant & Rental Consultant Service
 - **Runtime**: Python 3.12 (Virtual Environment: `.venv`)
-- **LLM Providers & API Keys**: Cloud LLMs via external APIs with dual-provider cascade failover:
-  - **Google Gemini API** (`GEMINI_API_KEY`) - Primary Provider
-  - **Groq API** (`GROQ_API_KEY`) - Fallback Provider
-  *(100% Free Dual-Cloud setup, strictly no credit card requirement, strictly no local Ollama dependency)*
+- **LLM Providers & API Keys**: Groq Cloud API with distinct models for generation, independent review and failover:
+  - **Groq API** (`GROQ_API_KEY`) - Sole LLM provider; model profiles and stage order come from `config/ai_runtime.json`
+  *(User-selected Groq plan; Developer usage and a monthly budget were authorized on 2026-10-08. No local Ollama dependency.)*
 - **Database**: **Supabase** table `item_tb` (33 active rental inventory items)
 - **Search Provider**: **Tavily Search API** (1,000 monthly free credits, basic depth)
 
@@ -39,7 +38,7 @@ Any modification or addition to this codebase **MUST strictly adhere** to the fo
 
 3. **NO Hardcoded Values & Logic (Strictly Zero-Hardcode Policy)**:
    - ❌ **No Hardcoded Configurations / Secrets**: Never hardcode API keys, URLs, endpoints, IP addresses, ports, database credentials, timeouts, retry counts, or model names in the source code.
-     - ✅ Must always inject configuration via `Settings` (`app/core/config.py`) loaded from `.env` through `pydantic-settings` (e.g., `GEMINI_API_KEY`, `GROQ_API_KEY`, `SUPABASE_KEY`, `TAVILY_API_KEY`).
+     - ✅ Must always inject configuration via `Settings` (`app/core/config.py`) loaded from `.env` through `pydantic-settings` (e.g., `GROQ_API_KEY`, `SUPABASE_KEY`, `TAVILY_API_KEY`).
    - ❌ **No Hardcoded Catalog / Inventory Data**: Never hardcode item catalogs, item IDs, category lists, technical specifications, or rental prices into code or static prompt strings.
      - ✅ Item inventory and category lists must be retrieved dynamically from Supabase (`item_tb`) or `MemoryCacheService`.
    - ❌ **No Hardcoded Dialogues / Canned Responses / Fallbacks**: Never hardcode canned assistant responses, static greetings, clarification questions, or interactive button options/chips.
@@ -49,10 +48,11 @@ Any modification or addition to this codebase **MUST strictly adhere** to the fo
    - ❌ **No Mock / Dummy Data in Production Flow**: Never inject mock data, dummy items, or hardcoded fallback returns into the Application or Infrastructure layers to bypass external dependencies.
      - ✅ If an external system or service fails, rely on structured exception handling and domain-level error handling following Clean Architecture.
 
-4. **NO Local Ollama & NO Credit-Card Cloud Dependencies (100% Free Cloud API Policy)**:
+4. **Groq Cloud Inference & User-Authorized Billing**:
    - ❌ Never configure, enforce, or assume local Ollama (`http://localhost:11434`) or local hardware VRAM execution.
-   - ❌ Never configure cloud providers requiring credit card binding or paid deposit tiers (e.g., Cerebras, SambaNova).
-   - ✅ All LLM inference, structured output generation, and streaming must utilize 100% free cloud LLM API providers configured via `GEMINI_API_KEY` (Google Gemini) and `GROQ_API_KEY` (Groq Cloud).
+   - ✅ Use Groq Cloud via `GROQ_API_KEY` on the user's selected Free or Developer plan. Configure the monthly spend limit in Groq Console; provider billing updates may lag, so this is not an exact cost guarantee.
+   - ✅ Use the approved stage order in `config/ai_runtime.json`. Keep the Production writer/reviewer pair first; qualify the user-authorized Qwen Preview fallback with real structured chat and review before enabling it. Retain qualification evidence and keep model-order measurement status truthful.
+   - ✅ Preserve distinct writer/reviewer model IDs; if only one model is available, return a structured error within the configured deadline.
 
 ### ⚖️ STRICT NEUTRALITY & ZERO-BIAS POLICY
 
@@ -112,7 +112,7 @@ Infrastructure (Adapters: DB, LLM, Search, Cache) & Interface (FastAPI Controlle
 
 - **`app/infrastructure/` (Frameworks & Drivers)**:
   - `SupabaseRepository`: Interacts asynchronously with Supabase PostgREST endpoint for `item_tb`.
-  - `LLM Adapters` (`GeminiClient` Primary & `GroqClient` Fallback via `MultiProviderLLMService`): Manages interactions with Cloud LLMs via `GEMINI_API_KEY` and `GROQ_API_KEY` supporting structured JSON schema generation and Server-Sent Events (SSE) streaming.
+  - `LLM Adapter` (`GroqClient` via `CascadeLLMService`): Uses `GROQ_API_KEY` for strict JSON schema generation. SSE reports progress and publishes the buffered answer after validation and independent review.
   - `TavilyClient`: Asynchronous client for Tavily Search API.
   - `MemoryCacheService`: In-memory TTL cache for the 33-item catalog to minimize DB roundtrips.
   - `prompt_templates.py`: Structured system instructions in Thai for the model.
@@ -121,7 +121,7 @@ Infrastructure (Adapters: DB, LLM, Search, Cache) & Interface (FastAPI Controlle
   - `app/interface/api/v1/endpoints/`:
     - `chat.py`: `POST /api/chat` (Full JSON response) and `POST /api/chat/stream` (SSE tokens).
     - `items.py`: `GET /api/items` (Catalog list).
-    - `health.py`: `GET /health` (Cloud LLMs [Gemini / Groq], Supabase, and Tavily health checks).
+    - `health.py`: `GET /health` (Cloud LLM [Groq], Supabase, and Tavily health checks).
   - `app/interface/schemas/`: Pydantic request and response schemas for web APIs.
 
 - **`app/core/` (Cross-Cutting Concerns)**:
@@ -163,7 +163,7 @@ When the user query is underspecified or ambiguous (e.g., _"อยากได�
 ## 5. Coding Standards & Conventions
 
 1. **Python Version**: Always write Python 3.12 compliant code.
-2. **Async-First**: All network operations (Supabase, Tavily, Cloud LLM APIs: Gemini, Groq, GitHub) must be asynchronous using `httpx.AsyncClient` or native async primitives. Never block the event loop with synchronous I/O.
+2. **Async-First**: All network operations (Supabase, Tavily, Cloud LLM API: Groq, GitHub) must be asynchronous using `httpx.AsyncClient` or native async primitives. Never block the event loop with synchronous I/O.
 3. **Typing**: Use standard Python type annotations (`typing.List`, `typing.Optional`, `typing.Dict`, `typing.Tuple`).
 4. **Pydantic v2**: Use `model_validate_json()`, `model_dump()`, and `model_json_schema()`. Avoid deprecated Pydantic v1 methods.
 5. **Virtual Environment**:

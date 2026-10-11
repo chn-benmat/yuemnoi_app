@@ -6,6 +6,7 @@ import json
 from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, HttpUrl, model_validator
+from app.domain.entities.catalog_guidance import QuestionnaireChoicePolicy
 
 
 class Strict(BaseModel):
@@ -61,7 +62,13 @@ class CatalogPresentation(Strict):
     status_labels: dict[str, str]
 
 
+class QuestionnaireFlowPolicy(Strict):
+    single_batch_per_goal: bool
+
+
 class InterpretationPolicy(ApprovedDocument):
+    questionnaire_flow: QuestionnaireFlowPolicy
+    questionnaire_choices: QuestionnaireChoicePolicy | None = None
     catalog_presentation: CatalogPresentation
     turn_instruction: str = Field(min_length=1)
     evidence_instruction: str = Field(min_length=1)
@@ -103,10 +110,10 @@ class QuotaPolicy(Strict):
 
 class ProviderProfile(Strict):
     id: str = Field(min_length=1)
-    protocol: Literal["groq_json_schema", "gemini_json_schema"]
+    protocol: Literal["groq_json_schema"]
     endpoint: HttpUrl
-    key_setting: Literal["GROQ_API_KEY", "GEMINI_API_KEY"]
-    model_setting: Literal["GEMINI_PRIMARY_MODEL", "GEMINI_FALLBACK_MODEL_1", "GEMINI_FALLBACK_MODEL_2", "GROQ_PRIMARY_MODEL", "GROQ_FALLBACK_MODEL_1", "GROQ_FALLBACK_MODEL_2"]
+    key_setting: Literal["GROQ_API_KEY"]
+    model_setting: Literal["GROQ_PRIMARY_MODEL", "GROQ_FALLBACK_MODEL_1", "GROQ_FALLBACK_MODEL_2"]
     proposed_model: str = Field(min_length=1)
     reasoning_effort: Literal["none", "low", "medium", "high"] | None
     enabled: bool
@@ -118,8 +125,7 @@ class ProviderProfile(Strict):
         u = self.endpoint
         if u.scheme != "https" or u.username or u.password or u.query or u.fragment:
             raise ValueError("Unsafe provider endpoint")
-        provider = "GROQ" if self.protocol == "groq_json_schema" else "GEMINI"
-        if self.key_setting != provider + "_API_KEY" or not self.model_setting.startswith(provider + "_"):
+        if not self.model_setting.startswith("GROQ_"):
             raise ValueError("Provider setting mismatch")
         if not self.enabled and not self.disabled_reason:
             raise ValueError("Disabled provider needs an operational reason")
@@ -130,7 +136,7 @@ class Limits(Strict):
     messages: int = Field(gt=0)
     characters: int = Field(gt=0)
     questions: int = Field(ge=1, le=3)
-    choices_per_question: int = Field(ge=1, le=4)
+    choices_per_question: int = Field(ge=1, le=5)
     items: int = Field(gt=0)
     output_tokens: int = Field(gt=0)
     temperature: float = Field(ge=0, le=2)

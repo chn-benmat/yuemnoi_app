@@ -4,6 +4,82 @@ import 'package:frontend/features/chatbot/domain/entities/chat_message.dart';
 import 'package:frontend/features/chatbot/presentation/widgets/interactive_questionnaire_card.dart';
 
 void main() {
+  for (final selectedIndex in [3, 4]) {
+    testWidgets(
+      'five budget choices retain option $selectedIndex and its period',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        const choices = [
+          QuestionChoice(
+            id: 'daily-low',
+            label: 'สูงสุด 500 บาทต่อวัน',
+            actionValue: 'สูงสุด 500 บาทต่อวัน',
+          ),
+          QuestionChoice(
+            id: 'daily-high',
+            label: 'สูงสุด 1,000 บาทต่อวัน',
+            actionValue: 'สูงสุด 1,000 บาทต่อวัน',
+          ),
+          QuestionChoice(
+            id: 'hourly-low',
+            label: 'สูงสุด 200 บาทต่อชั่วโมง',
+            actionValue: 'สูงสุด 200 บาทต่อชั่วโมง',
+          ),
+          QuestionChoice(
+            id: 'hourly-high',
+            label: 'สูงสุด 400 บาทต่อชั่วโมง',
+            actionValue: 'สูงสุด 400 บาทต่อชั่วโมง',
+          ),
+          QuestionChoice(
+            id: 'unlimited',
+            label: 'ไม่จำกัดงบประมาณ',
+            actionValue: 'ไม่จำกัดงบประมาณ',
+          ),
+        ];
+        List<QuestionnaireAnswer>? submitted;
+        String? summary;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: InteractiveQuestionnaireCard(
+                  questions: [
+                    ClarificationQuestion(
+                      id: 'budget',
+                      dimension: 'budget_max',
+                      title: 'มีงบสูงสุดต่อวันหรือต่อชั่วโมงเท่าไร?',
+                      options: choices.map((choice) => choice.label).toList(),
+                      choices: choices,
+                    ),
+                  ],
+                  onCompleted: (_) {},
+                  onCompletedWithContext: (text, answers, _) {
+                    summary = text;
+                    submitted = answers;
+                  },
+                  onDismiss: () {},
+                ),
+              ),
+            ),
+          ),
+        );
+        for (final choice in choices) {
+          expect(find.text(choice.label), findsOneWidget);
+        }
+        final selected = choices[selectedIndex];
+        await tester.ensureVisible(find.text(selected.label));
+        await tester.tap(find.text(selected.label));
+        await tester.pump(const Duration(milliseconds: 350));
+        expect(tester.takeException(), isNull);
+        expect(submitted!.single.optionId, selected.id);
+        expect(summary, selected.label);
+      },
+    );
+  }
+
   testWidgets(
     'budget branch follows category ID and retains the exact option ID',
     (tester) async {

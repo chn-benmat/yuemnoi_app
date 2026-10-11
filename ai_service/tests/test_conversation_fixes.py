@@ -151,7 +151,7 @@ async def test_evidence_contract_rejects_missing_selection_or_unsupplied_web(cha
 async def test_validation_diagnostics_omit_provider_values_and_unknown_keys():
     secret = "private-user-value"
     def respond(request):
-        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({"value": [], secret: secret})}}]})
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": json.dumps({"value": [], secret: secret})}}]})
     service, http = stack(respond)
     try:
         with pytest.raises(Exception):

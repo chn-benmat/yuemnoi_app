@@ -7,9 +7,11 @@ from app.domain.entities.turn_plan import NativeTurnPlan
 from native_turn_fixture import native_questions
 
 
-def test_native_contract_rejects_five_displayed_options_before_ui_validation():
+def test_native_contract_rejects_six_displayed_options_before_ui_validation():
     value = json.loads((Path(__file__).parent / 'fixtures/planning_five_choices.json').read_text(encoding='utf-8'))
     native_questions(value['stage']['questions'])
+    question = value['stage']['questions'][0]
+    question['choices'].append({**question['choices'][0], 'id': 'sixth-choice'})
     with pytest.raises(ValidationError):
         NativeTurnPlan.model_validate(value)
 

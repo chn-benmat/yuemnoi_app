@@ -1,10 +1,10 @@
 package supabase
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -18,12 +18,14 @@ const itemBucket = "item_bk"
 
 // เป็นตัวแทนในการทำงานกับตาราง item_tb และ review_tb
 type supabaseItemRepository struct {
-	client *supabase.Client
+	client  *supabase.Client
+	storage *storageClient
 }
 
-func NewSupabaseItemRepository(sbClient *supabase.Client) domain.ItemRepository {
+func NewSupabaseItemRepository(sbClient *supabase.Client, serviceKey string) domain.ItemRepository {
 	return &supabaseItemRepository{
-		client: sbClient,
+		client:  sbClient,
+		storage: newStorageClient(sbClient, serviceKey),
 	}
 }
 
@@ -60,12 +62,12 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 	urls := make([]string, 0, len(images))
 	for index, image := range images {
 		objectPath := fmt.Sprintf("%d/%d-%d%s", created.ID, time.Now().UnixNano(), index, image.Extension)
-		if err := r.uploadItemImage(objectPath, image); err != nil {
-			r.rollbackCreatedItem(created, paths)
+		if err := r.uploadItemImage(ctx, objectPath, image); err != nil {
+			r.rollbackCreatedItem(ctx, created, paths)
 			return nil, err
 		}
 		paths = append(paths, objectPath)
-		urls = append(urls, r.client.Storage.From(itemBucket).GetPublicUrl(objectPath).SignedUrl)
+		urls = append(urls, r.storage.publicURL(itemBucket, objectPath))
 	}
 
 	updated, err := r.Update(ctx, created.ID, created.UserID, map[string]interface{}{
@@ -73,44 +75,35 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 		"updated_at":     time.Now().UTC(),
 	})
 	if err != nil {
-		r.rollbackCreatedItem(created, paths)
+		r.rollbackCreatedItem(ctx, created, paths)
 		return nil, fmt.Errorf("save item image URLs failed: %w", err)
 	}
 	return updated, nil
 }
 
-func (r *supabaseItemRepository) uploadItemImage(path string, image domain.ItemImage) (err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("item image upload failed: %v", recovered)
-		}
-	}()
-
-	response := r.client.Storage.From(itemBucket).Upload(
-		path,
-		bytes.NewReader(image.Data),
-		&supabase.FileUploadOptions{
-			CacheControl: "3600",
-			ContentType:  image.ContentType,
-			MimeType:     image.ContentType,
-		},
-	)
-	if response.Key == "" {
-		return fmt.Errorf("item image upload failed: %s", response.Message)
+func (r *supabaseItemRepository) uploadItemImage(ctx context.Context, path string, image domain.ItemImage) error {
+	if err := r.storage.upload(ctx, itemBucket, path, image.Data, image.ContentType); err != nil {
+		return fmt.Errorf("item image upload failed: %w", err)
 	}
 	return nil
 }
 
-func (r *supabaseItemRepository) rollbackCreatedItem(item *domain.Item, paths []string) {
-	if len(paths) > 0 {
-		func() {
-			defer func() {
-				_ = recover()
-			}()
-			r.client.Storage.From(itemBucket).Remove(paths)
-		}()
+func (r *supabaseItemRepository) rollbackCreatedItem(ctx context.Context, item *domain.Item, paths []string) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storageCleanupTimeout)
+	defer cancel()
+	// ลบแถวให้สำเร็จก่อน เพื่อไม่ให้ข้อมูลที่ยังอ้างอิงอยู่ชี้ไปยังไฟล์ที่ถูกลบ
+	err := r.client.DB.From("item_tb").Delete().
+		Eq("id", strconv.FormatInt(item.ID, 10)).Eq("user_id", item.UserID).
+		ExecuteWithContext(cleanupCtx, nil)
+	if err != nil {
+		slog.Warn("ย้อนกลับรายการอุปกรณ์ที่สร้างไม่สำเร็จไม่ได้")
+		return
 	}
-	_ = r.Delete(context.Background(), item.ID, item.UserID)
+	if len(paths) > 0 {
+		if err := r.storage.remove(cleanupCtx, itemBucket, paths); err != nil {
+			slog.Warn("ลบรูปอุปกรณ์หลังบันทึกไม่สำเร็จไม่ได้")
+		}
+	}
 }
 
 // FindAll ดึงฟีดอุปกรณ์ที่จัดอันดับแล้ว พร้อมข้อมูลเจ้าของ
@@ -144,34 +137,20 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 	if len(items) > 0 {
 		var profiles []struct {
 			UserID       string `json:"user_id"`
-			Email        string `json:"email"`
+			DisplayName  string `json:"display_name"`
 			UserImageURL string `json:"user_image_url"`
+			IsVerified   bool   `json:"is_verified"`
 		}
-		_ = r.client.DB.From("profile_tb").Select("user_id,email,user_image_url").ExecuteWithContext(ctx, &profiles)
-		profilesMap := make(map[string]struct {
-			Email        string
-			UserImageURL string
-		})
-		for _, p := range profiles {
-			profilesMap[p.UserID] = struct {
-				Email        string
-				UserImageURL string
-			}{Email: p.Email, UserImageURL: p.UserImageURL}
-		}
-
+		_ = r.client.DB.From("public_profile_v").Select("user_id,display_name,user_image_url,is_verified").ExecuteWithContext(ctx, &profiles)
 		for i := range items {
-			if p, ok := profilesMap[items[i].UserID]; ok {
-				ownerName := p.Email
-				if idx := strings.Index(ownerName, "@"); idx != -1 {
-					ownerName = ownerName[:idx]
+			items[i].OwnerName = "ผู้ใช้งาน"
+			for _, p := range profiles {
+				if p.UserID == items[i].UserID {
+					items[i].OwnerName = p.DisplayName
+					items[i].OwnerAvatarURL = p.UserImageURL
+					items[i].IsVerified = p.IsVerified
+					break
 				}
-				if ownerName == "" {
-					ownerName = "Yuemnoi Verified"
-				}
-				items[i].OwnerName = ownerName
-				items[i].OwnerAvatarURL = p.UserImageURL
-			} else {
-				items[i].OwnerName = "Yuemnoi Verified"
 			}
 		}
 	}
@@ -183,7 +162,7 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domain.Item, error) {
 	var items []domain.Item
 
-	err := r.client.DB.From("item_tb").Select("*").Eq("id", strconv.FormatInt(id, 10)).ExecuteWithContext(ctx, &items)
+	err := r.client.DB.From("item_tb").Select("*").Eq("id", strconv.FormatInt(id, 10)).Eq("moderation_hidden", "false").ExecuteWithContext(ctx, &items)
 	if err != nil {
 		return nil, fmt.Errorf("supabase find by id failed: %w", err)
 	}
@@ -194,24 +173,16 @@ func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domai
 
 	item := &items[0]
 	var profiles []struct {
-		UserID       string `json:"user_id"`
-		Email        string `json:"email"`
+		DisplayName  string `json:"display_name"`
 		UserImageURL string `json:"user_image_url"`
+		IsVerified   bool   `json:"is_verified"`
 	}
-	_ = r.client.DB.From("profile_tb").Select("user_id,email,user_image_url").Eq("user_id", item.UserID).ExecuteWithContext(ctx, &profiles)
+	_ = r.client.DB.From("public_profile_v").Select("display_name,user_image_url,is_verified").Eq("user_id", item.UserID).ExecuteWithContext(ctx, &profiles)
+	item.OwnerName = "ผู้ใช้งาน"
 	if len(profiles) > 0 {
-		p := profiles[0]
-		ownerName := p.Email
-		if idx := strings.Index(ownerName, "@"); idx != -1 {
-			ownerName = ownerName[:idx]
-		}
-		if ownerName == "" {
-			ownerName = "Yuemnoi Verified"
-		}
-		item.OwnerName = ownerName
-		item.OwnerAvatarURL = p.UserImageURL
-	} else {
-		item.OwnerName = "Yuemnoi Verified"
+		item.OwnerName = profiles[0].DisplayName
+		item.OwnerAvatarURL = profiles[0].UserImageURL
+		item.IsVerified = profiles[0].IsVerified
 	}
 
 	return item, nil
@@ -278,10 +249,11 @@ func (r *supabaseItemRepository) Delete(ctx context.Context, id int64, userID st
 			}
 		}
 		if len(pathsToDelete) > 0 {
-			func() {
-				defer func() { _ = recover() }()
-				r.client.Storage.From(itemBucket).Remove(pathsToDelete)
-			}()
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storageCleanupTimeout)
+			defer cancel()
+			if err := r.storage.remove(cleanupCtx, itemBucket, pathsToDelete); err != nil {
+				slog.Warn("ลบไฟล์รูปของอุปกรณ์ที่ลบแล้วไม่สำเร็จ")
+			}
 		}
 	}
 

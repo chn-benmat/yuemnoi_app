@@ -12,7 +12,6 @@ import (
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
 )
 
 type mockPushSender struct {
@@ -62,7 +61,6 @@ func (m *mockPushAuthGateway) GetProfile(_ context.Context, _ string) (*domain.U
 }
 
 func TestPushHandlerSendChatPush(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 
 	mockSender := &mockPushSender{}
 	mockAuth := &mockPushAuthGateway{
@@ -75,8 +73,8 @@ func TestPushHandlerSendChatPush(t *testing.T) {
 	}
 	handler := ports.NewPushHandler(mockSender, mockAuth)
 
-	router := gin.New()
-	router.POST("/api/push/chat", handler.SendChatPush)
+	router := ports.NewHTTPApp()
+	router.Post("/api/push/chat", handler.SendChatPush)
 
 	t.Run("returns 200 queued and dispatches to sender", func(t *testing.T) {
 		payload := map[string]string{
@@ -94,7 +92,7 @@ func TestPushHandlerSendChatPush(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
-		router.ServeHTTP(w, req)
+		performFiberRequest(t, router, w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -135,7 +133,7 @@ func TestPushHandlerSendChatPush(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
-		router.ServeHTTP(w, req)
+		performFiberRequest(t, router, w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())
@@ -154,7 +152,7 @@ func TestPushHandlerSendChatPush(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
-		router.ServeHTTP(w, req)
+		performFiberRequest(t, router, w, req)
 
 		if w.Code != http.StatusUnauthorized {
 			t.Fatalf("expected status 401, got %d: %s", w.Code, w.Body.String())
@@ -174,7 +172,7 @@ func TestPushHandlerSendChatPush(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
-		router.ServeHTTP(w, req)
+		performFiberRequest(t, router, w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())

@@ -1,0 +1,70 @@
+# ความลับและค่าตั้งเฉพาะเครื่องของทุกส่วนในโปรเจ็กต์
+.env
+.env.*
+*.env
+*.env.*
+.secrets/
+service-account*.json
+service_account*.json
+*firebase-adminsdk*.json
+credentials.json
+credentials.*.json
+.setup-token.json
+google-services.json
+GoogleService-Info.plist
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+*.provisionprofile
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
+# เก็บไฟล์ตัวอย่างค่าตั้งที่ไม่มีความลับไว้ให้ทีมใช้งาน
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+!.env.*.sample
+!.env.*.template
+!*.env.example
+!*.env.sample
+!*.env.template
+!*.env.*.example
+!*.env.*.sample
+!*.env.*.template
+
+# Log, ไฟล์ชั่วคราว และข้อมูลจากการตรวจสอบในเครื่อง
+*.log
+*.log.*
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+/.qa/
+
+# สถานะของเครื่องมือในเครื่อง; เก็บ migrations และ configuration ไว้ใน Git
+/supabase/.temp/
+/supabase/.branches/
+
+# ไฟล์ของระบบปฏิบัติการและ IDE
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100/
+.Trashes/
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.idea/
+*.iml
+
+# กฎ build, dependencies และแคชของแต่ละส่วนอยู่ใน .gitignore ของส่วนนั้น

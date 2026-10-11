@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../constants/colors.dart';
+import '../theme/app_form_field_styles.dart';
 import 'app_field_label.dart';
 
 class AppTextFormField extends StatelessWidget {
@@ -18,6 +19,13 @@ class AppTextFormField extends StatelessWidget {
   final Key? fieldKey;
   final int maxLines;
   final int? minLines;
+  final bool readOnly;
+  final bool enabled;
+  final bool enableInteractiveSelection;
+  final VoidCallback? onTap;
+  final ValueChanged<String>? onChanged;
+  final TextInputAction? textInputAction;
+  final AppFormFieldVariant variant;
 
   const AppTextFormField({
     super.key,
@@ -34,16 +42,34 @@ class AppTextFormField extends StatelessWidget {
     this.fieldKey,
     this.maxLines = 1,
     this.minLines,
+    this.readOnly = false,
+    this.enabled = true,
+    this.enableInteractiveSelection = true,
+    this.onTap,
+    this.onChanged,
+    this.textInputAction,
+    this.variant = AppFormFieldVariant.filled,
   }) : assert(prefixIcon == null || prefix == null);
 
   @override
   Widget build(BuildContext context) {
+    final outlined = variant == AppFormFieldVariant.outlined;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AppFieldLabel(text: label),
+        AppFieldLabel(
+          text: label,
+          style: outlined ? AppFormFieldStyles.labelTextStyle : null,
+          padding: EdgeInsets.only(left: outlined ? 0 : 4, bottom: 8),
+        ),
         TextFormField(
           key: fieldKey,
+          readOnly: readOnly,
+          enabled: enabled,
+          enableInteractiveSelection: enableInteractiveSelection,
+          onTap: onTap,
+          onChanged: onChanged,
+          textInputAction: textInputAction,
           controller: controller,
           obscureText: obscureText,
           validator: validator,
@@ -51,61 +77,44 @@ class AppTextFormField extends StatelessWidget {
           inputFormatters: inputFormatters,
           maxLines: maxLines,
           minLines: minLines,
-          style: const TextStyle(fontSize: 16, color: Colors.black87),
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: const TextStyle(
-              color: AppColors.hintTextColor,
-              fontSize: 16,
-            ),
-            prefixIcon: prefix != null
-                ? Padding(
-                    padding: const EdgeInsetsDirectional.only(
-                      start: 20,
-                      end: 12,
-                    ),
-                    child: Align(
-                      alignment: Alignment.center,
-                      widthFactor: 1,
-                      heightFactor: 1,
-                      child: prefix,
-                    ),
-                  )
-                : prefixIcon != null
-                ? Icon(prefixIcon, color: AppColors.fieldIconColor, size: 22)
-                : null,
-            suffixIcon: suffixIcon,
-            filled: true,
-            fillColor: AppColors.bgFieldColor,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 16,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: const BorderSide(
-                color: AppColors.primaryColor,
-                width: 1.5,
+          style: outlined
+              ? AppFormFieldStyles.textStyle.copyWith(
+                  color: enabled
+                      ? AppFormFieldStyles.outlinedTextColor
+                      : AppFormFieldStyles.outlinedHintColor,
+                )
+              : const TextStyle(fontSize: 16, color: Colors.black87),
+          decoration:
+              AppFormFieldStyles.decoration(
+                context,
+                variant: variant,
+                enabled: enabled,
+              ).copyWith(
+                hintText: hintText,
+                prefixIcon: prefix != null
+                    ? Padding(
+                        padding: EdgeInsetsDirectional.only(
+                          start: outlined ? 16 : 20,
+                          end: 12,
+                        ),
+                        child: Align(
+                          alignment: Alignment.center,
+                          widthFactor: 1,
+                          heightFactor: 1,
+                          child: prefix,
+                        ),
+                      )
+                    : prefixIcon != null
+                    ? Icon(
+                        prefixIcon,
+                        color: outlined
+                            ? AppFormFieldStyles.outlinedHintColor
+                            : AppColors.fieldIconColor,
+                        size: 22,
+                      )
+                    : null,
+                suffixIcon: suffixIcon,
               ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: const BorderSide(color: Colors.redAccent, width: 1),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
-            ),
-            errorStyle: const TextStyle(fontSize: 12),
-          ),
         ),
       ],
     );

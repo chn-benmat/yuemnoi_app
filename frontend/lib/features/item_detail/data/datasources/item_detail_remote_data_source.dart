@@ -14,11 +14,9 @@ class ItemDetailRemoteException implements Exception {
 }
 
 class ItemDetailRemoteDataSource {
-  ItemDetailRemoteDataSource({
-    SupabaseClient? client,
-    ApiClient? apiClient,
-  })  : _client = client ?? SupabaseConfig.client,
-        _apiClient = apiClient ?? DioApiClient();
+  ItemDetailRemoteDataSource({SupabaseClient? client, ApiClient? apiClient})
+    : _client = client ?? SupabaseConfig.client,
+      _apiClient = apiClient ?? DioApiClient();
 
   static const _bucket = 'item_bk';
   final SupabaseClient _client;
@@ -71,7 +69,7 @@ class ItemDetailRemoteDataSource {
       if (userIds.isNotEmpty) {
         final rawProfiles = await _client
             .from('public_profile_v')
-            .select('user_id,user_image_url,display_name,email')
+            .select('user_id,user_image_url,display_name,is_verified')
             .inFilter('user_id', userIds.toList(growable: false));
         for (final profile in rawProfiles.cast<Map<String, dynamic>>()) {
           final userId = profile['user_id'];

@@ -2,6 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/identity/data/identity_api_repository.dart';
+import '../../features/identity/domain/identity_repository.dart';
+import '../../features/identity/presentation/identity_cubit.dart';
+import '../../features/identity/presentation/identity_page.dart';
 
 import '../../features/auth/presentation/pages/change_password.dart';
 import '../../features/auth/presentation/pages/forget_password.dart';
@@ -71,6 +75,7 @@ abstract final class AppRoutes {
       GlobalKey<NavigatorState>();
 
   static const login = '/login';
+  static const identity = '/profile/identity';
   static const home = '/home';
   static const search = '/search';
   static const chatbot = '/chatbot';
@@ -561,20 +566,20 @@ abstract final class AppRoutes {
         ),
         GoRoute(
           path: rentalPaymentSuccess,
-          pageBuilder: (context, state) => const MaterialPage<void>(
-            child: RentalPaymentSuccessScreen(),
-          ),
+          pageBuilder: (context, state) =>
+              const MaterialPage<void>(child: RentalPaymentSuccessScreen()),
         ),
         GoRoute(
           path: review,
-          pageBuilder: (context, state) => const MaterialPage<void>(
-            child: RentalReviewScreen(),
-          ),
+          pageBuilder: (context, state) =>
+              const MaterialPage<void>(child: RentalReviewScreen()),
         ),
         GoRoute(
           path: rentalReturn,
           pageBuilder: (context, state) {
-            final rentalId = int.tryParse(state.pathParameters['rentalId'] ?? '');
+            final rentalId = int.tryParse(
+              state.pathParameters['rentalId'] ?? '',
+            );
             final isLender = state.extra as bool?;
             return MaterialPage<void>(
               key: state.pageKey,
@@ -739,7 +744,44 @@ abstract final class AppRoutes {
           'กรุณาเข้าสู่ระบบหรือสมัครสมาชิกก่อนลงประกาศปล่อยเช่าอุปกรณ์ของคุณ เพื่อความปลอดภัยและการติดต่อกับผู้เช่า',
     );
     if (!authed || !context.mounted) return;
+    final repository = IdentityApiRepository();
+    try {
+      final status = await repository.status();
+      if (!context.mounted) return;
+      if (status.restricted || (status.enforcement && !status.canList)) {
+        await openIdentity(context);
+        return;
+      }
+    } on IdentityFailure catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+      return;
+    } finally {
+      repository.close();
+    }
     return context.push<void>(addRentalItem);
+  }
+
+  static Future<void> openIdentity(BuildContext context) async {
+    if (!await AuthGuard.requireAuth(
+          context,
+          title: 'เข้าสู่ระบบเพื่อยืนยันตัวตน',
+          message: 'กรุณาเข้าสู่ระบบก่อนส่งหลักฐานยืนยันตัวตน',
+        ) ||
+        !context.mounted) {
+      return;
+    }
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => BlocProvider(
+          create: (_) => IdentityCubit(IdentityApiRepository())..load(),
+          child: const IdentityPage(),
+        ),
+      ),
+    );
   }
 
   static Future<void> openMyItems(BuildContext context) {
@@ -765,8 +807,8 @@ abstract final class AppRoutes {
     bool? isOwner,
   }) {
     final page = RentalTrackingMapPage(
-      bookingData: bookingData ??
-          (trackingArgs?['bookingData'] as BookingRequestData?),
+      bookingData:
+          bookingData ?? (trackingArgs?['bookingData'] as BookingRequestData?),
       itemTitle: trackingArgs?['itemTitle'] as String?,
       itemImageUrl: trackingArgs?['itemImageUrl'] as String?,
       pickupLocation: trackingArgs?['pickupLocation'] as String?,
@@ -929,7 +971,9 @@ abstract final class AppRoutes {
     int? rentalId,
     bool? isLender,
   }) {
-    final route = rentalId != null ? '/rental/return/$rentalId' : rentalReturnDemo;
+    final route = rentalId != null
+        ? '/rental/return/$rentalId'
+        : rentalReturnDemo;
     return context.push<void>(route, extra: isLender);
   }
 

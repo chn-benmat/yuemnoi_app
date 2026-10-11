@@ -34,20 +34,37 @@ env/
 env.bak/
 venv.bak/
 
+# โมเดลที่ดาวน์โหลดและไลบรารีภายนอกที่ติดตั้งในเครื่อง
+/models/
+/vendor/
+/.cache/
+.ipynb_checkpoints/
+
 # Environment Variables & Secrets (CRITICAL: Do not commit API keys or credentials)
 .env
 .env.*
+*.env
+*.env.*
 !.env.example
 !.env.sample
 !.env.template
 !.env.*.example
 !.env.*.sample
 !.env.*.template
+!*.env.example
+!*.env.sample
+!*.env.template
+!*.env.*.example
+!*.env.*.sample
+!*.env.*.template
 service-account*.json
+service_account*.json
 *firebase-adminsdk*.json
 credentials.json
+credentials.*.json
 *.pem
 *.key
+*.p8
 *.p12
 *.pfx
 
@@ -74,6 +91,9 @@ dmypy.json
 
 # Logs and databases
 *.log
+*.log.*
+*.tmp
+*.temp
 *.sqlite
 *.sqlite-*
 *.sqlite3

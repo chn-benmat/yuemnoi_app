@@ -22,6 +22,7 @@ void main() {
             'user_id': 'owner-id',
             'email': 'jessica@example.com',
             'user_image_url': 'https://example.com/jessica.jpg',
+            'is_verified': true,
           },
           'reviewer-id': {
             'user_id': 'reviewer-id',
@@ -43,6 +44,8 @@ void main() {
       expect(item.id, 7);
       expect(item.owner.displayName, 'jessica');
       expect(item.owner.imageUrl, 'https://example.com/jessica.jpg');
+      expect(item.owner.isVerified, isTrue);
+      expect(item.reviews.single.reviewer.isVerified, isFalse);
       expect(item.isOwner, isTrue);
       expect(item.unitLabel, 'วัน');
       expect(item.reviews.single.reviewer.displayName, 'mark');
@@ -70,6 +73,7 @@ void main() {
 
     expect(item.name, 'อุปกรณ์ให้เช่า');
     expect(item.owner.displayName, 'ผู้ใช้งาน Yuemnoi');
+    expect(item.owner.isVerified, isFalse);
     expect(item.imageUrls, isEmpty);
     expect(item.price, 0);
     expect(item.isOwner, isFalse);

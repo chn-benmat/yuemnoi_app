@@ -8,6 +8,7 @@ from app.domain.entities.clarification import QuestionStep
 
 def request_evidence(request, limits):
     data=request.model_dump(mode='json')
+    data['questionnaire_complete'] = request.questionnaire_complete
     data['history']=conversation_context(request.history,limits)['messages'] if limits else data['history']
     answered={answer.question_id:answer for answer in request.questionnaire_answers}
     def selected_view(question, answers):
@@ -32,7 +33,7 @@ def request_evidence(request, limits):
         return {**normalized, **{key:value for key,value in result.items() if key not in QuestionStep.model_fields}}
     if request.context:
         data['context']=request.context.model_dump(mode='json',exclude_defaults=True)
-        if answered and set(answered)=={q.id for q in request.context.questions}:
+        if request.questionnaire_complete:
             data['context']['questions']=[selected_view(q, answered) for q in data['context']['questions']]
     for message in data['history']:
         content=message['content']

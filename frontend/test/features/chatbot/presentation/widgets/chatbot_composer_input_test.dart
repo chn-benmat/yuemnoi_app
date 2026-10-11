@@ -1,8 +1,159 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/chatbot/presentation/widgets/chatbot_composer.dart';
 
 void main() {
+  group('keyboard submission', () {
+    late TextEditingController controller;
+    late FocusNode focus;
+    late List<String> submitted;
+    late bool registeredTearDown;
+
+    setUp(() {
+      controller = TextEditingController();
+      focus = FocusNode();
+      submitted = [];
+      registeredTearDown = false;
+    });
+
+    Future<void> pumpComposer(
+      WidgetTester tester, {
+      bool isSending = false,
+    }) async {
+      if (!registeredTearDown) {
+        registeredTearDown = true;
+        addTearDown(() async {
+          await tester.pumpWidget(const SizedBox.shrink());
+          controller.dispose();
+          focus.dispose();
+        });
+      }
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChatbotComposer(
+              controller: controller,
+              focusNode: focus,
+              isSending: isSending,
+              onSend: () => submitted.add(controller.text),
+            ),
+          ),
+        ),
+      );
+    }
+
+    for (final key in [
+      LogicalKeyboardKey.enter,
+      LogicalKeyboardKey.numpadEnter,
+    ]) {
+      testWidgets('${key.keyLabel} sends from a physical keyboard', (
+        tester,
+      ) async {
+        await pumpComposer(tester);
+        await tester.enterText(find.byType(TextField), 'สวัสดี');
+        await tester.pump();
+
+        expect(await tester.sendKeyEvent(key), isTrue);
+
+        expect(submitted, ['สวัสดี']);
+        expect(controller.text, 'สวัสดี');
+      });
+    }
+
+    testWidgets('soft keyboard sends the latest text before rebuilding', (
+      tester,
+    ) async {
+      await pumpComposer(tester);
+      await tester.enterText(find.byType(TextField), 'สวัสดี');
+
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+
+      expect(submitted, ['สวัสดี']);
+    });
+
+    testWidgets('holding Enter sends only once', (tester) async {
+      await pumpComposer(tester);
+      await tester.enterText(find.byType(TextField), 'สวัสดี');
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+      expect(await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter), isTrue);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+
+      expect(submitted, ['สวัสดี']);
+    });
+
+    testWidgets('Shift+Enter stays available for multiline input', (
+      tester,
+    ) async {
+      await pumpComposer(tester);
+      await tester.enterText(find.byType(TextField), 'บรรทัดแรก');
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      expect(await tester.sendKeyEvent(LogicalKeyboardKey.enter), isFalse);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      const multilineText = 'บรรทัดแรก\nบรรทัดที่สอง';
+      tester.testTextInput.updateEditingValue(
+        TextEditingValue(
+          text: multilineText,
+          selection: TextSelection.collapsed(offset: multilineText.length),
+        ),
+      );
+
+      expect(submitted, isEmpty);
+      expect(controller.text, multilineText);
+    });
+
+    testWidgets('Enter does not submit while the IME is composing', (
+      tester,
+    ) async {
+      await pumpComposer(tester);
+      await tester.enterText(find.byType(TextField), 'สวัสดี');
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'สวัสดี',
+          selection: TextSelection.collapsed(offset: 6),
+          composing: TextRange(start: 0, end: 6),
+        ),
+      );
+      await tester.pump();
+
+      expect(await tester.sendKeyEvent(LogicalKeyboardKey.enter), isFalse);
+
+      expect(submitted, isEmpty);
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'สวัสดี',
+          selection: TextSelection.collapsed(offset: 6),
+        ),
+      );
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+
+      expect(submitted, ['สวัสดี']);
+    });
+
+    testWidgets('Enter does not send whitespace or send while busy', (
+      tester,
+    ) async {
+      await pumpComposer(tester);
+      await tester.enterText(find.byType(TextField), '  \n  ');
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      expect(submitted, isEmpty);
+
+      controller.text = 'สวัสดี';
+      await pumpComposer(tester, isSending: true);
+      focus.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(submitted, isEmpty);
+    });
+  });
+
   testWidgets('preserves and submits a detailed multi-item rental request', (
     tester,
   ) async {

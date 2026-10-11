@@ -100,13 +100,25 @@ class NamedAssessment(GuidanceModel):
 
 class NamedReviewAssessments(GuidanceModel):
     model_config = ConfigDict(populate_by_name=True)
-    relevance: 'ApplicableAssessment'
-    completeness: 'ApplicableAssessment'
+    relevance: 'ApplicableAssessment' = Field(
+        description='Every segment must serve the actual user purpose. Approved facts do not justify unsolicited platform or implementation explanations.',
+        json_schema_extra={'x-provider-description': True})
+    completeness: 'ApplicableAssessment' = Field(
+        description='Assess prose and displayed questions together. An invitation need not repeat choices or known constraints; material unknowns may require clarification.',
+        json_schema_extra={'x-provider-description': True})
     neutral_voice: 'NeutralVoiceAssessment' = Field(alias='ungendered_speaker')
-    choice_equivalence: NamedAssessment
-    grounding: NamedAssessment
-    context: NamedAssessment
-    followups: NamedAssessment
+    choice_equivalence: NamedAssessment = Field(
+        description='Compare displayed labels, values and periods, including branches. No prose repetition or prior selection is required. No choices: not applicable.',
+        json_schema_extra={'x-provider-description': True})
+    grounding: NamedAssessment = Field(
+        description='Verify actual factual claims. Preference invitations need no catalog citations or repeated constraints; they make no product or availability claim.',
+        json_schema_extra={'x-provider-description': True})
+    context: NamedAssessment = Field(
+        description='Check original needs and selected answers across prose, questions and context. No repeated budget/purpose is required; reasking known needs is a defect.',
+        json_schema_extra={'x-provider-description': True})
+    followups: NamedAssessment = Field(
+        description='Ask only material unknowns. Inspect displayed questions; no prose repetition or needless followup for a complete answer is required.',
+        json_schema_extra={'x-provider-description': True})
 
 
 class ApplicableAssessment(NamedAssessment):

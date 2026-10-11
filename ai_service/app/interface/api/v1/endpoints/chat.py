@@ -16,16 +16,8 @@ router = APIRouter()
 
 def log_chat_outcome(trace, code=None):
     record_diagnostic("outcome", error_code=code)
-    # Log ไม่รับข้อความผู้ใช้ draft หรือเหตุผลอิสระจากโมเดล
-    details = json.dumps(trace.summary(), ensure_ascii=True, separators=(",", ":"))
-    # เครื่องมือวินิจฉัยชั่วคราว: เก็บเฉพาะ metadata ที่ผ่านตัวกรอง ไม่มีข้อความหรือ key
-    from pathlib import Path
-    with Path(r'C:\Users\chn\.codex\visualizations\2026\10\07\01a11748-99a2-76e0-9637-26568343e0cf\emulator-fixes-20261008\native_metadata.jsonl').open('a', encoding='utf-8') as evidence:
-        evidence.write(details + '\n')
-    if code is None:
-        logger.info("Chat completed trace=%s diagnostics=%s", trace.trace_id, details)
-    else:
-        logger.warning("Chat failed trace=%s error_code=%s diagnostics=%s", trace.trace_id, code, details)
+    if code is not None:
+        logger.warning("Chat failed trace=%s error_code=%s", trace.trace_id, code)
 
 
 def safe_error_code(error):
@@ -84,11 +76,6 @@ async def chat_stream_endpoint(
     x_internal_service_key: str = Header(default=None),
 ):
     verify_internal_key(x_internal_service_key)
-    # เก็บคำขอทดสอบชั่วคราวในเครื่องเท่านั้น เพื่อตรวจเส้นทางจาก emulator
-    from pathlib import Path
-    from app.interface.cli.capture_chat_diagnostics import redact_configured_credentials
-    Path(r'C:\Users\chn\.codex\visualizations\2026\10\07\01a11748-99a2-76e0-9637-26568343e0cf\emulator-fixes-20261008\native_last_request.json').write_text(
-        json.dumps(redact_configured_credentials(request.model_dump(mode='json'), settings), ensure_ascii=False), encoding='utf-8')
 
     async def event_generator():
         with diagnostic_scope() as trace:

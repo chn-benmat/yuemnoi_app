@@ -6,16 +6,15 @@ import (
 	"testing"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRouterRegistersAPIEndpoints(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+
 	router := ports.SetupRouter(nil, nil, nil, nil, nil, nil, "")
 
 	var routes []string
-	for _, route := range router.Routes() {
+	for _, route := range router.GetRoutes(true) {
 		routes = append(routes, route.Method+" "+route.Path)
 	}
 
@@ -43,11 +42,17 @@ func TestRouterRegistersAPIEndpoints(t *testing.T) {
 		"POST /api/chat/contact",
 		"POST /api/chat-ai",
 		"POST /api/chat-ai/stream",
+		"GET /api/identity/status",
+		"POST /api/identity/sessions",
+		"POST /api/identity/sessions/:id/submit",
+		"POST /api/complaints",
+		"GET /api/admin/evidence/:id",
+		"GET /api/admin/:module",
+		"POST /api/admin/actions/:action/:target",
 	}, routes)
 }
 
 func TestRouterSecurityMiddleware(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 
 	router := ports.SetupRouter(nil, nil, nil, nil, nil, nil, "test-app-secret")
 	tests := []struct {
@@ -117,7 +122,7 @@ func TestRouterSecurityMiddleware(t *testing.T) {
 			}
 			response := httptest.NewRecorder()
 
-			router.ServeHTTP(response, request)
+			performFiberRequest(t, router, response, request)
 
 			assert.Equal(t, tt.wantStatus, response.Code)
 		})
@@ -125,19 +130,17 @@ func TestRouterSecurityMiddleware(t *testing.T) {
 }
 
 func TestRouterAllowsRequestsWhenAppSecretIsNotConfigured(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 
 	router := ports.SetupRouter(nil, nil, nil, nil, nil, nil, "")
 	request := httptest.NewRequest(http.MethodGet, "/missing", nil)
 	response := httptest.NewRecorder()
 
-	router.ServeHTTP(response, request)
+	performFiberRequest(t, router, response, request)
 
 	assert.Equal(t, http.StatusNotFound, response.Code)
 }
 
 func TestRouterMultiKeyRotation(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 
 	// จำลองสถานการณ์ Multi-Key Rotation: เซิร์ฟเวอร์รองรับทั้งคีย์ใหม่และคีย์เดิม
 	router := ports.SetupRouter(nil, nil, nil, nil, nil, nil, "new-secret-2026,old-secret-2025")
@@ -170,7 +173,7 @@ func TestRouterMultiKeyRotation(t *testing.T) {
 			request.Header.Set("X-App-Secret", tt.key)
 			response := httptest.NewRecorder()
 
-			router.ServeHTTP(response, request)
+			performFiberRequest(t, router, response, request)
 			assert.Equal(t, tt.wantStatus, response.Code)
 		})
 	}

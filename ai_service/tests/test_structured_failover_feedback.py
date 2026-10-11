@@ -17,7 +17,8 @@ class Result(BaseModel):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('failure', ['contract', 'quota'])
-async def test_bounded_fallback_receives_only_machine_contract_feedback(tmp_path, monkeypatch, failure):
+@pytest.mark.parametrize('phase', ['planning', 'evidence', 'review', 'repair'])
+async def test_bounded_fallback_receives_only_machine_contract_feedback(tmp_path, monkeypatch, failure, phase):
     runtime = RUNTIME.model_copy(update={'quota_ledger': RUNTIME.quota_ledger.model_copy(
         update={'path': str(tmp_path / 'quota.json')})})
     payloads = []
@@ -34,7 +35,7 @@ async def test_bounded_fallback_receives_only_machine_contract_feedback(tmp_path
         monkeypatch.setattr(service, '_get_cascade_tiers', lambda: [
             ('groq', settings.GROQ_PRIMARY_MODEL), ('groq', settings.GROQ_FALLBACK_MODEL_1)])
         try:
-            with generation_stage('planning'):
+            with generation_stage(phase):
                 result = await service.generate_structured(
                     json.dumps({'current_message': {'content': 'คำถามต้นฉบับ'}}, ensure_ascii=False),
                     Result, system_instruction='Keep the supplied evidence.')

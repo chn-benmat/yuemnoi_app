@@ -47,47 +47,147 @@ class HomeSupabaseDataSource {
   /// คำค้นหายอดนิยมและคำพ้องความหมาย (Synonyms) ภาษาไทยและภาษาอังกฤษประจำหมวดหมู่
   static const Map<String, List<String>> categoryKeywords = {
     'camera': [
-      'กล้อง', 'โดรน', 'เลนส์', 'ถ่ายภาพ', 'ถ่ายรูป', 'ไฟสตูดิโอ',
-      'โปรเจคเตอร์', 'ขาตั้งกล้อง', 'camera', 'canon', 'sony', 'fuji',
-      'nikon', 'gopro', 'dslr', 'mirrorless', 'แคนนอน', 'โซนี่',
+      'กล้อง',
+      'โดรน',
+      'เลนส์',
+      'ถ่ายภาพ',
+      'ถ่ายรูป',
+      'ไฟสตูดิโอ',
+      'โปรเจคเตอร์',
+      'ขาตั้งกล้อง',
+      'camera',
+      'canon',
+      'sony',
+      'fuji',
+      'nikon',
+      'gopro',
+      'dslr',
+      'mirrorless',
+      'แคนนอน',
+      'โซนี่',
     ],
     'audio': [
-      'เครื่องเสียง', 'ลำโพง', 'ไมค์', 'ไมโครโฟน', 'มิกเซอร์', 'หูฟัง',
-      'แอมป์', 'audio', 'sound', 'speaker', 'mic', 'jbl', 'shure', 'yamaha',
+      'เครื่องเสียง',
+      'ลำโพง',
+      'ไมค์',
+      'ไมโครโฟน',
+      'มิกเซอร์',
+      'หูฟัง',
+      'แอมป์',
+      'audio',
+      'sound',
+      'speaker',
+      'mic',
+      'jbl',
+      'shure',
+      'yamaha',
       'ยามาฮ่า',
     ],
     'computer': [
-      'คอม', 'คอมพิวเตอร์', 'โน้ตบุ๊ก', 'โน้ตบุ๊ค', 'แล็ปท็อป', 'ไอที',
-      'computer', 'laptop', 'macbook', 'pc', 'ipad', 'tablet', 'แมคบุ๊ก',
+      'คอม',
+      'คอมพิวเตอร์',
+      'โน้ตบุ๊ก',
+      'โน้ตบุ๊ค',
+      'แล็ปท็อป',
+      'ไอที',
+      'computer',
+      'laptop',
+      'macbook',
+      'pc',
+      'ipad',
+      'tablet',
+      'แมคบุ๊ก',
     ],
     'phone': [
-      'โทรศัพท์', 'มือถือ', 'ไอโฟน', 'ซัมซุง', 'phone', 'iphone', 'samsung',
-      'android', 'smartphone',
+      'โทรศัพท์',
+      'มือถือ',
+      'ไอโฟน',
+      'ซัมซุง',
+      'phone',
+      'iphone',
+      'samsung',
+      'android',
+      'smartphone',
     ],
     'tools': [
-      'เครื่องมือช่าง', 'ช่าง', 'สว่าน', 'เลื่อย', 'ค้อน', 'บันได',
-      'เครื่องฉีดน้ำ', 'ก่อสร้าง', 'tools', 'bosch', 'makita', 'บ๊อช',
+      'เครื่องมือช่าง',
+      'ช่าง',
+      'สว่าน',
+      'เลื่อย',
+      'ค้อน',
+      'บันได',
+      'เครื่องฉีดน้ำ',
+      'ก่อสร้าง',
+      'tools',
+      'bosch',
+      'makita',
+      'บ๊อช',
     ],
     'appliances': [
-      'เครื่องใช้ไฟฟ้า', 'เครื่องดูดฝุ่น', 'พัดลม', 'หม้อทอด', 'ตู้เย็น',
-      'แอร์', 'appliances', 'dyson', 'ไดสัน',
+      'เครื่องใช้ไฟฟ้า',
+      'เครื่องดูดฝุ่น',
+      'พัดลม',
+      'หม้อทอด',
+      'ตู้เย็น',
+      'แอร์',
+      'appliances',
+      'dyson',
+      'ไดสัน',
     ],
     'camping': [
-      'แคมป์', 'แคมป์ปิง', 'เต็นท์', 'เต้นท์', 'เก้าอี้สนาม', 'โต๊ะพับ',
-      'ถุงนอน', 'กระติก', 'เดินป่า', 'กลางแจ้ง', 'camping', 'coleman',
-      'naturehike', 'โคลแมน',
+      'แคมป์',
+      'แคมป์ปิง',
+      'เต็นท์',
+      'เต้นท์',
+      'เก้าอี้สนาม',
+      'โต๊ะพับ',
+      'ถุงนอน',
+      'กระติก',
+      'เดินป่า',
+      'กลางแจ้ง',
+      'camping',
+      'coleman',
+      'naturehike',
+      'โคลแมน',
     ],
     'sports': [
-      'กีฬา', 'ออกกำลังกาย', 'จักรยาน', 'ซับบอร์ด', 'ฟิตเนส', 'sports',
-      'bike', 'bicycle', 'trek', 'sup board',
+      'กีฬา',
+      'ออกกำลังกาย',
+      'จักรยาน',
+      'ซับบอร์ด',
+      'ฟิตเนส',
+      'sports',
+      'bike',
+      'bicycle',
+      'trek',
+      'sup board',
     ],
     'gaming': [
-      'เกม', 'เครื่องเล่นเกม', 'บอร์ดเกม', 'gaming', 'game', 'playstation',
-      'ps5', 'ps4', 'nintendo', 'switch', 'xbox', 'นินเทนโด',
+      'เกม',
+      'เครื่องเล่นเกม',
+      'บอร์ดเกม',
+      'gaming',
+      'game',
+      'playstation',
+      'ps5',
+      'ps4',
+      'nintendo',
+      'switch',
+      'xbox',
+      'นินเทนโด',
     ],
     'music': [
-      'ดนตรี', 'เครื่องดนตรี', 'กีตาร์', 'กีต้าร์', 'เบส', 'คีย์บอร์ด',
-      'เปียโน', 'กลอง', 'music', 'guitar', 'piano',
+      'ดนตรี',
+      'เครื่องดนตรี',
+      'กีตาร์',
+      'กีต้าร์',
+      'เบส',
+      'คีย์บอร์ด',
+      'เปียโน',
+      'กลอง',
+      'music',
+      'guitar',
+      'piano',
     ],
   };
 
@@ -277,7 +377,10 @@ class HomeSupabaseDataSource {
           ? (item['price'] as num).toInt()
           : int.tryParse(item['price']?.toString() ?? '0') ?? 0;
       final type = item['type']?.toString().toLowerCase().trim();
-      final priceUnit = (type == 'รายชั่วโมง' || type == 'hourly' || type == 'hour') ? '/ ชม.' : '/ วัน';
+      final priceUnit =
+          (type == 'รายชั่วโมง' || type == 'hourly' || type == 'hour')
+          ? '/ ชม.'
+          : '/ วัน';
 
       String imageUrl = '';
       if (item['item_image_url'] is List &&
@@ -305,7 +408,7 @@ class HomeSupabaseDataSource {
         } else if (email.isNotEmpty) {
           ownerName = email;
         } else {
-          ownerName = 'Yuemnoi Verified';
+          ownerName = 'ผู้ใช้งาน';
         }
         ownerAvatar ??= profile?['user_image_url']?.toString();
       }
@@ -345,8 +448,10 @@ class HomeSupabaseDataSource {
           rating: double.parse(rating.toStringAsFixed(1)),
           reviewCount: reviewCount,
           distanceKm: double.parse(distanceKm.toStringAsFixed(1)),
-          isVerified: true,
-          ownerName: ownerName.isEmpty ? 'Yuemnoi Verified' : ownerName,
+          isVerified:
+              item['is_verified'] == true ||
+              profilesMap?[item['user_id']?.toString()]?['is_verified'] == true,
+          ownerName: ownerName.isEmpty ? 'ผู้ใช้งาน' : ownerName,
           ownerAvatarUrl: ownerAvatar,
           imageUrl: imageUrl,
           isCurated: i < 4,
@@ -379,7 +484,9 @@ class HomeSupabaseDataSource {
           .select('*')
           .order('rank_position', ascending: true);
     } catch (e) {
-      debugPrint('Direct Supabase home_feed_ranked_v error: $e, fallback to item_tb');
+      debugPrint(
+        'Direct Supabase home_feed_ranked_v error: $e, fallback to item_tb',
+      );
     }
 
     if (rawItems == null || rawItems.isEmpty) {
@@ -411,7 +518,7 @@ class HomeSupabaseDataSource {
       try {
         final List<dynamic> profiles = await client
             .from('public_profile_v')
-            .select('user_id, display_name, email, user_image_url')
+            .select('user_id, display_name, user_image_url, is_verified')
             .inFilter('user_id', userIds);
         for (final p in profiles) {
           final uid = (p as Map)['user_id']?.toString();
@@ -589,5 +696,4 @@ class HomeSupabaseDataSource {
       return true;
     }
   }
-
 }

@@ -4,7 +4,7 @@ import '../constants/colors.dart';
 
 class AppPrimaryButton extends StatelessWidget {
   final String text;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool isLoading;
 
   const AppPrimaryButton({

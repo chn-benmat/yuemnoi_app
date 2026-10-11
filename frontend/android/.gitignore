@@ -9,15 +9,23 @@ GeneratedPluginRegistrant.java
 .cxx/
 .externalNativeBuild/
 *.log
+*.log.*
+*.hprof
 
 # Remember to never publicly share your keystore.
 # See https://flutter.dev/to/reference-keystore
 key.properties
 **/*.keystore
 **/*.jks
+*.pem
+*.key
+*.p12
+*.pfx
 build/
 
 # ไฟล์ติดตั้งและ configuration ของ Firebase เฉพาะสภาพแวดล้อม
 *.apk
 *.aab
+*.apks
+*.idsig
 google-services.json

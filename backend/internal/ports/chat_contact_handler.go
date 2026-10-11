@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 type ChatContactHandler struct {
@@ -16,7 +16,7 @@ type ChatContactHandler struct {
 }
 
 type chatContactRequest struct {
-	ConversationID string `json:"conversation_id" binding:"required"`
+	ConversationID string `json:"conversation_id" validate:"required"`
 }
 
 func NewChatContactHandler(
@@ -30,37 +30,35 @@ func NewChatContactHandler(
 }
 
 // GetConversationContact คืนเบอร์ของคู่สนทนาเฉพาะผู้ที่อยู่ในห้องแชทเท่านั้น
-func (h *ChatContactHandler) GetConversationContact(c *gin.Context) {
+func (h *ChatContactHandler) GetConversationContact(c fiber.Ctx) error {
 	requesterID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
-		return
+		return nil
 	}
 
 	var request chatContactRequest
-	if err := c.ShouldBindJSON(&request); err != nil || strings.TrimSpace(request.ConversationID) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุห้องสนทนา"})
-		return
+	if err := c.Bind().JSON(&request); err != nil || strings.TrimSpace(request.ConversationID) == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุห้องสนทนา"})
 	}
 
 	phone, err := h.repository.PhoneForConversation(
-		c.Request.Context(),
+		c.Context(),
 		requesterID,
 		strings.TrimSpace(request.ConversationID),
 	)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrConversationNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบห้องสนทนา"})
+			return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบห้องสนทนา"})
 		case errors.Is(err, domain.ErrContactForbidden):
-			c.JSON(http.StatusForbidden, gin.H{"error": "คุณไม่มีสิทธิ์ดูข้อมูลติดต่อของห้องนี้"})
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "คุณไม่มีสิทธิ์ดูข้อมูลติดต่อของห้องนี้"})
 		case errors.Is(err, domain.ErrContactPhoneNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "ผู้ใช้นี้ยังไม่ได้เพิ่มเบอร์โทรศัพท์"})
+			return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ผู้ใช้นี้ยังไม่ได้เพิ่มเบอร์โทรศัพท์"})
 		default:
 			log.Printf("load conversation contact failed: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถโหลดข้อมูลติดต่อได้"})
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถโหลดข้อมูลติดต่อได้"})
 		}
-		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"phone": phone})
+	return c.Status(http.StatusOK).JSON(fiber.Map{"phone": phone})
 }

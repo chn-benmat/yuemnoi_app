@@ -11,13 +11,12 @@ import (
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/aiservice"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
 // ส่งรหัสแยกโควตาชั่วคราว โควตารายวัน คิว และการตรวจคำตอบ โดยไม่เปิดเผยรายละเอียดภายใน
 func TestAIRateLimitContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+
 	for _, testCase := range []struct {
 		code       string
 		retryAfter string
@@ -43,14 +42,14 @@ func TestAIRateLimitContract(t *testing.T) {
 			}))
 			defer upstream.Close()
 			for _, path := range []string{"/api/chat-ai", "/api/chat-ai/stream"} {
-				router := gin.New()
+				router := ports.NewHTTPApp()
 				handler := ports.NewChatbotHandler(aiservice.NewClient(upstream.URL, "", time.Second), nil)
-				router.POST("/api/chat-ai", handler.SendMessage)
-				router.POST("/api/chat-ai/stream", handler.SendMessageStream)
+				router.Post("/api/chat-ai", handler.SendMessage)
+				router.Post("/api/chat-ai/stream", handler.SendMessageStream)
 				request := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(`{"query":"ถาม"}`))
 				request.Header.Set("Content-Type", "application/json")
 				response := httptest.NewRecorder()
-				router.ServeHTTP(response, request)
+				performFiberRequest(t, router, response, request)
 				require.Equal(t, http.StatusServiceUnavailable, response.Code)
 				require.Equal(t, testCase.retryAfter, response.Header().Get("Retry-After"))
 				var payload map[string]any
@@ -65,7 +64,7 @@ func TestAIRateLimitContract(t *testing.T) {
 
 // แม้เปิด SSE ด้วย HTTP 200 แล้ว รหัสข้อผิดพลาดและเวลารอต้องส่งถึง Flutter ครบ
 func TestAIStreamFailureContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+
 	for _, code := range []string{"quota_temporarily_unavailable", "quota_exhausted", "providers_busy", "review_unavailable", "structured_output_invalid", "response_quality_rejected"} {
 		t.Run(code, func(t *testing.T) {
 			data := map[string]any{"error_code": code}
@@ -80,13 +79,13 @@ func TestAIStreamFailureContract(t *testing.T) {
 				_, _ = io.WriteString(w, sse)
 			}))
 			defer upstream.Close()
-			router := gin.New()
+			router := ports.NewHTTPApp()
 			handler := ports.NewChatbotHandler(aiservice.NewClient(upstream.URL, "", time.Second), nil)
-			router.POST("/api/chat-ai/stream", handler.SendMessageStream)
+			router.Post("/api/chat-ai/stream", handler.SendMessageStream)
 			request := httptest.NewRequest(http.MethodPost, "/api/chat-ai/stream", bytes.NewBufferString(`{"query":"ถาม"}`))
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
-			router.ServeHTTP(response, request)
+			performFiberRequest(t, router, response, request)
 			require.Equal(t, http.StatusOK, response.Code)
 			require.Equal(t, sse, response.Body.String())
 		})

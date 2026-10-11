@@ -13,7 +13,6 @@ import (
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,7 +37,6 @@ func (m *mockAIChatbotGateway) SendMessageStream(ctx context.Context, req domain
 }
 
 func TestChatbotSendMessageSuccess(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 
 	mockGateway := &mockAIChatbotGateway{
 		sendMessageFunc: func(ctx context.Context, req domain.ChatbotRequest) (*domain.ChatbotResponse, error) {
@@ -61,8 +59,8 @@ func TestChatbotSendMessageSuccess(t *testing.T) {
 	}
 
 	handler := ports.NewChatbotHandler(mockGateway, nil)
-	router := gin.New()
-	router.POST("/api/chat-ai", handler.SendMessage)
+	router := ports.NewHTTPApp()
+	router.Post("/api/chat-ai", handler.SendMessage)
 
 	reqBody := domain.ChatbotRequest{
 		Query: "มีกล้อง Sony ไหม",
@@ -76,7 +74,7 @@ func TestChatbotSendMessageSuccess(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	performFiberRequest(t, router, w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp domain.ChatbotResponse
@@ -89,11 +87,10 @@ func TestChatbotSendMessageSuccess(t *testing.T) {
 }
 
 func TestChatbotSendMessageEmptyValidation(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 
 	handler := ports.NewChatbotHandler(&mockAIChatbotGateway{}, nil)
-	router := gin.New()
-	router.POST("/api/chat-ai", handler.SendMessage)
+	router := ports.NewHTTPApp()
+	router.Post("/api/chat-ai", handler.SendMessage)
 
 	reqBody := domain.ChatbotRequest{
 		Query:   "   ",
@@ -104,14 +101,13 @@ func TestChatbotSendMessageEmptyValidation(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	performFiberRequest(t, router, w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Contains(t, w.Body.String(), "กรุณาระบุข้อความคำถาม")
 }
 
 func TestChatbotSendMessageGatewayError(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 
 	mockGateway := &mockAIChatbotGateway{
 		sendMessageFunc: func(ctx context.Context, req domain.ChatbotRequest) (*domain.ChatbotResponse, error) {
@@ -120,8 +116,8 @@ func TestChatbotSendMessageGatewayError(t *testing.T) {
 	}
 
 	handler := ports.NewChatbotHandler(mockGateway, nil)
-	router := gin.New()
-	router.POST("/api/chat-ai", handler.SendMessage)
+	router := ports.NewHTTPApp()
+	router.Post("/api/chat-ai", handler.SendMessage)
 
 	reqBody := domain.ChatbotRequest{Query: "สอบถามสินค้า"}
 	bodyBytes, _ := json.Marshal(reqBody)
@@ -129,14 +125,13 @@ func TestChatbotSendMessageGatewayError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	performFiberRequest(t, router, w, req)
 
 	assert.Equal(t, http.StatusBadGateway, w.Code)
-	assert.Contains(t, w.Body.String(), "ผู้ช่วย AI ขัดข้องชั่วคราว")
+	assert.Contains(t, w.Body.String(), "ยืมหน่อย AI ขัดข้องชั่วคราว")
 }
 
 func TestChatbotSendMessageStreamSuccess(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 
 	ssePayload := "event: delta\ndata: {\"text\": \"สวั\"}\n\nevent: delta\ndata: {\"text\": \"สดี\"}\n\nevent: done\ndata: {\"status\": \"done\"}\n\n"
 	mockGateway := &mockAIChatbotGateway{
@@ -147,8 +142,8 @@ func TestChatbotSendMessageStreamSuccess(t *testing.T) {
 	}
 
 	handler := ports.NewChatbotHandler(mockGateway, nil)
-	router := gin.New()
-	router.POST("/api/chat-ai/stream", handler.SendMessageStream)
+	router := ports.NewHTTPApp()
+	router.Post("/api/chat-ai/stream", handler.SendMessageStream)
 
 	reqBody := domain.ChatbotRequest{Query: "ทักทาย"}
 	bodyBytes, _ := json.Marshal(reqBody)
@@ -156,7 +151,7 @@ func TestChatbotSendMessageStreamSuccess(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	performFiberRequest(t, router, w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))

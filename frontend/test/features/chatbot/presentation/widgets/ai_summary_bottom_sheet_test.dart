@@ -72,7 +72,7 @@ void main() {
         );
 
         // ตรวจสอบขั้นตอนการทำงาน (Timeline)
-        expect(find.text('การทำงานที่ได้รับ'), findsOneWidget);
+        expect(find.text('ขั้นตอนการทำงาน'), findsOneWidget);
         expect(find.text('วิเคราะห์คำถามและเจตนาของผู้ใช้'), findsOneWidget);
         expect(find.text('ค้นหาอุปกรณ์ในคลังระบบ Yuemnoi'), findsOneWidget);
         expect(
@@ -107,12 +107,16 @@ void main() {
         const completedMessage = ChatMessage(
           id: 'assistant-bubble-test',
           role: ChatMessageRole.assistant,
-          content: 'สวัสดีค่ะ มีอะไรให้น้องยืมหน่อยช่วยไหมคะ',
+          content: 'สวัสดีค่ะ มีอะไรให้ยืมหน่อย AI ช่วยไหมคะ',
           userQuery: 'สวัสดี',
           responseDuration: Duration(seconds: 3),
           activities: [
-            'วิเคราะห์ข้อความของผู้ใช้',
-            'เรียบเรียงคำตอบและข้อความต้อนรับ',
+            'กำลังเตรียมข้อมูล',
+            'กำลังวิเคราะห์คำถาม',
+            'กำลังสร้างคำตอบ',
+            'กำลังตรวจคำตอบ',
+            'กำลังสรุปคำคำตอบ',
+            'กำลังตรวจคำตอบ',
           ],
         );
 
@@ -149,8 +153,27 @@ void main() {
         expect(find.textContaining('แหล่งข้อมูลอ้างอิง'), findsNothing);
         expect(find.text('ไม่มีแหล่งอ้างอิงเพิ่มเติม'), findsNothing);
         expect(find.byKey(const Key('chatbot-summary-duration')), findsNothing);
-        expect(find.text('วิเคราะห์ข้อความของผู้ใช้'), findsOneWidget);
-        expect(find.text('เรียบเรียงคำตอบและข้อความต้อนรับ'), findsOneWidget);
+        const steps = [
+          'วิเคราะห์คำถาม',
+          'เตรียมข้อมูล',
+          'ตรวจคำตอบ',
+          'สรุปคำตอบ',
+        ];
+        double? previousStepY;
+        for (final step in steps) {
+          final finder = find.text(step);
+          expect(finder, findsOneWidget);
+          final stepY = tester.getTopLeft(finder).dy;
+          if (previousStepY != null) {
+            expect(stepY, greaterThan(previousStepY));
+          }
+          previousStepY = stepY;
+        }
+        expect(find.textContaining('กำลัง'), findsNothing);
+        expect(
+          find.byIcon(Icons.check_circle_outline_rounded),
+          findsNWidgets(4),
+        );
         // ไม่มี Search Query Card เพราะไม่ได้ค้นหา Google
         expect(find.text('Google Search (Serper.dev)'), findsNothing);
       },

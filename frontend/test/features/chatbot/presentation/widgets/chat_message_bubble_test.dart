@@ -534,7 +534,7 @@ void main() {
       (tester) async {
         const initialGreeting = ChatMessage(
           role: ChatMessageRole.assistant,
-          content: 'สวัสดีค่ะ ฉันคือ Yuemnoi ผู้ช่วยแนะนำอุปกรณ์เช่า',
+          content: 'สวัสดีค่ะ ฉันคือยืมหน่อย AI ช่วยแนะนำอุปกรณ์เช่า',
         );
 
         await tester.pumpWidget(
@@ -635,7 +635,7 @@ void main() {
       tester,
     ) async {
       const responseContent =
-          'สำหรับหมวดหมู่แคมป์ปิงและกิจกรรมกลางแจ้ง น้องยืมหน่อยมีอุปกรณ์พร้อมแนะนำดังนี้นะคะ:\n\n'
+          'สำหรับหมวดหมู่แคมป์ปิงและกิจกรรมกลางแจ้ง ยืมหน่อย AI มีอุปกรณ์พร้อมแนะนำดังนี้นะคะ:\n\n'
           '• **เต็นท์ Coleman Instant Cabin 4 คน** - กางและพับเก็บใน 1 นาที (ค่าเช่า 450 บาท ต่อ วัน)\n'
           '• **ชุดโต๊ะพับและเก้าอี้สนาม Naturehike 4 ตัว** - น้ำหนักเบาพกพาสะดวก (ค่าเช่า 250 บาท ต่อ วัน)\n\n'
           'คุณลูกค้าสามารถแตะดูรายละเอียดเพิ่มเติมจากการ์ดอุปกรณ์ด้านล่างนี้ได้เลยนะคะ';
@@ -792,7 +792,7 @@ void main() {
       'renders bold device titles directly without ชื่ออุปกรณ์, formats รายละเอียด/ราคาเช่า bold, and converts units/prices to Thai integer format',
       (tester) async {
         const responseContent =
-            'น้องยืมหน่อยขอแนะนำมือถือและอุปกรณ์สื่อสารพร้อมใช้งานในระบบนะคะ:\n\n'
+            'ยืมหน่อย AI ขอแนะนำมือถือและอุปกรณ์สื่อสารพร้อมใช้งานในระบบนะคะ:\n\n'
             '**iPhone 15 Pro 128GB**\n'
             '- **รายละเอียด:** สมาร์ตโฟนชิป A17 Pro กล้องระดับโปร 48MP\n'
             '- **ราคาเช่า:** 800 บาท ต่อ วัน\n\n'

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 const (
@@ -33,52 +33,51 @@ func NewItemHandler(r domain.ItemRepository, tokenVerifier domain.TokenVerifier)
 }
 
 type createItemRequest struct {
-	ItemName     string   `json:"item_name" form:"item_name" binding:"required,min=1,max=150"`
-	ItemImageURL []string `json:"item_image_url" form:"item_image_url" binding:"omitempty,dive,max=2048"`
-	Description  string   `json:"description" form:"description" binding:"required,min=1,max=2000"`
-	Category     string   `json:"category" form:"category" binding:"required,min=1,max=100"`
-	Price        int      `json:"price" form:"price" binding:"required,gt=0"`
-	Type         string   `json:"type" form:"type" binding:"required,oneof=รายวัน รายชั่วโมง day hour daily hourly"`
+	ItemName     string   `json:"item_name" form:"item_name" validate:"required,min=1,max=150"`
+	ItemImageURL []string `json:"item_image_url" form:"item_image_url" validate:"omitempty,dive,max=2048"`
+	Description  string   `json:"description" form:"description" validate:"required,min=1,max=2000"`
+	Category     string   `json:"category" form:"category" validate:"required,min=1,max=100"`
+	Price        int      `json:"price" form:"price" validate:"required,gt=0"`
+	Type         string   `json:"type" form:"type" validate:"required,oneof=รายวัน รายชั่วโมง day hour daily hourly"`
 }
 
 type updateItemRequest struct {
-	ItemName     *string   `json:"item_name" binding:"omitempty,min=1,max=150"`
-	ItemImageURL *[]string `json:"item_image_url" binding:"omitempty,dive,max=2048"`
-	Description  *string   `json:"description" binding:"omitempty,min=1,max=2000"`
-	Category     *string   `json:"category" binding:"omitempty,max=100"`
-	Price        *int      `json:"price" binding:"omitempty,gt=0"`
-	Status       *string   `json:"status" binding:"omitempty,max=50"`
-	Type         *string   `json:"type" binding:"omitempty,max=100"`
+	ItemName     *string   `json:"item_name" validate:"omitempty,min=1,max=150"`
+	ItemImageURL *[]string `json:"item_image_url" validate:"omitempty,dive,max=2048"`
+	Description  *string   `json:"description" validate:"omitempty,min=1,max=2000"`
+	Category     *string   `json:"category" validate:"omitempty,max=100"`
+	Price        *int      `json:"price" validate:"omitempty,gt=0"`
+	Status       *string   `json:"status" validate:"omitempty,max=50"`
+	Type         *string   `json:"type" validate:"omitempty,max=100"`
 }
 
-func parseItemID(c *gin.Context) (int64, bool) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+func parseItemID(c fiber.Ctx) (int64, bool) {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสอุปกรณ์ต้องเป็นจำนวนเต็มที่มากกว่า 0"})
+		_ = c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "รหัสอุปกรณ์ต้องเป็นจำนวนเต็มที่มากกว่า 0"})
 		return 0, false
 	}
 
 	return id, true
 }
 
-func writeItemError(c *gin.Context, err error) {
+func writeItemError(c fiber.Ctx, err error) error {
 	switch {
 	case errors.Is(err, domain.ErrItemNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบอุปกรณ์ หรือคุณไม่ใช่เจ้าของอุปกรณ์นี้"})
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบอุปกรณ์ หรือคุณไม่ใช่เจ้าของอุปกรณ์นี้"})
 	case errors.Is(err, domain.ErrItemInUse):
-		c.JSON(http.StatusConflict, gin.H{"error": "ไม่สามารถลบอุปกรณ์ที่มีการจองหรือรีวิวอ้างอิงอยู่"})
+		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "ไม่สามารถลบอุปกรณ์ที่มีการจองหรือรีวิวอ้างอิงอยู่"})
 	default:
 		log.Printf("item operation failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ระบบจัดการอุปกรณ์ขัดข้อง"})
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ระบบจัดการอุปกรณ์ขัดข้อง"})
 	}
 }
 
 // [GET] /api/items - ดึงข้อมูลอุปกรณ์เช่าทั้งหมด (รองรับ query params: search, category)
-func (h *ItemHandler) GetAllItems(c *gin.Context) {
-	items, err := h.repo.FindAll(c.Request.Context())
+func (h *ItemHandler) GetAllItems(c fiber.Ctx) error {
+	items, err := h.repo.FindAll(c.Context())
 	if err != nil {
-		writeItemError(c, err)
-		return
+		return writeItemError(c, err)
 	}
 
 	search := strings.TrimSpace(strings.ToLower(c.Query("search")))
@@ -110,45 +109,45 @@ func (h *ItemHandler) GetAllItems(c *gin.Context) {
 		items = filtered
 	}
 
-	c.JSON(http.StatusOK, items)
+	return c.Status(http.StatusOK).JSON(items)
 }
 
 // [GET] /api/items/:id - ดึงข้อมูลอุปกรณ์เช่าตาม ID
-func (h *ItemHandler) GetItemByID(c *gin.Context) {
+func (h *ItemHandler) GetItemByID(c fiber.Ctx) error {
 	id, ok := parseItemID(c)
 	if !ok {
-		return
+		return nil
 	}
 
-	item, err := h.repo.FindByID(c.Request.Context(), id)
+	item, err := h.repo.FindByID(c.Context(), id)
 	if err != nil {
-		writeItemError(c, err)
-		return
+		return writeItemError(c, err)
 	}
 
-	c.JSON(http.StatusOK, item)
+	return c.Status(http.StatusOK).JSON(item)
 }
 
 // [POST] /api/items - เพิ่มอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
-func (h *ItemHandler) CreateItem(c *gin.Context) {
+func (h *ItemHandler) CreateItem(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
-		return
+		return nil
 	}
 
 	var req createItemRequest
-	if err := c.ShouldBind(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลอุปกรณ์ไม่ถูกต้อง: " + err.Error()})
-		return
+	if err := c.Bind().Body(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลอุปกรณ์ไม่ถูกต้อง: " + err.Error()})
+	}
+	if strings.TrimSpace(req.ItemName) == "" || strings.TrimSpace(req.Description) == "" || strings.TrimSpace(req.Category) == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุชื่อ รายละเอียด และหมวดหมู่อุปกรณ์"})
 	}
 
 	images, err := itemImagesFromRequest(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	item, err := h.repo.Insert(c.Request.Context(), &domain.Item{
+	item, err := h.repo.Insert(c.Context(), &domain.Item{
 		UserID:       userID,
 		ItemName:     strings.TrimSpace(req.ItemName),
 		ItemImageURL: req.ItemImageURL,
@@ -159,15 +158,14 @@ func (h *ItemHandler) CreateItem(c *gin.Context) {
 		Type:         req.Type,
 	}, images)
 	if err != nil {
-		writeItemError(c, err)
-		return
+		return writeItemError(c, err)
 	}
 
-	c.JSON(http.StatusCreated, item)
+	return c.Status(http.StatusCreated).JSON(item)
 }
 
-func itemImagesFromRequest(c *gin.Context) ([]domain.ItemImage, error) {
-	if !strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
+func itemImagesFromRequest(c fiber.Ctx) ([]domain.ItemImage, error) {
+	if !strings.HasPrefix(strings.ToLower(c.Get("Content-Type")), "multipart/form-data") {
 		return nil, nil
 	}
 
@@ -228,20 +226,23 @@ func readItemImage(header *multipart.FileHeader) (*domain.ItemImage, error) {
 }
 
 // [PUT] /api/items/:id - แก้ไขอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
-func (h *ItemHandler) UpdateItem(c *gin.Context) {
+func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
-		return
+		return nil
 	}
 	id, ok := parseItemID(c)
 	if !ok {
-		return
+		return nil
 	}
 
 	var req updateItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลอุปกรณ์ไม่ถูกต้อง: " + err.Error()})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลอุปกรณ์ไม่ถูกต้อง: " + err.Error()})
+	}
+	if (req.ItemName != nil && strings.TrimSpace(*req.ItemName) == "") ||
+		(req.Description != nil && strings.TrimSpace(*req.Description) == "") {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ชื่อและรายละเอียดอุปกรณ์ต้องไม่เป็นข้อความว่าง"})
 	}
 
 	fields := make(map[string]interface{})
@@ -267,35 +268,32 @@ func (h *ItemHandler) UpdateItem(c *gin.Context) {
 		fields["type"] = *req.Type
 	}
 	if len(fields) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุข้อมูลที่ต้องการแก้ไขอย่างน้อย 1 ช่อง"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุข้อมูลที่ต้องการแก้ไขอย่างน้อย 1 ช่อง"})
 	}
 	fields["updated_at"] = time.Now().UTC()
 
-	item, err := h.repo.Update(c.Request.Context(), id, userID, fields)
+	item, err := h.repo.Update(c.Context(), id, userID, fields)
 	if err != nil {
-		writeItemError(c, err)
-		return
+		return writeItemError(c, err)
 	}
 
-	c.JSON(http.StatusOK, item)
+	return c.Status(http.StatusOK).JSON(item)
 }
 
 // [DELETE] /api/items/:id - ลบอุปกรณ์ของผู้ใช้ที่เข้าสู่ระบบ
-func (h *ItemHandler) DeleteItem(c *gin.Context) {
+func (h *ItemHandler) DeleteItem(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
-		return
+		return nil
 	}
 	id, ok := parseItemID(c)
 	if !ok {
-		return
+		return nil
 	}
 
-	if err := h.repo.Delete(c.Request.Context(), id, userID); err != nil {
-		writeItemError(c, err)
-		return
+	if err := h.repo.Delete(c.Context(), id, userID); err != nil {
+		return writeItemError(c, err)
 	}
 
-	c.Status(http.StatusNoContent)
+	return c.SendStatus(http.StatusNoContent)
 }

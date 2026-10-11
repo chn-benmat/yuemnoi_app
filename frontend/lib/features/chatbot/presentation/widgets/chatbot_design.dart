@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/colors.dart';
 
-// สีและระยะของผู้ช่วย AI ใช้ร่วมกันเฉพาะ feature นี้
+// สีและระยะของยืมหน่อย AI ใช้ร่วมกันเฉพาะ feature นี้
 abstract final class ChatbotDesign {
   static const primary = AppColors.primaryColor;
   static const canvas = Colors.white;

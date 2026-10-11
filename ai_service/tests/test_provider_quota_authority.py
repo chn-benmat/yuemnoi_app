@@ -11,7 +11,6 @@ import pytest
 from app.core.config import Settings
 from app.core.exceptions import AllLLMProvidersExhaustedException, LLMProviderException, RuntimeConfigurationException
 from app.infrastructure.llm.cascade_llm_service import CascadeLLMService
-from app.infrastructure.llm.gemini_client import GeminiClient
 from app.infrastructure.llm.groq_client import GroqClient
 from app.infrastructure.llm.quota import PersistentQuotaGovernor, QuotaGovernor
 from app.infrastructure.runtime.documents import ValidatedFile
@@ -40,8 +39,8 @@ def persistent(path, quota):
     return PersistentQuotaGovernor([quota], path, lock_timeout_seconds=1, poll_seconds=.005)
 
 
-def test_production_gemini_and_groq_use_api_authority():
-    assert {p.protocol for p in PRODUCTION.providers} == {'gemini_json_schema', 'groq_json_schema'}
+def test_production_groq_models_use_api_authority():
+    assert {p.protocol for p in PRODUCTION.providers} == {'groq_json_schema'}
     assert all(p.quota.authority == 'provider' for p in PRODUCTION.providers)
 
 
@@ -186,30 +185,23 @@ async def test_provider_balance_and_atomic_recovery_holds_survive_restart(tmp_pa
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('retry_header,details,expected', [
-    ('12', [{'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '45s'}], 12),
-    (None, [{'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '45.5s'}], 45.5),
-    (None, [{'@type': 'other-type', 'retryDelay': '45s'}], None),
-    (None, [{'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '-1s'}], None),
-    (None, [{'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': 'nans'}], None),
-    (None, {'invalid': 'shape'}, None),
-])
-async def test_gemini_retry_uses_typed_api_details_only(retry_header, details, expected):
+@pytest.mark.parametrize('retry_header,expected', [('12', 12), (None, None), ('invalid', None)])
+async def test_groq_retry_uses_api_header_and_ignores_error_message(retry_header, expected):
     response = httpx.Response(429, headers={'retry-after': retry_header} if retry_header else {},
-        json={'error': {'status': 'RESOURCE_EXHAUSTED', 'message': 'secret-wait-99s', 'details': details}})
+        json={'error': {'code': 'rate_limit_exceeded', 'message': 'secret-wait-99s'}})
     async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: response)) as http:
-        client = GeminiClient(api_key='fixture', http_client=http, runtime=PRODUCTION)
+        client = GroqClient(api_key='fixture', http_client=http, runtime=PRODUCTION)
         with pytest.raises(LLMProviderException) as failure:
-            await client.generate_text(client.configuration.GEMINI_PRIMARY_MODEL, 'fixture')
+            await client.generate_text(client.configuration.GROQ_PRIMARY_MODEL, 'fixture')
         assert failure.value.retry_after == expected
         assert 'secret-wait' not in json.dumps(client.observation())
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('provider', ['gemini', 'groq'])
+@pytest.mark.parametrize('provider', ['groq'])
 async def test_unknown_429_wait_is_not_advertised_as_configured_backoff(tmp_path, provider):
     cfg = Settings(_env_file=None, AI_QUOTA_LEDGER_PATH=tmp_path/'ledger.json',
-        GEMINI_API_KEY='fixture', GROQ_API_KEY='fixture')
+        GROQ_API_KEY='fixture')
     profiles = tuple(p.model_copy(update={'enabled': p.id == f'{provider}-primary'}) for p in PRODUCTION.providers)
     runtime = PRODUCTION.model_copy(update={'providers': profiles})
     clock, calls = [100.], []
@@ -219,7 +211,6 @@ async def test_unknown_429_wait_is_not_advertised_as_configured_backoff(tmp_path
             json={'error': {'status': 'RESOURCE_EXHAUSTED'}})
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
         service = CascadeLLMService(runtime=runtime, configuration=cfg,
-            gemini_client=GeminiClient(runtime=runtime, configuration=cfg, http_client=http),
             groq_client=GroqClient(runtime=runtime, configuration=cfg, http_client=http))
         service.governor._clock = lambda: clock[0]
         for _ in range(2):
@@ -238,7 +229,7 @@ async def test_unknown_429_wait_is_not_advertised_as_configured_backoff(tmp_path
 @pytest.mark.asyncio
 async def test_api_daily_request_exhaustion_survives_429_and_is_not_labelled_minute_limit(tmp_path):
     cfg = Settings(_env_file=None, AI_QUOTA_LEDGER_PATH=tmp_path/'ledger.json',
-        GEMINI_API_KEY='', GROQ_API_KEY='fixture')
+        GROQ_API_KEY='fixture')
     headers = {'retry-after': '45', 'x-ratelimit-limit-requests': '1000',
         'x-ratelimit-remaining-requests': '0', 'x-ratelimit-reset-requests': '2h'}
     async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(429,
@@ -253,23 +244,23 @@ async def test_api_daily_request_exhaustion_survives_429_and_is_not_labelled_min
 
 
 @pytest.mark.asyncio
-async def test_gemini_denial_falls_back_to_groq_despite_local_daily_history(tmp_path):
+async def test_provider_auth_denial_blocks_both_models_without_claiming_daily_exhaustion(tmp_path):
     calls = []
-    cfg = Settings(_env_file=None, AI_QUOTA_LEDGER_PATH=tmp_path/'ledger.json',
-        GEMINI_API_KEY='fixture', GROQ_API_KEY='fixture')
+    cfg = Settings(_env_file=None, AI_QUOTA_LEDGER_PATH=tmp_path/'ledger.json', GROQ_API_KEY='fixture')
     def respond(request):
-        provider = 'gemini' if 'contents' in json.loads(request.content) else 'groq'
-        calls.append(provider)
-        return (httpx.Response(403, json={'error': {'status': 'PERMISSION_DENIED'}}) if provider == 'gemini'
-                else httpx.Response(200, json=envelope()))
+        calls.append(json.loads(request.content)['model'])
+        return httpx.Response(403, json={'error': {'code': 'permission_denied'}})
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
         service = CascadeLLMService(runtime=PRODUCTION, configuration=cfg,
-            gemini_client=GeminiClient(runtime=PRODUCTION, configuration=cfg, http_client=http),
             groq_client=GroqClient(runtime=PRODUCTION, configuration=cfg, http_client=http))
         for name, state in service.governor._buckets.items():
             old = await service.governor.reserve(name, state.policy.tokens_per_day * 2)
             await service.governor.mark_sent(old)
             await service.governor.finish(old, {'usage': {'total_tokens': old.tokens}})
-        assert (await service.generate_structured('fixture', SmallResult)).value == 'valid'
-        assert calls == ['gemini', 'groq']
+        with pytest.raises(AllLLMProvidersExhaustedException) as failure:
+            await service.generate_structured('fixture', SmallResult)
+        assert failure.value.code == 'providers_exhausted'
+        assert service.telemetry[0]['http_status'] == 403
+        assert calls == [cfg.GROQ_PRIMARY_MODEL]
+        assert service._auth_blocked == {'groq'}
         await service.aclose()

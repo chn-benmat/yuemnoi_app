@@ -749,7 +749,7 @@ void main() {
     await tester.pump();
 
     // แสดงการเชื่อมต่อก่อนมีสถานะจริงจากบริการ
-    expect(find.textContaining('กำลังเชื่อมต่อผู้ช่วย AI'), findsOneWidget);
+    expect(find.textContaining('กำลังเชื่อมต่อยืมหน่อย AI'), findsOneWidget);
 
     // Backend sends searching status event
     repository.streamController.add(
@@ -887,7 +887,7 @@ void main() {
 
       // In thinking phase
       expect(find.byKey(const Key('chatbot-stop-button')), findsOneWidget);
-      expect(find.textContaining('กำลังเชื่อมต่อผู้ช่วย AI'), findsOneWidget);
+      expect(find.textContaining('กำลังเชื่อมต่อยืมหน่อย AI'), findsOneWidget);
 
       // User presses Stop before any delta is emitted
       await tester.tap(find.byKey(const Key('chatbot-stop-button')));

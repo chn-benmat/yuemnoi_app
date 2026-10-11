@@ -11,7 +11,6 @@ import (
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
-	"github.com/gin-gonic/gin"
 )
 
 type itemHandlerRepository struct {
@@ -45,11 +44,11 @@ func (itemTokenVerifier) UserIDFromToken(context.Context, string) (string, error
 }
 
 func TestCreateItemAcceptsMultipartImages(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+
 	repository := &itemHandlerRepository{}
 	handler := ports.NewItemHandler(repository, itemTokenVerifier{})
-	router := gin.New()
-	router.POST("/api/items", handler.CreateItem)
+	router := ports.NewHTTPApp()
+	router.Post("/api/items", handler.CreateItem)
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -80,7 +79,7 @@ func TestCreateItemAcceptsMultipartImages(t *testing.T) {
 	request.Header.Set("Content-Type", writer.FormDataContentType())
 	request.Header.Set("Authorization", "Bearer valid-token")
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
+	performFiberRequest(t, router, response, request)
 
 	if response.Code != http.StatusCreated {
 		t.Fatalf("expected status 201, got %d: %s", response.Code, response.Body.String())
@@ -97,7 +96,7 @@ func TestCreateItemAcceptsMultipartImages(t *testing.T) {
 }
 
 func TestGetAllItemsPreservesRankedOrderAndMetrics(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+
 	repository := &itemHandlerRepository{
 		rankedItems: []domain.RankedItem{
 			{
@@ -115,12 +114,12 @@ func TestGetAllItemsPreservesRankedOrderAndMetrics(t *testing.T) {
 		},
 	}
 	handler := ports.NewItemHandler(repository, itemTokenVerifier{})
-	router := gin.New()
-	router.GET("/api/items", handler.GetAllItems)
+	router := ports.NewHTTPApp()
+	router.Get("/api/items", handler.GetAllItems)
 
 	request := httptest.NewRequest(http.MethodGet, "/api/items", nil)
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
+	performFiberRequest(t, router, response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", response.Code, response.Body.String())
@@ -162,13 +161,13 @@ func TestGetAllItems_WithSearchFilter(t *testing.T) {
 		},
 	}
 	handler := ports.NewItemHandler(repository, itemTokenVerifier{})
-	router := gin.New()
-	router.GET("/api/items", handler.GetAllItems)
+	router := ports.NewHTTPApp()
+	router.Get("/api/items", handler.GetAllItems)
 
 	// ค้นหาด้วยชื่อภาษาไทย "กล้อง"
 	req1 := httptest.NewRequest(http.MethodGet, "/api/items?search=กล้อง", nil)
 	resp1 := httptest.NewRecorder()
-	router.ServeHTTP(resp1, req1)
+	performFiberRequest(t, router, resp1, req1)
 	if resp1.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp1.Code)
 	}
@@ -181,7 +180,7 @@ func TestGetAllItems_WithSearchFilter(t *testing.T) {
 	// ค้นหาด้วยคำอธิบาย "กันฝน"
 	req2 := httptest.NewRequest(http.MethodGet, "/api/items?search=กันฝน", nil)
 	resp2 := httptest.NewRecorder()
-	router.ServeHTTP(resp2, req2)
+	performFiberRequest(t, router, resp2, req2)
 	var res2 []map[string]any
 	_ = json.Unmarshal(resp2.Body.Bytes(), &res2)
 	if len(res2) != 1 || res2[0]["id"] != float64(8) {

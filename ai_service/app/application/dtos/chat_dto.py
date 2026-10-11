@@ -50,6 +50,13 @@ class ChatRequestDTO(BaseModel):
         return self
 
     @property
+    def questionnaire_complete(self) -> bool:
+        """ครบเมื่อมีคำตอบจริงของทุก ID ในชุดปัจจุบัน ไม่อนุมานจากข้อความ"""
+        return bool(self.context and self.context.questions) and {
+            answer.question_id for answer in self.questionnaire_answers
+        } == {question.id for question in self.context.questions}
+
+    @property
     def effective_message(self) -> str:
         if self.query and self.query.strip():
             return self.query.strip()

@@ -109,7 +109,8 @@ async def test_missing_app_topic_cannot_use_factual_social_reply():
 
 @pytest.mark.asyncio
 async def test_questionnaire_and_mixed_faq_use_one_call_and_no_cards():
-    decision = understanding(intent="inventory_search", catalog_operation="selection", missing_slots=["location"])
+    decision = understanding(intent="inventory_search", catalog_operation="selection", missing_slots=["location"],
+                             additional_goals=['อธิบายวิธีสมัครสมาชิก'])
     fast, llm, _, _ = make_fast(turn(understanding=decision, questions=[QUESTION], message="ขอข้อมูลเพิ่มเติม", response_mode="clarification"))
     result = await fast.execute(ChatRequestDTO(message="สมัครและหาอุปกรณ์สำหรับงาน"))
     assert result.response.endswith("ขอข้อมูลเพิ่มเติม")

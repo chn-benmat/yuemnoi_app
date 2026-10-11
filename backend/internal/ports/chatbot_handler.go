@@ -1,18 +1,21 @@
 package ports
 
 import (
+	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 // รักษารหัสโควตาและเวลาลองใหม่ โดยไม่ส่งรายละเอียดจากระบบภายใน
-func writeAIError(c *gin.Context, err error) {
+func writeAIError(c fiber.Ctx, err error) error {
 	statusCode := http.StatusBadGateway
 	code := "service_unavailable"
 	var serviceErr *domain.AIServiceError
@@ -22,117 +25,144 @@ func writeAIError(c *gin.Context, err error) {
 			statusCode = http.StatusServiceUnavailable
 		}
 		if serviceErr.RetryAfterSeconds != nil {
-			c.Header("Retry-After", fmt.Sprint(*serviceErr.RetryAfterSeconds))
+			c.Set("Retry-After", fmt.Sprint(*serviceErr.RetryAfterSeconds))
 		}
 	}
-	c.JSON(statusCode, gin.H{"status": "error", "error_code": code, "error": "ผู้ช่วย AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง"})
+	return c.Status(statusCode).JSON(fiber.Map{"status": "error", "error_code": code, "error": "ยืมหน่อย AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง"})
 }
 
-// ChatbotHandler จัดการคำขอเกี่ยวกับ AI Chatbot จาก Flutter Client
+// ChatbotHandler รับคำขอ AI และส่งต่อผ่าน domain gateway
 type ChatbotHandler struct {
 	gateway       domain.AIChatbotGateway
 	tokenVerifier domain.TokenVerifier
 }
 
-// NewChatbotHandler สร้างอินสแตนซ์ของ ChatbotHandler
-func NewChatbotHandler(
-	gateway domain.AIChatbotGateway,
-	tokenVerifier domain.TokenVerifier,
-) *ChatbotHandler {
-	return &ChatbotHandler{
-		gateway:       gateway,
-		tokenVerifier: tokenVerifier,
-	}
+func NewChatbotHandler(gateway domain.AIChatbotGateway, tokenVerifier domain.TokenVerifier) *ChatbotHandler {
+	return &ChatbotHandler{gateway: gateway, tokenVerifier: tokenVerifier}
 }
 
-// SendMessage รับข้อความคำถามจากผู้ใช้ และส่งต่อให้ AI Service เพื่อตอบกลับแบบสมบูรณ์รอบเดียว
-func (h *ChatbotHandler) SendMessage(c *gin.Context) {
+func (h *ChatbotHandler) SendMessage(c fiber.Ctx) error {
 	var req domain.ChatbotRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบข้อมูลไม่ถูกต้อง"})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "รูปแบบข้อมูลไม่ถูกต้อง"})
 	}
-
-	effectiveMsg := strings.TrimSpace(req.EffectiveMessage())
-	if effectiveMsg == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุข้อความคำถาม"})
-		return
+	if strings.TrimSpace(req.EffectiveMessage()) == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุข้อความคำถาม"})
 	}
-
-	// เรียกใช้งาน Gateway ส่งคำขอไปยัง AI Service
-	resp, err := h.gateway.SendMessage(c.Request.Context(), req)
+	resp, err := h.gateway.SendMessage(c.Context(), req)
 	if err != nil {
-		writeAIError(c, err)
-		return
+		return writeAIError(c, err)
 	}
-
-	c.JSON(http.StatusOK, resp)
+	return c.JSON(resp)
 }
 
-// SendMessageStream รับคำขอและสตรีมคำตอบของ AI กลับไปยัง Mobile Client แบบ Real-time SSE (Typewriter Effect)
-func (h *ChatbotHandler) SendMessageStream(c *gin.Context) {
+func (h *ChatbotHandler) SendMessageStream(c fiber.Ctx) error {
 	var req domain.ChatbotRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบข้อมูลไม่ถูกต้อง"})
-		return
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "รูปแบบข้อมูลไม่ถูกต้อง"})
+	}
+	if strings.TrimSpace(req.EffectiveMessage()) == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุข้อความคำถาม"})
 	}
 
-	effectiveMsg := strings.TrimSpace(req.EffectiveMessage())
-	if effectiveMsg == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุข้อความคำถาม"})
-		return
+	// สตรีมมีอายุเกิน handler จึงให้ callback เป็นเจ้าของ context และการปิด upstream
+	ctx, cancel := context.WithCancel(c.Context())
+	if timeout := c.App().Config().WriteTimeout; timeout > 0 {
+		cancel()
+		ctx, cancel = context.WithTimeout(c.Context(), timeout)
 	}
-
-	// เริ่มต้นการขอสตรีมจาก AI Service
-	streamBody, err := h.gateway.SendMessageStream(c.Request.Context(), req)
+	stopShutdown := func() bool { return false }
+	if shutdown, ok := ctx.Value(streamShutdownKey{}).(context.Context); ok {
+		stopShutdown = context.AfterFunc(shutdown, cancel)
+	}
+	streamBody, err := h.gateway.SendMessageStream(ctx, req)
 	if err != nil {
-		writeAIError(c, err)
-		return
-	}
-	defer streamBody.Close()
-
-	// ตั้งค่า Headers สำหรับ Server-Sent Events (SSE)
-	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache")
-	c.Writer.Header().Set("Connection", "keep-alive")
-	c.Writer.Header().Set("Transfer-Encoding", "chunked")
-	c.Writer.Header().Set("X-Accel-Buffering", "no")
-	c.Writer.WriteHeader(http.StatusOK)
-
-	flusher, hasFlusher := c.Writer.(http.Flusher)
-	if hasFlusher {
-		flusher.Flush()
+		stopShutdown()
+		cancel()
+		return writeAIError(c, err)
 	}
 
-	// อ่านและส่งต่อสตรีมทีละ Chunk ไปยัง Client ทันที
-	buf := make([]byte, 1024)
-	for {
-		select {
-		case <-c.Request.Context().Done():
-			// Client ยกเลิกการเชื่อมต่อ หรือปิดหน้าแอป
-			return
-		default:
-		}
+	c.Set("Content-Type", "text/event-stream")
+	c.Set("Cache-Control", "no-cache")
+	c.Set("Connection", "keep-alive")
+	c.Set("X-Accel-Buffering", "no")
+	c.Response().ImmediateHeaderFlush = true
+	return c.SendStreamWriter(func(writer *bufio.Writer) {
+		defer func() {
+			stopShutdown()
+			cancel()
+			_ = streamBody.Close()
+			if release, ok := ctx.Value(requestCancelKey{}).(context.CancelFunc); ok {
+				release()
+			}
+		}()
+		forwardAIStream(ctx, writer, streamBody)
+	})
+}
 
-		n, readErr := streamBody.Read(buf)
-		if n > 0 {
-			if _, writeErr := c.Writer.Write(buf[:n]); writeErr != nil {
+type streamChunk struct {
+	data []byte
+	err  error
+}
+
+func forwardAIStream(ctx context.Context, writer *bufio.Writer, body io.Reader) {
+	chunks := make(chan streamChunk, 1)
+	go func() {
+		for {
+			buf := make([]byte, 1024)
+			n, err := body.Read(buf)
+			select {
+			case chunks <- streamChunk{data: buf[:n], err: err}:
+			case <-ctx.Done():
 				return
 			}
-			if hasFlusher {
-				flusher.Flush()
+			if err != nil {
+				return
 			}
 		}
+	}()
 
-		if readErr != nil {
-			if readErr != io.EOF {
-				// ส่ง Event แจ้งเตือนข้อผิดพลาดถ้าสตรีมขาดช่วงกะทันหัน
-				_, _ = fmt.Fprintf(c.Writer, "event: error\ndata: {\"error_code\": \"stream_interrupted\"}\n\n")
-				if hasFlusher {
-					flusher.Flush()
+	// SSE comments ตรวจการตัดการเชื่อมต่อระหว่างรอ upstream โดยไม่สร้างสถานะ AI ปลอม
+	heartbeat := time.NewTicker(time.Second)
+	defer heartbeat.Stop()
+	atEventBoundary := true
+	var tail string
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-heartbeat.C:
+			// ห้ามแทรก comment กลาง event ที่ upstream ส่งมาไม่ครบ
+			if !atEventBoundary {
+				continue
+			}
+			if _, err := writer.WriteString(": keep-alive\n\n"); err != nil {
+				return
+			}
+			if err := writer.Flush(); err != nil {
+				return
+			}
+		case chunk := <-chunks:
+			if len(chunk.data) > 0 {
+				tail += string(chunk.data)
+				if len(tail) > 4 {
+					tail = tail[len(tail)-4:]
+				}
+				atEventBoundary = strings.HasSuffix(tail, "\n\n") || strings.HasSuffix(tail, "\r\n\r\n")
+				if _, err := writer.Write(chunk.data); err != nil {
+					return
+				}
+				if err := writer.Flush(); err != nil {
+					return
 				}
 			}
-			break
+			if chunk.err != nil {
+				if !errors.Is(chunk.err, io.EOF) {
+					_, _ = writer.WriteString("event: error\ndata: {\"error_code\": \"stream_interrupted\"}\n\n")
+					_ = writer.Flush()
+				}
+				return
+			}
 		}
 	}
 }

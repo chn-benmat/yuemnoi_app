@@ -15,8 +15,9 @@ async def health_check():
         "service": settings.APP_NAME,
         "hot_reload": True,
         "providers": {
-            "gemini_primary": settings.GEMINI_PRIMARY_MODEL,
             "groq_primary": settings.GROQ_PRIMARY_MODEL,
+            "groq_review_primary": settings.GROQ_FALLBACK_MODEL_1,
+            "groq_fallback": settings.GROQ_FALLBACK_MODEL_2,
         },
         "dependencies": {},
     }
@@ -42,12 +43,6 @@ async def health_check():
     # Check Groq Key
     status_report["dependencies"]["groq"] = {
         "status": "configured" if settings.GROQ_API_KEY else "not_configured",
-    }
-
-    # Check Gemini Key
-    status_report["dependencies"]["gemini"] = {
-        "status": "disabled" if not any(p.enabled and p.protocol == "gemini_json_schema" for p in container.llm_service.runtime.providers) else (
-            "configured" if settings.GEMINI_API_KEY else "not_configured"),
     }
 
     status_report["providers"]["profiles"] = [{"id": p.id, "enabled": p.enabled,

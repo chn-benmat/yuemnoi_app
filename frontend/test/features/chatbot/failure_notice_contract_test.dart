@@ -16,7 +16,7 @@ const _cases = [
     code: 'providers_rate_limited',
     seconds: 59,
     quota: true,
-    title: 'ผู้ช่วย AI ติดโควต้า',
+    title: 'ยืมหน่อย AI ติดโควต้า',
     description: 'ติดโควต้า',
     wait: '1 นาที',
   ),
@@ -24,7 +24,7 @@ const _cases = [
     code: 'quota_temporarily_unavailable',
     seconds: 37,
     quota: true,
-    title: 'ผู้ช่วย AI ติดโควต้าชั่วคราว',
+    title: 'ยืมหน่อย AI ติดโควต้าชั่วคราว',
     description: 'โควต้าชั่วคราว',
     wait: '1 นาที',
   ),
@@ -32,7 +32,7 @@ const _cases = [
     code: 'quota_exhausted',
     seconds: 41490,
     quota: true,
-    title: 'โควต้ารายวันของผู้ช่วย AI ไม่เพียงพอ',
+    title: 'โควต้ารายวันของยืมหน่อย AI ไม่เพียงพอ',
     description: 'โควต้ารายวัน',
     wait: '11 ชั่วโมง 32 นาที',
   ),
@@ -40,7 +40,7 @@ const _cases = [
     code: 'providers_busy',
     seconds: null,
     quota: false,
-    title: 'ผู้ช่วย AI ติดคิวชั่วคราว',
+    title: 'ยืมหน่อย AI ติดคิวชั่วคราว',
     description: 'รอคิวไม่ทัน',
     wait: null,
   ),
@@ -48,7 +48,7 @@ const _cases = [
     code: 'review_unavailable',
     seconds: null,
     quota: false,
-    title: 'ผู้ช่วย AI ยังตรวจสอบคำตอบไม่ได้',
+    title: 'ยืมหน่อย AI ยังตรวจสอบคำตอบไม่ได้',
     description: 'ยังตรวจสอบคำตอบไม่ได้',
     wait: null,
   ),
@@ -56,7 +56,7 @@ const _cases = [
     code: 'structured_output_invalid',
     seconds: null,
     quota: false,
-    title: 'ยืมหน่อย สร้างคำตอบไม่ได้',
+    title: 'ยืมหน่อย AI สร้างคำตอบไม่ได้',
     description: 'รูปแบบคำตอบไม่สมบูรณ์',
     wait: null,
   ),
@@ -64,7 +64,7 @@ const _cases = [
     code: 'response_quality_rejected',
     seconds: null,
     quota: false,
-    title: 'คำตอบของผู้ช่วย AI ยังไม่ผ่านการตรวจสอบ',
+    title: 'คำตอบของยืมหน่อย AI ยังไม่ผ่านการตรวจสอบ',
     description: 'ไม่ผ่านการตรวจสอบคุณภาพ',
     wait: null,
   ),
@@ -108,7 +108,7 @@ void main() {
         isNull,
       );
       final icon = tester.getRect(find.byIcon(Icons.schedule_rounded));
-      final title = tester.getRect(find.text('ผู้ช่วย AI ติดโควต้าชั่วคราว'));
+      final title = tester.getRect(find.text('ยืมหน่อย AI ติดโควต้าชั่วคราว'));
       expect(title.left, greaterThan(icon.right));
       expect(title.center.dy, icon.center.dy);
       now = now.add(const Duration(seconds: 1));

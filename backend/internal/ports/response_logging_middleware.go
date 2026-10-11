@@ -1,14 +1,14 @@
 package ports
 
 import (
-	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 const maxLoggedResponseChars = 16 * 1024
@@ -41,45 +41,56 @@ var sensitiveLogKeyFragments = []string{
 	"serper_api",
 }
 
-type responseLogWriter struct {
-	gin.ResponseWriter
-	body bytes.Buffer
-}
-
-func (w *responseLogWriter) Write(data []byte) (int, error) {
-	n, err := w.ResponseWriter.Write(data)
-	_, _ = w.body.Write(data[:n])
-	return n, err
-}
-
-func (w *responseLogWriter) WriteString(data string) (int, error) {
-	n, err := w.ResponseWriter.WriteString(data)
-	_, _ = w.body.WriteString(data[:n])
-	return n, err
-}
-
-// ResponseLoggingMiddleware บันทึก Structured Log ของ API Response โดยปกปิดข้อมูลที่มีความอ่อนไหว (PII / Secrets) อัตโนมัติ
-func ResponseLoggingMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
+// บันทึกเฉพาะข้อมูลการรับส่งคำขอ โดยไม่เก็บ headers, query หรือข้อมูลส่วนตัวใน body
+func accessLoggingMiddleware() fiber.Handler {
+	return func(c fiber.Ctx) error {
 		start := time.Now()
-		writer := &responseLogWriter{ResponseWriter: c.Writer}
-		c.Writer = writer
-
-		c.Next()
-
-		slog.InfoContext(
-			c.Request.Context(),
-			"api_response",
-			slog.String("method", c.Request.Method),
-			slog.String("path", c.Request.URL.Path),
-			slog.Int("status", c.Writer.Status()),
-			slog.Int64("latency_ms", time.Since(start).Milliseconds()),
-			slog.String("body", safeBodyForLog(writer.body.Bytes())),
-		)
+		err := c.Next()
+		status := c.Response().StatusCode()
+		if err != nil {
+			status = fiber.StatusInternalServerError
+			var httpErr *fiber.Error
+			if errors.As(err, &httpErr) {
+				status = httpErr.Code
+				if status == fiber.StatusMethodNotAllowed {
+					status = fiber.StatusNotFound
+				}
+			}
+		}
+		slog.InfoContext(c.Context(), "http_request",
+			slog.String("method", c.Method()), slog.String("path", c.Path()),
+			slog.Int("status", status), slog.Int64("latency_ms", time.Since(start).Milliseconds()))
+		return err
 	}
 }
 
-func responseLoggingMiddleware() gin.HandlerFunc {
+// ResponseLoggingMiddleware บันทึก Structured Log ของ API Response โดยปกปิดข้อมูลที่มีความอ่อนไหว (PII / Secrets) อัตโนมัติ
+func ResponseLoggingMiddleware() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		start := time.Now()
+		err := c.Next()
+		// ไม่อ่าน body stream เพื่อคงการส่งข้อมูลทันทีและไม่เก็บข้อความสนทนาใน log
+		body := "<stream omitted>"
+		if strings.HasPrefix(c.Path(), "/api/identity/") || strings.HasPrefix(c.Path(), "/api/admin/") {
+			body = "<identity data omitted>"
+		} else if !c.Response().IsBodyStream() {
+			body = safeBodyForLog(c.Response().Body())
+		}
+
+		slog.InfoContext(
+			c.Context(),
+			"api_response",
+			slog.String("method", c.Method()),
+			slog.String("path", c.Path()),
+			slog.Int("status", c.Response().StatusCode()),
+			slog.Int64("latency_ms", time.Since(start).Milliseconds()),
+			slog.String("body", body),
+		)
+		return err
+	}
+}
+
+func responseLoggingMiddleware() fiber.Handler {
 	return ResponseLoggingMiddleware()
 }
 

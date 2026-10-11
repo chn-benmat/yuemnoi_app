@@ -7,10 +7,12 @@ class AppFieldLabel extends StatelessWidget {
     super.key,
     required this.text,
     this.padding = const EdgeInsets.only(left: 4, bottom: 8),
+    this.style,
   });
 
   final String text;
   final EdgeInsetsGeometry padding;
+  final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +23,7 @@ class AppFieldLabel extends StatelessWidget {
       child: Text(
         text,
         style:
+            style ??
             theme.textTheme.bodyLarge?.copyWith(
               fontWeight: FontWeight.w600,
               color: AppColors.labelColor,

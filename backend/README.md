@@ -7,7 +7,7 @@
 **จัดการข้อมูล การเช่า และเชื่อมแอปกับบริการภายนอก**
 
 ![Go](https://img.shields.io/badge/Go-1.26.2-00ADD8?style=flat-square&logo=go&logoColor=white)
-![Gin](https://img.shields.io/badge/Gin-1.12.0-008ECF?style=flat-square)
+![Fiber](https://img.shields.io/badge/Fiber-3.5.0-00ACD7?style=flat-square)
 ![Supabase](https://img.shields.io/badge/Data-Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-Hexagonal-9251D0?style=flat-square)
 
@@ -41,7 +41,7 @@ Go Backend เป็น REST API หลักของ **Yuemnoi** เชื่�
 
 ```mermaid
 flowchart LR
-    App["Flutter"] -->|"REST / SSE"| API["Gin API :8080"]
+    App["Flutter"] -->|"REST / SSE"| API["Fiber API :8080"]
     API --> SB["Supabase Auth / Database / Storage"]
     API --> FCM["Firebase FCM HTTP v1"]
     API -->|"X-Internal-Service-Key"| AI["Python AI :8000"]
@@ -58,15 +58,19 @@ Frontend ยังใช้ Supabase โดยตรงในบางฟีเ�
 | เครื่องมือ / module              | เวอร์ชัน                                                    | ใช้ทำอะไร                                      |
 | -------------------------------- | ----------------------------------------------------------- | ---------------------------------------------- |
 | Go                               | **1.26.2** ตาม go directive; ใช้ toolchain ที่ตรงหรือรองรับ | ภาษา, HTTP client/server และ concurrency       |
-| `github.com/gin-gonic/gin`       | v1.12.0                                                     | Router, handlers และ middleware                |
+| `github.com/gofiber/fiber/v3`    | v3.5.0                                                     | Router, handlers และ middleware                |
 | `github.com/caarlos0/env/v11`    | v11.4.1                                                     | อ่าน env ลง typed configuration                |
+| `github.com/go-playground/validator/v10` | v10.30.1 | ตรวจ `validate` tags ของ request DTOs ผ่าน Fiber `StructValidator` |
 | `github.com/joho/godotenv`       | v1.5.1                                                      | โหลดไฟล์ `.env`                                |
-| `github.com/nedpals/supabase-go` | v0.5.0                                                      | Supabase Auth / PostgREST / Storage            |
+| `github.com/nedpals/supabase-go` | v0.5.0                                                      | Supabase Auth / PostgREST                       |
+| `firebase.google.com/go/v4`     | v4.22.0                                                     | Firebase Admin SDK สำหรับ FCM                  |
+| `cloud.google.com/go/auth`      | v0.20.0                                                     | Credentials, OAuth และ HTTP transport ของ Google |
+| `google.golang.org/api`         | v0.279.0                                                    | Client options สำหรับ Firebase SDK             |
+| `golang.org/x/time`             | v0.16.0                                                     | Token Bucket ผ่าน package `rate`               |
 | `github.com/stretchr/testify`    | v1.12.1                                                     | Assertions และ mocks ใน tests                  |
-| Go standard library              | ตาม Go toolchain                                            | `net/http`, `log/slog`, OAuth / JWT สำหรับ FCM |
-| Air — optional                   | ไม่ได้ pin ใน repository                                    | Hot reload; มีข้อจำกัดของ config ข้าม OS       |
+| Go standard library              | ตาม Go toolchain                                            | `net/http`, `log/slog` และ Supabase Storage adapter |
 
-FCM adapter ใช้ HTTP v1 และ Go standard library โดยตรง ไม่มี Firebase Admin SDK ใน Go dependencies ส่วน Supabase / Firebase / AI เป็นบริการภายนอก จึงไม่มีเวอร์ชัน server ที่ pin ไว้ใน go.mod
+FCM adapter ใช้ Firebase Admin SDK ส่ง HTTP v1 และใช้ Google Auth จัดการ credentials / OAuth โดยคง data, Android channel และเสียงแจ้งเตือนเดิม ส่วน Supabase Storage ใช้ HTTP adapter ที่ส่ง context และคืน error แทนการเรียก Upload / Remove ของ SDK เดิม Supabase / Firebase / AI เป็นบริการภายนอก จึงไม่มีเวอร์ชัน server ที่ pin ไว้ใน go.mod
 
 <a id="setup"></a>
 
@@ -105,7 +109,7 @@ OTP flow ปัจจุบันใช้ Supabase email OTP ผ่าน Magic
 
 ```dotenv
 PORT=8080
-GIN_MODE=debug
+APP_ENV=debug
 
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=replace-with-backend-service-role-key
@@ -131,7 +135,7 @@ SHUTDOWN_TIMEOUT=5s
 | ตัวแปร                          | Default                 | ต้องตั้งเมื่อ / ความหมาย                                        |
 | ------------------------------- | ----------------------- | --------------------------------------------------------------- |
 | `PORT`                          | `8080`                  | พอร์ต HTTP                                                      |
-| `GIN_MODE`                      | `debug`                 | ใช้ `release` เพื่อเปิด validation และ JSON slog ของ production |
+| `APP_ENV`                      | `debug`                 | ใช้ `release` เพื่อตรวจคอนฟิก production และใช้ JSON slog |
 | `SUPABASE_URL`                  | ไม่มี                   | **จำเป็นทุกโหมด**                                               |
 | `SUPABASE_SERVICE_ROLE_KEY`     | ไม่มี                   | **จำเป็นทุกโหมด**, server-only                                  |
 | `FIREBASE_SERVICE_ACCOUNT_PATH` | ไม่มี                   | path ของ service account สำหรับ FCM                             |
@@ -148,7 +152,9 @@ SHUTDOWN_TIMEOUT=5s
 
 [Config loader](internal/config/config.go) โหลด `.env` จาก working directory ก่อน และลอง `../../.env` หากไฟล์แรกโหลดไม่สำเร็จ แนะนำให้รันจาก `backend/` เพื่อให้ paths ของ Firebase และ shared runtime ชัดเจน Process environment ที่มีอยู่มีลำดับก่อนค่าจาก dotenv
 
-**Release configuration:** ตั้ง `GIN_MODE=release` พร้อม app key อย่างน้อยหนึ่งตัวจาก `APP_SECRET_KEY` / `APP_SECRET_KEYS` และ internal primary key อย่างน้อย 16 ตัวอักษร โค้ดไม่ได้บังคับความยาวขั้นต่ำของ app key ส่วน credential ของ Firebase เป็นเงื่อนไขสำหรับ push; ขาดแล้ว server ยังเริ่มได้พร้อม warning
+`APP_ENV` เป็นชื่อคอนฟิกหลักของ runtime; deployment เดิมยังใช้ `GIN_MODE` เป็น fallback ได้ เมื่อกำหนด `APP_ENV` ไว้จะมีสิทธิ์สูงกว่า โดยคงการตรวจ app key / internal key ในโหมด `release` เหมือนเดิม
+
+**Release configuration:** ตั้ง `APP_ENV=release` พร้อม app key อย่างน้อยหนึ่งตัวจาก `APP_SECRET_KEY` / `APP_SECRET_KEYS` และ internal primary key อย่างน้อย 16 ตัวอักษร โค้ดไม่ได้บังคับความยาวขั้นต่ำของ app key ส่วน credential ของ Firebase เป็นเงื่อนไขสำหรับ push; ขาดแล้ว server ยังเริ่มได้พร้อม warning
 
 <details>
 <summary>ตั้งค่า Firebase และการหมุนคีย์</summary>
@@ -169,9 +175,12 @@ Backend รวม app keys จากสองตัวแปรและรั�
 cd backend
 go version
 go mod download
-go install github.com/air-verse/air@latest
-air หรือ go run ./cmd/server
+go run main.go
 ```
+
+`main.go` เปิด HTTP server ด้วย Fiber `Listen` โดยตรง เมื่อแก้โค้ด ให้หยุดด้วย `Ctrl+C` แล้วรัน `go run main.go` ใหม่
+
+ในโหมด debug เมื่อแสดง log ใน terminal ค่า `status=2xx` เป็นสีเขียว, `status=4xx` (รวม 404) เป็นสีเหลือง และ `status=5xx` เป็นสีแดง พร้อมสีเหลืองสำหรับ `level=WARN` และสีแดงสำหรับ `level=ERROR` รองรับ Windows console ด้วย เมื่อ redirect ไปไฟล์หรือ pipe จะเป็นข้อความไม่มีสี ส่วน `APP_ENV=release` ใช้ JSON log
 
 เปิด terminal อีกหน้าตรวจ HTTP server:
 
@@ -210,19 +219,6 @@ curl http://localhost:8080/api/items \
 
 Go เปิด HTTP server ที่ `:8080` ตามค่า default มือถือ Android ในโปรเจกต์นี้บล็อก cleartext HTTP จึงต้องมี HTTPS endpoint หรือ native debug network policy ก่อนเชื่อมจากแอป ดูรายละเอียด URL ใน Frontend README
 
-<details>
-<summary>ใช้ Air สำหรับ hot reload</summary>
-
-Air เป็นเครื่องมือเสริมที่ต้องติดตั้งแยก และไม่มีเวอร์ชัน pin ใน go.mod เมื่อมี Air ใน PATH แล้ว ฝั่ง Windows ใช้:
-
-```powershell
-air -c .air.toml
-```
-
-[.air.toml](.air.toml) มี Windows override ที่ชี้ entry point ถูกต้อง แต่ default build command สำหรับ macOS / Linux ยังชี้ `.` ซึ่งไม่มี Go files หากจะใช้ Air บนสองระบบนี้ ให้ปรับ `[build].cmd` เป็น `go build -o ./tmp/main ./cmd/server` ก่อน สำหรับ quick start ใช้ `go run ./cmd/server` ได้เลย
-
-</details>
-
 <a id="api"></a>
 
 ## 🌐 API & authentication
@@ -253,13 +249,21 @@ Base path คือ `/api` เส้นทางทั้งหมดอยู�
 - รายการสินค้าใช้ query `search` และ `category`; ยังไม่มี pagination แบบ `limit` / `offset` ใน handler ปัจจุบัน
 - สร้าง item รองรับ JSON หรือ multipart; field รูปชื่อ `images` ไม่เกิน **5 รูป**, รูปละ **5 MiB**, JPEG / PNG / WebP
 - รูปโปรไฟล์ใช้ multipart field `image` ไม่เกิน **5 MiB**
-- Rate limiter เป็น token bucket **ต่อ client IP ใน memory**: Auth เติม 5/minute, burst 5; AI เติม 15/minute, burst 15 และตอบ 429 เมื่อเกิน
+- Rate limiter ใช้ `golang.org/x/time/rate` เป็น token bucket **ต่อ client IP ใน memory**: Auth เติม 5/minute, burst 5; AI เติม 15/minute, burst 15 และตอบ 429 เมื่อเกิน กวาด IP ที่ไม่ได้ใช้งานระหว่างรับคำขอโดยไม่สร้าง background goroutine; หลาย server instance ยังไม่แชร์ตัวนับ
+- Supabase Auth / PostgREST / Storage จำกัดเวลาคำขอไว้ **60s** รวมการอ่าน response body และเคารพ context ที่หมดเวลาก่อน ส่วนการชดเชยไฟล์ / รายการหลังบันทึกล้มเหลวใช้ context แยกไม่เกิน **5s** เพื่อทำความสะอาดได้แม้คำขอหลักถูกยกเลิก การล้างข้อมูลเป็น best effort และมี warning หากไม่สำเร็จ รูปโปรไฟล์ที่ยังมีการอ้างอิงหรือตรวจสอบไม่ได้จะถูกเก็บไว้ และ rollback อุปกรณ์จะลบแถวสำเร็จก่อนล้างไฟล์
+- FCM จำกัดเวลางานส่งรวม **10s** รองรับ cancellation ทั้ง OAuth และ delivery SDK อาจ retry ข้อผิดพลาดชั่วคราวภายในเวลานี้ ลบ device token เฉพาะ error `UNREGISTERED` ที่ SDK ระบุชนิดได้; HTTP 404 ทั่วไปไม่ทำให้ token ถูกลบ
 
 ### AI contract
 
 Go ส่ง `/chat-ai` ไป `/api/chat` ของ Python และ `/chat-ai/stream` ไป `/api/chat/stream` พร้อม `X-Internal-Service-Key`
 
 Gateway ส่ง SSE `status` (`step` และ `message`) ต่อทันทีตามข้อมูลจาก Python รวมถึงขั้นเตรียมข้อมูล วิเคราะห์คำถาม สร้างคำตอบ ตรวจคำตอบ และปรับปรุงคำตอบ โดยไม่จำลองความคืบหน้าหรือกำหนดเวลาเปลี่ยนสถานะเอง
+
+Fiber ใช้ native handlers (`func(fiber.Ctx) error`), `c.Bind()` พร้อม struct validation และ `SendStreamWriter` โดยคง URL, JSON, HTTP status, auth และ error / `Retry-After` เดิม ก่อนเปิด SSE จะตรวจผลจาก upstream ก่อนเสมอ เมื่อเปิดแล้วจะส่ง bytes ต่อทันทีและแทรก SSE heartbeat comments เฉพาะรอยต่อ event เพื่อจับการตัดการเชื่อมต่อระหว่างรอข้อมูล โดยไม่แทรก comment กลาง event และไม่สร้างสถานะ AI เพิ่ม
+
+การปิดสตรีม, `WRITE_TIMEOUT` และ server shutdown จะยกเลิก context และปิด upstream body สำหรับ Fiber การตัดการเชื่อมต่อก่อน upstream ตอบ headers ครั้งแรกยังไม่แจ้งผ่าน request context อัตโนมัติ ช่วงนี้จึงมี `AI_SERVICE_TIMEOUT` และ `WRITE_TIMEOUT` เป็นขอบเขตเวลา เมื่อเริ่มสตรีมแล้วตรวจ disconnect จาก write/flush errors ได้
+
+HTTP transport กำหนด request body limit รวม **32 MiB** เพื่อรองรับ multipart รูปสินค้า 5 รูป รูปละ 5 MiB พร้อม overhead และยังตรวจจำนวน / ขนาด / MIME ของแต่ละรูปใน handler เช่นเดิม `net/http` ยังคงใช้กับ outbound clients ของ Supabase, FCM และ AI service
 
 คำขอรองรับ `query` / `message` และ optional `session_id`, `history`, `context`, `questionnaire_answers`, `questionnaire_skipped`, `active_question_id` ผลตอบกลับมีข้อความ, การ์ด, แบบสอบถาม, references และข้อมูล scope / action / response kind / session context
 
@@ -286,11 +290,13 @@ go vet ./...
 
 `go test ./...` รวม tests ใน `tests/` และ `internal/` ใช้ mock / httptest เป็นหลัก Live AI gateway test ต้อง opt-in และข้ามโดย default บาง tests ต้องมี sibling AI fixtures / runtime files ที่ตรงกับ checkout จึงควรตรวจว่าไฟล์เหล่านั้นมีครบก่อนรัน
 
+ผลตรวจ Fiber v3 ครบ 23 endpoint พร้อมกรณีผิดพลาด การแก้ไข และข้อจำกัดที่ยังเหลืออยู่: [รายงานทดสอบ API](tests/API_TEST_REPORT.md)
+
 **Build บน Windows PowerShell**
 
 ```powershell
 New-Item -ItemType Directory -Force bin | Out-Null
-go build -o ./bin/yuemnoi-api.exe ./cmd/server
+go build -o ./bin/yuemnoi-api.exe .
 .\bin\yuemnoi-api.exe
 ```
 
@@ -298,7 +304,7 @@ go build -o ./bin/yuemnoi-api.exe ./cmd/server
 
 ```bash
 mkdir -p bin
-go build -o ./bin/yuemnoi-api ./cmd/server
+go build -o ./bin/yuemnoi-api .
 ./bin/yuemnoi-api
 ```
 
@@ -308,7 +314,7 @@ go build -o ./bin/yuemnoi-api ./cmd/server
 
 ```text
 backend/
-├── cmd/server/main.go       # Config, dependency injection, HTTP startup
+├── main.go                  # Config, dependency injection, HTTP startup
 ├── internal/
 │   ├── config/              # Typed env configuration
 │   ├── domain/              # Entities และ interfaces
@@ -316,15 +322,32 @@ backend/
 │   │   ├── supabase/        # Auth, data, storage
 │   │   ├── fcm/             # FCM HTTP v1
 │   │   └── aiservice/       # Python JSON / SSE client
-│   └── ports/               # Gin handlers, router, middleware
+│   └── ports/               # Fiber handlers, router, middleware
 ├── tests/                   # Tests และ HTTP mocks
-├── .air.toml                # Optional hot reload
 ├── .env                     # Server configuration — สร้างเอง
 ├── go.mod
 └── go.sum
 ```
 
-Domain ไม่ควร import Gin หรือ infrastructure ส่วน composition อยู่ที่ `cmd/server` กติกาเพิ่มเติมอยู่ใน [AGENTS.md](AGENTS.md)
+Domain ไม่ควร import Fiber หรือ infrastructure ส่วน composition อยู่ที่ root `main.go` กติกาเพิ่มเติมอยู่ใน [AGENTS.md](AGENTS.md)
+
+ระบบเจ้าหน้าที่และตัวตนเปิดผ่าน `OPERATIONS_ENABLED` พร้อม `IDENTITY_ENCRYPTION_KEY` (base64 ของคีย์ 32 bytes), `IDENTITY_HMAC_KEY` (base64 ของคีย์อย่างน้อย 32 bytes) และ `IDENTITY_CLEANUP_INTERVAL` (ค่าเริ่มต้น 15m) โดยไม่ต้องมี AI Service สำหรับขั้นตอนยืนยันตัวตน
+
+`POST /api/identity/sessions` รับ `consent_version: "identity-v1"` และวันเกิด `birth_date` แบบ ค.ศ. YYYY-MM-DD เมื่อส่งวันเกิดมาต้องเป็นวันที่จริงและไม่อยู่ในอนาคต ใช้คำขอทุกวัยแบบเดียวกัน ไม่มีเงื่อนไขผู้ปกครองหรืออายุขั้นต่ำ ยังรับ `is_minor` จากแอปรุ่นเก่าและส่ง `p_minor` เป็นข้อมูลประกอบใน schema เดิมเท่านั้น ไม่ใช้กำหนดสิทธิ์ ค่าอายุที่ขาดหรือ null ไม่ขัดขวาง Begin แต่ Submit ยังต้องมีวันเกิดตามบัตร แอปเก็บภาพชั่วคราวและเริ่มคำขอเมื่อกดส่ง จึงถ่ายภาพก่อนกรอกวันเกิดได้
+
+`POST /api/identity/sessions/:id/submit` รับ multipart `legal_name`, `citizen_id`, `birth_date` และภาพ `card`/`selfie` แบบฟอร์มเพิ่ม `name_prefix` (นาย / นางสาว / นาง), `first_name`, `last_name`, `address_detail`, `postal_code` (ตัวเลข ASCII 5 หลัก ไม่ขึ้นต้นด้วย 0), `province`, `district`, `subdistrict` เมื่อส่งช่องใหม่อย่างน้อยหนึ่งช่องต้องกรอกครบทุกช่อง ระบบตัดช่องว่างหัวท้ายและประกอบชื่อรวม ชื่อแต่ละช่องจำกัด 150 ตัวอักษร ที่อยู่ 500 ตัวอักษร จังหวัด/อำเภอ/ตำบลช่องละ 100 ตัวอักษร และชื่อรวมไม่เกิน 450 bytes ข้อมูลเก็บใน `raw_encrypted` ร่วมกับเลขบัตรและวันเกิด เปิดอ่านได้ผ่าน `identity-detail` ที่ตรวจสิทธิ์เจ้าหน้าที่ ยังรองรับแอปรุ่นเดิมที่ส่งเฉพาะชื่อรวม
+
+ผู้ใช้กรอกข้อมูลตามบัตรเองและส่งรูปบัตรกับใบหน้าเพื่อรอพนักงานตรวจ Go ตรวจ checksum เลขบัตร วันเกิด รูปแบบ/ขนาดภาพ ก่อนส่งสถานะ `pending` ไม่มี OCR หรือการส่งภาพเข้าบริการ AI และลบ route `read-card` แล้ว
+
+แบบฟอร์มและหน้าสรุปของผู้ใช้ไม่มีช่องบัตรตลอดชีพหรือวันหมดอายุ Go ไม่รับค่าอายุบัตรจาก client โดยคำขอรอตรวจมี `expires_on = null`, `lifetime = false`, `analysis = {"review_mode":"manual"}` หน้าพนักงานให้ระบุวันหมดอายุหรือบัตรตลอดชีพจากภาพเมื่ออนุมัติ ส่ง `decision`, `checked: true`, `reason`, `lifetime` (boolean) และ `expires_on` (YYYY-MM-DD เมื่อไม่ใช่บัตรตลอดชีพ) ผ่าน `identity-review` ขาดข้อมูลอายุบัตรได้ `409 card_validity_required` บัตรหมดอายุได้ `409 card_expired` การปฏิเสธ/ขอข้อมูลเพิ่มไม่ต้องระบุอายุบัตร
+
+ติดตั้ง [migration สำหรับทุกวัย](../supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql) ก่อนใช้งาน Backend และ Admin รุ่นนี้ การอนุมัติยังตรวจสิทธิ์พนักงาน ห้ามตรวจคำขอตนเอง ตรวจข้อมูลซ้ำ พร้อมบันทึก audit และคงการตรวจอายุบัตรของบัญชีที่อนุมัติแล้ว
+
+การส่งคำขอยืนยันลงทะเบียนหลักฐานก่อนอัปโหลดภาพบัตรและใบหน้าพร้อมกัน โดยใช้คนละ object path รอทั้งสองงานจบก่อนเรียก `identity_submit` หรือ rollback หากอัปโหลดงานหนึ่งล้มเหลวจะรออีกงานจบก่อนลบทั้งสอง path เพื่อไม่ให้ cleanup แข่งกับ worker ที่ยังอัปโหลดอยู่ คง context และ timeout ของ Storage เดิม รวมถึงงาน cleanup ตามกำหนดเผื่อ remote upload ที่หมดเวลาฝั่ง client การตรวจสิทธิ์ การเข้ารหัส และการอนุมัติโดยเจ้าหน้าที่คงเดิม ฝั่ง Flutter แสดงรับคำขอเมื่อ submit สำเร็จและโหลดสถานะล่าสุดต่อเบื้องหลัง
+
+ตารางภายในแยกเป็น `identity_private` และ `ops_private` โดย Go ยังเรียก RPC ชื่อเดิมใน `public` ด้วย service role ดู [migration และการตรวจสอบฐานข้อมูล](../supabase/README.md)
+
+`GET /api/identity/status` ส่ง `available` เพื่อบอกสิทธิ์เริ่มยืนยัน โดย `pilot` ยังคงหมายถึงสมาชิกกลุ่มทดลองเท่านั้น `POST /api/admin/actions/settings/identity` รับ `identity_open_to_all` และ/หรือ `enforce_identity` เป็น boolean พร้อม `reason` และคงค่าที่ไม่ได้ส่งมา หากส่งชนิดข้อมูลไม่ถูกต้องจะได้ HTTP 400 พร้อม `code: invalid_settings`
 
 <a id="troubleshooting"></a>
 
@@ -342,6 +365,7 @@ Domain ไม่ควร import Gin หรือ infrastructure ส่วน co
 | AI 502 / 503                   | ตรวจ base URL, Python, internal key, provider error และ `Retry-After` |
 | 429                            | รอ rate limiter คืนโควตา; อุปกรณ์ที่ใช้ IP เดียวกันแชร์ bucket        |
 | Rental 409                     | ตรวจสถานะ / ช่วงเวลา / ผู้มีสิทธิ์ตาม booking                         |
-| Air แจ้ง no Go files           | ใช้ `go run ./cmd/server` หรือแก้ default Air build target            |
 
 ---
+
+นโยบายทุกวัยใช้ migration `supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql` ยกเลิกการใช้ `is_minor` จำกัดลงประกาศ/จอง/อนุมัติตัวตนทั้ง Go guard และ database triggers รวมถึงถอด API `/api/identity/guardians`, คิวและคำสั่งผู้ปกครองจากระบบเจ้าหน้าที่ ข้อมูลประวัติผู้ปกครองและหลักฐานเก่ายังเก็บตามรอบลบเดิม การตรวจตัวตนโดยเจ้าหน้าที่ บัตรหมดอายุ และการระงับบัญชียังทำงานทุกวัย
