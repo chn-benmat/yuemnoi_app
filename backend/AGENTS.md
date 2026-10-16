@@ -1,54 +1,41 @@
-# Backend Agent Guide
+# แนวทางสำหรับ agent: backend
 
-## Scope
+ใช้กับทุกไฟล์ภายใต้ `backend/` รันคำสั่งจากโฟลเดอร์นี้ อ่าน `README.md` เมื่อแก้ API, auth, AI gateway หรือระบบยืนยันตัวตน และตรวจเวอร์ชัน Go/Fiber จาก `go.mod`
 
-These instructions apply to everything under `backend/`.
+## สถาปัตยกรรมและ HTTP
 
-## Architecture
+- รักษา Hexagonal Architecture: `internal/domain/` เป็น entities และ interfaces, `internal/adapters/` เชื่อมระบบภายนอก, `internal/ports/` เป็น Fiber handlers/middleware และ root `main.go` ประกอบ dependencies
+- เพิ่ม dependency ผ่าน domain interface และฉีด adapter จาก `main.go`; domain ต้องไม่ผูกกับ Fiber, HTTP client หรือฐานข้อมูล
+- ใช้ native Fiber v3 handlers และสร้าง app ผ่าน `ports.NewHTTPApp` หรือ router constructor เดิม เพื่อให้ validation, body limit, error mapping และ lifecycle ใช้กฎเดียวกัน
+- ลงทะเบียน routes ใน `internal/ports/router.go`; API อยู่ใต้ `/api` และ health check คือ `/health` ตรวจ caller ใน `../frontend/` และ `../admin/` เมื่อเปลี่ยน contract
+- ใช้ `validate` tags ใน request DTO ตรวจข้อความหลัง trim และแยกค่าที่ไม่ส่งออกจากค่าที่ส่งเป็นค่าว่างสำหรับ partial update
+- ใช้ `fiber.Ctx` ภายในอายุ handler เท่านั้น คัดลอกค่าที่งาน background ต้องใช้ และส่ง `context.Context` ผ่าน ports/adapters เพื่อรักษา timeout กับ cancellation
+- เมื่อแก้ SSE ให้รักษา upstream error mapping ก่อนเปิด stream, event boundaries, heartbeat และการปิด body/ยกเลิก upstream เมื่อ client disconnect
+- คอมเมนต์ที่เพิ่มหรือแก้ให้ใช้ภาษาไทยที่อธิบายเหตุผลหรือข้อจำกัด
 
-- Keep the existing Hexagonal Architecture boundaries:
-  - Root `main.go` is the server entrypoint: it composes dependencies and starts the Fiber HTTP server through `Listen`. Run it directly from `backend/` with `go run main.go`.
-  - `internal/config/` manages centralized type-safe configuration (`caarlos0/env/v11`, `godotenv`).
-  - `internal/domain/` contains business entities and ports; it must not depend on Fiber, Supabase, or other infrastructure.
-  - `internal/adapters/` implements domain ports for Supabase and external services.
-  - `internal/ports/` owns Fiber handlers, request/response mapping, middleware, and route registration.
-- Add dependencies through interfaces in `internal/domain/` and inject implementations from root `main.go`.
-- Keep HTTP routes under `/api` and register them in `internal/ports/router.go`. The health check remains `GET /health`.
-- When an API contract changes, inspect and update every affected handler, domain interface, adapter, test, frontend caller, and README entry.
+## สิทธิ์และ configuration
 
-## Fiber transport
+- กำหนด env ผ่าน typed config ใน `internal/config/config.go` และ `config.Load()` แทนการอ่าน env กระจายใน packages
+- ใช้ตัวตนจาก bearer token ที่ตรวจแล้วในการอนุญาตงาน ตรวจ ownership และสิทธิ์เจ้าหน้าที่ฝั่ง server แยกจาก app secret
+- เก็บ `SUPABASE_SERVICE_ROLE_KEY`, internal service key และ identity encryption/HMAC keys เฉพาะ server; ปกปิด token, รหัสผ่าน, OTP และข้อมูลส่วนบุคคลใน response/log
+- Go กับ Python ต้องใช้ internal service key ที่ตรงกัน ตรวจการเลือก key และการหมุน key ทั้งสองฝั่งก่อนเปลี่ยน configuration
+- ใช้ `log/slog` และ error ที่มีบริบทสำหรับผู้ดูแล โดยไม่เปิดเผยข้อมูลลับให้ client
+- เมื่อแก้ identity/admin ให้รักษา audit, evidence access, retention และการตรวจโดยเจ้าหน้าที่ อ้างกติกาปัจจุบันใน README และโค้ดแทนการเพิ่มเงื่อนไขอายุเอง
 
-- Use native Fiber v3 handlers and middleware in `internal/ports/`. Keep outbound service calls in adapters.
-- Create apps through `ports.NewHTTPApp` or `ports.SetupRouter` so production and tests share validation, body limits, error mapping, and request lifecycle behavior.
-- Use `validate` tags on request DTOs. Check required text after trimming whitespace, and preserve omitted versus explicitly empty values in partial updates.
-- Keep `fiber.Ctx` within the handler lifetime. Copy request values needed by background jobs; pass `context.Context` through domain ports and adapters. SSE callbacks own upstream body closure and cancellation.
-- Before changing binding, uploads, SSE, timeouts, or shutdown, read [API test report](tests/API_TEST_REPORT.md) for regression coverage and known transport limitations. Recheck its dated findings against current code and tests.
+## ตรวจงาน
 
-## Security and configuration
+```powershell
+go run main.go
+```
 
-- Never commit or print secrets, access tokens, authorization headers, or user data.
-- `SUPABASE_SERVICE_ROLE_KEY` is backend-only. Never expose it through an API response or copy it into frontend code.
-- Configuration must be defined in `internal/config/config.go` using `github.com/caarlos0/env/v11`. `.env` is loaded automatically if present. Do not use direct `os.Getenv` calls outside the config package.
-- Required Supabase configuration is `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Default port is `8080`.
-- Derive authenticated user identity from the verified bearer token, never from a user ID supplied in a request body.
-- Preserve context propagation and existing timeout behavior for database and external-service calls.
-- Use `log/slog` for structured logging, and ensure sensitive data (passwords, tokens, OTPs, PII) are redacted in audit logs.
+เมื่อแก้ Go code ให้จัดรูปแบบไฟล์ที่แก้ด้วย `gofmt` แล้วตรวจ:
 
-## Go conventions
+```powershell
+go test ./...
+go vet ./...
+go build ./...
+```
 
-- Make the smallest change that preserves the current package boundaries and constructor-based dependency injection.
-- Return errors with useful context while avoiding secret or internal-detail leakage in client responses.
-- Use standard-library facilities where practical and do not add dependencies unless the task requires them.
-- Add focused table-driven HTTP contract tests with Fiber `app.Test` (and real loopback sockets for streaming/lifecycle behavior) using `github.com/stretchr/testify` (`assert`/`require`). Do not require live Supabase services in unit tests.
-- Do not edit `go.mod` or `go.sum` unless dependencies actually change.
-
-## Verification
-
-- When adding or removing routes, update the endpoint contract matrix in `tests/api_contract_test.go`; it must match the registered routes.
-- After changing Go code or merging upstream changes, run `go test ./...`, `go vet ./...`, and `go build ./...` from `backend/`.
-- Report checks run, failures, skipped tests, and remaining limitations. Distinguish tests against local fake services from live end-to-end verification.
-
-## Development Rules
-
-- Write code comments in clear, easy-to-understand Thai.
-- Create all new test files inside the `tests/` directory.
+- วาง unit tests ข้าง package ตาม tests ที่มีอยู่; ใช้ `tests/` สำหรับ integration/HTTP contract tests ที่เหมาะสม ใช้ fake services สำหรับการตรวจแบบ offline และ opt-in เมื่อต้องเรียกบริการจริง
+- `tests/` ใน checkout นี้ยังว่าง; ไม่มี `tests/api_contract_test.go` หรือ `tests/API_TEST_REPORT.md` ให้ตรวจ coverage จากไฟล์ที่มีจริง
+- เมื่อเปลี่ยน AI gateway ให้ตรวจ JSON/SSE และ configuration ร่วมกับ `../ai_service/` รายงานผลตรวจและข้อจำกัดโดยแยก local tests จาก live end-to-end
