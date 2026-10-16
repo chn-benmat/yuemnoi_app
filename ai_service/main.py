@@ -6,8 +6,8 @@ from app.core.config import settings
 from app.core.container import container
 from app.core.logging import logger
 from app.infrastructure.server import run_server
-from app.interface.api.v1.endpoints.health import router as health_router
-from app.interface.api.v1.router import api_v1_router
+from app.interface.api.endpoints.health import router as health_router
+from app.interface.api.router import api_router
 
 
 @asynccontextmanager
@@ -45,7 +45,7 @@ app.add_middleware(
 
 # Route registration
 app.include_router(health_router, prefix="", tags=["Health"])
-app.include_router(api_v1_router, prefix="/api")
+app.include_router(api_router, prefix="/api")
 
 
 if __name__ == "__main__":

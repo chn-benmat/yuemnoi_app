@@ -445,7 +445,7 @@ ai_service/
 │   │   ├── runtime/          # Validated configuration / execution budgets
 │   │   ├── search/           # Tavily adapter
 │   │   └── supabase/         # PostgREST catalog adapter
-│   └── interface/api/v1/     # FastAPI endpoints / router
+│   └── interface/api/        # FastAPI endpoints / router
 ├── config/                   # Runtime JSON และ schemas
 ├── knowledge/                # Knowledge / interpretation policy JSON
 ├── tests/

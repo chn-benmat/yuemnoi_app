@@ -118,7 +118,7 @@ Infrastructure (Adapters: DB, LLM, Search, Cache) & Interface (FastAPI Controlle
   - `prompt_templates.py`: Structured system instructions in Thai for the model.
 
 - **`app/interface/` (Presentation & Delivery)**:
-  - `app/interface/api/v1/endpoints/`:
+  - `app/interface/api/endpoints/`:
     - `chat.py`: `POST /api/chat` (Full JSON response) and `POST /api/chat/stream` (SSE tokens).
     - `items.py`: `GET /api/items` (Catalog list).
     - `health.py`: `GET /health` (Cloud LLM [Groq], Supabase, and Tavily health checks).
