@@ -12,21 +12,17 @@ import (
 	"time"
 )
 
-// เลขที่ผ่าน checksum ยังไม่ได้ยืนยันว่าบัตรออกโดยหน่วยงานรัฐ
+// ตรวจเฉพาะตัวเลขครบ 13 หลัก ส่วนความถูกต้องให้เจ้าหน้าที่ตรวจหลักฐาน
 func ValidThaiCitizenID(id string) bool {
 	if len(id) != 13 {
 		return false
 	}
-	sum := 0
 	for i := 0; i < 13; i++ {
 		if id[i] < '0' || id[i] > '9' {
 			return false
 		}
-		if i < 12 {
-			sum += int(id[i]-'0') * (13 - i)
-		}
 	}
-	return (11-sum%11)%10 == int(id[12]-'0')
+	return true
 }
 func CitizenHMAC(id string, key []byte) string {
 	m := hmac.New(sha256.New, key)
