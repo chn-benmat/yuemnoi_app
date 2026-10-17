@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/features/rental_item/domain/entities/rental_item.dart';
 import 'package:frontend/features/rental_item/domain/repositories/rental_item_repository.dart';
 import 'package:frontend/features/rental_item/domain/usecases/create_rental_item_usecase.dart';
@@ -17,6 +18,9 @@ class NoopRentalItemRepository implements RentalItemRepository {
 }
 
 void main() {
+  setUp(() => AuthSession.saveAccessToken('test-token'));
+  tearDown(AuthSession.clear);
+
   testWidgets('renders category and rental type dropdowns', (tester) async {
     final bloc = RentalItemBloc(
       createItem: CreateRentalItemUseCase(NoopRentalItemRepository()),

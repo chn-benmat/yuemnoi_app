@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/services/item_catalog_service.dart';
 import '../../domain/repositories/home_repository.dart';
 import '../../domain/usecases/get_home_feed_usecase.dart';
 import 'home_event.dart';
@@ -7,10 +10,8 @@ import 'home_state.dart';
 
 /// BLoC ควบคุมการทำงานของหน้า Home Feed
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
-  HomeBloc({
-    required this.getHomeFeed,
-    required this.homeRepository,
-  }) : super(const HomeInitial()) {
+  HomeBloc({required this.getHomeFeed, required this.homeRepository})
+    : super(const HomeInitial()) {
     on<LoadHomeFeedStarted>(_onLoadHomeFeedStarted);
     on<CategoryFilterChanged>(_onCategoryFilterChanged);
     on<ApplyFilterRequested>(_onApplyFilterRequested);
@@ -18,10 +19,20 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<SearchQueryChanged>(_onSearchQueryChanged);
     on<ToggleFavoriteRequested>(_onToggleFavoriteRequested);
     on<RefreshHomeFeedRequested>(_onRefreshHomeFeedRequested);
+    _catalogSubscription = ItemCatalogService.instance.changes.listen((_) {
+      add(const RefreshHomeFeedRequested());
+    });
   }
 
   final GetHomeFeedUseCase getHomeFeed;
   final HomeRepository homeRepository;
+  late final StreamSubscription<void> _catalogSubscription;
+
+  @override
+  Future<void> close() async {
+    await _catalogSubscription.cancel();
+    return super.close();
+  }
 
   Future<void> _onLoadHomeFeedStarted(
     LoadHomeFeedStarted event,
@@ -29,10 +40,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   ) async {
     emit(const HomeLoading());
     try {
-      final data = await getHomeFeed(
-        categoryId: 'all',
-        searchQuery: '',
-      );
+      final data = await getHomeFeed(categoryId: 'all', searchQuery: '');
 
       emit(
         HomeLoaded(
@@ -154,10 +162,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       );
 
       emit(
-        currentState.copyWith(
-          searchQuery: event.query,
-          nearbyItems: nearby,
-        ),
+        currentState.copyWith(searchQuery: event.query, nearbyItems: nearby),
       );
     } catch (_) {
       // จัดการกรณีผิดพลาด
@@ -200,7 +205,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     Emitter<HomeState> emit,
   ) async {
     final currentState = state;
-    final categoryId = currentState is HomeLoaded ? currentState.selectedCategoryId : 'all';
+    final categoryId = currentState is HomeLoaded
+        ? currentState.selectedCategoryId
+        : 'all';
     final query = currentState is HomeLoaded ? currentState.searchQuery : '';
 
     if (currentState is HomeLoaded) {
@@ -232,9 +239,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       if (currentState is HomeLoaded) {
         emit(currentState.copyWith(isRefreshing: false));
       } else {
-        emit(const HomeError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่'));
+        emit(
+          const HomeError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่'),
+        );
       }
     }
   }
 }
-
