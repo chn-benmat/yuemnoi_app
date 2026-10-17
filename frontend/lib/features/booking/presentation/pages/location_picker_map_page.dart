@@ -454,14 +454,14 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: _closeSearch,
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.12),
-                ),
+                child: Container(color: Colors.black.withValues(alpha: 0.12)),
               ),
             ),
 
           // 3. แถบค้นหาและตัวเลือกสถานที่ยอดนิยมด้านบน
           Positioned(
+            // คงช่องพิมพ์เดิมไว้เมื่อเพิ่มพื้นหลังค้นหา เพื่อไม่ให้การเชื่อมต่อแป้นพิมพ์ถูกปิด
+            key: const ValueKey('pickup-location-search'),
             top: 12,
             left: 16,
             right: 16,
@@ -484,6 +484,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                   child: TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
+                    showCursor: true,
+                    cursorColor: AppColors.primaryColor,
+                    cursorWidth: 2,
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 14,
@@ -557,8 +560,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                               )
                             : ListView.separated(
                                 shrinkWrap: true,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
                                 itemCount: _searchResults.length,
                                 separatorBuilder: (_, _) => const Divider(
                                   height: 1,

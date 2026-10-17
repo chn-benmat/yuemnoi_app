@@ -7,6 +7,8 @@ class RentalRequestDraft extends Equatable {
     required this.endAt,
     required this.rentalType,
     required this.pickupLocation,
+    this.offerMessageId,
+    this.bookingId,
   });
 
   final int itemId;
@@ -14,6 +16,8 @@ class RentalRequestDraft extends Equatable {
   final DateTime endAt;
   final String rentalType;
   final String pickupLocation;
+  final String? offerMessageId;
+  final int? bookingId;
 
   @override
   List<Object?> get props => [
@@ -22,6 +26,8 @@ class RentalRequestDraft extends Equatable {
     endAt,
     rentalType,
     pickupLocation,
+    offerMessageId,
+    bookingId,
   ];
 }
 

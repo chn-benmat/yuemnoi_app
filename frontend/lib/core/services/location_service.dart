@@ -65,8 +65,39 @@ class DrivingRouteResult {
 
 /// บริการจัดการพิกัด แผนที่ และการค้นหาสถานที่
 class LocationService {
-  LocationService._();
-  static final LocationService instance = LocationService._();
+  LocationService();
+  static final LocationService instance = LocationService();
+  Position? _lastPosition;
+  final Map<String, ({LatLng start, DrivingRouteResult route, DateTime at})>
+  _routeCache = {};
+
+  DrivingRouteResult? cachedDrivingRoute(LatLng start, LatLng destination) {
+    final entry =
+        _routeCache['${destination.latitude},${destination.longitude}'];
+    if (entry == null ||
+        DateTime.now().difference(entry.at) > const Duration(minutes: 5) ||
+        const Distance().as(LengthUnit.Meter, entry.start, start) > 100)
+      return null;
+    return entry.route;
+  }
+
+  Future<void> preloadDrivingRoute(LatLng destination) async {
+    final last = await getLastKnownPosition();
+    if (last == null) return;
+    final start = LatLng(last.latitude, last.longitude);
+    if (cachedDrivingRoute(start, destination) == null) {
+      await fetchDrivingRoute(start, destination);
+    }
+  }
+
+  Future<Position?> getLastKnownPosition() async {
+    if (_lastPosition != null) return _lastPosition;
+    try {
+      return await Geolocator.getLastKnownPosition();
+    } catch (_) {
+      return null;
+    }
+  }
 
   final Dio _dio = Dio(
     BaseOptions(
@@ -391,12 +422,14 @@ class LocationService {
         return null;
       }
 
-      return await Geolocator.getCurrentPosition(
+      final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
           timeLimit: Duration(seconds: 10),
         ),
       );
+      _lastPosition = position;
+      return position;
     } catch (e) {
       debugPrint('Error getting current position: $e');
       try {
@@ -417,7 +450,12 @@ class LocationService {
         accuracy: accuracy,
         distanceFilter: distanceFilter,
       );
-      return Geolocator.getPositionStream(locationSettings: locationSettings);
+      return Geolocator.getPositionStream(
+        locationSettings: locationSettings,
+      ).map((position) {
+        _lastPosition = position;
+        return position;
+      });
     } catch (e) {
       debugPrint('Error getting position stream: $e');
       return null;
@@ -488,11 +526,16 @@ class LocationService {
             }
 
             if (points.isNotEmpty) {
-              return DrivingRouteResult(
+              final result = DrivingRouteResult(
                 points: points,
                 distanceMeters: distance,
                 durationSeconds: duration,
               );
+              if (_routeCache.length >= 8)
+                _routeCache.remove(_routeCache.keys.first);
+              _routeCache['${destination.latitude},${destination.longitude}'] =
+                  (start: start, route: result, at: DateTime.now());
+              return result;
             }
           }
         }

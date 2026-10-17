@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,15 +11,40 @@ import 'package:frontend/features/booking/domain/usecases/submit_rental_request_
 import 'package:frontend/features/booking/presentation/bloc/rental_request_cubit.dart';
 import 'package:frontend/features/booking/presentation/bloc/rental_request_state.dart';
 import 'package:frontend/features/booking/presentation/pages/booking_confirmation_page.dart';
+import 'package:frontend/core/navigation/app_routes.dart';
+import 'package:frontend/core/services/booking_confirmation_tracker.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeRentalRequestRepository implements RentalRequestRepository {
   RentalRequestResult? result;
   Object? error;
   int submitCalls = 0;
+  RentalRequestDraft? lastDraft;
+  int confirmCalls = 0;
+  int? confirmedRentalId;
+  String? confirmedOfferMessageId;
+  Object? confirmError;
+  Completer<RentalRequestResult>? confirmation;
+
+  @override
+  Future<RentalRequestResult> confirm({
+    required int rentalId,
+    required String offerMessageId,
+  }) async {
+    confirmCalls++;
+    confirmedRentalId = rentalId;
+    confirmedOfferMessageId = offerMessageId;
+    if (confirmError != null) throw confirmError!;
+    return confirmation == null
+        ? RentalRequestResult(id: rentalId, status: 'confirmed')
+        : confirmation!.future;
+  }
 
   @override
   Future<RentalRequestResult> submit(RentalRequestDraft draft) async {
     submitCalls++;
+    lastDraft = draft;
     final submitError = error;
     if (submitError != null) throw submitError;
     return result!;
@@ -43,6 +70,10 @@ RentalRequestCubit buildCubit(FakeRentalRequestRepository repository) {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    BookingConfirmationTracker.clearMemoryCache();
+  });
   blocTest<RentalRequestCubit, RentalRequestState>(
     'emits submitting and success when request is created',
     build: () {
@@ -53,8 +84,60 @@ void main() {
     act: (cubit) => cubit.submit(draft),
     expect: () => const [
       RentalRequestState(status: RentalRequestStatus.submitting),
-      RentalRequestState(status: RentalRequestStatus.success, rentalId: 21),
+      RentalRequestState(
+        status: RentalRequestStatus.success,
+        rentalId: 21,
+        rentalStatus: 'pending',
+      ),
     ],
+  );
+
+  test(
+    'confirmation failure retries the same pending booking without resubmission',
+    () async {
+      final repository = FakeRentalRequestRepository()
+        ..result = const RentalRequestResult(id: 21, status: 'pending')
+        ..confirmError = const RentalRequestException('ยืนยันไม่สำเร็จ');
+      final cubit = buildCubit(repository);
+      addTearDown(cubit.close);
+      await cubit.submit(draft);
+      expect(cubit.state.status, RentalRequestStatus.success);
+      expect(repository.confirmCalls, 0);
+      expect(await cubit.confirm(offerMessageId: '11'), isFalse);
+      expect(cubit.state.rentalId, 21);
+      expect(cubit.state.status, RentalRequestStatus.failure);
+      repository.confirmError = null;
+      expect(await cubit.confirm(offerMessageId: '11'), isTrue);
+      expect(cubit.state.status, RentalRequestStatus.confirmed);
+      expect(cubit.state.rentalStatus, 'confirmed');
+      expect(await cubit.confirm(offerMessageId: '11'), isFalse);
+      expect(repository.submitCalls, 1);
+      expect(repository.confirmCalls, 2);
+      expect(repository.confirmedRentalId, 21);
+      expect(repository.confirmedOfferMessageId, '11');
+    },
+  );
+
+  test(
+    'repeated taps send one confirmation and a pending response is not success',
+    () async {
+      final repository = FakeRentalRequestRepository()
+        ..result = const RentalRequestResult(id: 21, status: 'pending')
+        ..confirmation = Completer<RentalRequestResult>();
+      final cubit = buildCubit(repository);
+      addTearDown(cubit.close);
+      await cubit.submit(draft);
+      final first = cubit.confirm(offerMessageId: '11');
+      expect(cubit.state.status, RentalRequestStatus.confirming);
+      expect(await cubit.confirm(offerMessageId: '11'), isFalse);
+      expect(repository.confirmCalls, 1);
+      repository.confirmation!.complete(
+        const RentalRequestResult(id: 21, status: 'pending'),
+      );
+      expect(await first, isFalse);
+      expect(cubit.state.status, RentalRequestStatus.failure);
+      expect(cubit.state.rentalId, 21);
+    },
   );
 
   blocTest<RentalRequestCubit, RentalRequestState>(
@@ -74,50 +157,198 @@ void main() {
     ],
   );
 
-  testWidgets('confirmation submits a rental request without payment options', (
+  testWidgets(
+    'confirmation submits the owner offer and preserves an existing booking',
+    (tester) async {
+      final repository = FakeRentalRequestRepository()
+        ..result = const RentalRequestResult(id: 21, status: 'pending');
+      final cubit = buildCubit(repository);
+      addTearDown(cubit.close);
+      final start = DateTime(2026, 9, 5);
+      final bookingData = BookingRequestData(
+        item: const BookingItemInfo(
+          id: 7,
+          title: 'กล้องทดสอบ',
+          imageUrl: '',
+          rating: 5,
+          reviewCount: 1,
+          hourlyRate: 100,
+          dailyRate: 500,
+          defaultLocation: 'บางแค',
+        ),
+        startDate: start,
+        endDate: start.add(const Duration(days: 1)),
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 17, minute: 0),
+        location: 'บางแค',
+        originalMessageId: '11',
+        bookingId: 25,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BlocProvider.value(
+            value: cubit,
+            child: BookingConfirmationPage(bookingData: bookingData),
+          ),
+        ),
+      );
+
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('submit-rental-request-button')),
+          matching: find.text('ยืนยันคำขอเช่า'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('วิธีการชำระเงิน'), findsNothing);
+      expect(find.textContaining('Stripe'), findsNothing);
+
+      await tester.tap(
+        find.byKey(const ValueKey('submit-rental-request-button')),
+      );
+      await tester.pump();
+
+      expect(repository.submitCalls, 1);
+      expect(repository.lastDraft?.offerMessageId, '11');
+      expect(repository.lastDraft?.bookingId, 25);
+      await tester.pumpAndSettle();
+      expect(
+        await BookingConfirmationTracker.isConfirmed(messageId: '11'),
+        isFalse,
+        reason: 'Opening the summary must not confirm the rental',
+      );
+      expect(
+        find.byKey(const ValueKey('confirm-rental-button')),
+        findsOneWidget,
+      );
+      expect(repository.confirmCalls, 0);
+      Navigator.of(
+        tester.element(find.byKey(const ValueKey('confirm-rental-button'))),
+      ).pop();
+      await tester.pumpAndSettle();
+      expect(
+        await BookingConfirmationTracker.isConfirmed(messageId: '11'),
+        isFalse,
+      );
+      expect(cubit.state.status, RentalRequestStatus.success);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('submit-rental-request-button')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('submit-rental-request-button')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('confirm-rental-button')),
+        findsOneWidget,
+      );
+      expect(repository.submitCalls, 1);
+      repository.confirmError = const RentalRequestException(
+        'ลองยืนยันอีกครั้ง',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('confirm-rental-button')),
+      );
+      await tester.tap(find.byKey(const ValueKey('confirm-rental-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('ลองยืนยันอีกครั้ง'), findsOneWidget);
+      expect(
+        await BookingConfirmationTracker.isConfirmed(messageId: '11'),
+        isFalse,
+      );
+      expect(repository.submitCalls, 1);
+    },
+  );
+
+  testWidgets('success sheet opens status once without locking the navigator', (
     tester,
   ) async {
     final repository = FakeRentalRequestRepository()
       ..result = const RentalRequestResult(id: 21, status: 'pending');
     final cubit = buildCubit(repository);
     addTearDown(cubit.close);
-    final start = DateTime(2026, 9, 5);
-    final bookingData = BookingRequestData(
+    final booking = BookingRequestData(
       item: const BookingItemInfo(
         id: 7,
-        title: 'กล้องทดสอบ',
+        title: 'Test camera',
         imageUrl: '',
         rating: 5,
         reviewCount: 1,
         hourlyRate: 100,
         dailyRate: 500,
-        defaultLocation: 'บางแค',
+        defaultLocation: 'Pickup',
       ),
-      startDate: start,
-      endDate: start.add(const Duration(days: 1)),
+      startDate: DateTime(2026, 10, 18),
+      endDate: DateTime(2026, 10, 19),
       startTime: const TimeOfDay(hour: 9, minute: 0),
       endTime: const TimeOfDay(hour: 17, minute: 0),
-      location: 'บางแค',
+      location: 'Pickup',
+      originalMessageId: '11',
     );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: BlocProvider.value(
-          value: cubit,
-          child: BookingConfirmationPage(bookingData: bookingData),
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: TextButton(
+              onPressed: () => AppRoutes.openBookingConfirmation(
+                context,
+                bookingData: booking,
+              ),
+              child: const Text('open confirmation'),
+            ),
+          ),
         ),
-      ),
+        GoRoute(
+          path: AppRoutes.bookingConfirmation,
+          builder: (_, state) => BlocProvider.value(
+            value: cubit,
+            child: BookingConfirmationPage(
+              bookingData: state.extra as BookingRequestData,
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.rentalStatus,
+          builder: (_, state) =>
+              const Scaffold(body: Text('rental status destination')),
+        ),
+      ],
     );
-
-    expect(find.text('ส่งคำขอเช่า'), findsOneWidget);
-    expect(find.text('วิธีการชำระเงิน'), findsNothing);
-    expect(find.textContaining('Stripe'), findsNothing);
-
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.tap(find.text('open confirmation'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('submit-rental-request-button')),
+    );
     await tester.tap(
       find.byKey(const ValueKey('submit-rental-request-button')),
     );
-    await tester.pump();
-
-    expect(repository.submitCalls, 1);
+    await tester.pumpAndSettle();
+    expect(repository.confirmCalls, 0);
+    expect(
+      await BookingConfirmationTracker.isConfirmed(messageId: '11'),
+      isFalse,
+    );
+    expect(find.text('ตรวจสอบสถานะการเช่า'), findsNothing);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('confirm-rental-button')),
+    );
+    await tester.tap(find.byKey(const ValueKey('confirm-rental-button')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('rental status destination'), findsOneWidget);
+    expect(repository.confirmCalls, 1);
+    expect(
+      await BookingConfirmationTracker.isConfirmed(messageId: '11'),
+      isTrue,
+    );
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('open confirmation'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

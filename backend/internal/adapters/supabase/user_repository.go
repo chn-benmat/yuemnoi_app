@@ -200,7 +200,7 @@ func (r *supabaseUserRepository) completeRegistration(ctx context.Context, user 
 		return result, nil
 	}
 
-	objectPath := fmt.Sprintf("profile-%s-%d%s", userID, time.Now().UTC().UnixNano(), user.ProfileImage.Extension)
+	objectPath := fmt.Sprintf("%s/profile-%d%s", userID, time.Now().UTC().UnixNano(), user.ProfileImage.Extension)
 	err := r.uploadProfileImage(ctx, objectPath, user.ProfileImage)
 	if err != nil {
 		return nil, err
@@ -521,7 +521,7 @@ func (r *supabaseUserRepository) UpdateProfile(
 	}
 
 	if img != nil {
-		objectPath := fmt.Sprintf("profile-%s-%d%s", userID, time.Now().UTC().UnixNano(), img.Extension)
+		objectPath := fmt.Sprintf("%s/profile-%d%s", userID, time.Now().UTC().UnixNano(), img.Extension)
 		err := r.uploadProfileImage(ctx, objectPath, img)
 		if err != nil {
 			return nil, err

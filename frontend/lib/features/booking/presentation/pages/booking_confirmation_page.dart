@@ -7,6 +7,7 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/booking_confirmation_tracker.dart';
+import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/booking_request_model.dart';
 import '../../domain/entities/rental_request.dart';
@@ -37,7 +38,7 @@ class BookingConfirmationPage extends StatefulWidget {
 class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
   late BookingRequestData _bookingData;
   String _selectedPaymentMethod = 'cash';
-  bool _didShowSuccess = false;
+  bool _isConfirmationSheetOpen = false;
 
   @override
   void initState() {
@@ -59,13 +60,21 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
           longitude: 100.4341077,
         );
     _selectedPaymentMethod = _bookingData.paymentMethod;
+    final destination = LocationService.resolveCoordinates(
+      locationName: _bookingData.location,
+      latitude: _bookingData.latitude,
+      longitude: _bookingData.longitude,
+    );
+    unawaited(LocationService.instance.preloadDrivingRoute(destination));
   }
 
   bool get _isCurrentUserOwner {
-    if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized) return false;
+    if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized)
+      return false;
     final currentUserId = SupabaseConfig.client.auth.currentUser?.id;
     if (currentUserId == null || currentUserId.isEmpty) return false;
-    return _bookingData.ownerId != null && _bookingData.ownerId == currentUserId;
+    return _bookingData.ownerId != null &&
+        _bookingData.ownerId == currentUserId;
   }
 
   RentalRequestDraft _buildRentalDraft() {
@@ -75,84 +84,30 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
       endAt: _bookingData.endDateTime,
       rentalType: _bookingData.rentalType.name,
       pickupLocation: _bookingData.location,
+      offerMessageId: _bookingData.originalMessageId,
+      bookingId: _bookingData.bookingId,
     );
   }
 
-  Future<int?> _createOrConfirmBookingInDb() async {
-    try {
-      if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized) return null;
-      final client = SupabaseConfig.client;
-      final currentUserId = client.auth.currentUser?.id;
-      if (currentUserId == null || currentUserId.isEmpty) return null;
-
-      final messageId = _bookingData.originalMessageId ?? '';
-      if (messageId.isNotEmpty) {
-        final existingId = await BookingConfirmationTracker.getBookingId(messageId: messageId);
-        if (existingId != null && existingId > 0) {
-          return existingId;
-        }
-      }
-
-      // ผู้เช่าจริง: ถ้า current user เป็น owner ให้ใช้ ownerId หรือ target renter
-      final renterUserId = _isCurrentUserOwner
-          ? (_bookingData.ownerId == currentUserId ? currentUserId : currentUserId)
-          : currentUserId;
-
-      final res = await client.from('booking_tb').insert({
-        'user_id': renterUserId,
-        'item_id': _bookingData.item.id,
-        'start_at': _bookingData.startDateTime.toUtc().toIso8601String(),
-        'end_at': _bookingData.endDateTime.toUtc().toIso8601String(),
-        'start_date': _bookingData.startDateTime.toIso8601String().split('T').first,
-        'end_date': _bookingData.endDateTime.toIso8601String().split('T').first,
-        'total_price': _bookingData.totalPrice.toInt(),
-        'price': (_bookingData.rentalType == BookingRentalType.hourly
-                ? _bookingData.item.hourlyRate
-                : _bookingData.item.dailyRate)
-            .toInt(),
-        'pickup_location': _bookingData.location,
-        'status': 'confirmed',
-        'type': _bookingData.rentalType.name,
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).select('id').single();
-
-      final newBookingId = (res['id'] as num?)?.toInt();
-      return newBookingId;
-    } catch (e) {
-      debugPrint('Note creating booking record: $e');
-      return null;
-    }
-  }
-
-  Future<void> _showSuccess([int? confirmedBookingId]) async {
-    if (_didShowSuccess || !mounted) return;
-    _didShowSuccess = true;
-
-    int? effectiveBookingId = confirmedBookingId;
-    if (effectiveBookingId == null || effectiveBookingId <= 0) {
-      effectiveBookingId = await _createOrConfirmBookingInDb();
-    }
+  Future<void> _showConfirmation([int? pendingBookingId]) async {
+    if (_isConfirmationSheetOpen ||
+        !mounted ||
+        pendingBookingId == null ||
+        pendingBookingId <= 0)
+      return;
+    _isConfirmationSheetOpen = true;
+    final effectiveBookingId = pendingBookingId;
+    final cubit = context.read<RentalRequestCubit>();
 
     final messageId = _bookingData.originalMessageId ?? '';
-    // บันทึกว่าคำขอเช่าอุปกรณ์นี้ได้รับการกดยืนยันแล้ว พร้อมเลขออเดอร์เฉพาะรายการนี้
-    await BookingConfirmationTracker.markConfirmed(
-      messageId: messageId,
-      itemId: _bookingData.item.id,
-      bookingId: effectiveBookingId,
-    );
-    if (effectiveBookingId != null && effectiveBookingId > 0) {
-      await BookingConfirmationTracker.setStatus(
-        messageId: messageId,
-        status: 'confirmed',
-      );
-    }
 
-    final orderNumberStr = BookingConfirmationTracker.formatOrderNumber(effectiveBookingId);
+    final orderNumberStr = BookingConfirmationTracker.formatOrderNumber(
+      effectiveBookingId,
+    );
 
     if (!mounted) return;
 
-    await showModalBottomSheet<void>(
+    final openStatus = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -194,9 +149,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
               ),
               const SizedBox(height: 12),
               Text(
-                _isCurrentUserOwner
-                    ? 'ยอมรับคำขอเช่าเรียบร้อยแล้ว'
-                    : 'ส่งคำขอเช่าเรียบร้อยแล้ว',
+                'ตรวจสอบและยืนยันการเช่า',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
@@ -208,9 +161,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                _isCurrentUserOwner
-                    ? 'คุณได้ยอมรับคำขอเช่าและยืนยันการนัดรับเรียบร้อยแล้ว'
-                    : 'คำขอของคุณถูกส่งไปยังเจ้าของอุปกรณ์แล้ว',
+                'กรุณาตรวจสอบรายละเอียดก่อนกดยืนยันการเช่า',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
@@ -222,7 +173,10 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
               // ป้ายเลขออเดอร์เด่นชัดเจน
               Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF0FDF4),
                     borderRadius: BorderRadius.circular(8),
@@ -357,15 +311,61 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     const SizedBox(height: 8),
                     _buildStepRow('02', 'ชำระเงิน'),
                     const SizedBox(height: 8),
-                    _buildStepRow('03', 'สแกน QR Code หรือใส่รหัส PIN เพื่อเริ่มการเช่า'),
+                    _buildStepRow(
+                      '03',
+                      'สแกน QR Code หรือใส่รหัส PIN เพื่อเริ่มการเช่า',
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 18),
+              _buildConfirmButton(
+                sheetContext,
+                cubit,
+                effectiveBookingId,
+                messageId,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    _isConfirmationSheetOpen = false;
+    if (!mounted || openStatus != true) return;
+    // รอปิดแผ่นยืนยันก่อนเปิดหน้าใหม่ เพื่อไม่ให้ Navigator รับคำสั่งซ้อนกัน
+    await AppRoutes.openRentalStatus(context);
+    if (mounted) Navigator.pop(context, true);
+  }
+
+  Widget _buildConfirmButton(
+    BuildContext sheetContext,
+    RentalRequestCubit cubit,
+    int bookingId,
+    String messageId,
+  ) {
+    return BlocBuilder<RentalRequestCubit, RentalRequestState>(
+      bloc: cubit,
+      builder: (context, state) {
+        final isConfirming =
+            state.status == RentalRequestStatus.confirming ||
+            state.status == RentalRequestStatus.confirmed;
+        return PopScope(
+          canPop: !isConfirming,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (state.errorMessage != null) ...[
+                Text(
+                  state.errorMessage!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+                const SizedBox(height: 8),
+              ],
               SizedBox(
-                width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
+                  key: const ValueKey('confirm-rental-button'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,
@@ -374,30 +374,51 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.pop(sheetContext);
-                    Navigator.maybePop(context, effectiveBookingId ?? true);
-                    AppRoutes.openRentalStatus(context);
-                  },
-                  child: const Text(
-                    'ตรวจสอบสถานะการเช่า',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  onPressed: isConfirming
+                      ? null
+                      : () async {
+                          final confirmed = await cubit.confirm(
+                            offerMessageId: messageId,
+                          );
+                          if (!confirmed) return;
+                          // บันทึกในเครื่องหลัง server ยืนยันสำเร็จเท่านั้น การเปิดหรือปิดสรุปยังคง pending
+                          await BookingConfirmationTracker.markConfirmed(
+                            messageId: messageId,
+                            itemId: _bookingData.item.id,
+                            bookingId: bookingId,
+                          );
+                          await BookingConfirmationTracker.setStatus(
+                            messageId: messageId,
+                            status: cubit.state.rentalStatus ?? 'confirmed',
+                          );
+                          if (sheetContext.mounted &&
+                              ModalRoute.of(sheetContext)?.isCurrent == true)
+                            Navigator.pop(sheetContext, true);
+                        },
+                  child: isConfirming
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'ยืนยันการเช่า',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                 ),
               ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
-
-    if (mounted) {
-      Navigator.maybePop(context, effectiveBookingId ?? true);
-    }
   }
 
   @override
@@ -414,7 +435,9 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
         title: Text(
           widget.isDetailView
               ? 'รายละเอียดที่นัดรับ'
-              : (_isCurrentUserOwner ? 'ตรวจสอบและยอมรับคำขอเช่า' : 'ยืนยันคำขอเช่า'),
+              : (_isCurrentUserOwner
+                    ? 'ตรวจสอบและยอมรับคำขอเช่า'
+                    : 'ยืนยันคำขอเช่า'),
           style: const TextStyle(
             fontFamily: AppTextStyles.fontFamily,
             fontSize: 18,
@@ -565,9 +588,11 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                   : BlocBuilder<RentalRequestCubit, RentalRequestState>(
                       builder: (context, state) {
                         final isSubmitting =
-                            state.status == RentalRequestStatus.submitting;
-                        final isSuccess =
-                            state.status == RentalRequestStatus.success;
+                            state.status == RentalRequestStatus.submitting ||
+                            state.status == RentalRequestStatus.confirming;
+                        final isConfirmed =
+                            state.status == RentalRequestStatus.confirmed;
+                        final hasPendingRental = state.rentalId != null;
                         return SizedBox(
                           width: double.infinity,
                           height: 56,
@@ -582,19 +607,16 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                                 borderRadius: BorderRadius.circular(28),
                               ),
                             ),
-                            onPressed: isSubmitting
+                            onPressed: isSubmitting || _isCurrentUserOwner
                                 ? null
-                                : isSuccess
+                                : isConfirmed
                                 ? () => AppRoutes.openRentalStatus(context)
+                                : hasPendingRental
+                                ? () => _showConfirmation(state.rentalId)
                                 : () async {
-                                    if (_isCurrentUserOwner) {
-                                      final newId = await _createOrConfirmBookingInDb();
-                                      await _showSuccess(newId);
-                                    } else {
-                                      context.read<RentalRequestCubit>().submit(
-                                            _buildRentalDraft(),
-                                          );
-                                    }
+                                    context.read<RentalRequestCubit>().submit(
+                                      _buildRentalDraft(),
+                                    );
                                   },
                             child: isSubmitting
                                 ? const SizedBox(
@@ -608,7 +630,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                                 : Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      if (isSuccess) ...[
+                                      if (isConfirmed) ...[
                                         const Icon(
                                           Icons.assignment_outlined,
                                           size: 20,
@@ -617,11 +639,17 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                                         const SizedBox(width: 8),
                                       ],
                                       Text(
-                                        isSuccess
+                                        isConfirmed
                                             ? 'ตรวจสอบสถานะ'
+                                            : hasPendingRental
+                                            ? 'ยืนยันการเช่า'
                                             : (_isCurrentUserOwner
-                                                ? 'ยอมรับคำขอเช่า'
-                                                : 'ส่งคำขอเช่า'),
+                                                  ? 'รอผู้เช่ายืนยัน'
+                                                  : (_bookingData
+                                                                .originalMessageId !=
+                                                            null
+                                                        ? 'ยืนยันคำขอเช่า'
+                                                        : 'ส่งคำขอเช่า')),
                                         style: const TextStyle(
                                           fontFamily: AppTextStyles.fontFamily,
                                           fontSize: 16,
@@ -647,10 +675,12 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
     return BlocListener<RentalRequestCubit, RentalRequestState>(
       listener: (context, state) {
         if (state.status == RentalRequestStatus.success) {
-          unawaited(_showSuccess(state.rentalId));
+          unawaited(_showConfirmation(state.rentalId));
         }
         final errorMessage = state.errorMessage;
-        if (errorMessage != null && errorMessage.isNotEmpty) {
+        if (!_isConfirmationSheetOpen &&
+            errorMessage != null &&
+            errorMessage.isNotEmpty) {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
             ..showSnackBar(SnackBar(content: Text(errorMessage)));
@@ -729,4 +759,3 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
     );
   }
 }
-

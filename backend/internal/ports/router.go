@@ -126,6 +126,7 @@ func SetupRouterWithOperations(
 		rentals := api.Group("/rentals")
 		{
 			rentals.Post("", rentalController.CreateRentalOrder)
+			rentals.Post("/:id/confirm", rentalController.ConfirmRentalOrder)
 			rentals.Post("/:id/handover", rentalController.HandoverRental)
 			rentals.Post("/:id/return", rentalController.ReturnRental)
 		}

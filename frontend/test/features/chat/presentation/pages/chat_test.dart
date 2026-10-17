@@ -37,6 +37,9 @@ import 'package:frontend/features/booking/domain/entities/booking_request_model.
 import 'package:frontend/features/chat/domain/entities/item_inquiry_data.dart';
 import 'package:frontend/features/chat/presentation/widgets/stacked_images_grid_screen.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:frontend/core/navigation/app_routes.dart';
+import 'package:frontend/features/profile/presentation/pages/profile/user_profile_view_screen.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1566,10 +1569,15 @@ void main() {
         bloc.add(ChatMessagesUpdated([inquiryMsg]));
         await tester.pumpAndSettle();
 
-        expect(find.text('ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:'), findsOneWidget);
+        expect(
+          find.text('ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:'),
+          findsOneWidget,
+        );
 
         // Long press on the item inquiry card
-        await tester.longPress(find.text('ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:'));
+        await tester.longPress(
+          find.text('ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:'),
+        );
         await tester.pumpAndSettle();
 
         // Action sheet should appear with Delete button
@@ -1588,7 +1596,10 @@ void main() {
         await tester.pumpAndSettle();
 
         // Message should be removed from view
-        expect(find.text('ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:'), findsNothing);
+        expect(
+          find.text('ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:'),
+          findsNothing,
+        );
       },
     );
 
@@ -1694,7 +1705,7 @@ void main() {
     );
 
     testWidgets(
-      'Renter sees "ส่งคำขอเช่าอุปกรณ์นี้" on the item inquiry card',
+      'Renter cannot create rental offers from the item inquiry card',
       (tester) async {
         final bloc = ChatDetailBloc(
           streamMessages: mockStreamMessages,
@@ -1731,9 +1742,109 @@ void main() {
 
         expect(
           find.byKey(const ValueKey('inquiry-send-request-1')),
-          findsOneWidget,
+          findsNothing,
         );
-        expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsOneWidget);
+        expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsNothing);
+      },
+    );
+
+    testWidgets('Chat avatar opens the counterpart profile with its user ID', (
+      tester,
+    ) async {
+      final bloc = ChatDetailBloc(
+        streamMessages: mockStreamMessages,
+        sendMessage: mockSendMessage,
+        conversationId: sampleConversation1.id,
+      );
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => ChatDetailScreen(
+              conversation: sampleConversation1,
+              chatDetailBloc: bloc,
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.userProfileView,
+            builder: (_, state) {
+              final args = state.extra! as UserProfileViewArgs;
+              return Scaffold(
+                body: Text('profile:${args.userId}:${args.displayName}'),
+              );
+            },
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      streamController.add(const []);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('chat-profile-avatar')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'profile:${sampleConversation1.otherUserId}:${sampleConversation1.name}',
+        ),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets(
+      'Owner receives confirmation for the exact offer through the shared message stream',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 1800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final bloc = ChatDetailBloc(
+          streamMessages: mockStreamMessages,
+          sendMessage: mockSendMessage,
+          conversationId: sampleConversation2.id,
+        );
+        final data = BookingRequestData(
+          item: const BookingItemInfo(
+            id: 2,
+            title: 'Test tent',
+            imageUrl: '',
+            rating: 5,
+            reviewCount: 1,
+            hourlyRate: 100,
+            dailyRate: 500,
+            defaultLocation: 'Pickup',
+          ),
+          startDate: DateTime(2026, 10, 18),
+          endDate: DateTime(2026, 10, 19),
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 17, minute: 0),
+          location: 'Pickup',
+        );
+        ChatMessage offer(String id, BookingRequestData data) => ChatMessage(
+          id: id,
+          conversationId: sampleConversation2.id,
+          senderId: 'owner',
+          message: data.toChatMessagePayload(),
+          createdAt: DateTime(2026, 10, 17),
+          isMine: true,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatDetailScreen(
+              conversation: sampleConversation2,
+              chatDetailBloc: bloc,
+            ),
+          ),
+        );
+        streamController.add([offer('offer-1', data), offer('offer-2', data)]);
+        await tester.pumpAndSettle();
+        expect(find.text('แก้ไขรายละเอียด'), findsNWidgets(2));
+        streamController.add([
+          offer('offer-1', data.copyWith(bookingId: 25, status: 'confirmed')),
+          offer('offer-2', data),
+        ]);
+        await tester.pumpAndSettle();
+        expect(find.text('รายละเอียดนัดรับ'), findsOneWidget);
+        expect(find.text('แก้ไขรายละเอียด'), findsOneWidget);
+        await tester.pumpWidget(const SizedBox.shrink());
       },
     );
 
@@ -1832,8 +1943,11 @@ void main() {
           ),
           rentalType: BookingRentalType.daily,
           startDate: DateTime(now.year, now.month, now.day),
-          endDate:
-              DateTime(now.year, now.month, now.day).add(const Duration(days: 1)),
+          endDate: DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).add(const Duration(days: 1)),
           startTime: const TimeOfDay(hour: 9, minute: 0),
           endTime: const TimeOfDay(hour: 17, minute: 0),
           location: 'นัดรับตามตกลง',
@@ -1873,17 +1987,27 @@ void main() {
 
         // 1. Pinned active rental banner should appear at top
         expect(
-            find.byKey(const ValueKey('chat-active-rental-banner')), findsOneWidget);
+          find.byKey(const ValueKey('chat-active-rental-banner')),
+          findsOneWidget,
+        );
         expect(
-            find.byKey(const ValueKey('chat-banner-status-button')), findsOneWidget);
+          find.byKey(const ValueKey('chat-banner-status-button')),
+          findsOneWidget,
+        );
         expect(
-            find.byKey(const ValueKey('chat-banner-return-button')), findsOneWidget);
+          find.byKey(const ValueKey('chat-banner-return-button')),
+          findsOneWidget,
+        );
 
         // 2. Bubble card should update to active rental
         expect(
-            find.byKey(const ValueKey('chat-booking-return-button')), findsOneWidget);
-        expect(find.byKey(const ValueKey('chat-booking-rental-status-button')),
-            findsOneWidget);
+          find.byKey(const ValueKey('chat-booking-return-button')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('chat-booking-rental-status-button')),
+          findsOneWidget,
+        );
       },
     );
   });
