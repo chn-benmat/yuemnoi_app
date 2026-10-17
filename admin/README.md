@@ -129,7 +129,7 @@ Preview ไม่ดึงข้อมูลจริงและปิดปุ
 3. ยืนยันว่าตรวจหลักฐานแล้ว การอนุมัติไม่ต้องกรอกอายุบัตร วันหมดอายุ หรือเหตุผล
 4. หากขอข้อมูลเพิ่มหรือปฏิเสธ ต้องระบุเหตุผลก่อนบันทึก ระบบตรวจเงื่อนไขฝั่ง Backend และเก็บประวัติการดำเนินงาน
 
-ติดตั้ง [migration สำหรับฟอร์มอนุมัติ](../supabase/migrations/20261017083657_simplify_identity_approval.sql) ก่อนใช้งาน บัญชีที่อนุมัติโดยไม่มีข้อมูลอายุบัตรใช้งานได้ตามปกติ ส่วนวันหมดอายุที่เคยบันทึกไว้ยังมีผล รายละเอียด contract อยู่ใน [Backend README](../backend/README.md)
+ติดตั้ง [migration สำหรับฟอร์มอนุมัติ](../supabase/migrations/20261017083657_simplify_identity_approval.sql) และ [migration ยกเลิกอายุบัตร](../supabase/migrations/20261017132150_remove_identity_card_expiry.sql) ก่อนใช้งาน ผลอนุมัติและสิทธิ์ปล่อยเช่าไม่ใช้วันหมดอายุบัตร รวมถึงค่าที่เคยบันทึกไว้หรือส่งมาจาก client รุ่นเดิม รายละเอียด contract อยู่ใน [Backend README](../backend/README.md)
 
 <a id="development"></a>
 

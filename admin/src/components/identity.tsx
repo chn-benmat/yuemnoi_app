@@ -86,13 +86,6 @@ export default function Identity({
               {Object.entries({
                 ชื่อบนบัตร: r.legal_name,
                 เลขบัตร: r.masked_id,
-                วันหมดอายุ: r.lifetime
-                  ? "บัตรตลอดชีพ"
-                  : r.expires_on
-                    ? date(r.expires_on)
-                    : r.status === "pending"
-                      ? "รอพนักงานตรวจสอบ"
-                      : "ไม่ได้ระบุ",
               }).map(([k, v]) => (
                 <div key={k}>
                   <dt>{k}</dt>

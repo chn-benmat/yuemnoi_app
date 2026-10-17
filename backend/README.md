@@ -343,9 +343,9 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 
 แบบฟอร์มและหน้าสรุปของผู้ใช้ไม่มีช่องบัตรตลอดชีพหรือวันหมดอายุ Go ไม่รับค่าอายุบัตรจาก client โดยคำขอรอตรวจมี `expires_on = null`, `lifetime = false`, `analysis = {"review_mode":"manual"}` หน้าพนักงานอนุมัติผ่าน `identity-review` ด้วย `decision: "approved"`, `checked: true` โดยไม่ต้องส่งเหตุผลหรืออายุบัตร การปฏิเสธ/ขอข้อมูลเพิ่มยังต้องส่ง `reason` 3–500 ตัวอักษรและ `checked: true` คำสั่งอื่นยังบังคับเหตุผลตามเดิม
 
-ติดตั้ง [migration สำหรับฟอร์มอนุมัติ](../supabase/migrations/20261017083657_simplify_identity_approval.sql) เพื่อให้ฐานข้อมูลรองรับ contract นี้ คำขอและบัญชีที่อนุมัติโดยไม่ระบุอายุบัตรคง `expires_on = null`, `lifetime = false` และผ่านเงื่อนไขสิทธิ์หลังตรวจหลักฐาน ระบบยังรองรับหน้าพนักงานรุ่นเดิมที่ส่งอายุบัตรและยังตรวจวันหมดอายุที่เคยบันทึกไว้ การอนุมัติยังตรวจสิทธิ์เจ้าหน้าที่ ห้ามตรวจคำขอตนเอง ตรวจข้อมูลซ้ำ บันทึก audit และกำหนดเวลาลบหลักฐานตามเดิม ทดสอบ contract แบบ rollback ได้ด้วย [ชุดทดสอบ SQL](../supabase/tests/identity_approval.sql)
+ติดตั้ง [migration สำหรับฟอร์มอนุมัติ](../supabase/migrations/20261017083657_simplify_identity_approval.sql) และ [migration ยกเลิกอายุบัตร](../supabase/migrations/20261017132150_remove_identity_card_expiry.sql) เพื่อให้ฐานข้อมูลรองรับ contract นี้ ผลอนุมัติและสิทธิ์ปล่อยเช่าไม่ตรวจวันหมดอายุบัตร รวมถึงวันที่เดิมและค่าจาก client รุ่นเก่า คำขอที่อนุมัติใหม่เก็บ `expires_on = null`, `lifetime = false` เพื่อรองรับ schema เดิม การอนุมัติยังตรวจสิทธิ์เจ้าหน้าที่ ห้ามตรวจคำขอตนเอง ตรวจข้อมูลซ้ำ บันทึก audit และกำหนดเวลาลบหลักฐานตามเดิม ทดสอบ contract แบบ rollback ได้ด้วย [ชุดทดสอบ SQL](../supabase/tests/identity_approval.sql)
 
-ติดตั้ง [migration สำหรับทุกวัย](../supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql) ก่อนใช้งาน Backend และ Admin รุ่นนี้ การอนุมัติยังตรวจสิทธิ์พนักงาน ห้ามตรวจคำขอตนเอง ตรวจข้อมูลซ้ำ พร้อมบันทึก audit และคงการตรวจอายุบัตรของบัญชีที่อนุมัติแล้ว
+ติดตั้ง [migration สำหรับทุกวัย](../supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql) ก่อนใช้งาน Backend และ Admin รุ่นนี้ การอนุมัติยังตรวจสิทธิ์พนักงาน ห้ามตรวจคำขอตนเอง ตรวจข้อมูลซ้ำ พร้อมบันทึก audit
 
 การส่งคำขอยืนยันลงทะเบียนหลักฐานก่อนอัปโหลดภาพบัตรและใบหน้าพร้อมกัน โดยใช้คนละ object path รอทั้งสองงานจบก่อนเรียก `identity_submit` หรือ rollback หากอัปโหลดงานหนึ่งล้มเหลวจะรออีกงานจบก่อนลบทั้งสอง path เพื่อไม่ให้ cleanup แข่งกับ worker ที่ยังอัปโหลดอยู่ คง context และ timeout ของ Storage เดิม รวมถึงงาน cleanup ตามกำหนดเผื่อ remote upload ที่หมดเวลาฝั่ง client การตรวจสิทธิ์ การเข้ารหัส และการอนุมัติโดยเจ้าหน้าที่คงเดิม ฝั่ง Flutter แสดงรับคำขอเมื่อ submit สำเร็จและโหลดสถานะล่าสุดต่อเบื้องหลัง
 
@@ -372,4 +372,4 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 
 ---
 
-นโยบายทุกวัยใช้ migration `supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql` ยกเลิกการใช้ `is_minor` จำกัดลงประกาศ/จอง/อนุมัติตัวตนทั้ง Go guard และ database triggers รวมถึงถอด API `/api/identity/guardians`, คิวและคำสั่งผู้ปกครองจากระบบเจ้าหน้าที่ ข้อมูลประวัติผู้ปกครองและหลักฐานเก่ายังเก็บตามรอบลบเดิม การตรวจตัวตนโดยเจ้าหน้าที่ บัตรหมดอายุ และการระงับบัญชียังทำงานทุกวัย
+นโยบายทุกวัยใช้ migration `supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql` ยกเลิกการใช้ `is_minor` จำกัดลงประกาศ/จอง/อนุมัติตัวตนทั้ง Go guard และ database triggers รวมถึงถอด API `/api/identity/guardians`, คิวและคำสั่งผู้ปกครองจากระบบเจ้าหน้าที่ ข้อมูลประวัติผู้ปกครองและหลักฐานเก่ายังเก็บตามรอบลบเดิม การตรวจตัวตนโดยเจ้าหน้าที่และการระงับบัญชียังทำงานทุกวัย
