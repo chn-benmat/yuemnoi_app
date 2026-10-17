@@ -131,6 +131,8 @@ class BookingRequestData {
   final String? ownerId;
   final String? originalMessageId;
   final String paymentMethod;
+  final int? bookingId;
+  final String? status;
 
   static const String bookingPayloadPrefix = '📋 คำขอเช่าอุปกรณ์';
   static const String metaStartTag = '[BOOKING_DATA:';
@@ -151,6 +153,8 @@ class BookingRequestData {
     this.ownerId,
     this.originalMessageId,
     this.paymentMethod = 'cash',
+    this.bookingId,
+    this.status,
   });
 
   /// ตรวจสอบว่าข้อความเป็นข้อความคำขอเช่าหรือไม่
@@ -194,6 +198,8 @@ class BookingRequestData {
       'conversationId': conversationId,
       'ownerId': ownerId,
       if (originalMessageId != null) 'originalMessageId': originalMessageId,
+      if (bookingId != null) 'bookingId': bookingId,
+      if (status != null) 'status': status,
     };
 
     final jsonString = jsonEncode(jsonMap);
@@ -273,6 +279,8 @@ $metaStartTag$jsonString$metaEndTag''';
 
           return BookingRequestData(
             item: item,
+            bookingId: (map['bookingId'] as num?)?.toInt(),
+            status: map['status'] as String?,
             rentalType: rentalType,
             startDate: startDate,
             endDate: endDate,
@@ -399,10 +407,8 @@ $metaStartTag$jsonString$metaEndTag''';
 
   /// วันที่และช่วงเวลาแบบละเอียด (ระบุ วัน เดือน ปี และเวลาที่จะเช่า)
   String get formattedDetailedRentalPeriod {
-    final startStr = '$formattedStartDate เวลา $formattedStartTime';
     if (rentalType == BookingRentalType.daily) {
-      final endStr = '$formattedEndDate เวลา $formattedEndTime';
-      return '$startStr - $endStr ($duration วัน)';
+      return '$formattedStartDate - $formattedEndDate ($duration วัน)';
     } else {
       return '$formattedStartDate เวลา $formattedStartTime - $formattedEndTime ($duration ชม.)';
     }
@@ -433,6 +439,8 @@ $metaStartTag$jsonString$metaEndTag''';
     String? ownerId,
     String? originalMessageId,
     String? paymentMethod,
+    int? bookingId,
+    String? status,
   }) {
     return BookingRequestData(
       item: item ?? this.item,
@@ -449,6 +457,8 @@ $metaStartTag$jsonString$metaEndTag''';
       ownerId: ownerId ?? this.ownerId,
       originalMessageId: originalMessageId ?? this.originalMessageId,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      bookingId: bookingId ?? this.bookingId,
+      status: status ?? this.status,
     );
   }
 }

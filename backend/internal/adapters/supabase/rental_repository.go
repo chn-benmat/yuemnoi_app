@@ -26,6 +26,13 @@ func (r *supabaseRentalRepository) CreateRental(
 	userID string,
 	request domain.CreateRentalRequest,
 ) (*domain.RentalOrder, error) {
+	if request.OfferMessageID != "" {
+		return r.processChatOffer(ctx, userID, request, false)
+	}
+	return r.createRental(ctx, userID, request)
+}
+
+func (r *supabaseRentalRepository) createRental(ctx context.Context, userID string, request domain.CreateRentalRequest) (*domain.RentalOrder, error) {
 	var rental domain.RentalOrder
 	err := r.client.DB.Rpc("create_rental_request", map[string]interface{}{
 		"p_user_id":         userID,
@@ -131,7 +138,7 @@ func mapRentalRepositoryError(operation string, err error) error {
 
 	message := strings.ToLower(requestErr.Message)
 	switch {
-	case strings.Contains(message, "rental period is unavailable"),
+	case requestErr.Code == "23P01", strings.Contains(message, "rental period is unavailable"),
 		strings.Contains(message, "item is unavailable"):
 		return domain.ErrRentalUnavailable
 	case strings.Contains(message, "booking not found"):

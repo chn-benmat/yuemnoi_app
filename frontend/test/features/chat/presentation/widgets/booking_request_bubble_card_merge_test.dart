@@ -98,4 +98,24 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets('daily offer shows dates without clock times or sender wording', (
+    tester,
+  ) async {
+    await pumpCard(tester);
+    expect(find.text('รายละเอียดคำขอเช่า'), findsOneWidget);
+    expect(find.textContaining('เวลา 10:00'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'confirmation arriving for the same offer replaces the edit action',
+    (tester) async {
+      await pumpCard(tester);
+      await pumpCard(tester, initialStatus: 'confirmed');
+      expect(find.text('รายละเอียดนัดรับ'), findsOneWidget);
+      expect(find.text('แก้ไขรายละเอียด'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }

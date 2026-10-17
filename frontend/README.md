@@ -173,6 +173,8 @@ APP_SECRET_KEY=replace-with-client-app-key
 | Firebase Android  | เพิ่ม Android app ID `com.example.frontend` แล้ววาง `android/app/google-services.json` ที่ตรงกับ project                                                                                                           |
 | Firebase iOS      | เพิ่ม iOS app ให้ตรง bundle ID และเพิ่ม `GoogleService-Info.plist` เข้า Runner target; ตั้ง APNs / native capabilities เมื่อทดสอบ FCM                                                                              |
 
+รูปที่อัปโหลดใหม่ใช้ path `chat_bk/<conversation_id>/<filename>`, `item_bk/<owner_user_id>/<item_id>/<filename>` และ `profile_bk/<user_id>/<filename>` รวมถึงรูปตรวจสภาพคืนสินค้าที่อยู่ใต้เจ้าของและสินค้าเดียวกัน ต้องใช้ [migration สิทธิ์ Storage](../supabase/migrations/20261017151602_organize_storage_image_folders.sql) ร่วมกับแอปและ backend เวอร์ชันนี้ รูปแชตเก่ายังอ่านและลบได้ตามสิทธิ์ผู้ส่ง โดยไม่ได้ย้ายไฟล์เดิม
+
 Firebase initialization ใช้ `Firebase.initializeApp()` แบบ native และแจ้ง warning หากเริ่มไม่ได้ ดู [Firebase Flutter setup](https://firebase.google.com/docs/flutter/setup) ไฟล์ Firebase configuration ไม่ได้ติดมาใน repository และ checkout นี้ไม่มีชุด SQL migrations สำหรับสร้าง Supabase ทั้งระบบอัตโนมัติ
 
 แผนที่ปัจจุบันใช้ Google tile URL ส่วนค้นหาพิกัด / เส้นทางใช้ Nominatim และ OSRM จากโค้ด ไม่มี env สำหรับ map key ใน AppConfig
@@ -310,6 +312,8 @@ frontend/
 ภายในแต่ละ feature ส่วนใหญ่แยก `data/`, `domain/` และ `presentation/` ดูกติกาการพัฒนาเพิ่มเติมใน [AGENTS.md](AGENTS.md)
 
 หน้ายืนยันตัวตนเปิดฟอร์ม “ตรวจข้อมูล แล้วส่งคำขอ” พร้อมป๊อปอัพอธิบายการใช้ภาพบัตร ใบหน้า และข้อมูล ทุกวัยใช้ flow เดียวกันโดยไม่ต้องมีผู้ปกครอง ผู้ใช้ยินยอมแล้วถ่ายบัตรต่อด้วยใบหน้าได้ทันที กรอกข้อมูลรวมวันเกิดตามบัตรเพียงครั้งเดียวใต้เลขบัตร ภาพอยู่ชั่วคราวในหน้านี้และอัปโหลดเมื่อกดส่งเท่านั้น Cubit เริ่มหรือใช้คำขอเดิมที่ยังไม่หมดอายุ แล้วส่งข้อมูลให้เจ้าหน้าที่ตรวจ ไม่ใช้วันเกิดหรือสถานะผู้เยาว์เดิมเพื่อตัดสิทธิ์ การแก้วันเกิดไม่ล้างภาพและไม่เริ่มคำขอใหม่เพราะช่วงอายุเปลี่ยน แต่ต้องยืนยันความถูกต้องอีกครั้ง บัญชีที่ถูกระงับยังถูกจำกัดตามเดิม ทดสอบด้วย `flutter test test/features/identity`
+
+ที่อยู่ในหน้ายืนยันตัวตนเลือกจังหวัด → อำเภอ/เขต → ตำบล/แขวงจากรายการที่พิมพ์ค้นหาได้ เมื่อเปลี่ยนพื้นที่ระดับบนจะล้างค่าระดับถัดไปและรหัสไปรษณีย์ เมื่อเลือกตำบล/แขวงจะเติมรหัสหลักให้อัตโนมัติ พื้นที่ที่มีหลายรหัสมีตัวเลือกเพิ่มเติม และผู้ใช้ยังแก้รหัสเองได้ การเปลี่ยนที่อยู่หรือรหัสต้องยืนยันความถูกต้องใหม่ ข้อมูลพื้นที่อยู่ใน asset ของแอปและยังส่งชื่อภาษาไทยตาม API เดิม ดูแหล่งข้อมูลและวิธีอัปเดตใน [assets/data/README.md](assets/data/README.md)
 
 <a id="troubleshooting"></a>
 

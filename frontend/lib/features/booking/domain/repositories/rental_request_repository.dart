@@ -3,6 +3,11 @@ import '../entities/rental_request.dart';
 abstract class RentalRequestRepository {
   Future<RentalRequestResult> submit(RentalRequestDraft draft);
 
+  Future<RentalRequestResult> confirm({
+    required int rentalId,
+    required String offerMessageId,
+  });
+
   void close();
 }
 

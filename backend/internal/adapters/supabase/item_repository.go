@@ -61,7 +61,7 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 	paths := make([]string, 0, len(images))
 	urls := make([]string, 0, len(images))
 	for index, image := range images {
-		objectPath := fmt.Sprintf("%d/%d-%d%s", created.ID, time.Now().UnixNano(), index, image.Extension)
+		objectPath := fmt.Sprintf("%s/%d/%d-%d%s", created.UserID, created.ID, time.Now().UnixNano(), index, image.Extension)
 		if err := r.uploadItemImage(ctx, objectPath, image); err != nil {
 			r.rollbackCreatedItem(ctx, created, paths)
 			return nil, err

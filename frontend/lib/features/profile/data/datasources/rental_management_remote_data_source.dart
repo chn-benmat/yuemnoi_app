@@ -1,21 +1,29 @@
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/rental_income.dart';
 import '../models/rental_booking_model.dart';
 
 // คำอธิบาย: Data Source จัดการการดึงและอัปเดตข้อมูลการเช่า/ปล่อยเช่า, ส่งมอบ, คืนของ และรายได้
 class RentalManagementRemoteDataSource {
-  RentalManagementRemoteDataSource({ApiClient? apiClient})
-      : _apiClient = apiClient;
+  RentalManagementRemoteDataSource({
+    ApiClient? apiClient,
+    SupabaseClient? client,
+  }) : _apiClient = apiClient,
+       _client = client;
+
+  final SupabaseClient? _client;
+  SupabaseClient get _supabaseClient => _client ?? SupabaseConfig.client;
 
   ApiClient? _apiClient;
   ApiClient get _backendClient => _apiClient ??= DioApiClient();
   Future<List<RentalBookingModel>> getRentingBookings(String userId) async {
-    if (!SupabaseConfig.isInitialized || userId.isEmpty) return [];
+    if ((_client == null && !SupabaseConfig.isInitialized) || userId.isEmpty)
+      return [];
 
     try {
-      final client = SupabaseConfig.client;
+      final client = _supabaseClient;
       final rentingResp = await client
           .from('booking_tb')
           .select(
@@ -75,10 +83,11 @@ class RentalManagementRemoteDataSource {
   }
 
   Future<List<RentalBookingModel>> getLendingBookings(String userId) async {
-    if (!SupabaseConfig.isInitialized || userId.isEmpty) return [];
+    if ((_client == null && !SupabaseConfig.isInitialized) || userId.isEmpty)
+      return [];
 
     try {
-      final client = SupabaseConfig.client;
+      final client = _supabaseClient;
       final myItemsResp = await client
           .from('item_tb')
           .select('id')
@@ -226,13 +235,17 @@ class RentalManagementRemoteDataSource {
     );
   }
 
-  Future<Map<int, Map<String, dynamic>>> _fetchItemsMap(List<int> itemIds) async {
+  Future<Map<int, Map<String, dynamic>>> _fetchItemsMap(
+    List<int> itemIds,
+  ) async {
     if (itemIds.isEmpty) return {};
     final Map<int, Map<String, dynamic>> itemsMap = {};
     try {
-      final itemsResp = await SupabaseConfig.client
+      final itemsResp = await _supabaseClient
           .from('item_tb')
-          .select('id, user_id, item_name, category, item_image_url, price, type')
+          .select(
+            'id, user_id, item_name, category, item_image_url, price, type',
+          )
           .inFilter('id', itemIds);
 
       for (final it in (itemsResp as List)) {
@@ -254,7 +267,7 @@ class RentalManagementRemoteDataSource {
     final Map<String, String> userNames = {};
     final Map<String, String> userPhones = {};
     try {
-      final profilesResp = await SupabaseConfig.client
+      final profilesResp = await _supabaseClient
           .from('public_profile_v')
           .select('user_id, display_name')
           .inFilter('user_id', userIds.toList());

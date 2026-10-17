@@ -13,6 +13,7 @@ import '../../../../../core/services/phone_call_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../booking/domain/entities/booking_request_model.dart';
 import '../../widgets/rentals/rental_handover_modal.dart';
+import '../../bloc/rental_route_cubit.dart';
 
 class RentalTrackingMapPage extends StatefulWidget {
   final BookingRequestData? bookingData;
@@ -30,6 +31,7 @@ class RentalTrackingMapPage extends StatefulWidget {
   final String? statusCode;
   final int? bookingId;
   final bool? isOwner;
+  final LocationService? locationService;
 
   const RentalTrackingMapPage({
     super.key,
@@ -48,6 +50,7 @@ class RentalTrackingMapPage extends StatefulWidget {
     this.statusCode,
     this.bookingId,
     this.isOwner,
+    this.locationService,
   });
 
   @override
@@ -55,7 +58,9 @@ class RentalTrackingMapPage extends StatefulWidget {
 }
 
 class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  LocationService get _locationService =>
+      widget.locationService ?? LocationService.instance;
   late final MapController _mapController;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -70,7 +75,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   bool _forceUseRawDeviceGps = false;
   StreamSubscription<Position>? _positionStreamSubscription;
   bool _isAutoFollow = false;
-  DateTime? _lastRouteFetchTime;
+  late final RentalRouteCubit _routeCubit;
+  StreamSubscription<RentalRouteState>? _routeSubscription;
 
   // ข้อมูลที่ resolve แล้ว
   late String _resolvedTitle;
@@ -116,7 +122,10 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
           ),
           title: Row(
             children: [
-              const Icon(Icons.calendar_today_rounded, color: Color(0xFF2563EB)),
+              const Icon(
+                Icons.calendar_today_rounded,
+                color: Color(0xFF2563EB),
+              ),
               const SizedBox(width: 8),
               Text(
                 _isOwner ? 'ยังไม่ถึงวันนัดส่งมอบ' : 'ยังไม่ถึงวันนัดเช่า',
@@ -207,7 +216,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     );
   }
 
-
   @override
   void initState() {
     super.initState();
@@ -223,13 +231,41 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     );
 
     _resolveInitialData();
+    WidgetsBinding.instance.addObserver(this);
+    _routeCubit = RentalRouteCubit(
+      destination: _destinationLocation,
+      fetchRoute: _locationService.fetchDrivingRoute,
+      cachedRoute: _locationService.cachedDrivingRoute,
+      isVisible: () => mounted && (ModalRoute.of(context)?.isCurrent ?? false),
+    );
+    _routeSubscription = _routeCubit.stream.listen((state) {
+      if (!mounted) return;
+      final firstRoute = _routeResult == null && state.route != null;
+      setState(() {
+        _routeResult = state.route;
+        _isLoadingRoute = state.loading;
+      });
+      if (firstRoute)
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _fitBoundsToRoute();
+        });
+    });
     _initLocationsAndRoute();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _routeCubit.setActive(state == AppLifecycleState.resumed);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _routeSubscription?.cancel();
+    _routeCubit.close();
     _positionStreamSubscription?.cancel();
     _pulseController.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -284,14 +320,31 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
 
   Future<void> _initLocationsAndRoute() async {
     setState(() {
-      _isLoadingRoute = true;
+      _isLoadingRoute = _routeResult == null;
     });
+
+    // เริ่มจากพิกัดล่าสุดก่อน ระหว่างรอ GPS ใหม่ที่อาจใช้เวลาหลายวินาที
+    final lastKnown = await _locationService.getLastKnownPosition();
+    if (!mounted) return;
+    if (lastKnown != null) {
+      final point = LatLng(lastKnown.latitude, lastKnown.longitude);
+      if (const Distance().as(
+                LengthUnit.Kilometer,
+                point,
+                _destinationLocation,
+              ) <=
+              500 ||
+          _forceUseRawDeviceGps) {
+        setState(() => _userLocation = point);
+        _routeCubit.updatePosition(point);
+      }
+    }
 
     // 1. ดึงตำแหน่ง GPS ของตัวเรา
     LatLng userPos;
     bool isSimulated = false;
     try {
-      final pos = await LocationService.instance.getCurrentPosition();
+      final pos = await _locationService.getCurrentPosition();
       if (pos != null) {
         final rawLatLng = LatLng(pos.latitude, pos.longitude);
         _rawDeviceGps = rawLatLng;
@@ -336,42 +389,15 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       _isSimulatedLocation = isSimulated;
     });
 
-    // 2. ดึงเส้นทางขับรถจาก OSRM
-    try {
-      final route = await LocationService.instance.fetchDrivingRoute(
-        userPos,
-        _destinationLocation,
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _routeResult = route;
-        _isLoadingRoute = false;
-      });
-
-      // จัดกล้องให้อยู่ตรงกลางสองจุด
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _fitBoundsToRoute();
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoadingRoute = false;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _fitBoundsToRoute();
-      });
-    } finally {
-      // เริ่มต้นติดตามตำแหน่ง Real-time
-      _startLiveLocationTracking();
-    }
+    _routeCubit.updatePosition(userPos);
+    _startLiveLocationTracking();
   }
 
   /// สตรีมติดตามตำแหน่งพิกัดแบบ Real-time
   void _startLiveLocationTracking() {
     _positionStreamSubscription?.cancel();
     try {
-      final stream = LocationService.instance.getPositionStream(
+      final stream = _locationService.getPositionStream(
         accuracy: LocationAccuracy.high,
         distanceFilter: 2,
       );
@@ -408,14 +434,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       return;
     }
 
-    final wasSimulated = _isSimulatedLocation;
-    final previousLoc = _userLocation;
-
-    double movedMeters = 999.0;
-    if (previousLoc != null) {
-      movedMeters = distanceCalc.as(LengthUnit.Meter, previousLoc, newGps);
-    }
-
     // อัปเดตตำแหน่งหมุดทันทีแบบ Real-time
     setState(() {
       _userLocation = newGps;
@@ -429,35 +447,12 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       _mapController.move(newGps, _mapController.camera.zoom);
     }
 
-    // คำนวณเส้นทางใหม่เมื่อขยับเกิน 20 เมตร หรือเพิ่งเปลี่ยนจากจำลองมาเป็นพิกัดจริง
-    final now = DateTime.now();
-    final shouldFetchRoute =
-        movedMeters > 20.0 ||
-        wasSimulated ||
-        _lastRouteFetchTime == null ||
-        now.difference(_lastRouteFetchTime!).inSeconds > 12;
-
-    if (shouldFetchRoute) {
-      _lastRouteFetchTime = now;
-      _fetchRouteForPosition(newGps);
-    }
+    _routeCubit.updatePosition(newGps);
   }
 
   /// ดึงข้อมูลเส้นทางใหม่สำหรับพิกัดเริ่มต้นที่ระบุ
   Future<void> _fetchRouteForPosition(LatLng startPos) async {
-    try {
-      final route = await LocationService.instance.fetchDrivingRoute(
-        startPos,
-        _destinationLocation,
-      );
-      if (!mounted) return;
-      setState(() {
-        _routeResult = route;
-        _isLoadingRoute = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-    }
+    _routeCubit.updatePosition(startPos);
   }
 
   /// จำลองการขยับตำแหน่งตัวเรา (เมื่อแตะบนแผนที่ในโหมดจำลอง)
@@ -685,12 +680,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  // ปุ่มรีเฟรชเส้นทาง
-                  _buildGlassIconButton(
-                    icon: Icons.refresh_rounded,
-                    onTap: _initLocationsAndRoute,
                   ),
                 ],
               ),
@@ -1420,7 +1409,9 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                           ? () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('กำลังอยู่ระหว่างการเช่าอุปกรณ์'),
+                                  content: Text(
+                                    'กำลังอยู่ระหว่างการเช่าอุปกรณ์',
+                                  ),
                                   behavior: SnackBarBehavior.floating,
                                 ),
                               );
@@ -1439,7 +1430,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                                               ? Icons.qr_code_rounded
                                               : (_renterHandoverStep == 1
                                                     ? Icons.payments_rounded
-                                                    : Icons.checklist_rounded)))),
+                                                    : Icons
+                                                          .checklist_rounded)))),
                         size: 18,
                         color: Colors.white,
                       ),

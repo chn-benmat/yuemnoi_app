@@ -243,13 +243,13 @@ void main() {
     expect(cubit.state.captureUntil, repository.until.toUtc());
     await cubit.close();
   });
-  test('ไม่แสดงยืนยันเมื่อไม่มีผลหรือบัตรหมดอายุ', () {
+  test('แสดงผลอนุมัติโดยไม่ตรวจวันหมดอายุบัตร', () {
     expect(const IdentityStatus({}).verified, isFalse);
     expect(
       const IdentityStatus({
         'profile': {'status': 'approved', 'expires_on': '2000-01-01'},
       }).verified,
-      isFalse,
+      isTrue,
     );
     expect(
       const IdentityStatus({

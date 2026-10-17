@@ -9,19 +9,29 @@ import '../../../../core/widgets/app_field_label.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_form_field.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
+import '../../data/asset_thai_address_repository.dart';
 import '../../domain/identity_repository.dart';
+import '../../domain/thai_address.dart';
+import '../identity_address_cubit.dart';
 import '../identity_cubit.dart';
+import '../widgets/identity_address_dropdown.dart';
 import '../widgets/identity_camera_page.dart';
 import '../widgets/identity_widgets.dart';
 
 class IdentityPage extends StatefulWidget {
-  const IdentityPage({super.key, this.capture = captureIdentityPhoto});
+  const IdentityPage({
+    super.key,
+    this.capture = captureIdentityPhoto,
+    this.addressRepository,
+  });
   final IdentityCapture capture;
+  final ThaiAddressRepository? addressRepository;
   @override
   State<IdentityPage> createState() => _IdentityPageState();
 }
 
 class _IdentityPageState extends State<IdentityPage> {
+  late final IdentityAddressCubit _addressCubit;
   final _form = GlobalKey<FormState>();
   final _birthField = GlobalKey<FormFieldState<String>>();
   final _birthDisplay = TextEditingController();
@@ -68,6 +78,9 @@ class _IdentityPageState extends State<IdentityPage> {
   @override
   void initState() {
     super.initState();
+    _addressCubit = IdentityAddressCubit(
+      widget.addressRepository ?? AssetThaiAddressRepository(),
+    )..load();
     _clock = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted) setState(() {});
     });
@@ -88,11 +101,13 @@ class _IdentityPageState extends State<IdentityPage> {
     _clearCardFields();
     _confirmed = false;
     _validateDetails = false;
+    if (!_addressCubit.isClosed) _addressCubit.reset();
   }
 
   @override
   void dispose() {
     _clock.cancel();
+    _addressCubit.close();
     _clear();
     for (final c in [..._cardFields.values, _birthDisplay]) {
       c.dispose();
@@ -244,6 +259,118 @@ class _IdentityPageState extends State<IdentityPage> {
     if (_confirmed) setState(() => _confirmed = false);
   }
 
+  Widget _addressFields() {
+    return BlocConsumer<IdentityAddressCubit, IdentityAddressState>(
+      bloc: _addressCubit,
+      listenWhen: (previous, current) =>
+          previous.province != current.province ||
+          previous.district != current.district ||
+          previous.subdistrict != current.subdistrict,
+      listener: (context, address) => setState(() {
+        _province.text = address.province?.name ?? '';
+        _district.text = address.district?.name ?? '';
+        _subdistrict.text = address.subdistrict?.name ?? '';
+        // เปลี่ยนพื้นที่แล้วล้างรหัสเดิม รวมถึงรหัสที่ผู้ใช้เคยแก้เอง
+        _postalCode.text = address.postalCodes.isEmpty
+            ? ''
+            : address.postalCodes.first;
+        _confirmed = false;
+      }),
+      builder: (context, address) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (address.error)
+            Row(
+              children: [
+                const Expanded(child: Text('โหลดรายการที่อยู่ไม่สำเร็จ')),
+                TextButton(
+                  onPressed: _addressCubit.load,
+                  child: const Text('ลองอีกครั้ง'),
+                ),
+              ],
+            ),
+          IdentityAddressDropdown<ThaiProvince>(
+            fieldKey: const ValueKey('province'),
+            label: 'จังหวัด',
+            hintText: address.loading ? 'กำลังโหลดจังหวัด…' : 'เลือกจังหวัด',
+            controller: _province,
+            options: address.provinces,
+            optionLabel: (province) => province.name,
+            selected: address.province,
+            onSelected: _addressCubit.selectProvince,
+            validator: _required,
+          ),
+          const SizedBox(height: 20),
+          IdentityAddressDropdown<ThaiDistrict>(
+            fieldKey: const ValueKey('district'),
+            label: 'อำเภอ/เขต',
+            hintText: address.province == null
+                ? 'เลือกจังหวัดก่อน'
+                : 'เลือกอำเภอ/เขต',
+            controller: _district,
+            options: address.districts,
+            optionLabel: (district) => district.name,
+            selected: address.district,
+            onSelected: _addressCubit.selectDistrict,
+            validator: _required,
+          ),
+          const SizedBox(height: 20),
+          IdentityAddressDropdown<ThaiSubdistrict>(
+            fieldKey: const ValueKey('subdistrict'),
+            label: 'ตำบล/แขวง',
+            hintText: address.district == null
+                ? 'เลือกอำเภอ/เขตก่อน'
+                : 'เลือกตำบล/แขวง',
+            controller: _subdistrict,
+            options: address.subdistricts,
+            optionLabel: (subdistrict) => subdistrict.name,
+            selected: address.subdistrict,
+            onSelected: _addressCubit.selectSubdistrict,
+            validator: _required,
+          ),
+          const SizedBox(height: 20),
+          _cardTextField(
+            'postal_code',
+            'รหัสไปรษณีย์',
+            hintText: 'เติมอัตโนมัติ และแก้ไขได้',
+            validator: _postal,
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(5),
+            ],
+          ),
+          if (address.postalCodes.length > 1) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'พื้นที่นี้มีหลายรหัส เลือกให้ตรงกับที่อยู่ หรือแก้ไขรหัสด้านบน',
+              style: TextStyle(fontSize: 12, color: IdentityColors.muted),
+            ),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _postalCode,
+              builder: (context, value, _) => Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final code in address.postalCodes)
+                    ChoiceChip(
+                      key: ValueKey('postal_option:$code'),
+                      label: Text(code),
+                      selected: value.text == code,
+                      onSelected: (_) {
+                        _postalCode.text = code;
+                        _invalidateConfirmation();
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     setState(() => _validateDetails = true);
@@ -259,6 +386,7 @@ class _IdentityPageState extends State<IdentityPage> {
       return;
     }
     if (!_consent || !_confirmed || _card == null || _selfie == null) return;
+    if (_addressCubit.state.subdistrict == null) return;
     final sent = await _cubit.submit(
       {
         'name_prefix': _namePrefix!,
@@ -621,22 +749,7 @@ class _IdentityPageState extends State<IdentityPage> {
           maxLines: 3,
         ),
         const SizedBox(height: 20),
-        _cardTextField(
-          'postal_code',
-          'รหัสไปรษณีย์',
-          validator: _postal,
-          keyboardType: TextInputType.number,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(5),
-          ],
-        ),
-        const SizedBox(height: 20),
-        _cardTextField('province', 'จังหวัด'),
-        const SizedBox(height: 20),
-        _cardTextField('district', 'อำเภอ/เขต'),
-        const SizedBox(height: 20),
-        _cardTextField('subdistrict', 'ตำบล/แขวง'),
+        _addressFields(),
         const SizedBox(height: 24),
         IdentityPanel(
           color: IdentityColors.canvas,
@@ -718,7 +831,7 @@ class _IdentityPageState extends State<IdentityPage> {
       'unavailable' =>
         'ระบบกำลังทดลองเฉพาะบัญชีที่ได้รับเชิญ กรุณากลับมาใหม่ภายหลัง',
       _ =>
-        'บัตรหรือรอบถ่ายภาพเดิมหมดอายุ\nเตรียมบัตรปัจจุบันและเริ่มรอบใหม่ได้',
+        'รอบการยืนยันเดิมหมดอายุ\nเริ่มรอบใหม่เพื่อส่งข้อมูลให้เจ้าหน้าที่ตรวจ',
     };
     final icon = switch (kind) {
       'approved' => Icons.verified_rounded,
@@ -816,17 +929,7 @@ class _IdentityPageState extends State<IdentityPage> {
           IdentityPanel(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _summaryRow('สถานะ', 'ผ่านการอนุมัติ'),
-                _summaryRow(
-                  'ใช้ได้ถึง',
-                  status.profile['lifetime'] == true
-                      ? 'บัตรตลอดชีพ'
-                      : _dateText(
-                          status.profile['expires_on']?.toString() ?? '',
-                        ),
-                ),
-              ],
+              children: [_summaryRow('สถานะ', 'ผ่านการอนุมัติ')],
             ),
           ),
         ],
@@ -848,7 +951,6 @@ class _IdentityPageState extends State<IdentityPage> {
     if (['rejected', 'corrections', 'expired'].contains(status)) {
       return status as String;
     }
-    if (s.profile['status'] == 'approved') return 'expired';
     if (!s.available) return 'unavailable';
     return 'form';
   }
@@ -945,13 +1047,6 @@ class _IdentityPageState extends State<IdentityPage> {
                   onPressed: _back,
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
-                actions: [
-                  IconButton(
-                    tooltip: 'โหลดสถานะใหม่',
-                    onPressed: state.busy || _capturing ? null : _cubit.load,
-                    icon: const Icon(Icons.refresh_rounded, size: 22),
-                  ),
-                ],
               ),
               body: AbsorbPointer(
                 absorbing: state.busy || _capturing,

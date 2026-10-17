@@ -3,10 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/features/identity/data/asset_thai_address_repository.dart';
 import 'package:frontend/features/identity/domain/identity_repository.dart';
+import 'package:frontend/features/identity/domain/thai_address.dart';
 import 'package:frontend/features/identity/presentation/identity_cubit.dart';
 import 'package:frontend/features/identity/presentation/identity_page.dart';
 import 'package:frontend/features/identity/presentation/widgets/identity_camera_page.dart';
+
+late List<ThaiProvince> _thaiProvinces;
+
+class _TestAddressRepository implements ThaiAddressRepository {
+  bool fail = false;
+
+  @override
+  Future<List<ThaiProvince>> load() async {
+    if (fail) throw StateError('อ่าน asset ไม่สำเร็จ');
+    return _thaiProvinces;
+  }
+}
 
 class RolloutRepository implements IdentityRepository {
   RolloutRepository({Map<String, dynamic>? data})
@@ -63,6 +77,7 @@ Future<RolloutRepository> showPage(
   double scale = 1,
   IdentityCapture? capture,
   bool acceptConsent = true,
+  ThaiAddressRepository? addressRepository,
 }) async {
   final repo = repository ?? RolloutRepository();
   final cubit = IdentityCubit(repo);
@@ -79,6 +94,7 @@ Future<RolloutRepository> showPage(
       home: BlocProvider.value(
         value: cubit,
         child: IdentityPage(
+          addressRepository: addressRepository ?? _TestAddressRepository(),
           capture:
               capture ??
               (context, kind) async => base64Decode(
@@ -153,17 +169,31 @@ Uint8List testPhoto() => base64Decode(
 );
 
 Future<void> fillAddress(WidgetTester tester) async {
+  final detail = find.byKey(const ValueKey('address_detail'));
+  await tester.ensureVisible(detail);
+  await tester.enterText(detail, '99/1 หมู่ 2 ถนนทดสอบ');
   for (final entry in {
-    'address_detail': '99/1 หมู่ 2 ถนนทดสอบ',
-    'postal_code': '10200',
     'province': 'กรุงเทพมหานคร',
     'district': 'พระนคร',
     'subdistrict': 'บวรนิเวศ',
   }.entries) {
-    final field = find.byKey(ValueKey(entry.key));
-    await tester.ensureVisible(field);
-    await tester.enterText(field, entry.value);
+    await selectAddress(tester, entry.key, entry.value);
   }
+  await tester.pumpAndSettle();
+}
+
+Future<void> selectAddress(
+  WidgetTester tester,
+  String field,
+  String value,
+) async {
+  final target = find.byKey(ValueKey(field));
+  await tester.ensureVisible(target);
+  await tester.tap(target);
+  await tester.pumpAndSettle();
+  await tester.enterText(find.byKey(const ValueKey('address_search')), value);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(ValueKey('address_option:$value')));
   await tester.pumpAndSettle();
 }
 
@@ -188,6 +218,152 @@ Future<void> fillIdentity(
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    _thaiProvinces = await AssetThaiAddressRepository().load();
+  });
+
+  testWidgets(
+    'เลือกพื้นที่ตามลำดับ ค้นหาได้ และเปลี่ยนพื้นที่ล้างข้อมูลที่ขึ้นต่อกัน',
+    (tester) async {
+      await showPage(tester);
+      String text(String field) => tester
+          .widget<TextFormField>(find.byKey(ValueKey(field)))
+          .controller!
+          .text;
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const ValueKey('district')))
+            .enabled,
+        false,
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.descendant(
+                of: find.byKey(const ValueKey('province')),
+                matching: find.byType(TextField),
+              ),
+            )
+            .readOnly,
+        true,
+      );
+      await fillAddress(tester);
+      expect(text('postal_code'), '10200');
+      await confirm(tester);
+      await selectAddress(tester, 'district', 'หนองแขม');
+      expect(text('province'), 'กรุงเทพมหานคร');
+      expect(text('district'), 'หนองแขม');
+      expect(text('subdistrict'), isEmpty);
+      expect(text('postal_code'), isEmpty);
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('identity_confirmation')),
+            )
+            .value,
+        false,
+      );
+      await selectAddress(tester, 'subdistrict', 'หนองแขม');
+      expect(text('postal_code'), '10160');
+      await selectAddress(tester, 'province', 'เชียงใหม่');
+      expect(text('district'), isEmpty);
+      expect(text('subdistrict'), isEmpty);
+      expect(text('postal_code'), isEmpty);
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const ValueKey('subdistrict')))
+            .enabled,
+        false,
+      );
+      await selectAddress(tester, 'district', 'เมืองเชียงใหม่');
+      await selectAddress(tester, 'subdistrict', 'ศรีภูมิ');
+      expect(text('postal_code'), '50200');
+
+      final province = find.byKey(const ValueKey('province'));
+      await tester.ensureVisible(province);
+      await tester.tap(province);
+      await tester.pumpAndSettle();
+      final search = find.byKey(const ValueKey('address_search'));
+      await tester.enterText(search, 'ไม่มีจังหวัดชื่อนี้');
+      await tester.pumpAndSettle();
+      expect(find.text('ไม่พบข้อมูลที่ค้นหา'), findsOneWidget);
+      await tester.enterText(search, 'ภูเก็ต');
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('address_option:ภูเก็ต')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('address_option:กรุงเทพมหานคร')),
+        findsNothing,
+      );
+      await tester.tap(find.byTooltip('ปิดรายการ'));
+      await tester.pumpAndSettle();
+      expect(text('province'), 'เชียงใหม่');
+      expect(text('postal_code'), '50200');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'รหัสหลายตัวเลือกแก้เองได้ เก็บค่าตอนเปิดซ้ำ และส่งค่าที่แก้จริง',
+    (tester) async {
+      final repo = await showPage(tester);
+      await begin(tester);
+      await fillIdentity(tester);
+      await selectAddress(tester, 'district', 'ดุสิต');
+      await selectAddress(tester, 'subdistrict', 'สวนจิตรลดา');
+      final postal = find.byKey(const ValueKey('postal_code'));
+      String code() => tester.widget<TextFormField>(postal).controller!.text;
+      expect(code(), '10300');
+      final option = find.byKey(const ValueKey('postal_option:10303'));
+      await tester.ensureVisible(option);
+      await tester.tap(option);
+      await tester.pumpAndSettle();
+      expect(code(), '10303');
+      await confirm(tester);
+      await tester.ensureVisible(postal);
+      await tester.enterText(postal, '10301');
+      await tester.pumpAndSettle();
+      expect(tester.widget<ChoiceChip>(option).selected, false);
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('identity_confirmation')),
+            )
+            .value,
+        false,
+      );
+      await selectAddress(tester, 'subdistrict', 'สวนจิตรลดา');
+      expect(code(), '10301');
+      await confirm(tester);
+      await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+      expect(repo.submittedFields!['postal_code'], '10301');
+      expect(repo.submittedFields!['district'], 'ดุสิต');
+      expect(repo.submittedFields!['subdistrict'], 'สวนจิตรลดา');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets('โหลดข้อมูลพื้นที่ล้มเหลวลองใหม่ได้โดยไม่ล้างข้อมูลส่วนตัว', (
+    tester,
+  ) async {
+    final repository = _TestAddressRepository()..fail = true;
+    await showPage(tester, addressRepository: repository);
+    final firstName = find.byKey(const ValueKey('first_name'));
+    await tester.ensureVisible(firstName);
+    await tester.enterText(firstName, 'ทดสอบ');
+    expect(find.text('โหลดรายการที่อยู่ไม่สำเร็จ'), findsOneWidget);
+    repository.fail = false;
+    await tapText(tester, 'ลองอีกครั้ง');
+    await fillAddress(tester);
+    expect(find.text('ทดสอบ'), findsOneWidget);
+    expect(find.text('10200'), findsOneWidget);
+    expect(find.text('โหลดรายการที่อยู่ไม่สำเร็จ'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('กล้องถูกปฏิเสธสิทธิ์มีปุ่มตั้งค่าและลองใหม่', (tester) async {
     const camera = MethodChannel('plugins.flutter.io/camera');
     const permission = MethodChannel(
@@ -386,7 +562,10 @@ void main() {
     expect(find.byKey(const ValueKey('pick_birth_date')), findsOneWidget);
     expect(repo.begins, 0);
     expect(captures, isEmpty);
-    await tester.tap(find.byTooltip('โหลดสถานะใหม่'));
+    await tester
+        .element(find.byType(IdentityPage))
+        .read<IdentityCubit>()
+        .load();
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('identity_consent_dialog')), findsNothing);
     await tapText(tester, 'เงื่อนไขการใช้ข้อมูล');
@@ -779,7 +958,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
     await tapText(tester, 'ทำต่อ');
-    await tester.tap(find.byTooltip('โหลดสถานะใหม่'));
+    await tester
+        .element(find.byType(IdentityPage))
+        .read<IdentityCubit>()
+        .load();
     await tester.pumpAndSettle();
     expect(find.text('แก้ไข'), findsOneWidget);
     expect(find.text('10200'), findsOneWidget);

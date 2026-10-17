@@ -31,6 +31,9 @@ class RentalRequestRemoteDataSource {
           'end_at': draft.endAt.toUtc().toIso8601String(),
           'rental_type': draft.rentalType,
           'pickup_location': draft.pickupLocation.trim(),
+          if (draft.offerMessageId != null)
+            'offer_message_id': draft.offerMessageId,
+          if (draft.bookingId != null) 'booking_id': draft.bookingId,
         },
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -58,6 +61,39 @@ class RentalRequestRemoteDataSource {
     throw const RentalRequestRemoteException(
       'ข้อมูลคำขอเช่าที่ได้รับไม่ถูกต้อง',
     );
+  }
+
+  Future<RentalRequestResult> confirm({
+    required int rentalId,
+    required String offerMessageId,
+  }) async {
+    final token = AuthSession.accessToken;
+    if (token == null || token.isEmpty) {
+      throw const RentalRequestRemoteException(
+        'กรุณาเข้าสู่ระบบก่อนยืนยันการเช่า',
+      );
+    }
+    try {
+      final response = await _client.post(
+        '/api/rentals/$rentalId/confirm',
+        data: {'offer_message_id': offerMessageId},
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response.statusCode != 200) {
+        throw RentalRequestRemoteException(_serverMessage(response));
+      }
+      final data = _map(response.data);
+      final id = _int(data['id']);
+      final status = data['status']?.toString() ?? '';
+      if (id == null || id <= 0 || status.isEmpty) {
+        throw const RentalRequestRemoteException(
+          'ข้อมูลการยืนยันการเช่าไม่ถูกต้อง',
+        );
+      }
+      return RentalRequestResult(id: id, status: status);
+    } on ApiClientException catch (error) {
+      throw RentalRequestRemoteException(_networkMessage(error));
+    }
   }
 
   int? _int(Object? value) =>

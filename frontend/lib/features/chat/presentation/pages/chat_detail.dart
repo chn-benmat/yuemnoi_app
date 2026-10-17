@@ -575,10 +575,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       _conversation.role == ChatParticipantRole.renter;
 
   Future<void> _openBookingRequest([ItemInquiryData? activeInquiry]) async {
-    final latestInquiry = activeInquiry ??
-        _getLatestItemInquiry(
-          context.read<ChatDetailBloc>().state.messages,
-        );
+    if (!_isCurrentUserOwner) return;
+    final latestInquiry =
+        activeInquiry ??
+        _getLatestItemInquiry(context.read<ChatDetailBloc>().state.messages);
 
     final int itemId;
     final String title;
@@ -591,15 +591,15 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       title = latestInquiry.itemName.isNotEmpty
           ? latestInquiry.itemName
           : (_conversation.itemName?.isNotEmpty == true
-              ? _conversation.itemName!
-              : (_conversation.name.isNotEmpty
-                  ? 'อุปกรณ์จาก ${_conversation.name}'
-                  : 'อุปกรณ์เช่า'));
+                ? _conversation.itemName!
+                : (_conversation.name.isNotEmpty
+                      ? 'อุปกรณ์จาก ${_conversation.name}'
+                      : 'อุปกรณ์เช่า'));
       imageUrl = (latestInquiry.imageUrl?.isNotEmpty == true)
           ? latestInquiry.imageUrl!
           : (_conversation.itemImageUrl?.isNotEmpty == true
-              ? _conversation.itemImageUrl!
-              : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop');
+                ? _conversation.itemImageUrl!
+                : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop');
 
       final unit = (latestInquiry.unitLabel ?? '').toLowerCase();
       if (unit.contains('ชั่วโมง') || unit.contains('hour')) {
@@ -607,7 +607,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       } else if (unit.contains('วัน') || unit.contains('day')) {
         rentalType = BookingRentalType.daily;
       } else {
-        rentalType = (_conversation.itemRentalType == 'hourly' ||
+        rentalType =
+            (_conversation.itemRentalType == 'hourly' ||
                 _conversation.itemRentalType == 'hour' ||
                 _conversation.itemRentalType == 'รายชั่วโมง')
             ? BookingRentalType.hourly
@@ -622,12 +623,13 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       title = _conversation.itemName?.isNotEmpty == true
           ? _conversation.itemName!
           : (_conversation.name.isNotEmpty
-              ? 'อุปกรณ์จาก ${_conversation.name}'
-              : 'อุปกรณ์เช่า');
+                ? 'อุปกรณ์จาก ${_conversation.name}'
+                : 'อุปกรณ์เช่า');
       imageUrl = _conversation.itemImageUrl?.isNotEmpty == true
           ? _conversation.itemImageUrl!
           : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop';
-      rentalType = (_conversation.itemRentalType == 'hourly' ||
+      rentalType =
+          (_conversation.itemRentalType == 'hourly' ||
               _conversation.itemRentalType == 'hour' ||
               _conversation.itemRentalType == 'รายชั่วโมง')
           ? BookingRentalType.hourly
@@ -641,9 +643,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    final ownerDisplayName = _isCurrentUserOwner
-        ? 'ฉัน'
-        : _conversation.name;
+    final ownerDisplayName = _isCurrentUserOwner ? 'ฉัน' : _conversation.name;
 
     final itemInfo = BookingItemInfo(
       id: itemId,
@@ -661,7 +661,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       ownerName: ownerDisplayName,
     );
 
-    final currentUserId = SupabaseConfig.isConfigured && SupabaseConfig.isInitialized
+    final currentUserId =
+        SupabaseConfig.isConfigured && SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentUser?.id
         : null;
 
@@ -705,8 +706,6 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     return null;
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -723,14 +722,18 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                 prev.messages.length != curr.messages.length ||
                 prev.status != curr.status,
             builder: (context, state) {
-              final hasHandover = state.messages.any((m) =>
-                  m.message.contains('ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว') ||
-                  m.message.contains('เริ่มต้นช่วงเวลาเช่า') ||
-                  m.message.contains('ส่งมอบอุปกรณ์สำเร็จ'));
-              final hasReturn = state.messages.any((m) =>
-                  m.message.contains('ส่งคืนอุปกรณ์เรียบร้อย') ||
-                  m.message.contains('ตรวจรับคืนอุปกรณ์เรียบร้อย') ||
-                  m.message.contains('คืนของสำเร็จ'));
+              final hasHandover = state.messages.any(
+                (m) =>
+                    m.message.contains('ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว') ||
+                    m.message.contains('เริ่มต้นช่วงเวลาเช่า') ||
+                    m.message.contains('ส่งมอบอุปกรณ์สำเร็จ'),
+              );
+              final hasReturn = state.messages.any(
+                (m) =>
+                    m.message.contains('ส่งคืนอุปกรณ์เรียบร้อย') ||
+                    m.message.contains('ตรวจรับคืนอุปกรณ์เรียบร้อย') ||
+                    m.message.contains('คืนของสำเร็จ'),
+              );
 
               if (!hasHandover || hasReturn) {
                 return const SizedBox.shrink();
@@ -748,7 +751,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                 if (data != null) {
                   activeBooking = data;
                   activeMessage = m;
-                  activeBookingId = BookingConfirmationTracker.getCachedBookingId(m.id);
+                  activeBookingId =
+                      BookingConfirmationTracker.getCachedBookingId(m.id);
                   break;
                 }
               }
@@ -890,17 +894,32 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                 isFailed: state.failedMessageIds.contains(
                                   item.message.id,
                                 ),
-                                isOwner: _conversation.role ==
+                                isOwner:
+                                    _conversation.role ==
                                     ChatParticipantRole.renter,
-                                isHandoverCompleted: state.messages.any((m) =>
-                                    m.message.contains('ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว') ||
-                                    m.message.contains('เริ่มต้นช่วงเวลาเช่า') ||
-                                    m.message.contains('ส่งมอบอุปกรณ์สำเร็จ')),
-                                isReturnCompleted: state.messages.any((m) =>
-                                    m.message.contains('ส่งคืนอุปกรณ์เรียบร้อย') ||
-                                    m.message.contains('ตรวจรับคืนอุปกรณ์เรียบร้อย') ||
-                                    m.message.contains('คืนของสำเร็จ')),
-                                onSendBookingRequest: _openBookingRequest,
+                                isHandoverCompleted: state.messages.any(
+                                  (m) =>
+                                      m.message.contains(
+                                        'ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว',
+                                      ) ||
+                                      m.message.contains(
+                                        'เริ่มต้นช่วงเวลาเช่า',
+                                      ) ||
+                                      m.message.contains('ส่งมอบอุปกรณ์สำเร็จ'),
+                                ),
+                                isReturnCompleted: state.messages.any(
+                                  (m) =>
+                                      m.message.contains(
+                                        'ส่งคืนอุปกรณ์เรียบร้อย',
+                                      ) ||
+                                      m.message.contains(
+                                        'ตรวจรับคืนอุปกรณ์เรียบร้อย',
+                                      ) ||
+                                      m.message.contains('คืนของสำเร็จ'),
+                                ),
+                                onSendBookingRequest: _isCurrentUserOwner
+                                    ? _openBookingRequest
+                                    : null,
                                 onRetry: () {
                                   context.read<ChatDetailBloc>().add(
                                     ChatRetryMessageSent(
@@ -923,7 +942,9 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                       ChatMessageDeleted(
                                         conversationId: widget.conversation.id,
                                         messageId: id,
-                                        imageUrl: idsToDelete.length == 1 ? msg.imageUrl : null,
+                                        imageUrl: idsToDelete.length == 1
+                                            ? msg.imageUrl
+                                            : null,
                                       ),
                                     );
                                   }

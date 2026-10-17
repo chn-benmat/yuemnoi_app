@@ -17,5 +17,20 @@ class RentalRequestRepositoryImpl implements RentalRequestRepository {
   }
 
   @override
+  Future<RentalRequestResult> confirm({
+    required int rentalId,
+    required String offerMessageId,
+  }) async {
+    try {
+      return await remoteDataSource.confirm(
+        rentalId: rentalId,
+        offerMessageId: offerMessageId,
+      );
+    } on RentalRequestRemoteException catch (error) {
+      throw RentalRequestException(error.message);
+    }
+  }
+
+  @override
   void close() => remoteDataSource.close();
 }

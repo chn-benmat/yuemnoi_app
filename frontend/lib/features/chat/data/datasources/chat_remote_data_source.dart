@@ -63,7 +63,9 @@ class ChatRemoteDataSource {
       final existingConvs = await client
           .from('conversation_tb')
           .select('*')
-          .or('and(renter_id.eq.$currentUserId,owner_id.eq.$ownerId),and(renter_id.eq.$ownerId,owner_id.eq.$currentUserId)')
+          .or(
+            'and(renter_id.eq.$currentUserId,owner_id.eq.$ownerId),and(renter_id.eq.$ownerId,owner_id.eq.$currentUserId)',
+          )
           .order('last_message_at', ascending: false)
           .limit(1);
 
@@ -73,9 +75,10 @@ class ChatRemoteDataSource {
         // อัปเดต item_id เป็นอุปกรณ์ล่าสุดที่กดทักมา (ถ้ามีการระบุ itemId)
         if (itemId != null && itemId > 0) {
           try {
-            await client.from('conversation_tb').update({
-              'item_id': itemId,
-            }).eq('id', conversation['id']);
+            await client
+                .from('conversation_tb')
+                .update({'item_id': itemId})
+                .eq('id', conversation['id']);
             conversation['item_id'] = itemId;
           } catch (_) {}
         }
@@ -109,7 +112,8 @@ class ChatRemoteDataSource {
 
       // 4. ดึงข้อมูลอุปกรณ์ (หากมีการผูก item_id ไว้)
       final dynamic effectiveItemId =
-          conversation['item_id'] ?? (itemId != null && itemId > 0 ? itemId : null);
+          conversation['item_id'] ??
+          (itemId != null && itemId > 0 ? itemId : null);
       Map<String, dynamic>? item;
       if (effectiveItemId != null) {
         final parsedId = effectiveItemId is num
@@ -135,7 +139,9 @@ class ChatRemoteDataSource {
     } on PostgrestException catch (e) {
       throw ChatRemoteException('เกิดข้อผิดพลาดในการโหลดห้องแชท: ${e.message}');
     } catch (_) {
-      throw const ChatRemoteException('ไม่สามารถเชื่อมต่อห้องแชทได้ กรุณาลองใหม่');
+      throw const ChatRemoteException(
+        'ไม่สามารถเชื่อมต่อห้องแชทได้ กรุณาลองใหม่',
+      );
     }
   }
 
@@ -163,7 +169,9 @@ class ChatRemoteDataSource {
       if (otherId.isNotEmpty) {
         otherProfile = await client
             .from('public_profile_v')
-            .select('user_id,user_image_url,is_online,last_seen_at,display_name')
+            .select(
+              'user_id,user_image_url,is_online,last_seen_at,display_name',
+            )
             .eq('user_id', otherId)
             .maybeSingle();
       }
@@ -209,8 +217,8 @@ class ChatRemoteDataSource {
           .or('renter_id.eq.$currentUserId,owner_id.eq.$currentUserId')
           .order('last_message_at', ascending: false);
 
-      final allRawConversations =
-          (rawConversations as List).cast<Map<String, dynamic>>();
+      final allRawConversations = (rawConversations as List)
+          .cast<Map<String, dynamic>>();
       if (allRawConversations.isEmpty) return const [];
 
       // Deduplicate: รวมห้องแชทของคู่สนทนาคนเดียวกัน ให้แสดงเฉพาะห้องแชทล่าสุดเพียงห้องเดียว
@@ -251,7 +259,9 @@ class ChatRemoteDataSource {
         try {
           final profiles = await client
               .from('public_profile_v')
-              .select('user_id,user_image_url,is_online,last_seen_at,display_name')
+              .select(
+                'user_id,user_image_url,is_online,last_seen_at,display_name',
+              )
               .inFilter('user_id', otherUserIds.toList(growable: false));
           for (final p in (profiles as List).cast<Map<String, dynamic>>()) {
             final uid = p['user_id']?.toString();
@@ -295,27 +305,29 @@ class ChatRemoteDataSource {
             .toSet();
       } catch (_) {}
 
-      return conversations.map((conv) {
-        final convId = conv['id']?.toString() ?? '';
-        final renterId = conv['renter_id']?.toString() ?? '';
-        final ownerId = conv['owner_id']?.toString() ?? '';
-        final otherId = currentUserId == renterId ? ownerId : renterId;
+      return conversations
+          .map((conv) {
+            final convId = conv['id']?.toString() ?? '';
+            final renterId = conv['renter_id']?.toString() ?? '';
+            final ownerId = conv['owner_id']?.toString() ?? '';
+            final otherId = currentUserId == renterId ? ownerId : renterId;
 
-        int? itemId;
-        if (conv['item_id'] != null) {
-          itemId = conv['item_id'] is num
-              ? (conv['item_id'] as num).toInt()
-              : int.tryParse(conv['item_id'].toString());
-        }
+            int? itemId;
+            if (conv['item_id'] != null) {
+              itemId = conv['item_id'] is num
+                  ? (conv['item_id'] as num).toInt()
+                  : int.tryParse(conv['item_id'].toString());
+            }
 
-        return ChatConversationModel.fromRecords(
-          conversation: conv,
-          otherProfile: profilesMap[otherId],
-          item: itemId != null ? itemsMap[itemId] : null,
-          currentUserId: currentUserId,
-          hasUnreadMessage: unreadConvIds.contains(convId),
-        );
-      }).toList(growable: false);
+            return ChatConversationModel.fromRecords(
+              conversation: conv,
+              otherProfile: profilesMap[otherId],
+              item: itemId != null ? itemsMap[itemId] : null,
+              currentUserId: currentUserId,
+              hasUnreadMessage: unreadConvIds.contains(convId),
+            );
+          })
+          .toList(growable: false);
     } on ChatRemoteException {
       rethrow;
     } on PostgrestException catch (e) {
@@ -434,8 +446,10 @@ class ChatRemoteDataSource {
 
       final list = (records as List)
           .cast<Map<String, dynamic>>()
-          .map((json) =>
-              ChatMessageModel.fromJson(json, currentUserId: currentUserId))
+          .map(
+            (json) =>
+                ChatMessageModel.fromJson(json, currentUserId: currentUserId),
+          )
           .toList(growable: false);
 
       // Return messages in chronological order (oldest to newest)
@@ -460,22 +474,28 @@ class ChatRemoteDataSource {
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true)
-        .map((records) => records
-            .map((json) =>
-                ChatMessageModel.fromJson(json, currentUserId: currentUserId))
-            .toList())
+        .map(
+          (records) => records
+              .map(
+                (json) => ChatMessageModel.fromJson(
+                  json,
+                  currentUserId: currentUserId,
+                ),
+              )
+              .toList(),
+        )
         .handleError((error) {
           debugPrint('streamMessages connection error: $error');
         });
   }
-
 
   RealtimeChannel? _roomChannel;
   String? _activeRoomChannelConversationId;
 
   RealtimeChannel? getOrCreateRoomChannel(String conversationId) {
     if (!SupabaseConfig.isInitialized && _client == null) return null;
-    if (_roomChannel != null && _activeRoomChannelConversationId == conversationId) {
+    if (_roomChannel != null &&
+        _activeRoomChannelConversationId == conversationId) {
       return _roomChannel;
     }
     try {
@@ -505,7 +525,6 @@ class ChatRemoteDataSource {
     } catch (_) {}
   }
 
-
   Future<void> broadcastTypingStatus({
     required String conversationId,
     required bool isTyping,
@@ -514,17 +533,12 @@ class ChatRemoteDataSource {
       final channel = getOrCreateRoomChannel(conversationId);
       await channel?.sendBroadcastMessage(
         event: 'typing',
-        payload: {
-          'user_id': _currentUserId,
-          'is_typing': isTyping,
-        },
+        payload: {'user_id': _currentUserId, 'is_typing': isTyping},
       );
     } catch (_) {}
   }
 
-  Future<void> broadcastReadReceipt({
-    required String conversationId,
-  }) async {
+  Future<void> broadcastReadReceipt({required String conversationId}) async {
     try {
       final channel = getOrCreateRoomChannel(conversationId);
       await channel?.sendBroadcastMessage(
@@ -545,10 +559,7 @@ class ChatRemoteDataSource {
       final channel = getOrCreateRoomChannel(conversationId);
       await channel?.sendBroadcastMessage(
         event: 'message_deleted',
-        payload: {
-          'message_id': messageId,
-          'conversation_id': conversationId,
-        },
+        payload: {'message_id': messageId, 'conversation_id': conversationId},
       );
     } catch (_) {}
   }
@@ -562,10 +573,12 @@ class ChatRemoteDataSource {
     final currentUserId = _currentUserId;
     final extension = _extension(fileName);
     final path =
-        '$currentUserId/$conversationId/${DateTime.now().microsecondsSinceEpoch}.$extension';
+        '$conversationId/$currentUserId-${DateTime.now().microsecondsSinceEpoch}.$extension';
 
     try {
-      await client.storage.from(_chatBucket).uploadBinary(
+      await client.storage
+          .from(_chatBucket)
+          .uploadBinary(
             path,
             imageBytes,
             fileOptions: FileOptions(contentType: _contentType(extension)),
@@ -593,28 +606,37 @@ class ChatRemoteDataSource {
           ? '[รูปภาพ]'
           : message.trim();
 
-      final inserted = await client.from('chat_message_tb').insert({
-        'conversation_id': conversationId,
-        'sender_id': currentUserId,
-        'message': message.trim(),
-        'image_url': imageUrl,
-        'created_at': nowIso,
-      }).select('id').maybeSingle();
+      final inserted = await client
+          .from('chat_message_tb')
+          .insert({
+            'conversation_id': conversationId,
+            'sender_id': currentUserId,
+            'message': message.trim(),
+            'image_url': imageUrl,
+            'created_at': nowIso,
+          })
+          .select('id')
+          .maybeSingle();
 
       final newMsgId = inserted?['id']?.toString() ?? '';
 
-      await client.from('conversation_tb').update({
-        'last_message': displayLastMsg,
-        'last_message_at': nowIso,
-        'updated_at': nowIso,
-      }).eq('id', conversationId);
+      await client
+          .from('conversation_tb')
+          .update({
+            'last_message': displayLastMsg,
+            'last_message_at': nowIso,
+            'updated_at': nowIso,
+          })
+          .eq('id', conversationId);
 
       // ส่ง Push Notification ไปยังผู้รับในระบบ OS (ทำงานแบบ Background Non-blocking)
-      unawaited(sendChatPushNotification(
-        conversationId: conversationId,
-        message: displayLastMsg,
-        messageId: newMsgId,
-      ));
+      unawaited(
+        sendChatPushNotification(
+          conversationId: conversationId,
+          message: displayLastMsg,
+          messageId: newMsgId,
+        ),
+      );
     } on PostgrestException catch (e) {
       throw ChatRemoteException('ส่งข้อความไม่สำเร็จ: ${e.message}');
     } catch (_) {
@@ -694,27 +716,37 @@ class ChatRemoteDataSource {
         if (latestMsg != null) {
           final lastText = latestMsg['message']?.toString().trim() ?? '';
           final lastImg = latestMsg['image_url']?.toString();
-          final displayLastMsg = lastImg != null &&
+          final displayLastMsg =
+              lastImg != null &&
                   lastImg.isNotEmpty &&
                   (lastText.isEmpty || lastText == '📷 ส่งรูปภาพ')
               ? '[รูปภาพ]'
               : lastText;
-          final lastAt = latestMsg['created_at']?.toString() ??
+          final lastAt =
+              latestMsg['created_at']?.toString() ??
               DateTime.now().toUtc().toIso8601String();
 
-          await client.from('conversation_tb').update({
-            'last_message': displayLastMsg,
-            'last_message_at': lastAt,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          }).eq('id', conversationId);
+          await client
+              .from('conversation_tb')
+              .update({
+                'last_message': displayLastMsg,
+                'last_message_at': lastAt,
+                'updated_at': DateTime.now().toUtc().toIso8601String(),
+              })
+              .eq('id', conversationId);
         } else {
-          await client.from('conversation_tb').update({
-            'last_message': '',
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          }).eq('id', conversationId);
+          await client
+              .from('conversation_tb')
+              .update({
+                'last_message': '',
+                'updated_at': DateTime.now().toUtc().toIso8601String(),
+              })
+              .eq('id', conversationId);
         }
       } catch (e) {
-        debugPrint('Failed to update conversation last_message after delete: $e');
+        debugPrint(
+          'Failed to update conversation last_message after delete: $e',
+        );
       }
     } on PostgrestException catch (e) {
       throw ChatRemoteException('ลบข้อความไม่สำเร็จ: ${e.message}');
@@ -742,11 +774,14 @@ class ChatRemoteDataSource {
       if (conversationId != null && conversationId.isNotEmpty) {
         final nowIso = DateTime.now().toUtc().toIso8601String();
         try {
-          await client.from('conversation_tb').update({
-            'last_message': newMessage.trim(),
-            'last_message_at': nowIso,
-            'updated_at': nowIso,
-          }).eq('id', conversationId);
+          await client
+              .from('conversation_tb')
+              .update({
+                'last_message': newMessage.trim(),
+                'last_message_at': nowIso,
+                'updated_at': nowIso,
+              })
+              .eq('id', conversationId);
         } catch (_) {}
       }
     } on PostgrestException catch (e) {
@@ -756,9 +791,7 @@ class ChatRemoteDataSource {
     }
   }
 
-  Future<void> deleteConversation({
-    required String conversationId,
-  }) async {
+  Future<void> deleteConversation({required String conversationId}) async {
     final client = _supabaseClient;
     try {
       // 1. ค้นหาและลบรูปภาพทั้งหมดที่แนบในการสนทนานี้ออกจาก Supabase Storage
@@ -784,9 +817,7 @@ class ChatRemoteDataSource {
           try {
             await client.storage.from(_chatBucket).remove(imagePaths);
           } catch (e) {
-            debugPrint(
-              'Failed to delete conversation images from storage: $e',
-            );
+            debugPrint('Failed to delete conversation images from storage: $e');
           }
         }
       } catch (e) {
@@ -802,10 +833,7 @@ class ChatRemoteDataSource {
           .eq('conversation_id', conversationId);
 
       // 3. ลบห้องสนทนาในตาราง conversation_tb
-      await client
-          .from('conversation_tb')
-          .delete()
-          .eq('id', conversationId);
+      await client.from('conversation_tb').delete().eq('id', conversationId);
     } on PostgrestException catch (e) {
       throw ChatRemoteException('ลบการสนทนาไม่สำเร็จ: ${e.message}');
     } catch (_) {
@@ -908,13 +936,16 @@ class ChatRemoteDataSource {
               if (latestMsgRow == null) continue;
 
               final senderId = latestMsgRow['sender_id']?.toString() ?? '';
-              if (senderId == currentUserId) continue; // ข้อความที่ส่งโดยตัวเอง ไม่ต้องแจ้งเตือน
+              if (senderId == currentUserId)
+                continue; // ข้อความที่ส่งโดยตัวเอง ไม่ต้องแจ้งเตือน
 
               final otherId = currentUserId == renterId ? ownerId : renterId;
 
               final profile = await client
                   .from('public_profile_v')
-                  .select('user_id,user_image_url,is_online,last_seen_at,display_name')
+                  .select(
+                    'user_id,user_image_url,is_online,last_seen_at,display_name',
+                  )
                   .eq('user_id', otherId)
                   .maybeSingle();
 
@@ -935,7 +966,8 @@ class ChatRemoteDataSource {
                 hasUnreadMessage: true,
               );
 
-              final createdAt = DateTime.tryParse(
+              final createdAt =
+                  DateTime.tryParse(
                     latestMsgRow['created_at']?.toString() ?? '',
                   ) ??
                   DateTime.now();
@@ -961,7 +993,6 @@ class ChatRemoteDataSource {
         });
   }
 
-
   static String _extension(String fileName) {
     final index = fileName.lastIndexOf('.');
     if (index < 0 || index == fileName.length - 1) return 'jpg';
@@ -970,10 +1001,10 @@ class ChatRemoteDataSource {
   }
 
   static String _contentType(String extension) => switch (extension) {
-        'png' => 'image/png',
-        'webp' => 'image/webp',
-        _ => 'image/jpeg',
-      };
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    _ => 'image/jpeg',
+  };
 
   static String _extractCleanPushMessage(String raw) {
     final trimmed = raw.trim();
@@ -1015,4 +1046,3 @@ class IncomingChatMessageData {
   final DateTime createdAt;
   final ChatConversation conversation;
 }
-

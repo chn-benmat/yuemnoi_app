@@ -37,6 +37,10 @@ Go Backend เป็น REST API หลักของ **Yuemnoi** เชื่�
 
 การสร้างคำขอเช่าเรียก RPC `create_rental_request` ส่วน endpoint ส่งมอบ / รับคืนเปลี่ยนสถานะ booking เป็น `active` / `completed` ตามสิทธิ์และเงื่อนไขในโค้ด การหัก Wallet, คืนเงินมัดจำ และตรวจ OTP / QR ไม่ได้อยู่ใน handlers เหล่านี้ ต้องตรวจ logic ของฐานข้อมูลและระบบชำระเงินแยกก่อนอ้างว่า flow การเงินทำงานครบ
 
+การยืนยันข้อเสนอจากแชทมีสองขั้นตอน: `POST /api/rentals` พร้อม `offer_message_id` สร้างหรือเรียกใช้ booking เดิมเป็น `pending` และผูก `bookingId` / `status` ในข้อความเดิม จากนั้นเมื่อผู้เช่ากดปุ่ม “ยืนยันการเช่า” ในหน้าสรุป จึงเรียก `POST /api/rentals/:id/confirm` พร้อม `offer_message_id` เพื่อเปลี่ยนเป็น `confirmed` และเผยแพร่สถานะให้ทั้งสองเครื่อง Backend ตรวจผู้เช่า เจ้าของสินค้าจริง คู่สนทนา เงื่อนไขข้อเสนอ และเลข booking ที่ผูกกับข้อความซ้ำก่อนยืนยัน การเปิดหรือปิดหน้าสรุปไม่เปลี่ยนสถานะ การลองใหม่ใช้เลขรายการเดิมโดยไม่สร้างซ้ำ รายการ `pending` ยังไม่แสดงในหน้าสถานะการเช่า
+
+เงื่อนไขเทียบข้อความก่อนบันทึกใช้ PostgREST `eq` กับข้อความเดิมตรงตัว โดยเข้ารหัส URL เพื่อชดเชย SDK ที่ถอด encoding ก่อนส่ง ห้ามเติมอัญประกาศหรือ escape JSON ซ้ำ เพราะจะค้นได้ 0 แถวและทำให้ข้อเสนอที่ถูกต้องถูกปฏิเสธเป็น `invalid rental` กรณีทดสอบใน `rental_offer_test.go` ตรวจ filter จริงหลังถอด URL รวมข้อความไทย บรรทัดใหม่ และ JSON
+
 ### ภาพรวมการเชื่อมต่อ
 
 ```mermaid
@@ -242,6 +246,7 @@ Base path คือ `/api` เส้นทางทั้งหมดอยู�
 | `GET /items`, `GET /items/:id`                            | ฟีด / รายละเอียด           | ไม่ต้อง                               |
 | `POST /items`, `PUT /items/:id`, `DELETE /items/:id`      | จัดการอุปกรณ์              | ต้องมี; ตรวจเจ้าของ                   |
 | `POST /rentals`                                           | สร้างคำขอเช่า              | ต้องมี                                |
+| `POST /rentals/:id/confirm`                               | ผู้เช่ายืนยันข้อเสนอเป็น confirmed | ต้องมี; ตรวจผู้เช่าและข้อความข้อเสนอ |
 | `POST /rentals/:id/handover`, `POST /rentals/:id/return`  | เปลี่ยนสถานะ               | ต้องมี; ตรวจผู้มีสิทธิ์               |
 | `POST /chat/contact`, `POST /push/chat`                   | Contact / push             | ต้องมี                                |
 | `POST /chat-ai`, `POST /chat-ai/stream`                   | AI JSON / SSE              | handler ปัจจุบันไม่บังคับ user Bearer |
@@ -251,6 +256,7 @@ Base path คือ `/api` เส้นทางทั้งหมดอยู�
 - รายการสินค้าใช้ query `search` และ `category`; ยังไม่มี pagination แบบ `limit` / `offset` ใน handler ปัจจุบัน
 - สร้าง item รองรับ JSON หรือ multipart; field รูปชื่อ `images` ไม่เกิน **5 รูป**, รูปละ **5 MiB**, JPEG / PNG / WebP
 - รูปโปรไฟล์ใช้ multipart field `image` ไม่เกิน **5 MiB**
+- รูปสินค้าใหม่เก็บที่ `item_bk/<owner_user_id>/<item_id>/<filename>` หลังสร้างไอดีสินค้า ส่วนรูปโปรไฟล์ทั้งตอนสมัครและแก้ไขเก็บที่ `profile_bk/<user_id>/<filename>`; URL และการลบรูปเดิมยังอ้างอิง path ที่บันทึกไว้
 - Rate limiter ใช้ `golang.org/x/time/rate` เป็น token bucket **ต่อ client IP ใน memory**: Auth เติม 5/minute, burst 5; AI เติม 15/minute, burst 15 และตอบ 429 เมื่อเกิน กวาด IP ที่ไม่ได้ใช้งานระหว่างรับคำขอโดยไม่สร้าง background goroutine; หลาย server instance ยังไม่แชร์ตัวนับ
 - Supabase Auth / PostgREST / Storage จำกัดเวลาคำขอไว้ **60s** รวมการอ่าน response body และเคารพ context ที่หมดเวลาก่อน ส่วนการชดเชยไฟล์ / รายการหลังบันทึกล้มเหลวใช้ context แยกไม่เกิน **5s** เพื่อทำความสะอาดได้แม้คำขอหลักถูกยกเลิก การล้างข้อมูลเป็น best effort และมี warning หากไม่สำเร็จ รูปโปรไฟล์ที่ยังมีการอ้างอิงหรือตรวจสอบไม่ได้จะถูกเก็บไว้ และ rollback อุปกรณ์จะลบแถวสำเร็จก่อนล้างไฟล์
 - FCM จำกัดเวลางานส่งรวม **10s** รองรับ cancellation ทั้ง OAuth และ delivery SDK อาจ retry ข้อผิดพลาดชั่วคราวภายในเวลานี้ ลบ device token เฉพาะ error `UNREGISTERED` ที่ SDK ระบุชนิดได้; HTTP 404 ทั่วไปไม่ทำให้ token ถูกลบ
@@ -343,9 +349,9 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 
 แบบฟอร์มและหน้าสรุปของผู้ใช้ไม่มีช่องบัตรตลอดชีพหรือวันหมดอายุ Go ไม่รับค่าอายุบัตรจาก client โดยคำขอรอตรวจมี `expires_on = null`, `lifetime = false`, `analysis = {"review_mode":"manual"}` หน้าพนักงานอนุมัติผ่าน `identity-review` ด้วย `decision: "approved"`, `checked: true` โดยไม่ต้องส่งเหตุผลหรืออายุบัตร การปฏิเสธ/ขอข้อมูลเพิ่มยังต้องส่ง `reason` 3–500 ตัวอักษรและ `checked: true` คำสั่งอื่นยังบังคับเหตุผลตามเดิม
 
-ติดตั้ง [migration สำหรับฟอร์มอนุมัติ](../supabase/migrations/20261017083657_simplify_identity_approval.sql) เพื่อให้ฐานข้อมูลรองรับ contract นี้ คำขอและบัญชีที่อนุมัติโดยไม่ระบุอายุบัตรคง `expires_on = null`, `lifetime = false` และผ่านเงื่อนไขสิทธิ์หลังตรวจหลักฐาน ระบบยังรองรับหน้าพนักงานรุ่นเดิมที่ส่งอายุบัตรและยังตรวจวันหมดอายุที่เคยบันทึกไว้ การอนุมัติยังตรวจสิทธิ์เจ้าหน้าที่ ห้ามตรวจคำขอตนเอง ตรวจข้อมูลซ้ำ บันทึก audit และกำหนดเวลาลบหลักฐานตามเดิม ทดสอบ contract แบบ rollback ได้ด้วย [ชุดทดสอบ SQL](../supabase/tests/identity_approval.sql)
+ติดตั้ง [migration สำหรับฟอร์มอนุมัติ](../supabase/migrations/20261017083657_simplify_identity_approval.sql) และ [migration ยกเลิกอายุบัตร](../supabase/migrations/20261017132150_remove_identity_card_expiry.sql) เพื่อให้ฐานข้อมูลรองรับ contract นี้ ผลอนุมัติและสิทธิ์ปล่อยเช่าไม่ตรวจวันหมดอายุบัตร รวมถึงวันที่เดิมและค่าจาก client รุ่นเก่า คำขอที่อนุมัติใหม่เก็บ `expires_on = null`, `lifetime = false` เพื่อรองรับ schema เดิม การอนุมัติยังตรวจสิทธิ์เจ้าหน้าที่ ห้ามตรวจคำขอตนเอง ตรวจข้อมูลซ้ำ บันทึก audit และกำหนดเวลาลบหลักฐานตามเดิม ทดสอบ contract แบบ rollback ได้ด้วย [ชุดทดสอบ SQL](../supabase/tests/identity_approval.sql)
 
-ติดตั้ง [migration สำหรับทุกวัย](../supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql) ก่อนใช้งาน Backend และ Admin รุ่นนี้ การอนุมัติยังตรวจสิทธิ์พนักงาน ห้ามตรวจคำขอตนเอง ตรวจข้อมูลซ้ำ พร้อมบันทึก audit และคงการตรวจอายุบัตรของบัญชีที่อนุมัติแล้ว
+ติดตั้ง [migration สำหรับทุกวัย](../supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql) ก่อนใช้งาน Backend และ Admin รุ่นนี้ การอนุมัติยังตรวจสิทธิ์พนักงาน ห้ามตรวจคำขอตนเอง ตรวจข้อมูลซ้ำ พร้อมบันทึก audit
 
 การส่งคำขอยืนยันลงทะเบียนหลักฐานก่อนอัปโหลดภาพบัตรและใบหน้าพร้อมกัน โดยใช้คนละ object path รอทั้งสองงานจบก่อนเรียก `identity_submit` หรือ rollback หากอัปโหลดงานหนึ่งล้มเหลวจะรออีกงานจบก่อนลบทั้งสอง path เพื่อไม่ให้ cleanup แข่งกับ worker ที่ยังอัปโหลดอยู่ คง context และ timeout ของ Storage เดิม รวมถึงงาน cleanup ตามกำหนดเผื่อ remote upload ที่หมดเวลาฝั่ง client การตรวจสิทธิ์ การเข้ารหัส และการอนุมัติโดยเจ้าหน้าที่คงเดิม ฝั่ง Flutter แสดงรับคำขอเมื่อ submit สำเร็จและโหลดสถานะล่าสุดต่อเบื้องหลัง
 
@@ -372,4 +378,4 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 
 ---
 
-นโยบายทุกวัยใช้ migration `supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql` ยกเลิกการใช้ `is_minor` จำกัดลงประกาศ/จอง/อนุมัติตัวตนทั้ง Go guard และ database triggers รวมถึงถอด API `/api/identity/guardians`, คิวและคำสั่งผู้ปกครองจากระบบเจ้าหน้าที่ ข้อมูลประวัติผู้ปกครองและหลักฐานเก่ายังเก็บตามรอบลบเดิม การตรวจตัวตนโดยเจ้าหน้าที่ บัตรหมดอายุ และการระงับบัญชียังทำงานทุกวัย
+นโยบายทุกวัยใช้ migration `supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql` ยกเลิกการใช้ `is_minor` จำกัดลงประกาศ/จอง/อนุมัติตัวตนทั้ง Go guard และ database triggers รวมถึงถอด API `/api/identity/guardians`, คิวและคำสั่งผู้ปกครองจากระบบเจ้าหน้าที่ ข้อมูลประวัติผู้ปกครองและหลักฐานเก่ายังเก็บตามรอบลบเดิม การตรวจตัวตนโดยเจ้าหน้าที่และการระงับบัญชียังทำงานทุกวัย

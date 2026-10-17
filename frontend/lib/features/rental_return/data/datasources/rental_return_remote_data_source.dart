@@ -12,7 +12,7 @@ class RentalReturnRemoteDataSource {
   final SupabaseClient? _customClient;
 
   RentalReturnRemoteDataSource({SupabaseClient? client})
-      : _customClient = client;
+    : _customClient = client;
 
   SupabaseClient? get _client =>
       _customClient ??
@@ -29,7 +29,9 @@ class RentalReturnRemoteDataSource {
       int itemId = 0;
       String renterId = '';
       DateTime startAt = DateTime.now().subtract(const Duration(hours: 4));
-      DateTime endAt = DateTime.now().add(const Duration(hours: 2, minutes: 15));
+      DateTime endAt = DateTime.now().add(
+        const Duration(hours: 2, minutes: 15),
+      );
       String pickupLocation = 'จุดนัดพบที่ตกลงไว้ (สยามพารากอน ชั้น 3)';
       double totalPrice = 1000.0;
       int activeRentalId = rentalId ?? 0;
@@ -73,8 +75,10 @@ class RentalReturnRemoteDataSource {
           endAt = DateTime.tryParse(endAtStr.toString()) ?? endAt;
         }
 
-        pickupLocation = bookingResp['pickup_location']?.toString() ?? pickupLocation;
-        totalPrice = (bookingResp['total_price'] as num?)?.toDouble() ??
+        pickupLocation =
+            bookingResp['pickup_location']?.toString() ?? pickupLocation;
+        totalPrice =
+            (bookingResp['total_price'] as num?)?.toDouble() ??
             (bookingResp['price'] as num?)?.toDouble() ??
             1000.0;
       } else if (activeRentalId > 0) {
@@ -117,7 +121,8 @@ class RentalReturnRemoteDataSource {
               .eq('user_id', lenderId)
               .maybeSingle();
           if (lenderProfile != null) {
-            final displayName = lenderProfile['display_name']?.toString().trim() ?? '';
+            final displayName =
+                lenderProfile['display_name']?.toString().trim() ?? '';
             final email = lenderProfile['email']?.toString() ?? '';
             if (displayName.isNotEmpty) {
               lenderName = displayName;
@@ -162,7 +167,8 @@ class RentalReturnRemoteDataSource {
         final depositAmount = (itemPrice * 2.5).clamp(1000.0, 15000.0);
 
         final effectiveOrderId = activeRentalId > 0 ? activeRentalId : 1024;
-        final orderChallenge = 'YM-${effectiveOrderId.toString().padLeft(5, '0')}';
+        final orderChallenge =
+            'YM-${effectiveOrderId.toString().padLeft(5, '0')}';
         final category = itemData['category']?.toString() ?? 'ทั่วไป';
 
         // ตรวจสอบว่ามี return_photos ที่ลูกค้าเคยส่งไว้ใน booking_tb หรือไม่
@@ -170,17 +176,25 @@ class RentalReturnRemoteDataSource {
         final rawPhotos = bookingResp?['return_photos'];
         if (rawPhotos != null && rawPhotos.toString().isNotEmpty) {
           try {
-            final decoded = rawPhotos is List ? rawPhotos : jsonDecode(rawPhotos.toString());
+            final decoded = rawPhotos is List
+                ? rawPhotos
+                : jsonDecode(rawPhotos.toString());
             if (decoded is List) {
               photos = decoded.map((item) {
-                final map = item is Map<String, dynamic> ? item : Map<String, dynamic>.from(item as Map);
+                final map = item is Map<String, dynamic>
+                    ? item
+                    : Map<String, dynamic>.from(item as Map);
                 return ReturnInspectionPhoto(
                   angleKey: map['angleKey']?.toString() ?? 'angle_1',
-                  angleTitle: map['angleTitle']?.toString() ?? 'ภาพถ่ายสภาพเครื่อง',
+                  angleTitle:
+                      map['angleTitle']?.toString() ?? 'ภาพถ่ายสภาพเครื่อง',
                   localPath: map['localPath']?.toString(),
                   imageUrl: map['imageUrl']?.toString(),
-                  challengeCode: map['challengeCode']?.toString() ?? orderChallenge,
-                  timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? '') ?? DateTime.now(),
+                  challengeCode:
+                      map['challengeCode']?.toString() ?? orderChallenge,
+                  timestamp:
+                      DateTime.tryParse(map['timestamp']?.toString() ?? '') ??
+                      DateTime.now(),
                   locationText: map['locationText']?.toString(),
                 );
               }).toList();
@@ -195,17 +209,24 @@ class RentalReturnRemoteDataSource {
           photos = _buildPhotosForCategory(category, orderChallenge);
         }
 
-        final dbStatus = bookingResp?['status']?.toString().toLowerCase().trim();
+        final dbStatus = bookingResp?['status']
+            ?.toString()
+            .toLowerCase()
+            .trim();
         RentalReturnStep initialStep = RentalReturnStep.inProgress;
         if (dbStatus == 'คืนของสำเร็จ' || dbStatus == 'completed') {
           initialStep = RentalReturnStep.completed;
-        } else if (photos.any((p) => p.hasPhoto) || dbStatus == 'รอส่งคืน' || dbStatus == 'awaiting_return') {
+        } else if (photos.any((p) => p.hasPhoto) ||
+            dbStatus == 'รอส่งคืน' ||
+            dbStatus == 'awaiting_return') {
           initialStep = RentalReturnStep.lenderInspecting;
         }
 
         return RentalReturnSession(
           rentalId: effectiveOrderId,
-          itemName: itemData['item_name']?.toString() ?? 'อุปกรณ์เช่า #${effectiveOrderId.toString().padLeft(5, '0')}',
+          itemName:
+              itemData['item_name']?.toString() ??
+              'อุปกรณ์เช่า #${effectiveOrderId.toString().padLeft(5, '0')}',
           itemImageUrl: mainImageUrl,
           category: category,
           renterId: renterId,
@@ -229,14 +250,19 @@ class RentalReturnRemoteDataSource {
         );
       }
     } catch (e) {
-      debugPrint('Warning fetching session from Supabase: $e. Falling back to mock session.');
+      debugPrint(
+        'Warning fetching session from Supabase: $e. Falling back to mock session.',
+      );
     }
 
     // หากไม่พบในฐานข้อมูล ให้ใช้ Mock Session ที่จำลองตาม rentalId อย่างแม่นยำ
     return RentalReturnSession.createMockSession(rentalId: rentalId ?? 1024);
   }
 
-  List<ReturnInspectionPhoto> _buildPhotosForCategory(String category, String challengeCode) {
+  List<ReturnInspectionPhoto> _buildPhotosForCategory(
+    String category,
+    String challengeCode,
+  ) {
     final now = DateTime.now();
     final catLower = category.toLowerCase();
 
@@ -282,7 +308,8 @@ class RentalReturnRemoteDataSource {
           timestamp: now,
         ),
       ];
-    } else if (catLower.contains('แล็ปท็อป') || catLower.contains('คอมพิวเตอร์')) {
+    } else if (catLower.contains('แล็ปท็อป') ||
+        catLower.contains('คอมพิวเตอร์')) {
       return [
         ReturnInspectionPhoto(
           angleKey: 'angle_1',
@@ -337,18 +364,36 @@ class RentalReturnRemoteDataSource {
       final client = _client;
       if (client == null) return photoPath;
 
+      final booking = await client
+          .from('booking_tb')
+          .select('item_id')
+          .eq('id', rentalId)
+          .single();
+      final itemId = (booking['item_id'] as num).toInt();
+      final item = await client
+          .from('item_tb')
+          .select('user_id')
+          .eq('id', itemId)
+          .single();
+      final ownerId = item['user_id'] as String;
+
       final fileName =
-          'return_${rentalId}_${angleKey}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final path = 'return_inspections/$fileName';
+          'return_${rentalId}_${angleKey}_${DateTime.now().microsecondsSinceEpoch}.jpg';
+      final path = '$ownerId/$itemId/$fileName';
 
       // อ่าน bytes ซึ่งทำงานได้ทั้ง Web และ Mobile
       final bytes = await XFile(photoPath).readAsBytes();
 
       // อัปโหลดไปยัง bucket 'item_bk'
-      await client.storage.from('item_bk').uploadBinary(
+      await client.storage
+          .from('item_bk')
+          .uploadBinary(
             path,
             bytes,
-            fileOptions: FileOptions(cacheControl: '3600', upsert: true),
+            fileOptions: FileOptions(
+              cacheControl: '3600',
+              contentType: 'image/jpeg',
+            ),
           );
 
       return client.storage.from('item_bk').getPublicUrl(path);
@@ -397,14 +442,19 @@ class RentalReturnRemoteDataSource {
       }
 
       final photosJson = jsonEncode(photosData);
-      final challengeCode = photos.isNotEmpty ? photos.first.challengeCode : 'YM-${rentalId.toString().padLeft(5, '0')}';
+      final challengeCode = photos.isNotEmpty
+          ? photos.first.challengeCode
+          : 'YM-${rentalId.toString().padLeft(5, '0')}';
 
-      await client.from('booking_tb').update({
-        'status': 'รอส่งคืน',
-        'return_photos': photosJson,
-        'challenge_code': challengeCode,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', rentalId);
+      await client
+          .from('booking_tb')
+          .update({
+            'status': 'รอส่งคืน',
+            'return_photos': photosJson,
+            'challenge_code': challengeCode,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', rentalId);
     } catch (e) {
       debugPrint('Note updating booking status and return photos: $e');
     }
@@ -415,10 +465,7 @@ class RentalReturnRemoteDataSource {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final otp = (100000 + Random().nextInt(900000)).toString();
     final token = 'YUEMNOI_RETURN_${rentalId}_${otp}_$timestamp';
-    return {
-      'token': token,
-      'otp': otp,
-    };
+    return {'token': token, 'otp': otp};
   }
 
   /// บันทึกการคืนของเสร็จสมบูรณ์
@@ -427,10 +474,13 @@ class RentalReturnRemoteDataSource {
       final client = _client;
       if (client == null) return;
 
-      await client.from('booking_tb').update({
-        'status': 'คืนของสำเร็จ',
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', rentalId);
+      await client
+          .from('booking_tb')
+          .update({
+            'status': 'คืนของสำเร็จ',
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', rentalId);
     } catch (e) {
       debugPrint('Note updating booking completion: $e');
     }

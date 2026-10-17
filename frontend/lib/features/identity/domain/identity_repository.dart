@@ -40,14 +40,8 @@ class IdentityStatus {
     return control?['suspended'] == true;
   }
 
-  bool get verified {
-    if (profile['status'] != 'approved') return false;
-    if (profile['lifetime'] == true) return true;
-    final expiry = DateTime.tryParse(profile['expires_on']?.toString() ?? '');
-    final today = DateTime.now();
-    return expiry != null &&
-        !expiry.isBefore(DateTime(today.year, today.month, today.day));
-  }
+  // ผลอนุมัติของเจ้าหน้าที่ไม่ผูกกับวันหมดอายุบัตร
+  bool get verified => profile['status'] == 'approved';
 }
 
 abstract interface class IdentityRepository {
