@@ -8,8 +8,36 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	supabaseclient "github.com/nedpals/supabase-go"
 )
+
+func TestAppTokenAccessUsesCurrentTrustedMetadata(t *testing.T) {
+	dashboardOnly := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/v1/user" || r.Header.Get("Authorization") != "Bearer existing-token" || r.Header.Get("apikey") != "test-key" {
+			t.Errorf("unexpected identity request")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":            "existing-user",
+			"app_metadata":  map[string]any{"dashboard_only": dashboardOnly},
+			"user_metadata": map[string]any{"dashboard_only": true},
+		})
+	}))
+	defer server.Close()
+	repository := NewSupabaseUserRepository(supabaseclient.CreateClient(server.URL, "test-key"), "test-key")
+	if _, err := repository.AppUserIDFromToken(context.Background(), "existing-token"); err != nil {
+		t.Fatalf("regular user with editable metadata was blocked: %v", err)
+	}
+	dashboardOnly = true
+	if _, err := repository.AppUserIDFromToken(context.Background(), "existing-token"); err != domain.ErrDashboardOnly {
+		t.Fatalf("existing app token error = %v, want dashboard_only", err)
+	}
+	if id, err := repository.UserIDFromToken(context.Background(), "existing-token"); err != nil || id != "existing-user" {
+		t.Fatalf("dashboard identity changed: id=%q err=%v", id, err)
+	}
+}
 
 func TestChangePasswordSendsAuthenticatedUpdateRequest(t *testing.T) {
 	var requestBody struct {

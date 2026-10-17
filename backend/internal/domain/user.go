@@ -6,6 +6,7 @@ import (
 )
 
 var ErrInvalidAccessToken = errors.New("invalid access token")
+var ErrDashboardOnly = errors.New("dashboard_only")
 
 // RegisterUser contains all data required to create an Auth user and an
 // optional profile image. DisplayName is stored as Auth user metadata, Phone
@@ -75,4 +76,5 @@ type TokenVerifier interface {
 type AuthGateway interface {
 	AuthRepository
 	TokenVerifier
+	AppUserIDFromToken(ctx context.Context, userToken string) (string, error)
 }

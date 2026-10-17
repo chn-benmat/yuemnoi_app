@@ -53,7 +53,8 @@ func SetupRouterWithOperations(
 		return c.Next()
 	})
 	router.Use(verifyAppSecret(appSecretKey))
-	router.Use(operationsBusinessGuard(operations, authGateway))
+	appGateway := appTokenVerifier{authGateway}
+	router.Use(operationsBusinessGuard(operations, appGateway))
 
 	// Health check สำหรับ Docker และระบบเฝ้าระวัง โดยไม่เปิดเผยข้อมูลภายใน
 	router.Get("/health", func(c fiber.Ctx) error {
@@ -65,12 +66,12 @@ func SetupRouterWithOperations(
 	aiRateLimiter := NewRateLimiter(15.0/60.0, 15.0) // 15 ครั้งต่อนาทีสำหรับ AI
 
 	// นำเข้าคอนโทรลเลอร์ต่างๆ
-	itemController := NewItemHandler(itemRepo, authGateway)
-	rentalController := NewRentalHandler(rentalRepository, authGateway)
-	userController := NewUserHandler(authGateway)
-	pushController := NewPushHandler(pushSender, authGateway)
-	chatContactController := NewChatContactHandler(contactRepository, authGateway)
-	chatbotController := NewChatbotHandler(aiGateway, authGateway)
+	itemController := NewItemHandler(itemRepo, appGateway)
+	rentalController := NewRentalHandler(rentalRepository, appGateway)
+	userController := NewUserHandler(appGateway)
+	pushController := NewPushHandler(pushSender, appGateway)
+	chatContactController := NewChatContactHandler(contactRepository, appGateway)
+	chatbotController := NewChatbotHandler(aiGateway, appGateway)
 
 	// จัดการกลุ่มเส้นทาง API
 	api := router.Group("/api")
@@ -83,6 +84,7 @@ func SetupRouterWithOperations(
 			user.Post("/register", authRateLimit, userController.Register)
 			// POST /api/auth/login
 			user.Post("/login", authRateLimit, userController.Login)
+			user.Get("/session", userController.Session)
 			// POST /api/auth/google-profile
 			user.Post("/google-profile", authRateLimit, userController.SyncGoogleProfileImage)
 			// POST /api/auth/change-password
@@ -151,15 +153,17 @@ func SetupRouterWithOperations(
 		}
 	}
 
-	operationsHandler := NewOperationsHandler(operations, authGateway)
+	operationsHandler := NewOperationsHandler(operations, appGateway)
+	adminHandler := NewOperationsHandler(operations, authGateway)
 	identityLimit := RateLimitMiddleware(NewRateLimiter(5.0/60.0, 5), "ส่งคำขอถี่เกินไป กรุณารอสักครู่")
+	router.Post("/api/admin/login", RateLimitMiddleware(authRateLimiter, "กรุณารอสักครู่แล้วลองใหม่"), dashboardLogin(authGateway, operations.Store))
 	router.Get("/api/identity/status", operationsHandler.Status)
 	router.Post("/api/identity/sessions", identityLimit, operationsHandler.Begin)
 	router.Post("/api/identity/sessions/:id/submit", identityLimit, operationsHandler.Submit)
 	router.Post("/api/complaints", identityLimit, operationsHandler.Complaint)
-	router.Get("/api/admin/evidence/:id", operationsHandler.Evidence)
-	router.Get("/api/admin/:module", operationsHandler.Read)
-	router.Post("/api/admin/actions/:action/:target", operationsHandler.Action)
+	router.Get("/api/admin/evidence/:id", adminHandler.Evidence)
+	router.Get("/api/admin/:module", adminHandler.Read)
+	router.Post("/api/admin/actions/:action/:target", adminHandler.Action)
 	return router
 }
 

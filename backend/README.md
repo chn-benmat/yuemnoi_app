@@ -49,6 +49,8 @@ flowchart LR
 
 Frontend ยังใช้ Supabase โดยตรงในบางฟีเจอร์ รายละเอียดอยู่ใน [Frontend README](../frontend/README.md)
 
+บัญชีที่มี `app_metadata.dashboard_only = true` ใช้ได้เฉพาะ dashboard: `POST /api/auth/login`, OTP และ API ส่วนตัวของแอปตอบ HTTP 403 พร้อม `code: dashboard_only` โดยตรวจ metadata ปัจจุบันจาก Supabase Auth ทุกครั้ง `GET /api/auth/session` ใช้ตรวจ OAuth และ session ที่กู้คืน ส่วน dashboard ใช้ `POST /api/admin/login` และตรวจสิทธิ์เจ้าหน้าที่ก่อนคืน token ใช้ [migration](../supabase/migrations/20261017094213_restrict_dashboard_only_accounts.sql) เพื่อกำหนดบัญชี `admin_yuemnoi@gmail.com` และบังคับ RLS สำหรับการเข้าถึง Supabase โดยตรงด้วย JWT เดิม ทดสอบฐานข้อมูลแบบ rollback ได้ด้วย [dashboard_only_access.sql](../supabase/tests/dashboard_only_access.sql)
+
 <a id="stack"></a>
 
 ## 🧰 Tech stack & versions
