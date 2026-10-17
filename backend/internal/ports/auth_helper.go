@@ -1,12 +1,32 @@
 package ports
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/gofiber/fiber/v3"
 )
+
+const dashboardOnlyMessage = "บัญชีนี้ใช้ได้เฉพาะ Dashboard สำหรับเจ้าหน้าที่ กรุณาใช้บัญชีผู้ใช้ทั่วไปในแอป"
+
+// แยกตัวตรวจสิทธิ์ของแอปจาก dashboard แม้ใช้ผู้ให้บริการ Auth เดียวกัน
+type appTokenVerifier struct {
+	domain.AuthGateway
+}
+
+func (v appTokenVerifier) UserIDFromToken(ctx context.Context, token string) (string, error) {
+	return v.AppUserIDFromToken(ctx, token)
+}
+
+func appTokenError(c fiber.Ctx, err error) error {
+	if errors.Is(err, domain.ErrDashboardOnly) {
+		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": dashboardOnlyMessage, "code": "dashboard_only"})
+	}
+	return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Access Token ไม่ถูกต้องหรือหมดอายุ"})
+}
 
 // extractToken สกัดเอา JWT Token ออกจาก Authorization Header (Bearer <token>)
 func extractToken(c fiber.Ctx) (string, bool) {
@@ -38,7 +58,7 @@ func authenticatedUserID(c fiber.Ctx, verifier domain.TokenVerifier) (string, bo
 
 	userID, err := verifier.UserIDFromToken(c.Context(), token)
 	if err != nil || strings.TrimSpace(userID) == "" {
-		_ = c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Access Token ไม่ถูกต้องหรือหมดอายุ"})
+		_ = appTokenError(c, err)
 		return "", false
 	}
 

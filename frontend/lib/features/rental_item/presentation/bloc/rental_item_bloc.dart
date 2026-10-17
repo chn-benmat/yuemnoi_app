@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/services/item_catalog_service.dart';
 import '../../domain/repositories/rental_item_repository.dart';
 import '../../domain/usecases/create_rental_item_usecase.dart';
 import 'rental_item_event.dart';
@@ -73,6 +74,7 @@ class RentalItemBloc extends Bloc<RentalItemEvent, RentalItemState> {
           createdItem: item,
         ),
       );
+      ItemCatalogService.instance.notifyChanged();
     } on RentalItemException catch (error) {
       emit(
         state.copyWith(

@@ -897,6 +897,30 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('เลขบัตรต้องครบ 13 หลักแล้วส่งให้เจ้าหน้าที่โดยไม่ตรวจสูตร', (
+    tester,
+  ) async {
+    final repo = await showPage(tester);
+    await begin(tester);
+    await fillIdentity(tester);
+    final citizen = find.byKey(const ValueKey('citizen_id'));
+    await tester.ensureVisible(citizen);
+    await tester.enterText(citizen, '123456789000');
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.submits, 0);
+    expect(find.text('กรอกเลขบัตร 13 หลักให้ครบ'), findsOneWidget);
+
+    await tester.ensureVisible(citizen);
+    await tester.enterText(citizen, '1234567890000');
+    await confirm(tester);
+    await tapText(tester, 'ส่งคำขอยืนยันตัวตน');
+    expect(repo.submits, 1);
+    expect(repo.submittedFields!['citizen_id'], '1234567890000');
+    expect(find.text('รับคำขอของคุณแล้ว'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('ข้อมูลอื่นยังว่างไม่ส่งและเลื่อนไปข้อผิดพลาดแรก', (
     tester,
   ) async {

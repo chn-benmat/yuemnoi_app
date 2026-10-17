@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
     hide AuthApiException, AuthState;
 
 import '../../../../core/network/auth_session.dart';
+import '../../../../core/network/app_session_validator.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/chat_notification_service.dart';
 import '../../../../core/services/fcm_service.dart';
@@ -23,10 +24,15 @@ import 'auth_state.dart';
 /// BLoC จัดการข้อมูลและการโต้ตอบต่างๆ ในส่วนของการยืนยันตัวตน
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository authRepository;
+  final AppSessionValidator _sessionValidator;
   StreamSubscription? _authStateSubscription;
   bool _signInHandled = false;
 
-  AuthBloc({required this.authRepository}) : super(const AuthInitial()) {
+  AuthBloc({
+    required this.authRepository,
+    AppSessionValidator? sessionValidator,
+  }) : _sessionValidator = sessionValidator ?? AppSessionValidator(),
+       super(const AuthInitial()) {
     on<AuthLoginRequested>(_onLoginRequested);
     on<AuthGoogleLoginRequested>(_onGoogleLoginRequested);
     on<AuthRegisterRequested>(_onRegisterRequested);
@@ -41,8 +47,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       _authStateSubscription = SupabaseConfig.client.auth.onAuthStateChange
           .listen(
             (authState) {
-              if (authState.event == AuthChangeEvent.signedIn &&
+              if ((authState.event == AuthChangeEvent.signedIn ||
+                      authState.event == AuthChangeEvent.tokenRefreshed) &&
                   authState.session != null) {
+                if (authState.event == AuthChangeEvent.tokenRefreshed) {
+                  _signInHandled = false;
+                }
                 add(AuthAuthStateChanged(authState.session!));
               }
             },
@@ -204,7 +214,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (_signInHandled) return;
     _signInHandled = true;
 
-    AuthSession.saveAccessToken(event.session.accessToken);
+    try {
+      await AuthSession.accept(event.session, validator: _sessionValidator);
+    } on AppSessionException catch (error) {
+      _signInHandled = false;
+      if (error.rejected) await AuthSession.reject();
+      emit(LoginFailure(message: error.message));
+      return;
+    } catch (_) {
+      _signInHandled = false;
+      AuthSession.clear();
+      emit(
+        const LoginFailure(
+          message: 'ไม่สามารถตรวจสอบสิทธิ์เข้าแอปได้ กรุณาลองใหม่',
+        ),
+      );
+      return;
+    }
     final isGoogle = _signedInWithGoogle(event.session.user.appMetadata);
 
     UserPresenceService.instance.initialize();
@@ -246,6 +272,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   @override
   Future<void> close() {
     _authStateSubscription?.cancel();
+    _sessionValidator.close();
     authRepository.close();
     return super.close();
   }

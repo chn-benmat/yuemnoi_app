@@ -274,16 +274,9 @@ class _IdentityPageState extends State<IdentityPage> {
 
   String? _citizen(String? value) {
     final s = value?.trim() ?? '';
-    if (s.length != 13 || int.tryParse(s) == null) {
-      return 'กรอกเลขบัตร 13 หลักให้ครบ';
-    }
-    var sum = 0;
-    for (var i = 0; i < 12; i++) {
-      sum += int.parse(s[i]) * (13 - i);
-    }
-    return (11 - sum % 11) % 10 == int.parse(s[12])
+    return RegExp(r'^[0-9]{13}$').hasMatch(s)
         ? null
-        : 'เลขบัตรไม่ถูกต้อง กรุณาตรวจอีกครั้ง';
+        : 'กรอกเลขบัตร 13 หลักให้ครบ';
   }
 
   String _dateText(String value) {

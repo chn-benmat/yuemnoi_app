@@ -1,14 +1,24 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'app_session_validator.dart';
 import 'supabase_client.dart';
 
 class AuthSession {
   AuthSession._();
 
   static String? _accessToken;
+  static String? _authorizedUserId;
 
   static String? get accessToken {
+    if (_accessToken == null) return null;
     if (SupabaseConfig.isInitialized) {
-      return SupabaseConfig.client.auth.currentSession?.accessToken ??
-          _accessToken;
+      final session = SupabaseConfig.client.auth.currentSession;
+      if (session == null ||
+          session.user.appMetadata['dashboard_only'] == true ||
+          (_authorizedUserId != null && session.user.id != _authorizedUserId)) {
+        return null;
+      }
+      return session.accessToken;
     }
     return _accessToken;
   }
@@ -21,23 +31,49 @@ class AuthSession {
     final currentSession = SupabaseConfig.client.auth.currentSession;
     if (currentSession == null) return false;
 
-    if (!currentSession.isExpired) {
-      saveAccessToken(currentSession.accessToken);
-      return true;
-    }
-
     try {
-      final response = await SupabaseConfig.client.auth.refreshSession();
-      final refreshedSession = response.session;
-      if (refreshedSession == null || refreshedSession.isExpired) {
+      final session = currentSession.isExpired
+          ? (await SupabaseConfig.client.auth.refreshSession()).session
+          : currentSession;
+      if (session == null || session.isExpired) {
+        clear();
         return false;
       }
-
-      saveAccessToken(refreshedSession.accessToken);
+      await accept(session);
       return true;
-    } catch (_) {
-      _accessToken = null;
+    } on AppSessionException catch (error) {
+      clear();
+      if (error.rejected) await reject();
       return false;
+    } catch (_) {
+      clear();
+      return false;
+    }
+  }
+
+  static Future<void> accept(
+    Session session, {
+    AppSessionValidator? validator,
+  }) async {
+    clear();
+    final checker = validator ?? AppSessionValidator();
+    try {
+      await checker.validate(session);
+      _authorizedUserId = session.user.id;
+      saveAccessToken(session.accessToken);
+    } finally {
+      if (validator == null) checker.close();
+    }
+  }
+
+  static Future<void> reject() async {
+    clear();
+    if (SupabaseConfig.isInitialized) {
+      try {
+        await SupabaseConfig.client.auth.signOut(scope: SignOutScope.local);
+      } catch (_) {
+        // การปฏิเสธสิทธิ์ในแอปยังมีผล แม้คำขอออกจากระบบขัดข้อง
+      }
     }
   }
 
@@ -47,5 +83,6 @@ class AuthSession {
 
   static void clear() {
     _accessToken = null;
+    _authorizedUserId = null;
   }
 }

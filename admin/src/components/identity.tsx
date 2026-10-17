@@ -90,7 +90,9 @@ export default function Identity({
                   ? "บัตรตลอดชีพ"
                   : r.expires_on
                     ? date(r.expires_on)
-                    : "รอพนักงานตรวจสอบ",
+                    : r.status === "pending"
+                      ? "รอพนักงานตรวจสอบ"
+                      : "ไม่ได้ระบุ",
               }).map(([k, v]) => (
                 <div key={k}>
                   <dt>{k}</dt>
@@ -191,11 +193,7 @@ export default function Identity({
                               ? "ปฏิเสธคำขอ"
                               : "ขอข้อมูลเพิ่ม",
                         review: true,
-                        data: {
-                          decision,
-                          lifetime: r.lifetime === true,
-                          expires_on: r.expires_on ?? "",
-                        },
+                        data: { decision },
                         detail:
                           "ตรวจชื่อ ข้อมูลบัตร และเทียบรูปใบหน้ากับรูปบนบัตรด้วยตนเองก่อนบันทึก",
                       })

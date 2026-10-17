@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -31,15 +32,56 @@ func NewSupabaseUserRepository(sbClient *supabase.Client, authAPIKey string) dom
 }
 
 func (r *supabaseUserRepository) UserIDFromToken(ctx context.Context, userToken string) (string, error) {
-	user, err := r.client.Auth.User(ctx, userToken)
+	user, err := r.authIdentity(ctx, userToken)
 	if err != nil {
-		return "", fmt.Errorf("invalid access token: %w", err)
+		return "", err
 	}
-	if user == nil || user.ID == "" {
-		return "", fmt.Errorf("access token does not contain a user")
-	}
-
 	return user.ID, nil
+}
+
+// อ่าน app_metadata ล่าสุดจาก Auth เพื่อให้ session เดิมถูกจำกัดได้ทันที
+func (r *supabaseUserRepository) AppUserIDFromToken(ctx context.Context, userToken string) (string, error) {
+	user, err := r.authIdentity(ctx, userToken)
+	if err != nil {
+		return "", err
+	}
+	if user.AppMetadata.DashboardOnly {
+		return "", domain.ErrDashboardOnly
+	}
+	return user.ID, nil
+}
+
+type authIdentity struct {
+	ID          string `json:"id"`
+	AppMetadata struct {
+		DashboardOnly bool `json:"dashboard_only"`
+	} `json:"app_metadata"`
+}
+
+func (r *supabaseUserRepository) authIdentity(ctx context.Context, token string) (*authIdentity, error) {
+	endpoint := strings.TrimRight(r.client.BaseURL, "/") + "/auth/v1/user"
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create Auth identity request: %w", err)
+	}
+	request.Header.Set("apikey", r.authAPIKey)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := r.client.HTTPClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("verify Auth identity: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, domain.ErrInvalidAccessToken
+	}
+	var user authIdentity
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&user); err != nil {
+		return nil, fmt.Errorf("decode Auth identity: %w", err)
+	}
+	if user.ID == "" {
+		return nil, domain.ErrInvalidAccessToken
+	}
+	return &user, nil
 }
 
 // SyncGoogleProfileImage copies the Google avatar URL from Supabase Auth

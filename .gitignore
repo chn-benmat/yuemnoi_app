@@ -66,5 +66,3 @@ ehthumbs.db
 Desktop.ini
 .idea/
 *.iml
-
-# กฎ build, dependencies และแคชของแต่ละส่วนอยู่ใน .gitignore ของส่วนนั้น

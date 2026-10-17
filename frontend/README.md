@@ -51,6 +51,8 @@ flowchart LR
 
 การเชื่อมต่อปัจจุบันเป็น **Hybrid**: แอปเรียก Go สำหรับ Auth บางส่วน, โปรไฟล์, ลงประกาศ, คำขอเช่า และ AI ขณะเดียวกันยังอ่าน / เขียน Supabase โดยตรงในบางฟีเจอร์ เช่น ฟีด, แชต และขั้นตอนรับคืน จึงต้องเตรียม database permissions และ RLS ให้ตรงกับโค้ดด้วย
 
+แอปตรวจ `GET /api/auth/session` ก่อนยอมรับ session จากรหัสผ่าน, Google OAuth และการกู้คืนเมื่อเปิดแอป บัญชีที่ backend กำหนด `app_metadata.dashboard_only = true` จะแสดงข้อความให้ใช้ Dashboard และออกจาก session เฉพาะแอป การตรวจจาก backend ครอบคลุม metadata ใน session เดิมที่ยังไม่อัปเดต ระหว่างที่ยังตรวจสิทธิ์ไม่สำเร็จ แอปจะไม่เปิดใช้ token สำหรับข้อมูลส่วนตัว ต้องติดตั้ง backend และ [migration แยกสิทธิ์ dashboard](../supabase/migrations/20261017094213_restrict_dashboard_only_accounts.sql) ร่วมกัน
+
 <a id="stack"></a>
 
 ## 🧰 Tech stack & versions

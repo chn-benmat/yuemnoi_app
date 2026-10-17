@@ -12,7 +12,6 @@ import '../../../../../core/network/auth_session.dart';
 import '../../../../../core/utils/auth_guard.dart';
 import '../../../../auth/presentation/bloc/auth_event.dart';
 import 'user_profile_view_screen.dart';
-import '../../../../identity/data/identity_api_repository.dart';
 import '../../widgets/profile/profile_widgets.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -115,16 +114,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (authed && mounted) setState(() {});
       return;
     }
-    final meta = user.userMetadata ?? {};
-    final bio = (meta['bio'] as String?)?.trim();
-    var verified = false;
-    final identity = IdentityApiRepository();
-    try {
-      verified = (await identity.status()).verified;
-    } catch (_) {
-    } finally {
-      identity.close();
-    }
     if (!mounted) return;
     AppRoutes.openUserProfile(
       context,
@@ -132,11 +121,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         userId: user.id,
         displayName: _displayName,
         avatarUrl: _avatarUrl,
-        rating: 4.9,
-        isVerified: verified,
-        bio: (bio != null && bio.isNotEmpty)
-            ? bio
-            : 'สนใจกล้องตัวไหนโปรดติดต่อฉัน',
       ),
     );
   }

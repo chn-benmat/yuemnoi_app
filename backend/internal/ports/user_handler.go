@@ -86,6 +86,9 @@ func (h *UserHandler) Login(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "อีเมลหรือรหัสผ่านไม่ถูกต้อง"})
 	}
+	if _, err := h.verifier.UserIDFromToken(c.Context(), tokens.AccessToken); err != nil {
+		return appTokenError(c, err)
+	}
 
 	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":        http.StatusOK,
@@ -97,6 +100,9 @@ func (h *UserHandler) Login(c fiber.Ctx) error {
 
 // [POST] /api/auth/google-profile - บันทึกรูปโปรไฟล์จาก Google Avatar
 func (h *UserHandler) SyncGoogleProfileImage(c fiber.Ctx) error {
+	if _, ok := authenticatedUserID(c, h.verifier); !ok {
+		return nil
+	}
 	userToken, ok := extractToken(c)
 	if !ok {
 		return nil
@@ -247,6 +253,9 @@ func readProfileImage(header *multipart.FileHeader) (*domain.ProfileImage, error
 
 // [POST] /api/auth/change-password - เปลี่ยนรหัสผ่าน (ต้องมี Access Token)
 func (h *UserHandler) ChangePassword(c fiber.Ctx) error {
+	if _, ok := authenticatedUserID(c, h.verifier); !ok {
+		return nil
+	}
 	var req userChangePasswordRequest
 
 	if err := c.Bind().JSON(&req); err != nil {
@@ -313,6 +322,9 @@ func (h *UserHandler) VerifyResetOTP(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "การยืนยันรหัส OTP ล้มเหลว หรือรหัสหมดอายุ"})
 	}
+	if _, err := h.verifier.UserIDFromToken(c.Context(), tokens.AccessToken); err != nil {
+		return appTokenError(c, err)
+	}
 
 	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":        http.StatusOK,
@@ -320,6 +332,16 @@ func (h *UserHandler) VerifyResetOTP(c fiber.Ctx) error {
 		"access_token":  tokens.AccessToken,
 		"refresh_token": tokens.RefreshToken,
 	})
+}
+
+// ตรวจ session จาก OAuth และ session ที่กู้คืนก่อนเปิดข้อมูลส่วนตัวในแอป
+func (h *UserHandler) Session(c fiber.Ctx) error {
+	c.Set("Cache-Control", "private, no-store")
+	userID, ok := authenticatedUserID(c, h.verifier)
+	if !ok {
+		return nil
+	}
+	return c.JSON(fiber.Map{"user_id": userID})
 }
 
 // [GET] /api/user/profile - ดึงข้อมูลโปรไฟล์ของผู้ใช้ที่ล็อกอินอยู่

@@ -20,15 +20,24 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     stage = "backend_login";
-    const login = await backend("/api/auth/login", {
+    const login = await backend("/api/admin/login", {
       method: "POST",
       body: JSON.stringify({ email: input.email, password: input.password }),
     });
-    if (!login.ok)
+    if (!login.ok) {
+      const status = login.status === 403 ? 403 : login.status >= 500 ? 503 : 401;
       return Response.json(
-        { error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" },
-        { status: 401 },
+        {
+          error:
+            status === 403
+              ? "บัญชีนี้ยังไม่มีสิทธิ์เจ้าหน้าที่"
+              : status === 503
+                ? "ระบบเข้าสู่ระบบยังไม่พร้อม กรุณาลองใหม่"
+                : "อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+        },
+        { status },
       );
+    }
     const auth = await login.json();
     if (typeof auth.access_token !== "string")
       throw new Error("invalid_response");

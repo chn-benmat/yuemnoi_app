@@ -46,6 +46,7 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
   String? _error;
   bool _starting = false, _taking = false, _permissionDenied = false;
   int _generation = 0;
+  Future<void> _cameraOperation = Future<void>.value();
   bool get _face => widget.kind == IdentityCaptureKind.selfie;
   String get _title => _face ? 'ถ่ายใบหน้าของคุณ' : 'ถ่ายด้านหน้าบัตร';
   @override
@@ -55,10 +56,27 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
     _start();
   }
 
-  Future<void> _release() async {
+  Future<void> _runCameraOperation(Future<void> Function() operation) {
+    // CameraX ใช้ทรัพยากรร่วมกัน จึงต้องรอเปิดหรือคืนกล้องเดิมให้จบก่อน
+    return _cameraOperation = _cameraOperation.then((_) => operation());
+  }
+
+  Future<void> _release() => _runCameraOperation(_releaseCamera);
+
+  Future<void> _releaseCamera() async {
     final camera = _camera;
     _camera = null;
-    await camera?.dispose();
+    await _disposeCamera(camera);
+  }
+
+  Future<void> _disposeCamera(CameraController? camera) async {
+    try {
+      await camera?.dispose();
+    } on CameraException {
+      // คืนกล้องที่เริ่มไม่สำเร็จอาจล้มเหลว แต่ต้องให้ผู้ใช้ลองใหม่ได้
+    } on PlatformException {
+      // CameraX อาจคืน surface ที่ยังไม่ถูกสร้างหรือถูกคืนไปแล้ว
+    }
   }
 
   Future<void> _start() async {
@@ -68,10 +86,17 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
       _error = null;
       _permissionDenied = false;
     });
+    await _runCameraOperation(() => _initializeCamera(generation));
+  }
+
+  Future<void> _initializeCamera(int generation) async {
+    if (!mounted || generation != _generation) return;
     CameraController? candidate;
     try {
-      await _release();
+      await _releaseCamera();
+      if (!mounted || generation != _generation) return;
       final cameras = await availableCameras();
+      if (!mounted || generation != _generation) return;
       final lens = _face ? CameraLensDirection.front : CameraLensDirection.back;
       final matches = cameras.where((c) => c.lensDirection == lens);
       if (matches.isEmpty) throw CameraException('NoCamera', '');
@@ -83,17 +108,15 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
         enableAudio: false,
       );
       await candidate.initialize();
+      if (!mounted || generation != _generation) return;
       await candidate.lockCaptureOrientation(DeviceOrientation.portraitUp);
-      if (!mounted || generation != _generation) {
-        await candidate.dispose();
-        return;
-      }
+      if (!mounted || generation != _generation) return;
       setState(() {
         _camera = candidate;
         _starting = false;
       });
+      candidate = null;
     } on CameraException catch (e) {
-      await candidate?.dispose();
       if (mounted && generation == _generation) {
         setState(() {
           _starting = false;
@@ -104,13 +127,14 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
         });
       }
     } catch (_) {
-      await candidate?.dispose();
       if (mounted && generation == _generation) {
         setState(() {
           _starting = false;
           _error = 'กล้องยังไม่พร้อม กรุณาลองใหม่';
         });
       }
+    } finally {
+      await _disposeCamera(candidate);
     }
   }
 
