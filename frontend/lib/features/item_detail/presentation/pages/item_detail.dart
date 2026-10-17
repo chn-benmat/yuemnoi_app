@@ -929,9 +929,6 @@ class _OwnerCard extends StatelessWidget {
             userId: owner.userId,
             displayName: owner.displayName,
             avatarUrl: owner.imageUrl,
-            rating: item.averageRating,
-            isVerified: owner.isVerified,
-            bio: 'สนใจกล้องตัวไหนโปรดติดต่อฉัน',
           ),
         );
       },
