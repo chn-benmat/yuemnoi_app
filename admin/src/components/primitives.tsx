@@ -106,13 +106,11 @@ export function ActionDialog({
   const ref = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [lifetime, setLifetime] = useState(false);
   const identityApproval =
     operation?.action === "identity-review" &&
     operation.data?.decision === "approved";
   useEffect(() => {
     setError("");
-    setLifetime(operation?.data?.lifetime === true);
     if (operation) ref.current?.showModal();
     else ref.current?.close();
   }, [operation]);
@@ -132,16 +130,7 @@ export function ActionDialog({
           method: "POST",
           body: JSON.stringify({
             ...operation.data,
-            ...(identityApproval
-              ? {
-                  lifetime: form.get("lifetime") === "on",
-                  expires_on:
-                    form.get("lifetime") === "on"
-                      ? null
-                      : form.get("expires_on"),
-                }
-              : {}),
-            reason: form.get("reason"),
+            ...(!identityApproval ? { reason: form.get("reason") } : {}),
             checked: form.get("checked") === "on",
           }),
         },
@@ -196,35 +185,6 @@ export function ActionDialog({
               />
             </label>
           )}
-          {identityApproval && (
-            <fieldset>
-              <legend>อายุบัตรตามภาพที่ตรวจสอบ</legend>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  name="lifetime"
-                  checked={lifetime}
-                  onChange={(e) => setLifetime(e.target.checked)}
-                />
-                บัตรตลอดชีพตามภาพบัตร
-              </label>
-              {!lifetime && (
-                <label>
-                  วันหมดอายุบัตร
-                  <input
-                    type="date"
-                    name="expires_on"
-                    defaultValue={String(operation.data?.expires_on ?? "")}
-                    required
-                  />
-                </label>
-              )}
-              <p className="muted">
-                ระบุจากภาพบัตรก่อนอนุมัติ
-                หากบัตรหมดอายุให้ขอข้อมูลเพิ่มหรือปฏิเสธคำขอ
-              </p>
-            </fieldset>
-          )}
           {operation.review && (
             <label className="check">
               <input type="checkbox" name="checked" required />
@@ -232,17 +192,19 @@ export function ActionDialog({
               ตรวจหลักฐานด้วยตนเองและตรวจสิทธิ์ที่เกี่ยวข้องแล้ว
             </label>
           )}
-          <label>
-            เหตุผลการดำเนินการ
-            <textarea
-              name="reason"
-              minLength={3}
-              maxLength={500}
-              required
-              rows={4}
-              placeholder="ระบุเหตุผลโดยไม่ใส่เลขบัตรหรือข้อมูลส่วนตัวเกินจำเป็น"
-            />
-          </label>
+          {!identityApproval && (
+            <label>
+              เหตุผลการดำเนินการ
+              <textarea
+                name="reason"
+                minLength={3}
+                maxLength={500}
+                required
+                rows={4}
+                placeholder="ระบุเหตุผลโดยไม่ใส่เลขบัตรหรือข้อมูลส่วนตัวเกินจำเป็น"
+              />
+            </label>
+          )}
           {error && (
             <p className="error" role="alert">
               {error}

@@ -18,7 +18,7 @@
 - รักษา `private, no-store` สำหรับข้อมูลเจ้าหน้าที่และหลักฐาน ส่ง evidence ผ่าน proxy ที่ตรวจสิทธิ์; browser ต้องไม่อ่าน Supabase หรือเก็บ service-role key โดยตรง
 - Export CSV ผ่าน `src/lib/export.ts` เพื่อคงการตัดข้อมูลตัวตน/หลักฐานและการป้องกัน spreadsheet formula injection
 - Preview ใช้ได้เมื่อเป็น development และ `ADMIN_PREVIEW=true` เท่านั้น รักษาข้อมูลตัวอย่างและการปิด action จริงใน preview
-- การตรวจตัวตนเป็น manual review สำหรับทุกวัย การอนุมัติต้องรักษาการยืนยันหลักฐาน เหตุผล และวันหมดอายุ/บัตรตลอดชีพตาม backend contract
+- การตรวจตัวตนเป็น manual review สำหรับทุกวัย การอนุมัติต้องยืนยันหลักฐาน โดยไม่บังคับเหตุผลหรืออายุบัตร; การปฏิเสธ/ขอข้อมูลเพิ่มและคำสั่งอื่นยังต้องระบุเหตุผลตาม backend contract
 
 ## ตรวจงาน
 
