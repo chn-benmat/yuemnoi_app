@@ -27,10 +27,10 @@ class RentalManagementRemoteDataSource {
       final List<Map<String, dynamic>> rawBookings =
           List<Map<String, dynamic>>.from(rentingResp as List);
 
-      // กรองสถานะ pending และ reject ออกจากหน้ารายการสถานะ
+      // กรองสถานะ reject ออกจากหน้ารายการสถานะ
       final validBookings = rawBookings.where((b) {
         final s = (b['status']?.toString() ?? '').toLowerCase().trim();
-        return s != 'pending' && s != 'rejected' && s != 'reject';
+        return s != 'rejected' && s != 'reject';
       }).toList();
 
       if (validBookings.isEmpty) return [];
@@ -102,10 +102,10 @@ class RentalManagementRemoteDataSource {
       final List<Map<String, dynamic>> rawBookings =
           List<Map<String, dynamic>>.from(lendingResp as List);
 
-      // กรองสถานะ pending และ reject ออกจากหน้ารายการสถานะ
+      // กรองสถานะ reject ออกจากหน้ารายการสถานะ
       final validBookings = rawBookings.where((b) {
         final s = (b['status']?.toString() ?? '').toLowerCase().trim();
-        return s != 'pending' && s != 'rejected' && s != 'reject';
+        return s != 'rejected' && s != 'reject';
       }).toList();
 
       if (validBookings.isEmpty) return [];

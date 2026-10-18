@@ -27,7 +27,7 @@ class RentalStatusCubit extends Cubit<RentalStatusState> {
 
       bool isAllowedStatus(dynamic b) {
         final s = (b.statusCode ?? '').toString().toLowerCase().trim();
-        return s != 'pending' && s != 'rejected' && s != 'reject';
+        return s != 'rejected' && s != 'reject';
       }
 
       emit(RentalStatusLoaded(
