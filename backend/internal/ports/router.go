@@ -93,6 +93,8 @@ func SetupRouterWithOperations(
 			items.Get("", itemController.GetAllItems)
 			// POST /api/items
 			items.Post("", itemController.CreateItem)
+			items.Get("/:id/auto-reply", itemController.GetAutoReply)
+			items.Put("/:id/auto-reply", itemController.SaveAutoReply)
 			// GET /api/items/:id
 			items.Get("/:id", itemController.GetItemByID)
 			// PUT /api/items/:id

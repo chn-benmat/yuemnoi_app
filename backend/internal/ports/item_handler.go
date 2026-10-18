@@ -49,6 +49,7 @@ type updateItemRequest struct {
 	Price        *int      `json:"price" validate:"omitempty,gt=0"`
 	Status       *string   `json:"status" validate:"omitempty,max=50"`
 	Type         *string   `json:"type" validate:"omitempty,max=100"`
+	OwnerHidden  *bool     `json:"owner_hidden"`
 }
 
 func parseItemID(c fiber.Ctx) (int64, bool) {
@@ -122,6 +123,26 @@ func (h *ItemHandler) GetItemByID(c fiber.Ctx) error {
 	item, err := h.repo.FindByID(c.Context(), id)
 	if err != nil {
 		return writeItemError(c, err)
+	}
+	if item.OwnerHidden {
+		// รายการที่ซ่อนอ่านได้เฉพาะเจ้าของและผู้เช่าที่มีประวัติอ้างอิงอยู่
+		auth := strings.Fields(c.Get("Authorization"))
+		if len(auth) != 2 || !strings.EqualFold(auth[0], "Bearer") || h.tokenVerifier == nil {
+			return writeItemError(c, domain.ErrItemNotFound)
+		}
+		userID, err := h.tokenVerifier.UserIDFromToken(c.Context(), auth[1])
+		if err != nil || userID == "" {
+			return writeItemError(c, domain.ErrItemNotFound)
+		}
+		if userID != item.UserID {
+			allowed, err := h.repo.HasRentalAccess(c.Context(), id, userID)
+			if err != nil {
+				return writeItemError(c, err)
+			}
+			if !allowed {
+				return writeItemError(c, domain.ErrItemNotFound)
+			}
+		}
 	}
 
 	return c.Status(http.StatusOK).JSON(item)
@@ -266,6 +287,9 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 	}
 	if req.Type != nil {
 		fields["type"] = *req.Type
+	}
+	if req.OwnerHidden != nil {
+		fields["owner_hidden"] = *req.OwnerHidden
 	}
 	if len(fields) == 0 {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุข้อมูลที่ต้องการแก้ไขอย่างน้อย 1 ช่อง"})

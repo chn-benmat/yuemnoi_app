@@ -21,7 +21,8 @@ type Item struct {
 	Category       string    `json:"category"`
 	Price          int       `json:"price"`
 	Status         string    `json:"status"` // เช่น "pending", "verified", "rejected"
-	Type           string    `json:"type"`   // เช่น "รายวัน", "รายชั่วโมง"
+	OwnerHidden    bool      `json:"owner_hidden"`
+	Type           string    `json:"type"` // เช่น "รายวัน", "รายชั่วโมง"
 	OwnerName      string    `json:"owner_name,omitempty"`
 	IsVerified     bool      `json:"is_verified"`
 	OwnerAvatarURL string    `json:"owner_avatar_url,omitempty"`
@@ -48,6 +49,9 @@ type ItemRepository interface {
 	Insert(ctx context.Context, item *Item, images []ItemImage) (*Item, error)
 	FindAll(ctx context.Context) ([]RankedItem, error)
 	FindByID(ctx context.Context, id int64) (*Item, error)
+	HasRentalAccess(ctx context.Context, id int64, userID string) (bool, error)
 	Update(ctx context.Context, id int64, userID string, fields map[string]interface{}) (*Item, error)
 	Delete(ctx context.Context, id int64, userID string) error
+	GetAutoReply(ctx context.Context, id int64, userID string) (*ItemAutoReply, error)
+	SaveAutoReply(ctx context.Context, id int64, userID string, settings ItemAutoReply) (*ItemAutoReply, error)
 }

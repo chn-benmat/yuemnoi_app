@@ -64,8 +64,9 @@ class _EditItemScreenState extends State<EditItemScreen> {
     final remaining = 5 - _images.length;
     if (remaining <= 0) return;
 
-    final hasPermission =
-        await AppPermissionService.requestGalleryPermission(context);
+    final hasPermission = await AppPermissionService.requestGalleryPermission(
+      context,
+    );
     if (!hasPermission || !mounted) return;
 
     try {
@@ -152,7 +153,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
           icon: const Icon(Icons.arrow_back_rounded, size: 30),
         ),
         title: const Text(
-          'แก้ไขอุปกรณ์ให้เช่า',
+          'ข้อมูลพื้นฐาน',
           style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
         ),
       ),
@@ -313,7 +314,7 @@ class _EditableImagePicker extends StatelessWidget {
           children: [
             const Expanded(
               child: Text(
-                'รูปภาพ',
+                'รูปภาพสินค้า',
                 style: TextStyle(color: AppColors.labelColor, fontSize: 14),
               ),
             ),

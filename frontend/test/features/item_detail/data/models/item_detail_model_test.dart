@@ -15,6 +15,7 @@ void main() {
           'category': 'กล้องและอุปกรณ์ถ่ายภาพ',
           'price': 1000,
           'status': 'verified',
+          'owner_hidden': true,
           'type': 'รายวัน',
         },
         profilesByUserId: {
@@ -47,6 +48,7 @@ void main() {
       expect(item.owner.isVerified, isTrue);
       expect(item.reviews.single.reviewer.isVerified, isFalse);
       expect(item.isOwner, isTrue);
+      expect(item.ownerHidden, isTrue);
       expect(item.unitLabel, 'วัน');
       expect(item.reviews.single.reviewer.displayName, 'mark');
       expect(item.averageRating, 4.5);

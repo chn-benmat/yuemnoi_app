@@ -188,6 +188,19 @@ func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domai
 	return item, nil
 }
 
+func (r *supabaseItemRepository) HasRentalAccess(ctx context.Context, id int64, userID string) (bool, error) {
+	var bookings []struct {
+		ID int64 `json:"id"`
+	}
+	err := r.client.DB.From("booking_tb").Select("id").Limit(1).
+		Eq("item_id", strconv.FormatInt(id, 10)).Eq("user_id", userID).
+		ExecuteWithContext(ctx, &bookings)
+	if err != nil {
+		return false, fmt.Errorf("check item rental access failed: %w", err)
+	}
+	return len(bookings) > 0, nil
+}
+
 func (r *supabaseItemRepository) Update(
 	ctx context.Context,
 	id int64,

@@ -21,6 +21,12 @@ class UserItemModel {
   final String? imageUrl;
   @JsonKey(fromJson: _category)
   final String category;
+  @JsonKey(defaultValue: '')
+  final String status;
+  @JsonKey(name: 'type', defaultValue: '')
+  final String rentalType;
+  @JsonKey(name: 'owner_hidden', defaultValue: false)
+  final bool ownerHidden;
 
   const UserItemModel({
     this.id,
@@ -30,6 +36,9 @@ class UserItemModel {
     this.imageCount = 1,
     this.imageUrl,
     this.category = 'ทั่วไป',
+    this.status = '',
+    this.rentalType = '',
+    this.ownerHidden = false,
   });
 
   factory UserItemModel.fromJson(Map<String, dynamic> json) =>
@@ -59,6 +68,9 @@ class UserItemModel {
       imageCount: imageCount,
       imageUrl: imageUrl,
       category: category,
+      status: status,
+      rentalType: rentalType,
+      ownerHidden: ownerHidden,
     );
   }
 

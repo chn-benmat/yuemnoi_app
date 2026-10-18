@@ -49,6 +49,7 @@ class ItemDetail extends Equatable {
     required this.rentalType,
     required this.reviews,
     required this.isOwner,
+    this.ownerHidden = false,
   });
 
   final int id;
@@ -62,8 +63,24 @@ class ItemDetail extends Equatable {
   final String rentalType;
   final List<ItemReview> reviews;
   final bool isOwner;
+  final bool ownerHidden;
 
   String get unitLabel => rentalType == 'รายชั่วโมง' ? 'ชั่วโมง' : 'วัน';
+
+  ItemDetail withVisibility({required bool hidden}) => ItemDetail(
+    id: id,
+    owner: owner,
+    name: name,
+    imageUrls: imageUrls,
+    description: description,
+    category: category,
+    price: price,
+    status: status,
+    rentalType: rentalType,
+    reviews: reviews,
+    isOwner: isOwner,
+    ownerHidden: hidden,
+  );
 
   double get averageRating {
     if (reviews.isEmpty) return 0;
@@ -84,6 +101,7 @@ class ItemDetail extends Equatable {
     rentalType,
     reviews,
     isOwner,
+    ownerHidden,
   ];
 }
 

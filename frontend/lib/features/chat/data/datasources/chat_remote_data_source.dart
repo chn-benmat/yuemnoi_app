@@ -620,14 +620,7 @@ class ChatRemoteDataSource {
 
       final newMsgId = inserted?['id']?.toString() ?? '';
 
-      await client
-          .from('conversation_tb')
-          .update({
-            'last_message': displayLastMsg,
-            'last_message_at': nowIso,
-            'updated_at': nowIso,
-          })
-          .eq('id', conversationId);
+      // ฐานข้อมูลอัปเดตข้อความล่าสุดพร้อม auto reply ใน transaction เดียว
 
       // ส่ง Push Notification ไปยังผู้รับในระบบ OS (ทำงานแบบ Background Non-blocking)
       unawaited(

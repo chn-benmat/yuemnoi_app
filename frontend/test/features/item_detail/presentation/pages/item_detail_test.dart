@@ -61,12 +61,18 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('shows edit action when the signed-in user owns the item', (
+  testWidgets('shows option A management sections for the owner', (
     tester,
   ) async {
     await pumpDetail(tester, isOwner: true);
 
-    expect(find.text('แก้ไขอุปกรณ์ของคุณ'), findsOneWidget);
+    expect(find.text('รายละเอียดอุปกรณ์'), findsOneWidget);
+    expect(find.text('การแสดงผล'), findsOneWidget);
+    expect(find.text('ข้อมูลพื้นฐาน'), findsOneWidget);
+    expect(find.text('ข้อความตอบกลับอัตโนมัติ'), findsOneWidget);
+    expect(find.text('ตั้งค่าการเช่า'), findsNothing);
+    expect(find.text('รูปภาพ'), findsNothing);
+    expect(find.text('ลบอุปกรณ์'), findsOneWidget);
     expect(find.text('แชท'), findsNothing);
   });
 
@@ -77,6 +83,8 @@ void main() {
 
     expect(find.text('แชท'), findsOneWidget);
     expect(find.text('แก้ไขอุปกรณ์ของคุณ'), findsNothing);
+    expect(find.text('การแสดงผล'), findsNothing);
+    expect(find.text('ลบอุปกรณ์'), findsNothing);
   });
 
   testWidgets('asks for a contact phone before opening a rental chat', (

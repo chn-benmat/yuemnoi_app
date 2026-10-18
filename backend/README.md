@@ -61,22 +61,22 @@ Frontend ยังใช้ Supabase โดยตรงในบางฟีเ�
 
 เวอร์ชันอ้างอิง [go.mod](go.mod) และ checksums อยู่ใน [go.sum](go.sum)
 
-| เครื่องมือ / module              | เวอร์ชัน                                                    | ใช้ทำอะไร                                      |
-| -------------------------------- | ----------------------------------------------------------- | ---------------------------------------------- |
-| Go                               | **1.26.2** ตาม go directive; ใช้ toolchain ที่ตรงหรือรองรับ | ภาษา, HTTP client/server และ concurrency       |
-| `github.com/gofiber/fiber/v3`    | v3.5.0                                                     | Router, handlers และ middleware                |
-| `github.com/caarlos0/env/v11`    | v11.4.1                                                     | อ่าน env ลง typed configuration                |
-| `github.com/go-playground/validator/v10` | v10.30.1 | ตรวจ `validate` tags ของ request DTOs ผ่าน Fiber `StructValidator` |
-| `github.com/joho/godotenv`       | v1.5.1                                                      | โหลดไฟล์ `.env`                                |
-| `github.com/nedpals/supabase-go` | v0.5.0                                                      | Supabase Auth / PostgREST                       |
-| `firebase.google.com/go/v4`     | v4.22.0                                                     | Firebase Admin SDK สำหรับ FCM                  |
-| `cloud.google.com/go/auth`      | v0.20.0                                                     | Credentials, OAuth และ HTTP transport ของ Google |
-| `google.golang.org/api`         | v0.279.0                                                    | Client options สำหรับ Firebase SDK             |
-| `golang.org/x/time`             | v0.16.0                                                     | Token Bucket ผ่าน package `rate`               |
-| `github.com/jellydator/ttlcache/v3` | v3.4.1 | Cache อายุข้อมูลตาม TTL สำหรับ IP buckets และ FCM device tokens |
-| `github.com/lmittmann/tint`       | v1.2.1 | Console handler สำหรับ `log/slog` ในโหมด debug |
-| `github.com/stretchr/testify`    | v1.12.1                                                     | Assertions และ mocks ใน tests                  |
-| Go standard library              | ตาม Go toolchain                                            | `net/http`, `log/slog` และ Supabase Storage adapter |
+| เครื่องมือ / module                      | เวอร์ชัน                                                    | ใช้ทำอะไร                                                          |
+| ---------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| Go                                       | **1.26.2** ตาม go directive; ใช้ toolchain ที่ตรงหรือรองรับ | ภาษา, HTTP client/server และ concurrency                           |
+| `github.com/gofiber/fiber/v3`            | v3.5.0                                                      | Router, handlers และ middleware                                    |
+| `github.com/caarlos0/env/v11`            | v11.4.1                                                     | อ่าน env ลง typed configuration                                    |
+| `github.com/go-playground/validator/v10` | v10.30.1                                                    | ตรวจ `validate` tags ของ request DTOs ผ่าน Fiber `StructValidator` |
+| `github.com/joho/godotenv`               | v1.5.1                                                      | โหลดไฟล์ `.env`                                                    |
+| `github.com/nedpals/supabase-go`         | v0.5.0                                                      | Supabase Auth / PostgREST                                          |
+| `firebase.google.com/go/v4`              | v4.22.0                                                     | Firebase Admin SDK สำหรับ FCM                                      |
+| `cloud.google.com/go/auth`               | v0.20.0                                                     | Credentials, OAuth และ HTTP transport ของ Google                   |
+| `google.golang.org/api`                  | v0.279.0                                                    | Client options สำหรับ Firebase SDK                                 |
+| `golang.org/x/time`                      | v0.16.0                                                     | Token Bucket ผ่าน package `rate`                                   |
+| `github.com/jellydator/ttlcache/v3`      | v3.4.1                                                      | Cache อายุข้อมูลตาม TTL สำหรับ IP buckets และ FCM device tokens    |
+| `github.com/lmittmann/tint`              | v1.2.1                                                      | Console handler สำหรับ `log/slog` ในโหมด debug                     |
+| `github.com/stretchr/testify`            | v1.12.1                                                     | Assertions และ mocks ใน tests                                      |
+| Go standard library                      | ตาม Go toolchain                                            | `net/http`, `log/slog` และ Supabase Storage adapter                |
 
 FCM adapter ใช้ Firebase Admin SDK ส่ง HTTP v1 และใช้ Google Auth จัดการ credentials / OAuth โดยคง data, Android channel และเสียงแจ้งเตือนเดิม ส่วน Supabase Storage ใช้ HTTP adapter ที่ส่ง context และคืน error แทนการเรียก Upload / Remove ของ SDK เดิม Supabase / Firebase / AI เป็นบริการภายนอก จึงไม่มีเวอร์ชัน server ที่ pin ไว้ใน go.mod
 
@@ -140,23 +140,23 @@ SHUTDOWN_TIMEOUT=5s
 
 ### ตัวแปรทั้งหมดที่รองรับ
 
-| ตัวแปร                          | Default                 | ต้องตั้งเมื่อ / ความหมาย                                        |
-| ------------------------------- | ----------------------- | --------------------------------------------------------------- |
-| `PORT`                          | `8080`                  | พอร์ต HTTP                                                      |
-| `APP_ENV`                      | `debug`                 | ใช้ `release` เพื่อตรวจคอนฟิก production และใช้ JSON slog |
-| `SUPABASE_URL`                  | ไม่มี                   | **จำเป็นทุกโหมด**                                               |
-| `SUPABASE_SERVICE_ROLE_KEY`     | ไม่มี                   | **จำเป็นทุกโหมด**, server-only                                  |
-| `FIREBASE_SERVICE_ACCOUNT_PATH` | ไม่มี                   | path ของ service account สำหรับ FCM                             |
-| `FIREBASE_SERVICE_ACCOUNT_KEY`  | ไม่มี                   | service account JSON แบบ inline; มีลำดับก่อน path               |
-| `APP_SECRET_KEY`                | ไม่มี                   | app key เดี่ยวหรือคั่น comma; ต้องมีคีย์ใน release              |
-| `APP_SECRET_KEYS`               | ไม่มี                   | app keys เพิ่มเติมคั่น comma; รวมกับตัวแปรด้านบน                |
-| `INTERNAL_SERVICE_KEY`          | ไม่มี                   | ต้องมีใน release; primary key ยาวอย่างน้อย **16 ตัวอักษร**      |
-| `AI_SERVICE_URL`                | `http://localhost:8000` | **Base URL** ของ Python ไม่ต่อ `/api/chat`                   |
-| `AI_SERVICE_TIMEOUT`            | `45s`                   | Go duration ที่มากกว่า 0; env ที่ระบุชัดเจนชนะ runtime JSON     |
-| `AI_CLIENT_RUNTIME_PATH`        | ไม่มี                   | อ่าน gateway timeout จาก shared JSON เมื่อกำหนด path            |
-| `READ_TIMEOUT`                  | `15s`                   | HTTP server read timeout                                        |
-| `WRITE_TIMEOUT`                 | `90s`                   | HTTP server write timeout                                       |
-| `SHUTDOWN_TIMEOUT`              | `5s`                    | เวลา graceful shutdown                                          |
+| ตัวแปร                          | Default                 | ต้องตั้งเมื่อ / ความหมาย                                    |
+| ------------------------------- | ----------------------- | ----------------------------------------------------------- |
+| `PORT`                          | `8080`                  | พอร์ต HTTP                                                  |
+| `APP_ENV`                       | `debug`                 | ใช้ `release` เพื่อตรวจคอนฟิก production และใช้ JSON slog   |
+| `SUPABASE_URL`                  | ไม่มี                   | **จำเป็นทุกโหมด**                                           |
+| `SUPABASE_SERVICE_ROLE_KEY`     | ไม่มี                   | **จำเป็นทุกโหมด**, server-only                              |
+| `FIREBASE_SERVICE_ACCOUNT_PATH` | ไม่มี                   | path ของ service account สำหรับ FCM                         |
+| `FIREBASE_SERVICE_ACCOUNT_KEY`  | ไม่มี                   | service account JSON แบบ inline; มีลำดับก่อน path           |
+| `APP_SECRET_KEY`                | ไม่มี                   | app key เดี่ยวหรือคั่น comma; ต้องมีคีย์ใน release          |
+| `APP_SECRET_KEYS`               | ไม่มี                   | app keys เพิ่มเติมคั่น comma; รวมกับตัวแปรด้านบน            |
+| `INTERNAL_SERVICE_KEY`          | ไม่มี                   | ต้องมีใน release; primary key ยาวอย่างน้อย **16 ตัวอักษร**  |
+| `AI_SERVICE_URL`                | `http://localhost:8000` | **Base URL** ของ Python ไม่ต่อ `/api/chat`                  |
+| `AI_SERVICE_TIMEOUT`            | `45s`                   | Go duration ที่มากกว่า 0; env ที่ระบุชัดเจนชนะ runtime JSON |
+| `AI_CLIENT_RUNTIME_PATH`        | ไม่มี                   | อ่าน gateway timeout จาก shared JSON เมื่อกำหนด path        |
+| `READ_TIMEOUT`                  | `15s`                   | HTTP server read timeout                                    |
+| `WRITE_TIMEOUT`                 | `90s`                   | HTTP server write timeout                                   |
+| `SHUTDOWN_TIMEOUT`              | `5s`                    | เวลา graceful shutdown                                      |
 
 [Config loader](internal/config/config.go) โหลด `.env` จาก working directory ก่อน และลอง `../../.env` หากไฟล์แรกโหลดไม่สำเร็จ แนะนำให้รันจาก `backend/` เพื่อให้ paths ของ Firebase และ shared runtime ชัดเจน Process environment ที่มีอยู่มีลำดับก่อนค่าจาก dotenv
 
@@ -183,7 +183,7 @@ Backend รวม app keys จากสองตัวแปรและรั�
 cd backend
 go version
 go mod download
-go run main.go
+go run main.go หรือ go run .
 ```
 
 `main.go` เปิด HTTP server ด้วย Fiber `Listen` โดยตรง เมื่อแก้โค้ด ให้หยุดด้วย `Ctrl+C` แล้วรัน `go run main.go` ใหม่
@@ -243,23 +243,30 @@ Base path คือ `/api` เส้นทางทั้งหมดอยู�
 
 **User identity:** routes ที่ต้อง login ใช้ `Authorization: Bearer <Supabase access token>` แยกจาก app key และตรวจสิทธิ์เจ้าของ / คู่สัญญาตาม handler
 
-| Method / route                                            | หน้าที่                    | User Bearer                           |
-| --------------------------------------------------------- | -------------------------- | ------------------------------------- |
-| `GET /health`                                             | HTTP liveness              | ไม่ต้อง                               |
-| `POST /auth/register`, `POST /auth/login`                 | สมัคร / login              | ไม่ต้อง                               |
-| `POST /auth/send-otp`, `POST /auth/verify-otp`            | ส่ง / ตรวจ email OTP       | ไม่ต้อง                               |
-| `POST /auth/google-profile`, `POST /auth/change-password` | ซิงค์รูป / เปลี่ยนรหัสผ่าน | ต้องมี                                |
-| `GET /user/profile`, `PUT /user/profile`                  | อ่าน / แก้โปรไฟล์          | ต้องมี                                |
-| `PUT /user/contact`, `POST /user/fcm-token`               | Contact / device token     | ต้องมี                                |
-| `GET /items`, `GET /items/:id`                            | ฟีด / รายละเอียด           | ไม่ต้อง                               |
-| `POST /items`, `PUT /items/:id`, `DELETE /items/:id`      | จัดการอุปกรณ์              | ต้องมี; ตรวจเจ้าของ                   |
-| `POST /rentals`                                           | สร้างคำขอเช่า              | ต้องมี                                |
-| `POST /rentals/:id/confirm`                               | ผู้เช่ายืนยันข้อเสนอเป็น confirmed | ต้องมี; ตรวจผู้เช่าและข้อความข้อเสนอ |
-| `POST /rentals/:id/handover`, `POST /rentals/:id/return`  | เปลี่ยนสถานะ               | ต้องมี; ตรวจผู้มีสิทธิ์               |
-| `POST /chat/contact`, `POST /push/chat`                   | Contact / push             | ต้องมี                                |
-| `POST /chat-ai`, `POST /chat-ai/stream`                   | AI JSON / SSE              | handler ปัจจุบันไม่บังคับ user Bearer |
+| Method / route                                            | หน้าที่                            | User Bearer                           |
+| --------------------------------------------------------- | ---------------------------------- | ------------------------------------- |
+| `GET /health`                                             | HTTP liveness                      | ไม่ต้อง                               |
+| `POST /auth/register`, `POST /auth/login`                 | สมัคร / login                      | ไม่ต้อง                               |
+| `POST /auth/send-otp`, `POST /auth/verify-otp`            | ส่ง / ตรวจ email OTP               | ไม่ต้อง                               |
+| `POST /auth/google-profile`, `POST /auth/change-password` | ซิงค์รูป / เปลี่ยนรหัสผ่าน         | ต้องมี                                |
+| `GET /user/profile`, `PUT /user/profile`                  | อ่าน / แก้โปรไฟล์                  | ต้องมี                                |
+| `PUT /user/contact`, `POST /user/fcm-token`               | Contact / device token             | ต้องมี                                |
+| `GET /items`, `GET /items/:id`                            | ฟีด / รายละเอียด                   | ไม่ต้อง                               |
+| `POST /items`, `PUT /items/:id`, `DELETE /items/:id`      | จัดการอุปกรณ์                      | ต้องมี; ตรวจเจ้าของ                   |
+| `GET /items/:id/auto-reply`, `PUT /items/:id/auto-reply` | อ่าน / บันทึกข้อความตอบกลับอัตโนมัติ | ต้องมี; ตรวจเจ้าของ                   |
+| `POST /rentals`                                           | สร้างคำขอเช่า                      | ต้องมี                                |
+| `POST /rentals/:id/confirm`                               | ผู้เช่ายืนยันข้อเสนอเป็น confirmed | ต้องมี; ตรวจผู้เช่าและข้อความข้อเสนอ  |
+| `POST /rentals/:id/handover`, `POST /rentals/:id/return`  | เปลี่ยนสถานะ                       | ต้องมี; ตรวจผู้มีสิทธิ์               |
+| `POST /chat/contact`, `POST /push/chat`                   | Contact / push                     | ต้องมี                                |
+| `POST /chat-ai`, `POST /chat-ai/stream`                   | AI JSON / SSE                      | handler ปัจจุบันไม่บังคับ user Bearer |
 
 ทุก route ในตารางยกเว้น `/health` ต้องเติม `/api` ด้านหน้า เช่น `/items` → `/api/items` เส้นทาง AI ยังผ่าน app-key middleware และ rate limiter แม้ handler จะไม่ตรวจ user Bearer
+
+การตอบกลับอัตโนมัติรับ JSON `{ "enabled": true, "message": "ข้อความตอบกลับ" }` จำกัดข้อความหลัง trim ไม่เกิน 500 Unicode code points และเปิดใช้ได้เมื่อข้อความไม่ว่าง ค่าเริ่มต้นปิดไว้ เจ้าของต้องกดบันทึกก่อนมีผล โดยใช้ตารางตั้งค่าส่วนตัวแยกจาก item สาธารณะ ต้องติดตั้ง migrations `item_auto_reply` และ `item_auto_reply_actor_guard` ใน `../supabase/migrations/` ร่วมกับ API รุ่นนี้
+
+เมื่อผู้เช่าส่งการ์ด `[ITEM_INQUIRY:{...}]` ฐานข้อมูลตรวจคู่สนทนาและเจ้าของอุปกรณ์จริง แล้วส่งข้อความเพียงครั้งเดียวต่อผู้เช่า–อุปกรณ์–เจ้าของ แม้ห้องเดิมจะเปลี่ยนไปคุยอุปกรณ์อื่นหรือเจ้าของไม่ได้เปิดแอป การแก้ข้อความ/ปิด–เปิดใหม่ไม่ reset ประวัติและไม่ส่งย้อนหลัง สินค้าที่เจ้าของซ่อนยังตอบการสอบถามในแชทเดิมได้ ข้อความเข้าสตรีม Realtime และประวัติแชทปกติ; ยังไม่ได้เพิ่ม OS push สำหรับข้อความตอบกลับอัตโนมัติ
+
+Migration ย้ายการรักษา `conversation_tb.last_message` มาอยู่ฝั่งฐานข้อมูลพร้อมข้อความตอบกลับ และป้องกัน client รุ่นเดิมเขียนทับด้วยข้อความขาเข้า ตรวจแบบ rollback ด้วย `../supabase/tests/item_auto_reply.sql` โดยไม่มีข้อความทดสอบค้างในห้องจริง
 
 - รายการสินค้าใช้ query `search` และ `category`; ยังไม่มี pagination แบบ `limit` / `offset` ใน handler ปัจจุบัน
 - สร้าง item รองรับ JSON หรือ multipart; field รูปชื่อ `images` ไม่เกิน **5 รูป**, รูปละ **5 MiB**, JPEG / PNG / WebP

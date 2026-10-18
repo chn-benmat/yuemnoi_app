@@ -96,7 +96,9 @@ class SupabaseRepository(ItemRepositoryInterface):
             if cached is not None:
                 return cached
 
-        endpoint = f"{self._base_url}/rest/v1/item_tb?select=id,item_name,category,price,type,status,item_image_url,description"
+        endpoint = (f"{self._base_url}/rest/v1/item_tb"
+                    "?select=id,item_name,category,price,type,status,item_image_url,description"
+                    "&owner_hidden=eq.false&moderation_hidden=eq.false")
         try:
             await self.start()
             resp = await self._http.get(endpoint, headers=self._headers(), timeout=self._timeout)

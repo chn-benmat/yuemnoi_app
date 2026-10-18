@@ -35,6 +35,7 @@ abstract final class ItemDetailModel {
       status: _string(item['status']),
       rentalType: _normalizeRentalType(item['type']),
       reviews: mappedReviews,
+      ownerHidden: item['owner_hidden'] == true,
       isOwner: currentUserId != null && currentUserId == ownerId,
     );
   }
@@ -65,6 +66,7 @@ abstract final class ItemDetailModel {
       status: _string(item['status']),
       rentalType: _normalizeRentalType(item['type']),
       reviews: const [],
+      ownerHidden: item['owner_hidden'] == true,
       isOwner: currentUserId != null && currentUserId == ownerId,
     );
   }
