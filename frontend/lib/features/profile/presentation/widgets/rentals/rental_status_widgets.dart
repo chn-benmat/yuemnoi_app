@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../../core/constants/colors.dart';
@@ -32,6 +31,8 @@ class RentalStatusItemData {
   final String? duration;
   final int? totalPrice;
   final String? pickupLocation;
+  final String category;
+  final bool isOwner;
 
   const RentalStatusItemData({
     this.bookingId,
@@ -50,7 +51,44 @@ class RentalStatusItemData {
     this.duration,
     this.totalPrice,
     this.pickupLocation,
+    this.category = 'ทั่วไป',
+    this.isOwner = false,
   });
+
+  bool get isPending {
+    final code = statusCode.toLowerCase().trim();
+    return code == 'pending' ||
+        status.contains('รอการยืนยัน') ||
+        status.contains('มีคำขอเช่าใหม่') ||
+        status.contains('รอดำเนินการ');
+  }
+
+  bool get isActive {
+    final code = statusCode.toLowerCase().trim();
+    return code == 'active' ||
+        code == 'in_use' ||
+        code == 'ongoing' ||
+        status.contains('กำลังเช่า') ||
+        status.contains('กำลังใช้งาน');
+  }
+
+  bool get isConfirmed {
+    final code = statusCode.toLowerCase().trim();
+    return code == 'confirmed' || status.contains('ยืนยัน') || status.contains('นัดรับ');
+  }
+
+  bool get isCompleted {
+    final code = statusCode.toLowerCase().trim();
+    return code == 'completed' ||
+        code == 'finished' ||
+        status.contains('เสร็จสิ้น') ||
+        status.contains('คืนแล้ว');
+  }
+
+  bool get isCancelled {
+    final code = statusCode.toLowerCase().trim();
+    return code == 'cancelled' || status.contains('ยกเลิก');
+  }
 
   factory RentalStatusItemData.fromEntity(
     RentalBooking entity,
@@ -74,6 +112,8 @@ class RentalStatusItemData {
       duration: entity.duration,
       totalPrice: entity.totalPrice.toInt(),
       pickupLocation: entity.pickupLocation,
+      category: entity.category ?? 'ทั่วไป',
+      isOwner: entity.isOwner,
     );
   }
 }
@@ -89,48 +129,48 @@ class RentalStatusLoadingSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SkeletonShimmer(
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: 3,
+        itemCount: 4,
         separatorBuilder: (context, i) => const SizedBox(height: 14),
         itemBuilder: (context, index) => Container(
-          height: 140,
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SkeletonBox(width: 70, height: 70, borderRadius: 12),
+                  const SkeletonBox(width: 74, height: 74, borderRadius: 12),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
+                        SkeletonBox(width: 80, height: 12, borderRadius: 6),
+                        SizedBox(height: 8),
                         SkeletonBox(height: 16, borderRadius: 8),
                         SizedBox(height: 8),
                         FractionallySizedBox(
-                          widthFactor: 0.6,
+                          widthFactor: 0.65,
                           child: SkeletonBox(height: 12, borderRadius: 6),
-                        ),
-                        SizedBox(height: 8),
-                        FractionallySizedBox(
-                          widthFactor: 0.4,
-                          child: SkeletonBox(height: 10, borderRadius: 5),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const SkeletonBox(width: 70, height: 26, borderRadius: 14),
+                  const SizedBox(width: 10),
+                  const SkeletonBox(width: 68, height: 24, borderRadius: 12),
                 ],
               ),
-              const Spacer(),
-              const SkeletonBox(height: 36, borderRadius: 20),
+              const SizedBox(height: 12),
+              const SkeletonBox(height: 38, borderRadius: 10),
+              const SizedBox(height: 12),
+              const SkeletonBox(height: 42, borderRadius: 12),
             ],
           ),
         ),
@@ -148,6 +188,7 @@ class RentalStatusEmptyView extends StatelessWidget {
   final String message;
   final VoidCallback? onAction;
   final String actionLabel;
+  final IconData icon;
 
   const RentalStatusEmptyView({
     super.key,
@@ -155,13 +196,14 @@ class RentalStatusEmptyView extends StatelessWidget {
     required this.message,
     this.onAction,
     this.actionLabel = 'ค้นหาอุปกรณ์เพื่อเช่า',
+    this.icon = Icons.inventory_2_outlined,
   });
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -172,10 +214,10 @@ class RentalStatusEmptyView extends StatelessWidget {
                 color: Color(0xFFF3E8FF),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.assignment_outlined,
+              child: Icon(
+                icon,
                 color: AppColors.primaryColor,
-                size: 42,
+                size: 40,
               ),
             ),
             const SizedBox(height: 20),
@@ -184,9 +226,9 @@ class RentalStatusEmptyView extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontFamily: AppTextStyles.fontFamily,
-                fontSize: 18,
+                fontSize: 17,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E),
+                color: Color(0xFF0F172A),
               ),
             ),
             const SizedBox(height: 8),
@@ -196,33 +238,35 @@ class RentalStatusEmptyView extends StatelessWidget {
               style: const TextStyle(
                 fontFamily: AppTextStyles.fontFamily,
                 fontSize: 13,
-                color: AppColors.hintTextColor,
+                color: Color(0xFF64748B),
                 height: 1.5,
               ),
             ),
             if (onAction != null) ...[
               const SizedBox(height: 24),
-              ElevatedButton(
+              ElevatedButton.icon(
                 onPressed: onAction,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 12,
-                  ),
-                  elevation: 0,
-                ),
-                child: Text(
+                icon: const Icon(Icons.explore_outlined, size: 18),
+                label: Text(
                   actionLabel,
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                    fontSize: 13.5,
                   ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  elevation: 0,
+                  shadowColor: Colors.transparent,
                 ),
               ),
             ],
@@ -234,16 +278,17 @@ class RentalStatusEmptyView extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// List Widget
+// List Widget with Interactive Sub-Filters & Urgency Banner
 // ─────────────────────────────────────────────────────────────────────────────
 
-class RentalStatusList extends StatelessWidget {
+class RentalStatusList extends StatefulWidget {
   final List<RentalStatusItemData> items;
   final Future<void> Function()? onRefresh;
   final String emptyTitle;
   final String emptyMessage;
   final VoidCallback? onEmptyAction;
   final String emptyActionLabel;
+  final bool isLender;
 
   const RentalStatusList({
     super.key,
@@ -253,26 +298,59 @@ class RentalStatusList extends StatelessWidget {
     this.emptyMessage = 'เมื่อคุณทำการยืนยันเช่าอุปกรณ์ รายการจะแสดงที่นี่',
     this.onEmptyAction,
     this.emptyActionLabel = 'ค้นหาอุปกรณ์เพื่อเช่า',
+    this.isLender = false,
   });
 
   @override
+  State<RentalStatusList> createState() => _RentalStatusListState();
+}
+
+class _RentalStatusListState extends State<RentalStatusList> {
+  String _activeFilter = 'all'; // all, pending, confirmed, active, completed
+
+  List<RentalStatusItemData> get _filteredItems {
+    if (_activeFilter == 'pending') {
+      return widget.items.where((it) => it.isPending).toList();
+    }
+    if (_activeFilter == 'confirmed') {
+      return widget.items.where((it) => it.isConfirmed).toList();
+    }
+    if (_activeFilter == 'active') {
+      return widget.items.where((it) => it.isActive).toList();
+    }
+    if (_activeFilter == 'completed') {
+      return widget.items.where((it) => it.isCompleted || it.isCancelled).toList();
+    }
+    return widget.items;
+  }
+
+  int get _countPending => widget.items.where((it) => it.isPending).length;
+  int get _countConfirmed => widget.items.where((it) => it.isConfirmed).length;
+  int get _countActive => widget.items.where((it) => it.isActive).length;
+  int get _countCompleted =>
+      widget.items.where((it) => it.isCompleted || it.isCancelled).length;
+
+  @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
+    if (widget.items.isEmpty) {
       final emptyChild = RentalStatusEmptyView(
-        title: emptyTitle,
-        message: emptyMessage,
-        actionLabel: emptyActionLabel,
-        onAction: onEmptyAction ?? () => AppRoutes.openHome(context),
+        title: widget.emptyTitle,
+        message: widget.emptyMessage,
+        actionLabel: widget.emptyActionLabel,
+        onAction: widget.onEmptyAction ?? () => AppRoutes.openHome(context),
       );
-      if (onRefresh != null) {
+      if (widget.onRefresh != null) {
         return RefreshIndicator(
           color: AppColors.primaryColor,
-          onRefresh: onRefresh!,
+          backgroundColor: Colors.white,
+          onRefresh: widget.onRefresh!,
           child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
             children: [
               SizedBox(
-                height: MediaQuery.of(context).size.height * 0.7,
+                height: MediaQuery.of(context).size.height * 0.65,
                 child: emptyChild,
               ),
             ],
@@ -282,28 +360,276 @@ class RentalStatusList extends StatelessWidget {
       return emptyChild;
     }
 
-    final listView = ListView.separated(
-      padding: const EdgeInsets.all(16),
-      physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: items.length,
-      separatorBuilder: (context, i) => const SizedBox(height: 14),
-      itemBuilder: (context, index) => RentalStatusCard(item: items[index]),
+    final filtered = _filteredItems;
+
+    // หา item ที่กำลังใช้งานตัวแรกเพื่อแสดง Banner ด่วน
+    final activeUrgentItem = widget.items.where((it) => it.isActive).firstOrNull;
+
+    final content = CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      slivers: [
+        // ── 1. Status Filter Pills Bar ──
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _buildFilterChip('all', 'ทั้งหมด', widget.items.length),
+                  const SizedBox(width: 8),
+                  if (_countPending > 0 || _activeFilter == 'pending') ...[
+                    _buildFilterChip('pending', 'รอการยืนยัน', _countPending,
+                        activeColor: const Color(0xFFF59E0B)),
+                    const SizedBox(width: 8),
+                  ],
+                  _buildFilterChip('confirmed', 'รอนัดรับ', _countConfirmed,
+                      activeColor: const Color(0xFF3B82F6)),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('active', 'กำลังใช้งาน', _countActive,
+                      activeColor: const Color(0xFF10B981)),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('completed', 'เสร็จสิ้น', _countCompleted,
+                      activeColor: const Color(0xFF64748B)),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // ── 2. Urgent Active Alert Banner (ถ้ามีอุปกรณ์ที่กำลังเช่าอยู่) ──
+        if (activeUrgentItem != null &&
+            _activeFilter != 'completed' &&
+            _activeFilter != 'pending') ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: _buildActiveUrgencyBanner(context, activeUrgentItem),
+            ),
+          ),
+        ],
+
+        // ── 3. List of Rental Cards ──
+        if (filtered.isEmpty) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 40),
+              child: RentalStatusEmptyView(
+                title: 'ไม่มีรายการในหมวดนี้',
+                message: 'ไม่พบรายการอุปกรณ์ตามตัวกรองที่คุณเลือก',
+                actionLabel: 'ดูทั้งหมด',
+                onAction: () => setState(() => _activeFilter = 'all'),
+              ),
+            ),
+          ),
+        ] else ...[
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final item = filtered[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: RentalStatusCard(item: item),
+                  );
+                },
+                childCount: filtered.length,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
 
-    if (onRefresh != null) {
+    if (widget.onRefresh != null) {
       return RefreshIndicator(
         color: AppColors.primaryColor,
-        onRefresh: onRefresh!,
-        child: listView,
+        backgroundColor: Colors.white,
+        onRefresh: widget.onRefresh!,
+        child: content,
       );
     }
 
-    return listView;
+    return content;
+  }
+
+  Widget _buildFilterChip(
+    String key,
+    String label,
+    int count, {
+    Color activeColor = AppColors.primaryColor,
+  }) {
+    final isSelected = _activeFilter == key;
+
+    return InkWell(
+      onTap: () => setState(() => _activeFilter = key),
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? activeColor : const Color(0xFFE2E8F0),
+            width: 1.0,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: activeColor.withValues(alpha: 0.25),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontSize: 12.5,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? Colors.white : const Color(0xFF475569),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.white.withValues(alpha: 0.24)
+                    : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? Colors.white : const Color(0xFF64748B),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveUrgencyBanner(
+    BuildContext context,
+    RentalStatusItemData item,
+  ) {
+    final effectiveEnd = _computeEffectiveRentalEnd(item);
+    final now = DateTime.now();
+    final isOverdue = now.isAfter(effectiveEnd);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isOverdue ? const Color(0xFFFEF2F2) : const Color(0xFFF5F3FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isOverdue ? const Color(0xFFFECACA) : const Color(0xFFDDD6FE),
+          width: 1.0,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isOverdue ? const Color(0xFFFEE2E2) : const Color(0xFFEDE9FE),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isOverdue ? Icons.warning_amber_rounded : Icons.timer_outlined,
+              color: isOverdue ? const Color(0xFFDC2626) : AppColors.primaryColor,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isOverdue ? 'เลยกำหนดส่งคืนอุปกรณ์!' : 'กำลังใช้งานอยู่ขณะนี้',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.bold,
+                    color: isOverdue
+                        ? const Color(0xFFB91C1C)
+                        : AppColors.primaryColor,
+                  ),
+                ),
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 11.5,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () {
+              AppRoutes.openRentalReturn(
+                context,
+                rentalId: item.bookingId,
+                isLender: item.isOwner,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  isOverdue ? const Color(0xFFDC2626) : AppColors.primaryColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: const Size(0, 32),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+            child: Text(
+              item.isOwner ? 'ตรวจรับคืน' : 'ส่งคืนอุปกรณ์',
+              style: const TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Card Widget
+// Card Widget (Clean Shopee/SaaS Hybrid Style)
 // ─────────────────────────────────────────────────────────────────────────────
 
 DateTime _computeEffectiveRentalEnd(RentalStatusItemData item) {
@@ -369,17 +695,8 @@ class RentalStatusCard extends StatelessWidget {
     );
   }
 
-  bool _isItemRenting(RentalStatusItemData item) {
-    final code = item.statusCode.toLowerCase().trim();
-    return code == 'active' ||
-        code == 'in_use' ||
-        code == 'ongoing' ||
-        item.status.contains('กำลังเช่า') ||
-        item.status.contains('กำลังใช้งาน');
-  }
-
   bool _isItemOverdue(RentalStatusItemData item) {
-    if (!_isItemRenting(item)) return false;
+    if (!item.isActive) return false;
     final now = DateTime.now();
     DateTime? effectiveEnd = item.endDate;
     if (effectiveEnd == null && item.startDate != null) {
@@ -391,48 +708,62 @@ class RentalStatusCard extends StatelessWidget {
   Widget _buildStatusBadge(RentalStatusItemData item) {
     final status = item.statusCode.toLowerCase().trim();
     final isOverdue = _isItemOverdue(item);
+
     Color bg;
     Color fg;
-    BorderSide border;
+    Color border;
+    IconData badgeIcon;
     String badgeText = item.status;
 
     if (isOverdue) {
       bg = const Color(0xFFFEF2F2);
       fg = const Color(0xFFDC2626);
-      border = const BorderSide(color: Color(0xFFFECACA));
+      border = const Color(0xFFFECACA);
+      badgeIcon = Icons.warning_amber_rounded;
       badgeText = 'เลยกำหนดคืน';
     } else {
       switch (status) {
         case 'pending':
           bg = const Color(0xFFFFFBEB);
-          fg = const Color(0xFFB45309);
-          border = const BorderSide(color: Color(0xFFFDE68A));
+          fg = const Color(0xFFD97706);
+          border = const Color(0xFFFDE68A);
+          badgeIcon = Icons.hourglass_top_rounded;
+          badgeText = item.status.isNotEmpty ? item.status : 'รอการยืนยัน';
           break;
         case 'confirmed':
           bg = const Color(0xFFEFF6FF);
           fg = const Color(0xFF1D4ED8);
-          border = const BorderSide(color: Color(0xFFBFDBFE));
+          border = const Color(0xFFBFDBFE);
+          badgeIcon = Icons.handshake_outlined;
+          badgeText = 'นัดรับอุปกรณ์';
           break;
         case 'active':
-          bg = const Color(0xFFF5F3FF);
-          fg = AppColors.primaryColor;
-          border = const BorderSide(color: Color(0xFFDDD6FE));
+          bg = const Color(0xFFECFDF5);
+          fg = const Color(0xFF059669);
+          border = const Color(0xFFA7F3D0);
+          badgeIcon = Icons.play_circle_outline_rounded;
+          badgeText = 'กำลังใช้งาน';
           break;
         case 'completed':
         case 'finished':
-          bg = const Color(0xFFF0FDF4);
-          fg = const Color(0xFF15803D);
-          border = const BorderSide(color: Color(0xFFBBF7D0));
+          bg = const Color(0xFFF8FAFC);
+          fg = const Color(0xFF475569);
+          border = const Color(0xFFE2E8F0);
+          badgeIcon = Icons.check_circle_outline_rounded;
+          badgeText = 'เสร็จสิ้น';
           break;
         case 'cancelled':
           bg = const Color(0xFFFEF2F2);
           fg = const Color(0xFFB91C1C);
-          border = const BorderSide(color: Color(0xFFFECACA));
+          border = const Color(0xFFFECACA);
+          badgeIcon = Icons.cancel_outlined;
+          badgeText = 'ยกเลิกแล้ว';
           break;
         default:
           bg = const Color(0xFFF8FAFC);
           fg = const Color(0xFF475569);
-          border = const BorderSide(color: Color(0xFFE2E8F0));
+          border = const Color(0xFFE2E8F0);
+          badgeIcon = Icons.info_outline_rounded;
       }
     }
 
@@ -440,23 +771,30 @@ class RentalStatusCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.fromBorderSide(border),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border, width: 0.9),
       ),
-      child: Text(
-        badgeText,
-        style: TextStyle(
-          fontFamily: AppTextStyles.fontFamily,
-          fontSize: 11,
-          color: fg,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(badgeIcon, size: 12, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            badgeText,
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 11,
+              color: fg,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildRentalTimeStatusBox(RentalStatusItemData item) {
-    if (!_isItemRenting(item)) return const SizedBox.shrink();
+  Widget _buildTimeHighlightBox(RentalStatusItemData item) {
+    if (!item.isActive) return const SizedBox.shrink();
 
     final now = DateTime.now();
     DateTime? effectiveEnd = item.endDate;
@@ -465,10 +803,9 @@ class RentalStatusCard extends StatelessWidget {
     }
 
     final isExpired = effectiveEnd != null && now.isAfter(effectiveEnd);
-
-    final bgColor = isExpired ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4);
-    final borderColor = isExpired ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0);
-    final accentColor = isExpired ? const Color(0xFFDC2626) : const Color(0xFF16A34A);
+    final bgColor = isExpired ? const Color(0xFFFEF2F2) : const Color(0xFFF5F3FF);
+    final borderColor = isExpired ? const Color(0xFFFECACA) : const Color(0xFFDDD6FE);
+    final accentColor = isExpired ? const Color(0xFFDC2626) : AppColors.primaryColor;
 
     String statusText;
     if (effectiveEnd == null) {
@@ -481,27 +818,25 @@ class RentalStatusCard extends StatelessWidget {
       final diff = effectiveEnd.difference(now);
       final diffText = _formatDurationDiff(diff);
       final deadlineStr = _formatDeadlineTime(effectiveEnd);
-      statusText = 'ครบกำหนด: $deadlineStr (เหลือเวลาอีก $diffText)';
+      statusText = 'ครบกำหนด: $deadlineStr (เหลืออีก $diffText)';
     }
 
     return Container(
       margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7.5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor, width: 1),
+        border: Border.all(color: borderColor, width: 0.9),
       ),
       child: Row(
         children: [
-          FaIcon(
-            isExpired
-                ? FontAwesomeIcons.triangleExclamation
-                : FontAwesomeIcons.clock,
-            size: 12.5,
+          Icon(
+            isExpired ? Icons.warning_rounded : Icons.schedule_rounded,
+            size: 14,
             color: accentColor,
           ),
-          const SizedBox(width: 7),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               statusText,
@@ -552,203 +887,424 @@ class RentalStatusCard extends StatelessWidget {
     }
   }
 
+  String _formatRentalDates(RentalStatusItemData item) {
+    if (item.startDate == null || item.endDate == null) {
+      return item.duration?.isNotEmpty == true ? item.duration! : 'ระยะเวลาตามสัญญา';
+    }
+    try {
+      final f = DateFormat('d MMM', 'th');
+      final s = f.format(item.startDate!.toLocal());
+      final e = f.format(item.endDate!.toLocal());
+      if (item.duration != null && item.duration!.isNotEmpty) {
+        return '$s - $e (${item.duration})';
+      }
+      return '$s - $e';
+    } catch (_) {
+      return '${item.startDate!.day}/${item.startDate!.month} - ${item.endDate!.day}/${item.endDate!.month}';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => _showDetailModal(context),
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            children: [
-              // ── Top row: image + info + status ────────────────────
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Thumbnail
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      width: 66,
-                      height: 66,
-                      color: const Color(0xFFF1F5F9),
-                      child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: item.imageUrl!,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: const Color(0xFFF1F5F9),
-                                child: Icon(
-                                  item.iconData,
-                                  color: const Color(0xFF94A3B8),
-                                  size: 24,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showDetailModal(context),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── 1. Top Section: Image + Info + Status Badge ──
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Thumbnail
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        width: 74,
+                        height: 74,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          border: Border.all(color: const Color(0xFFF1F5F9)),
+                        ),
+                        child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: item.imageUrl!,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: const Color(0xFFF1F5F9),
+                                  child: Center(
+                                    child: Icon(
+                                      item.iconData,
+                                      color: const Color(0xFF94A3B8),
+                                      size: 26,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              errorWidget: (context, url, err) => Container(
-                                color: const Color(0xFFF1F5F9),
-                                child: Icon(
-                                  item.iconData,
-                                  color: const Color(0xFF94A3B8),
-                                  size: 24,
+                                errorWidget: (context, url, err) => Container(
+                                  color: const Color(0xFFF1F5F9),
+                                  child: Icon(
+                                    item.iconData,
+                                    color: const Color(0xFF94A3B8),
+                                    size: 26,
+                                  ),
                                 ),
+                              )
+                            : Icon(
+                                item.iconData,
+                                color: const Color(0xFF94A3B8),
+                                size: 28,
                               ),
-                            )
-                          : Icon(
-                              item.iconData,
-                              color: const Color(0xFF94A3B8),
-                              size: 24,
-                            ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Product info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.2,
-                            color: Color(0xFF0F172A),
+                    const SizedBox(width: 12),
+                    // Product Details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (item.bookingId != null) ...[
+                            Text(
+                              '#BK${item.bookingId} • ${item.category}',
+                              style: const TextStyle(
+                                fontFamily: AppTextStyles.fontFamily,
+                                fontSize: 11,
+                                color: Color(0xFF94A3B8),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                          ],
+                          Text(
+                            item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                              height: 1.25,
+                              color: Color(0xFF0F172A),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${item.partnerRole}: ${item.ownerName}',
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 12,
-                            color: Color(0xFF64748B),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (item.duration != null || item.totalPrice != null) ...[
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              if (item.duration != null &&
-                                  item.duration!.isNotEmpty) ...[
-                                Text(
-                                  item.duration!,
+                              Icon(
+                                item.partnerRole.contains('เจ้าของ')
+                                    ? Icons.storefront_outlined
+                                    : Icons.person_outline_rounded,
+                                size: 13,
+                                color: const Color(0xFF64748B),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  '${item.partnerRole}: ${item.ownerName}',
                                   style: const TextStyle(
                                     fontFamily: AppTextStyles.fontFamily,
-                                    fontSize: 11.5,
+                                    fontSize: 12,
                                     color: Color(0xFF64748B),
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ],
-                              if (item.duration != null &&
-                                  item.duration!.isNotEmpty &&
-                                  item.totalPrice != null)
-                                const Text(
-                                  ' • ',
-                                  style: TextStyle(
-                                    color: Color(0xFFCBD5E1),
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              if (item.totalPrice != null)
-                                Text(
-                                  '฿${item.totalPrice}',
-                                  style: const TextStyle(
-                                    fontFamily: AppTextStyles.fontFamily,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.primaryColor,
-                                  ),
-                                ),
+                              ),
                             ],
                           ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildStatusBadge(item),
+                  ],
+                ),
+
+                // ── 2. Time Countdown Highlight (if active) ──
+                _buildTimeHighlightBox(item),
+
+                // ── 3. Pickup Location Pin (if confirmed) ──
+                if (item.isConfirmed &&
+                    item.pickupLocation != null &&
+                    item.pickupLocation!.isNotEmpty) ...[
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 13.5,
+                          color: Color(0xFF2563EB),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'นัดรับที่: ${item.pickupLocation!}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 11.5,
+                              color: Color(0xFF334155),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // Status badge
-                  _buildStatusBadge(item),
                 ],
-              ),
-              // Option 1: แถบกล่องเวลาภายในตัวการ์ด (Time Status Box)
-              _buildRentalTimeStatusBox(item),
-              const SizedBox(height: 12),
-              // ── Tracking route & action button ─────────────────────────────
-              if (item.statusCode.toLowerCase() == 'active') ...[
-                SizedBox(
-                  width: double.infinity,
-                  height: 42,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      AppRoutes.openRentalReturn(
-                        context,
-                        rentalId: item.bookingId,
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryColor,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+
+                const SizedBox(height: 10),
+
+                // ── 4. Period & Pricing Bar ──
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFF1F5F9)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 12.5,
+                            color: Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _formatRentalDates(item),
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 11.5,
+                              color: Color(0xFF475569),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    child: const Text(
-                      'ส่งคืนอุปกรณ์',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
+                      if (item.totalPrice != null) ...[
+                        Text(
+                          '฿${item.totalPrice}',
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryColor,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ] else ...[
-                SizedBox(
-                  width: double.infinity,
-                  height: 40,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _openTrackingMap(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryColor,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+
+                const SizedBox(height: 12),
+
+                // ── 5. Action Buttons Row ──
+                Row(
+                  children: [
+                    // Primary Action
+                    Expanded(
+                      child: item.isActive
+                          ? ElevatedButton.icon(
+                              onPressed: () {
+                                AppRoutes.openRentalReturn(
+                                  context,
+                                  rentalId: item.bookingId,
+                                  isLender: item.isOwner,
+                                );
+                              },
+                              icon: Icon(
+                                item.isOwner
+                                    ? Icons.qr_code_2_rounded
+                                    : Icons.assignment_turned_in_outlined,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                              label: Text(
+                                item.isOwner
+                                    ? 'ตรวจรับของคืน & สแกน QR'
+                                    : 'ส่งคืนอุปกรณ์ (ถ่ายภาพ)',
+                                style: const TextStyle(
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: item.isOwner
+                                    ? const Color(0xFF10B981)
+                                    : AppColors.primaryColor,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shadowColor: Colors.transparent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                              ),
+                            )
+                          : item.isConfirmed
+                              ? ElevatedButton.icon(
+                                  onPressed: () => _openTrackingMap(context),
+                                  icon: const Icon(
+                                    Icons.near_me_outlined,
+                                    size: 15,
+                                    color: Colors.white,
+                                  ),
+                                  label: const Text(
+                                    'ดูจุดนัดรับ & เส้นทาง',
+                                    style: TextStyle(
+                                      fontFamily: AppTextStyles.fontFamily,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2563EB),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shadowColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                  ),
+                                )
+                              : item.isPending
+                                  ? item.isOwner
+                                      ? ElevatedButton.icon(
+                                          onPressed: () => _showDetailModal(context),
+                                          icon: const Icon(
+                                            Icons.assignment_ind_outlined,
+                                            size: 15,
+                                            color: Colors.white,
+                                          ),
+                                          label: const Text(
+                                            'ตรวจสอบคำขอเช่า',
+                                            style: TextStyle(
+                                              fontFamily: AppTextStyles.fontFamily,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFFF59E0B),
+                                            foregroundColor: Colors.white,
+                                            elevation: 0,
+                                            shadowColor: Colors.transparent,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
+                                          ),
+                                        )
+                                      : OutlinedButton.icon(
+                                          onPressed: () => _showDetailModal(context),
+                                          icon: const Icon(
+                                            Icons.hourglass_empty_rounded,
+                                            size: 15,
+                                            color: Color(0xFFD97706),
+                                          ),
+                                          label: const Text(
+                                            'รอการยืนยันจากเจ้าของ',
+                                            style: TextStyle(
+                                              fontFamily: AppTextStyles.fontFamily,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFFD97706),
+                                            ),
+                                          ),
+                                          style: OutlinedButton.styleFrom(
+                                            backgroundColor: const Color(0xFFFFFBEB),
+                                            side: const BorderSide(
+                                              color: Color(0xFFFDE68A),
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
+                                          ),
+                                        )
+                                  : OutlinedButton(
+                                      onPressed: () => _showDetailModal(context),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.primaryColor,
+                                        side: const BorderSide(
+                                          color: Color(0xFFE2E8F0),
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                      ),
+                                      child: const Text(
+                                        'ดูรายละเอียดการเช่า',
+                                        style: TextStyle(
+                                          fontFamily: AppTextStyles.fontFamily,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Secondary detail button
+                    Material(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        onTap: () => _showDetailModal(context),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 14,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
-                    icon: const Icon(
-                      Icons.near_me_outlined,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                    label: const Text(
-                      'ดูเส้นทางนัดรับ & ตรวจรับของ',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -770,10 +1326,12 @@ class _RentalStatusDetailSheet extends StatelessWidget {
         return -1;
       case 'completed':
       case 'finished':
-        return 2;
+        return 3;
       case 'active':
-        return 1;
+        return 2;
       case 'confirmed':
+        return 1;
+      case 'pending':
       default:
         return 0;
     }
@@ -787,352 +1345,420 @@ class _RentalStatusDetailSheet extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Drag handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            // Sheet Title
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'รายละเอียดสถานะการเช่า',
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E2022),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Item preview card
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7F8FA),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
               ),
-              child: Row(
+
+              // Title Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      width: 54,
-                      height: 54,
-                      color: const Color(0xFFF3E8FF),
-                      child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: item.imageUrl!,
-                              fit: BoxFit.cover,
-                              errorWidget: (context, url, error) => Icon(
+                  const Text(
+                    'รายละเอียดสถานะการเช่า',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 22),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Step-by-Step Progress Stepper
+              if (!isCancelled) ...[
+                _buildTimelineStepper(currentStep),
+                const SizedBox(height: 16),
+              ],
+
+              // Item Preview Card
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        color: const Color(0xFFF3E8FF),
+                        child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: item.imageUrl!,
+                                fit: BoxFit.cover,
+                                errorWidget: (context, url, error) => Icon(
+                                  item.iconData,
+                                  color: AppColors.primaryColor,
+                                  size: 26,
+                                ),
+                              )
+                            : Icon(
                                 item.iconData,
                                 color: AppColors.primaryColor,
                                 size: 26,
                               ),
-                            )
-                          : Icon(
-                              item.iconData,
-                              color: AppColors.primaryColor,
-                              size: 26,
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: Color(0xFF1E2022),
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${item.partnerRole}: ${item.ownerName}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 12,
-                            color: Color(0xFF777A7C),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (item.totalPrice != null)
-                    Text(
-                      '฿${item.totalPrice}',
-                      style: const TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: AppColors.primaryColor,
                       ),
                     ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14.5,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${item.partnerRole}: ${item.ownerName}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (item.totalPrice != null)
+                      Text(
+                        '฿${item.totalPrice}',
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: AppColors.primaryColor,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 18),
-            if (isCancelled) ...[
+
+              const SizedBox(height: 14),
+
+              if (isCancelled) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFECACA)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.cancel_outlined,
+                        color: Color(0xFFDC2626),
+                        size: 20,
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'รายการเช่านี้ถูกยกเลิกแล้ว',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            color: Color(0xFFDC2626),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
+
+              // Rental Details Info Box
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFEBEE),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFFCDD2)),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
-                child: const Row(
+                child: Column(
                   children: [
-                    Icon(
-                      Icons.cancel_outlined,
-                      color: Color(0xFFC62828),
-                      size: 22,
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'รายการเช่านี้ถูกยกเลิกแล้ว',
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          color: Color(0xFFC62828),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
+                    if (item.bookingId != null) ...[
+                      _buildInfoRow('รหัสคำขอเช่า', '#BK${item.bookingId}'),
+                      const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                    ],
+                    _buildInfoRow('สถานะปัจจุบัน', item.status, valueColor: item.statusColor),
+                    if (item.startDate != null && item.endDate != null) ...[
+                      const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                      _buildInfoRow(
+                        'ระยะเวลาเช่า',
+                        '${_formatDate(item.startDate!)} - ${_formatDate(item.endDate!)}',
+                      ),
+                    ],
+                    if (item.pickupLocation != null && item.pickupLocation!.isNotEmpty) ...[
+                      const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                      _buildInfoRow('สถานที่นัดรับ', item.pickupLocation!),
+                    ],
+                    if (item.totalPrice != null) ...[
+                      const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                      _buildInfoRow(
+                        'ยอดรวมทั้งหมด',
+                        '฿${item.totalPrice}',
+                        valueColor: AppColors.primaryColor,
+                        isBold: true,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // วิดเจ็ตนับเวลาถอยหลัง (ถ้า Active)
+              if (item.isActive) ...[
+                RentalCountdownTimerWidget(
+                  endDateTime: _computeEffectiveRentalEnd(item),
+                  startDateTime: item.startDate,
+                  isCompact: false,
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // Actions
+              if (item.isActive) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: item.isOwner
+                          ? const Color(0xFF10B981)
+                          : AppColors.primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-            if ((item.statusCode.toLowerCase() == 'active' || item.status.contains('กำลังเช่า')) &&
-                item.endDate != null &&
-                DateTime.now().isAfter(item.endDate!)) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF2F2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFECACA)),
-                ),
-                child: const Row(
-                  children: [
-                    FaIcon(
-                      FontAwesomeIcons.triangleExclamation,
-                      color: Color(0xFFDC2626),
-                      size: 15,
+                    onPressed: () {
+                      Navigator.pop(context);
+                      AppRoutes.openRentalReturn(
+                        context,
+                        rentalId: item.bookingId,
+                        isLender: item.isOwner,
+                      );
+                    },
+                    icon: Icon(
+                      item.isOwner
+                          ? Icons.qr_code_2_rounded
+                          : Icons.assignment_turned_in_outlined,
+                      size: 18,
                     ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'เลยกำหนดส่งคืนอุปกรณ์แล้ว กรุณาดำเนินการส่งคืน',
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          color: Color(0xFFDC2626),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
+                    label: Text(
+                      item.isOwner
+                          ? 'ตรวจรับของคืน & สแกน QR'
+                          : 'ดำเนินการส่งคืนอุปกรณ์',
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13.5,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 14),
-            ],
-            // Rental Details Box
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Column(
-                children: [
-                  if (item.bookingId != null) ...[
-                    _buildInfoRow('รหัสคำขอเช่า', '#${item.bookingId}'),
-                    const Divider(height: 16),
-                  ],
-                  _buildInfoRow('สถานะปัจจุบัน', item.status, valueColor: item.statusColor),
-                  if (item.startDate != null && item.endDate != null) ...[
-                    const Divider(height: 16),
-                    _buildInfoRow(
-                      'ระยะเวลาเช่า',
-                      '${_formatDate(item.startDate!)} - ${_formatDate(item.endDate!)}',
+                const SizedBox(height: 10),
+              ],
+
+              if (item.pickupLocation != null && item.pickupLocation!.isNotEmpty) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
                     ),
-                  ],
-                  if (item.pickupLocation != null && item.pickupLocation!.isNotEmpty) ...[
-                    const Divider(height: 16),
-                    _buildInfoRow('สถานที่นัดรับ', item.pickupLocation!),
-                  ],
-                  if (item.totalPrice != null) ...[
-                    const Divider(height: 16),
-                    _buildInfoRow(
-                      'ยอดรวมทั้งหมด',
-                      '฿${item.totalPrice}',
-                      valueColor: AppColors.primaryColor,
-                      isBold: true,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // ── วิดเจ็ตนับเวลาถอยหลังการส่งคืน / ติดตามเวลาส่งคืนเลท ในหน้า Sheet ──
-            if (item.statusCode.toLowerCase() == 'active') ...[
-              RentalCountdownTimerWidget(
-                endDateTime: _computeEffectiveRentalEnd(item),
-                startDateTime: item.startDate,
-                isCompact: false,
-              ),
-              const SizedBox(height: 16),
-            ],
-            // Actions
-            if (item.statusCode.toLowerCase() == 'active') ...[
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryColor,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    AppRoutes.openRentalReturn(
-                      context,
-                      rentalId: item.bookingId,
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.assignment_turned_in_outlined,
-                    size: 18,
-                  ),
-                  label: const Text(
-                    'ดำเนินการส่งคืนอุปกรณ์',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                    onPressed: () {
+                      Navigator.pop(context);
+                      final isOwner = item.partnerRole == 'ผู้เช่า';
+                      AppRoutes.openRentalTrackingMap(
+                        context,
+                        isOwner: isOwner,
+                        trackingArgs: {
+                          'itemTitle': item.title,
+                          'itemImageUrl': item.imageUrl,
+                          'pickupLocation': item.pickupLocation,
+                          'ownerName': item.ownerName,
+                          'ownerPhone': item.ownerPhone,
+                          'periodText': item.duration,
+                          'totalPrice': item.totalPrice?.toDouble(),
+                          'statusCode': item.statusCode,
+                          'bookingId': item.bookingId,
+                          'isOwner': isOwner,
+                        },
+                      );
+                    },
+                    icon: const Icon(Icons.near_me_rounded, size: 18),
+                    label: const Text(
+                      'ดูเส้นทางนัดรับ & แผนที่',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13.5,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            if (item.pickupLocation != null && item.pickupLocation!.isNotEmpty) ...[
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                const SizedBox(height: 10),
+              ],
+
+              if (item.itemId != null) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryColor,
+                      side: const BorderSide(color: Color(0xFFD8B4FE)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
                     ),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    final isOwner = item.partnerRole == 'ผู้เช่า';
-                    AppRoutes.openRentalTrackingMap(
-                      context,
-                      isOwner: isOwner,
-                      trackingArgs: {
-                        'itemTitle': item.title,
-                        'itemImageUrl': item.imageUrl,
-                        'pickupLocation': item.pickupLocation,
-                        'ownerName': item.ownerName,
-                        'periodText': item.duration,
-                        'totalPrice': item.totalPrice?.toDouble(),
-                        'statusCode': item.statusCode,
-                        'bookingId': item.bookingId,
-                        'isOwner': isOwner,
-                      },
-                    );
-                  },
-                  icon: Icon(
-                    item.statusCode.toLowerCase() == 'active'
-                        ? Icons.inventory_2_outlined
-                        : Icons.near_me_rounded,
-                    size: 18,
-                  ),
-                  label: Text(
-                    item.statusCode.toLowerCase() == 'active'
-                        ? 'ดูรายละเอียดการเช่า'
-                        : 'ดูเส้นทางนัดรับ & ตรวจรับของ',
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                    onPressed: () {
+                      Navigator.pop(context);
+                      AppRoutes.openItemDetail(context, itemId: item.itemId!);
+                    },
+                    child: const Text(
+                      'ดูรายละเอียดอุปกรณ์ต้นทาง',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13.5,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
+              ],
             ],
-            if (item.itemId != null) ...[
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primaryColor,
-                    side: const BorderSide(color: Color(0xFFD8B4FE)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    AppRoutes.openItemDetail(context, itemId: item.itemId!);
-                  },
-                  child: const Text(
-                    'ดูรายละเอียดอุปกรณ์',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTimelineStepper(int currentStep) {
+    const steps = [
+      'ส่งคำขอเช่า',
+      'ยืนยันนัดรับ',
+      'กำลังใช้งาน',
+      'ส่งคืนเรียบร้อย',
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          for (int i = 0; i < steps.length; i++) ...[
+            _buildStepCircle(i, i <= currentStep, i == currentStep, steps[i]),
+            if (i < steps.length - 1)
+              Expanded(
+                child: Container(
+                  height: 2,
+                  color: i < currentStep
+                      ? AppColors.primaryColor
+                      : const Color(0xFFCBD5E1),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepCircle(
+    int stepIndex,
+    bool isCompletedOrCurrent,
+    bool isCurrent,
+    String label,
+  ) {
+    return Column(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: isCompletedOrCurrent
+                ? (isCurrent && stepIndex == 0
+                    ? const Color(0xFFF59E0B)
+                    : AppColors.primaryColor)
+                : const Color(0xFFE2E8F0),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: isCompletedOrCurrent
+                ? const Icon(Icons.check, size: 14, color: Colors.white)
+                : Text(
+                    '${stepIndex + 1}',
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 11,
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: AppTextStyles.fontFamily,
+            fontSize: 10,
+            color: isCompletedOrCurrent
+                ? const Color(0xFF0F172A)
+                : const Color(0xFF94A3B8),
+            fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1149,8 +1775,8 @@ class _RentalStatusDetailSheet extends StatelessWidget {
           label,
           style: const TextStyle(
             fontFamily: AppTextStyles.fontFamily,
-            fontSize: 12,
-            color: Color(0xFF777A7C),
+            fontSize: 12.5,
+            color: Color(0xFF64748B),
           ),
         ),
         const SizedBox(width: 12),
@@ -1160,9 +1786,9 @@ class _RentalStatusDetailSheet extends StatelessWidget {
             textAlign: TextAlign.end,
             style: TextStyle(
               fontFamily: AppTextStyles.fontFamily,
-              fontSize: 12,
+              fontSize: 12.5,
               fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: valueColor ?? const Color(0xFF1E2022),
+              color: valueColor ?? const Color(0xFF0F172A),
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -1179,4 +1805,3 @@ class _RentalStatusDetailSheet extends StatelessWidget {
     }
   }
 }
-

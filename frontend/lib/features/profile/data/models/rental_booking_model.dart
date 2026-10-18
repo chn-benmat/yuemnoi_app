@@ -149,6 +149,8 @@ class RentalBookingModel {
   }) {
     final status = rawStatus?.toLowerCase().trim();
     switch (status) {
+      case 'pending':
+        return isRenter ? 'รอการยืนยัน' : 'มีคำขอเช่าใหม่';
       case 'confirmed':
         if (startDate != null) {
           final now = DateTime.now();
