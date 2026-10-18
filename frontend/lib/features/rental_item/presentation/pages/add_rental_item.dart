@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../../core/models/pickup_location.dart';
+import '../../../../core/widgets/pickup_location_field.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -44,6 +46,7 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
       }
     });
   }
+
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -52,6 +55,7 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
   String? _category;
   String? _rentalType;
   bool _showImageValidationError = false;
+  PickupLocation? _pickupLocation;
 
   @override
   void dispose() {
@@ -120,6 +124,7 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
           rentalType: _rentalType!,
           price: int.parse(_priceController.text),
           images: state.images,
+          pickupLocation: _pickupLocation,
         ),
       ),
     );
@@ -244,6 +249,12 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
                             ? 'กรุณาระบุราคาที่มากกว่า 0'
                             : null;
                       },
+                    ),
+                    const SizedBox(height: 16),
+                    PickupLocationField(
+                      value: _pickupLocation,
+                      onChanged: (value) =>
+                          setState(() => _pickupLocation = value),
                     ),
                   ],
                 ),

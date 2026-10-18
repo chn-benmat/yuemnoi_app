@@ -26,6 +26,10 @@ func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
 		switch {
 		case r.URL.Path == "/rest/v1/rpc/create_rental_request":
 			createCalls++
+			var request map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request["p_offer_message_id"] != "11" {
+				t.Errorf("missing authoritative offer snapshot: %v (%v)", request, err)
+			}
 			fmt.Fprint(w, `{"id":25,"user_id":"renter","item_id":7,"status":"pending"}`)
 		case r.URL.Path == "/rest/v1/chat_message_tb" && r.Method == http.MethodGet:
 			payload := originalMessage
@@ -58,6 +62,8 @@ func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
 			var data map[string]any
 			json.NewDecoder(r.Body).Decode(&data)
 			sharedMessage, _ = data["message"].(string)
+			// จำลอง trigger จัดรูปแบบข้อความใหม่ ต้องใช้ผลที่ DB คืนมาสำหรับ CAS ครั้งถัดไป
+			sharedMessage += " "
 			json.NewEncoder(w).Encode([]any{map[string]any{"id": 11, "message": sharedMessage}})
 		case r.URL.Path == "/rest/v1/booking_tb" && r.Method == http.MethodGet:
 			fmt.Fprintf(w, `[{"id":25,"user_id":"renter","item_id":7,"status":%q,"type":"รายวัน","start_at":"2026-10-18T02:00:00Z","end_at":"2026-10-19T02:00:00Z","pickup_location":"Pickup"}]`, persistedStatus)

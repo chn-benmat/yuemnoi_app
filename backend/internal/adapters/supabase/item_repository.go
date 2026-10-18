@@ -33,13 +33,18 @@ func NewSupabaseItemRepository(sbClient *supabase.Client, serviceKey string) dom
 func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, images []domain.ItemImage) (*domain.Item, error) {
 	var items []domain.Item
 	payload := map[string]interface{}{
-		"user_id":     item.UserID,
-		"item_name":   item.ItemName,
-		"description": item.Description,
-		"category":    item.Category,
-		"price":       item.Price,
-		"status":      item.Status,
-		"type":        item.Type,
+		"user_id":          item.UserID,
+		"item_name":        item.ItemName,
+		"description":      item.Description,
+		"category":         item.Category,
+		"price":            item.Price,
+		"status":           item.Status,
+		"type":             item.Type,
+		"pickup_location":  item.PickupLocation,
+		"pickup_address":   item.PickupAddress,
+		"pickup_note":      item.PickupNote,
+		"pickup_latitude":  item.PickupLatitude,
+		"pickup_longitude": item.PickupLongitude,
 	}
 	if item.ItemImageURL != nil {
 		payload["item_image_url"] = item.ItemImageURL

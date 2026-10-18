@@ -112,6 +112,7 @@ class BookingRequestData {
   final TimeOfDay endTime;
   final String location;
   final String locationNote;
+  final String? locationAddress;
   final double? latitude;
   final double? longitude;
   final String? conversationId;
@@ -134,6 +135,7 @@ class BookingRequestData {
     required this.endTime,
     required this.location,
     this.locationNote = 'เลือกโดยผู้ปล่อยเช่า',
+    this.locationAddress,
     this.latitude,
     this.longitude,
     this.conversationId,
@@ -178,6 +180,7 @@ class BookingRequestData {
       'endMinute': endTime.minute,
       'location': location,
       'locationNote': locationNote,
+      'locationAddress': locationAddress,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       'totalPrice': totalPrice,
@@ -267,6 +270,7 @@ $metaStartTag$jsonString$metaEndTag''';
             location: map['location'] as String? ?? 'นัดรับตามตกลง',
             locationNote:
                 map['locationNote'] as String? ?? 'เลือกโดยผู้ปล่อยเช่า',
+            locationAddress: map['locationAddress'] as String?,
             latitude: lat,
             longitude: lng,
             conversationId: map['conversationId'] as String?,
@@ -411,6 +415,7 @@ $metaStartTag$jsonString$metaEndTag''';
     TimeOfDay? endTime,
     String? location,
     String? locationNote,
+    String? locationAddress,
     double? latitude,
     double? longitude,
     String? conversationId,
@@ -429,6 +434,7 @@ $metaStartTag$jsonString$metaEndTag''';
       endTime: endTime ?? this.endTime,
       location: location ?? this.location,
       locationNote: locationNote ?? this.locationNote,
+      locationAddress: locationAddress ?? this.locationAddress,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       conversationId: conversationId ?? this.conversationId,

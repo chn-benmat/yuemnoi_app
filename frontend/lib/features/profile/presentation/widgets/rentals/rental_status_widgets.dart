@@ -32,6 +32,9 @@ class RentalStatusItemData {
   final String? duration;
   final int? totalPrice;
   final String? pickupLocation;
+  final double? latitude;
+  final double? longitude;
+  final String? pickupNote;
 
   const RentalStatusItemData({
     this.bookingId,
@@ -50,6 +53,9 @@ class RentalStatusItemData {
     this.duration,
     this.totalPrice,
     this.pickupLocation,
+    this.latitude,
+    this.longitude,
+    this.pickupNote,
   });
 
   factory RentalStatusItemData.fromEntity(
@@ -74,6 +80,9 @@ class RentalStatusItemData {
       duration: entity.duration,
       totalPrice: entity.totalPrice.toInt(),
       pickupLocation: entity.pickupLocation,
+      latitude: entity.latitude,
+      longitude: entity.longitude,
+      pickupNote: entity.pickupNote,
     );
   }
 }
@@ -346,6 +355,9 @@ class RentalStatusCard extends StatelessWidget {
         'itemTitle': item.title,
         'itemImageUrl': item.imageUrl,
         'pickupLocation': item.pickupLocation,
+        'destinationLat': item.latitude,
+        'destinationLng': item.longitude,
+        'pickupNote': item.pickupNote,
         'ownerName': item.ownerName,
         'ownerPhone': item.ownerPhone,
         'periodText': item.duration,
@@ -466,9 +478,15 @@ class RentalStatusCard extends StatelessWidget {
 
     final isExpired = effectiveEnd != null && now.isAfter(effectiveEnd);
 
-    final bgColor = isExpired ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4);
-    final borderColor = isExpired ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0);
-    final accentColor = isExpired ? const Color(0xFFDC2626) : const Color(0xFF16A34A);
+    final bgColor = isExpired
+        ? const Color(0xFFFEF2F2)
+        : const Color(0xFFF0FDF4);
+    final borderColor = isExpired
+        ? const Color(0xFFFECACA)
+        : const Color(0xFFBBF7D0);
+    final accentColor = isExpired
+        ? const Color(0xFFDC2626)
+        : const Color(0xFF16A34A);
 
     String statusText;
     if (effectiveEnd == null) {
@@ -526,7 +544,9 @@ class RentalStatusCard extends StatelessWidget {
       return hours > 0 ? '${diff.inDays} วัน $hours ชม.' : '${diff.inDays} วัน';
     } else if (diff.inHours > 0) {
       final mins = diff.inMinutes % 60;
-      return mins > 0 ? '${diff.inHours} ชม. $mins นาที' : '${diff.inHours} ชม.';
+      return mins > 0
+          ? '${diff.inHours} ชม. $mins นาที'
+          : '${diff.inHours} ชม.';
     } else {
       final mins = diff.inMinutes;
       return '${mins > 0 ? mins : 1} นาที';
@@ -535,13 +555,17 @@ class RentalStatusCard extends StatelessWidget {
 
   String _formatDeadlineTime(DateTime dt) {
     final now = DateTime.now();
-    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final isToday =
+        dt.year == now.year && dt.month == now.month && dt.day == now.day;
     final timeStr = '${DateFormat('HH:mm').format(dt)} น.';
     if (isToday) {
       return 'วันนี้ $timeStr';
     }
     final tomorrow = now.add(const Duration(days: 1));
-    final isTomorrow = dt.year == tomorrow.year && dt.month == tomorrow.month && dt.day == tomorrow.day;
+    final isTomorrow =
+        dt.year == tomorrow.year &&
+        dt.month == tomorrow.month &&
+        dt.day == tomorrow.day;
     if (isTomorrow) {
       return 'พรุ่งนี้ $timeStr';
     }
@@ -634,7 +658,8 @@ class RentalStatusCard extends StatelessWidget {
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (item.duration != null || item.totalPrice != null) ...[
+                        if (item.duration != null ||
+                            item.totalPrice != null) ...[
                           const SizedBox(height: 4),
                           Row(
                             children: [
@@ -932,11 +957,15 @@ class _RentalStatusDetailSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
             ],
-            if ((item.statusCode.toLowerCase() == 'active' || item.status.contains('กำลังเช่า')) &&
+            if ((item.statusCode.toLowerCase() == 'active' ||
+                    item.status.contains('กำลังเช่า')) &&
                 item.endDate != null &&
                 DateTime.now().isAfter(item.endDate!)) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEF2F2),
                   borderRadius: BorderRadius.circular(12),
@@ -980,7 +1009,11 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                     _buildInfoRow('รหัสคำขอเช่า', '#${item.bookingId}'),
                     const Divider(height: 16),
                   ],
-                  _buildInfoRow('สถานะปัจจุบัน', item.status, valueColor: item.statusColor),
+                  _buildInfoRow(
+                    'สถานะปัจจุบัน',
+                    item.status,
+                    valueColor: item.statusColor,
+                  ),
                   if (item.startDate != null && item.endDate != null) ...[
                     const Divider(height: 16),
                     _buildInfoRow(
@@ -988,7 +1021,8 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                       '${_formatDate(item.startDate!)} - ${_formatDate(item.endDate!)}',
                     ),
                   ],
-                  if (item.pickupLocation != null && item.pickupLocation!.isNotEmpty) ...[
+                  if (item.pickupLocation != null &&
+                      item.pickupLocation!.isNotEmpty) ...[
                     const Divider(height: 16),
                     _buildInfoRow('สถานที่นัดรับ', item.pickupLocation!),
                   ],
@@ -1051,7 +1085,8 @@ class _RentalStatusDetailSheet extends StatelessWidget {
               ),
               const SizedBox(height: 10),
             ],
-            if (item.pickupLocation != null && item.pickupLocation!.isNotEmpty) ...[
+            if (item.pickupLocation != null &&
+                item.pickupLocation!.isNotEmpty) ...[
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -1074,6 +1109,9 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                         'itemTitle': item.title,
                         'itemImageUrl': item.imageUrl,
                         'pickupLocation': item.pickupLocation,
+                        'destinationLat': item.latitude,
+                        'destinationLng': item.longitude,
+                        'pickupNote': item.pickupNote,
                         'ownerName': item.ownerName,
                         'periodText': item.duration,
                         'totalPrice': item.totalPrice?.toDouble(),
@@ -1179,4 +1217,3 @@ class _RentalStatusDetailSheet extends StatelessWidget {
     }
   }
 }
-

@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../core/models/pickup_location.dart';
 
 import '../../../rental_item/domain/entities/rental_item.dart';
 
@@ -50,6 +51,7 @@ class ItemDetail extends Equatable {
     required this.reviews,
     required this.isOwner,
     this.ownerHidden = false,
+    this.pickupLocation,
   });
 
   final int id;
@@ -64,6 +66,7 @@ class ItemDetail extends Equatable {
   final List<ItemReview> reviews;
   final bool isOwner;
   final bool ownerHidden;
+  final PickupLocation? pickupLocation;
 
   String get unitLabel => rentalType == 'รายชั่วโมง' ? 'ชั่วโมง' : 'วัน';
 
@@ -80,6 +83,7 @@ class ItemDetail extends Equatable {
     reviews: reviews,
     isOwner: isOwner,
     ownerHidden: hidden,
+    pickupLocation: pickupLocation,
   );
 
   double get averageRating {
@@ -102,6 +106,7 @@ class ItemDetail extends Equatable {
     reviews,
     isOwner,
     ownerHidden,
+    pickupLocation,
   ];
 }
 
@@ -115,6 +120,7 @@ class ItemEditDraft extends Equatable {
     required this.price,
     required this.retainedImageUrls,
     required this.newImages,
+    this.pickupLocation,
   });
 
   final int itemId;
@@ -125,6 +131,7 @@ class ItemEditDraft extends Equatable {
   final int price;
   final List<String> retainedImageUrls;
   final List<RentalItemImage> newImages;
+  final PickupLocation? pickupLocation;
 
   @override
   List<Object?> get props => [
@@ -136,5 +143,6 @@ class ItemEditDraft extends Equatable {
     price,
     retainedImageUrls,
     newImages,
+    pickupLocation,
   ];
 }

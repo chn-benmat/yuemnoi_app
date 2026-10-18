@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import '../../../../core/models/pickup_location.dart';
 
 class RentalItem {
   const RentalItem({required this.id, required this.imageUrls});
@@ -22,6 +23,7 @@ class RentalItemDraft {
     required this.rentalType,
     required this.price,
     required this.images,
+    this.pickupLocation,
   });
 
   final String name;
@@ -30,4 +32,5 @@ class RentalItemDraft {
   final String rentalType;
   final int price;
   final List<RentalItemImage> images;
+  final PickupLocation? pickupLocation;
 }

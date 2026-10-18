@@ -49,7 +49,7 @@ class ItemDetailRemoteDataSource {
       final item = await _client
           .from('item_tb')
           .select(
-            'id,user_id,item_name,item_image_url,description,category,price,status,type,owner_hidden',
+            'id,user_id,item_name,item_image_url,description,category,price,status,type,owner_hidden,pickup_location,pickup_address,pickup_note,pickup_latitude,pickup_longitude',
           )
           .eq('id', itemId)
           .maybeSingle();
@@ -144,6 +144,7 @@ class ItemDetailRemoteDataSource {
           'description': draft.description.trim(),
           'type': draft.rentalType,
           'price': draft.price,
+          ...?draft.pickupLocation?.toJson(),
           'item_image_url': imageUrls,
         },
       );

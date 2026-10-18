@@ -68,7 +68,7 @@ void main() {
 
     expect(find.text('รายละเอียดอุปกรณ์'), findsOneWidget);
     expect(find.text('การแสดงผล'), findsOneWidget);
-    expect(find.text('ข้อมูลพื้นฐาน'), findsOneWidget);
+    expect(find.text('แก้ไขอุปกรณ์'), findsOneWidget);
     expect(find.text('ข้อความตอบกลับอัตโนมัติ'), findsOneWidget);
     expect(find.text('ตั้งค่าการเช่า'), findsNothing);
     expect(find.text('รูปภาพ'), findsNothing);

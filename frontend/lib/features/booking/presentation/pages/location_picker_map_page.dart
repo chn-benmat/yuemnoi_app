@@ -49,6 +49,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
   double _currentZoom = 16.0;
 
   late final TextEditingController _nameController;
+  late final TextEditingController _noteController;
   late final TextEditingController _searchController;
   final FocusNode _searchFocusNode = FocusNode();
 
@@ -57,8 +58,10 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
   bool _isLocatingUser = false;
   List<LocationSearchResult> _searchResults = [];
   Timer? _debounceTimer;
+  Timer? _geocodeTimer;
 
   String _resolvedAddress = '';
+  int _geocodeVersion = 0;
   late AnimationController _pinAnimController;
   late Animation<double> _pinJumpAnimation;
 
@@ -80,6 +83,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
     _nameController = TextEditingController(
       text: widget.initialLocationName ?? 'ซีคอน บางแค',
     );
+    _noteController = TextEditingController(text: widget.initialNote ?? '');
     _searchController = TextEditingController();
 
     _pinAnimController = AnimationController(
@@ -103,7 +107,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _geocodeTimer?.cancel();
     _nameController.dispose();
+    _noteController.dispose();
     _searchController.dispose();
     _searchFocusNode.removeListener(_onSearchFocusChanged);
     _searchFocusNode.dispose();
@@ -173,24 +179,26 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
     LatLng latLng, {
     bool updateLocationName = false,
   }) {
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
-      if (!mounted) return;
-      setState(() => _isReverseGeocoding = true);
+    _geocodeTimer?.cancel();
+    final version = ++_geocodeVersion;
+    setState(() {
+      _isReverseGeocoding = true;
+      _resolvedAddress = '';
+    });
+    _geocodeTimer = Timer(const Duration(milliseconds: 400), () async {
       final result = await LocationService.instance.reverseGeocode(
         latLng.latitude,
         latLng.longitude,
       );
-
-      if (mounted && result != null) {
-        setState(() {
-          _resolvedAddress = result.displayName;
-          if (updateLocationName) {
-            _nameController.text = result.name;
-          }
-          _isReverseGeocoding = false;
-        });
-      }
+      if (!mounted || version != _geocodeVersion) return;
+      setState(() {
+        _resolvedAddress =
+            result?.displayName ??
+            '${latLng.latitude.toStringAsFixed(6)}, ${latLng.longitude.toStringAsFixed(6)}';
+        if (updateLocationName && result != null)
+          _nameController.text = result.name;
+        _isReverseGeocoding = false;
+      });
     });
   }
 
@@ -250,7 +258,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
 
   void _onConfirmLocation() {
     final name = _nameController.text.trim();
-    final initialNote = widget.initialNote?.trim();
+    final initialNote = _noteController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -263,9 +271,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
 
     final result = LocationPickerResult(
       locationName: name,
-      locationNote: initialNote != null && initialNote.isNotEmpty
-          ? initialNote
-          : 'ปักหมุดบนแผนที่',
+      locationNote: initialNote,
       latitude: _currentCenter.latitude,
       longitude: _currentCenter.longitude,
       fullAddress: _resolvedAddress,
@@ -855,6 +861,15 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
 
                     const SizedBox(height: 14),
 
+                    TextField(
+                      controller: _noteController,
+                      key: const Key('pickup-location-note'),
+                      maxLength: 500,
+                      decoration: const InputDecoration(
+                        labelText: 'หมายเหตุ (ไม่บังคับ)',
+                        hintText: 'เช่น หน้าประตู 1',
+                      ),
+                    ),
                     // ปุ่มยืนยันสถานที่นัดพบนี้
                     SizedBox(
                       height: 48,
@@ -871,7 +886,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        onPressed: _onConfirmLocation,
+                        onPressed: _isReverseGeocoding
+                            ? null
+                            : _onConfirmLocation,
                         icon: const Icon(Icons.check_circle_rounded, size: 20),
                         label: const Text(
                           'ยืนยันสถานที่นัดพบนี้',

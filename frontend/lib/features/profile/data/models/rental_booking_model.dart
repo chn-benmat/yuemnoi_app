@@ -19,6 +19,9 @@ class RentalBookingModel {
   final String duration;
   final double totalPrice;
   final String? pickupLocation;
+  final double? latitude;
+  final double? longitude;
+  final String? pickupNote;
   final bool isOwner;
 
   const RentalBookingModel({
@@ -37,6 +40,9 @@ class RentalBookingModel {
     this.duration = '',
     this.totalPrice = 0.0,
     this.pickupLocation,
+    this.latitude,
+    this.longitude,
+    this.pickupNote,
     this.isOwner = false,
   });
 
@@ -80,6 +86,9 @@ class RentalBookingModel {
       duration: duration,
       totalPrice: price,
       pickupLocation: booking['pickup_location']?.toString(),
+      latitude: double.tryParse('${booking['latitude']}'),
+      longitude: double.tryParse('${booking['longitude']}'),
+      pickupNote: booking['pickup_note']?.toString(),
       isOwner: isOwner,
     );
   }
@@ -101,6 +110,9 @@ class RentalBookingModel {
       duration: duration,
       totalPrice: totalPrice,
       pickupLocation: pickupLocation,
+      latitude: latitude,
+      longitude: longitude,
+      pickupNote: pickupNote,
       isOwner: isOwner,
     );
   }
@@ -152,7 +164,11 @@ class RentalBookingModel {
       case 'confirmed':
         if (startDate != null) {
           final now = DateTime.now();
-          final startDay = DateTime(startDate.year, startDate.month, startDate.day);
+          final startDay = DateTime(
+            startDate.year,
+            startDate.month,
+            startDate.day,
+          );
           final today = DateTime(now.year, now.month, now.day);
           if (today.isBefore(startDay)) {
             final days = startDay.difference(today).inDays;

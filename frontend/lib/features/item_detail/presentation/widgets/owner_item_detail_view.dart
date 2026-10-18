@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/widgets/pickup_location_field.dart';
 
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
@@ -98,6 +99,8 @@ class OwnerItemDetailView extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (item.pickupLocation != null)
+                    PickupLocationCard(location: item.pickupLocation!),
                   const SizedBox(height: 20),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -137,7 +140,7 @@ class OwnerItemDetailView extends StatelessWidget {
                         _ManagementRow(
                           id: 'basic',
                           icon: Icons.description_outlined,
-                          title: 'ข้อมูลพื้นฐาน',
+                          title: 'แก้ไขอุปกรณ์',
                           onTap: busy ? null : onEditBasic,
                         ),
                         const _MenuDivider(),

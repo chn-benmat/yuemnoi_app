@@ -1,5 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/models/pickup_location.dart';
+import '../../../../core/widgets/pickup_location_field.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -37,11 +39,13 @@ class _EditItemScreenState extends State<EditItemScreen> {
   late String _rentalType;
   late List<_EditableImage> _images;
   String? _imageError;
+  PickupLocation? _pickupLocation;
 
   @override
   void initState() {
     super.initState();
     final item = widget.item;
+    _pickupLocation = item.pickupLocation;
     _nameController = TextEditingController(text: item.name);
     _descriptionController = TextEditingController(text: item.description);
     _priceController = TextEditingController(text: item.price.toString());
@@ -119,6 +123,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
       ItemDetailUpdateSubmitted(
         ItemEditDraft(
           itemId: widget.item.id,
+          pickupLocation: _pickupLocation,
           name: _nameController.text,
           category: _category,
           description: _descriptionController.text,
@@ -153,7 +158,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
           icon: const Icon(Icons.arrow_back_rounded, size: 30),
         ),
         title: const Text(
-          'ข้อมูลพื้นฐาน',
+          'แก้ไขอุปกรณ์',
           style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
         ),
       ),
@@ -264,6 +269,11 @@ class _EditItemScreenState extends State<EditItemScreen> {
                         ? 'กรุณาระบุราคาที่มากกว่า 0'
                         : null;
                   },
+                ),
+                const SizedBox(height: 16),
+                PickupLocationField(
+                  value: _pickupLocation,
+                  onChanged: (value) => setState(() => _pickupLocation = value),
                 ),
                 const SizedBox(height: 48),
                 AppPrimaryButton(

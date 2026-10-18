@@ -27,7 +27,7 @@ class RentalManagementRemoteDataSource {
       final rentingResp = await client
           .from('booking_tb')
           .select(
-            'id, user_id, item_id, start_date, end_date, start_at, end_at, price, total_price, status, type, pickup_location, created_at',
+            'id, user_id, item_id, start_date, end_date, start_at, end_at, price, total_price, status, type, pickup_location, latitude, longitude, pickup_note, created_at',
           )
           .eq('user_id', userId)
           .order('created_at', ascending: false);
@@ -103,7 +103,7 @@ class RentalManagementRemoteDataSource {
       final lendingResp = await client
           .from('booking_tb')
           .select(
-            'id, user_id, item_id, start_date, end_date, start_at, end_at, price, total_price, status, type, pickup_location, created_at',
+            'id, user_id, item_id, start_date, end_date, start_at, end_at, price, total_price, status, type, pickup_location, latitude, longitude, pickup_note, created_at',
           )
           .inFilter('item_id', myItemIds)
           .order('created_at', ascending: false);

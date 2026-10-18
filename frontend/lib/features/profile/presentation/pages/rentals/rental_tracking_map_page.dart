@@ -250,7 +250,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
           if (mounted) _fitBoundsToRoute();
         });
     });
-    _initLocationsAndRoute();
+    if (_hasDestinationCoordinates) _initLocationsAndRoute();
   }
 
   @override
@@ -288,11 +288,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     final destLat = b?.latitude ?? widget.destinationLat;
     final destLng = b?.longitude ?? widget.destinationLng;
 
-    if (destLat != null &&
-        destLng != null &&
-        destLat != 0.0 &&
-        destLng != 0.0) {
-      _destinationLocation = LatLng(destLat, destLng);
+    if (_hasDestinationCoordinates) {
+      _destinationLocation = LatLng(destLat!, destLng!);
     } else {
       final fallback = LocationService.resolveCoordinates(
         locationName: _resolvedLocation,
@@ -539,8 +536,27 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     }
   }
 
+  bool get _hasDestinationCoordinates {
+    final lat = widget.bookingData?.latitude ?? widget.destinationLat;
+    final lng = widget.bookingData?.longitude ?? widget.destinationLng;
+    return lat != null &&
+        lng != null &&
+        lat.isFinite &&
+        lng.isFinite &&
+        lat.abs() <= 90 &&
+        lng.abs() <= 180;
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!_hasDestinationCoordinates)
+      return Scaffold(
+        appBar: AppBar(title: const Text('จุดนัดรับสินค้า')),
+        body: const Center(
+          child: Text('การจองนี้ยังไม่มีพิกัดจุดนัดรับ กรุณาติดต่อคู่เช่า'),
+        ),
+      );
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -734,7 +750,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                           setState(() {
                             _forceUseRawDeviceGps = true;
                           });
-                          _initLocationsAndRoute();
+                          if (_hasDestinationCoordinates)
+                            _initLocationsAndRoute();
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -810,7 +827,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                         setState(() {
                           _forceUseRawDeviceGps = false;
                         });
-                        _initLocationsAndRoute();
+                        if (_hasDestinationCoordinates)
+                          _initLocationsAndRoute();
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(

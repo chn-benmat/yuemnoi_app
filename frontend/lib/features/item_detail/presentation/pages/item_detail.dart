@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/pickup_location_field.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
@@ -992,6 +993,10 @@ class _DetailContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 40),
+              if (item.pickupLocation != null) ...[
+                PickupLocationCard(location: item.pickupLocation!),
+                const SizedBox(height: 24),
+              ],
               const _SectionTitle('รีวิวล่าสุด'),
               const SizedBox(height: 18),
               if (item.reviews.isEmpty)

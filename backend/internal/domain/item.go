@@ -13,6 +13,12 @@ var (
 
 // Item ตรงกับตาราง item_tb ในฐานข้อมูล Supabase
 type Item struct {
+	PickupLocation  string   `json:"pickup_location" form:"pickup_location"`
+	PickupAddress   string   `json:"pickup_address" form:"pickup_address"`
+	PickupNote      string   `json:"pickup_note" form:"pickup_note"`
+	PickupLatitude  *float64 `json:"pickup_latitude" form:"pickup_latitude"`
+	PickupLongitude *float64 `json:"pickup_longitude" form:"pickup_longitude"`
+
 	ID             int64     `json:"id"`
 	UserID         string    `json:"user_id"`
 	ItemName       string    `json:"item_name"`
