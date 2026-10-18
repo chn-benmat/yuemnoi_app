@@ -1,3 +1,4 @@
+import '../../../../core/network/sse_decoder.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -90,173 +91,156 @@ class ChatbotRemoteDataSource {
       );
     }
 
-    String? currentEvent;
     var completed = false;
     ChatResponse? readyResponse;
     try {
-      await for (final line in lineStream.timeout(idleTimeout)) {
-        final trimmed = line.trim();
-        if (trimmed.isEmpty || trimmed.startsWith(':')) {
-          if (trimmed.isEmpty) currentEvent = null;
-          continue;
-        }
-
-        if (trimmed.startsWith('event:')) {
-          currentEvent = trimmed.substring(6).trim();
-          continue;
-        }
-
-        if (trimmed.startsWith('data:')) {
-          final rawData = trimmed.substring(5).trim();
-          if (rawData.isEmpty) continue;
-          if (rawData == '[DONE]') {
-            if (!completed) {
-              throw const ChatbotRemoteException(
-                'การตอบกลับไม่สมบูรณ์ กรุณาลองใหม่',
-              );
-            }
-            break;
-          }
-
-          try {
-            final decoded = jsonDecode(rawData);
-            if (decoded is! Map<String, dynamic>) continue;
-
-            if (currentEvent == 'error' || decoded['status'] == 'error') {
-              throw ChatbotRemoteException(
-                _modelError(
-                  decoded['error_code'] as String?,
-                  retryAfterSeconds: decoded['retry_after_seconds'],
-                ),
-                errorCode: decoded['error_code'] as String?,
-                retryAfterSeconds: _retrySeconds(
-                  decoded['retry_after_seconds'],
-                ),
-              );
-            }
-            switch (currentEvent) {
-              case 'ready':
-                if (readyResponse != null) {
-                  throw const FormatException('Duplicate ready response');
-                }
-                readyResponse = ChatResponseModel.fromJson(decoded).toEntity();
-                yield ChatReadyEvent(response: readyResponse);
-              case 'status':
-                yield ChatStatusEvent(
-                  step: decoded['step'] as String? ?? '',
-                  message: decoded['message'] as String? ?? '',
-                );
-              case 'metadata':
-                final rawItems =
-                    decoded['recommended_items'] as List<dynamic>? ?? const [];
-                final rawQuestions =
-                    decoded['questions'] as List<dynamic>? ?? const [];
-                yield ChatMetadataEvent(
-                  mode: decoded['mode'] as String? ?? 'recommendation',
-                  understanding: ChatUnderstandingModel.fromJson(decoded),
-                  recommendedItems: rawItems
-                      .whereType<Map>()
-                      .map(
-                        (item) => RecommendedItemModel.fromJson(
-                          item.map((k, v) => MapEntry(k.toString(), v)),
-                        ).toEntity(),
-                      )
-                      .toList(growable: false),
-                  questions: rawQuestions
-                      .whereType<Map>()
-                      .map(
-                        (q) => ClarificationQuestionModel.fromJson(
-                          q.map((k, v) => MapEntry(k.toString(), v)),
-                        ).toEntity(),
-                      )
-                      .toList(growable: false),
-                );
-              case 'delta':
-                final text = decoded['text'] as String? ?? '';
-                if (text.isNotEmpty) {
-                  yield ChatDeltaEvent(text: text);
-                }
-              case 'done':
-                if (readyResponse != null &&
-                    ChatResponseModel.fromJson(decoded).toEntity() !=
-                        readyResponse) {
-                  throw const FormatException(
-                    'Completed response differs from ready',
-                  );
-                }
-                final rawReplies =
-                    decoded['suggested_replies'] as List<dynamic>? ?? const [];
-                final rawItems =
-                    decoded['recommended_items'] as List<dynamic>? ?? const [];
-                final rawQuestions =
-                    decoded['questions'] as List<dynamic>? ?? const [];
-                final rawSources =
-                    decoded['search_sources'] as List<dynamic>? ?? const [];
-                final thought = decoded['thought'] as String?;
-                final searchQuery = decoded['search_query'] as String?;
-                final answer = decoded['answer'] as String?;
-                final rawActivities =
-                    decoded['activities'] as List<dynamic>? ?? const [];
-                final doneEvent = ChatDoneEvent(
-                  understanding: ChatUnderstandingModel.fromJson(decoded),
-                  context: ChatContextModel.fromJson(decoded['context']),
-                  references: ChatContextModel.references(
-                    decoded['references'],
-                  ),
-                  answer: answer?.trim().isNotEmpty == true
-                      ? answer!.trim()
-                      : null,
-                  suggestedReplies: rawReplies
-                      .map((e) => e.toString())
-                      .toList(growable: false),
-                  recommendedItems: rawItems
-                      .whereType<Map>()
-                      .map(
-                        (item) => RecommendedItemModel.fromJson(
-                          item.map((k, v) => MapEntry(k.toString(), v)),
-                        ).toEntity(),
-                      )
-                      .toList(growable: false),
-                  questions: rawQuestions
-                      .whereType<Map>()
-                      .map(
-                        (q) => ClarificationQuestionModel.fromJson(
-                          q.map((k, v) => MapEntry(k.toString(), v)),
-                        ).toEntity(),
-                      )
-                      .toList(growable: false),
-                  thought: thought?.trim().isNotEmpty == true
-                      ? thought!.trim()
-                      : null,
-                  searchSources: rawSources
-                      .whereType<Map>()
-                      .map(
-                        (s) => SearchSourceModel.fromJson(
-                          s.map((k, v) => MapEntry(k.toString(), v)),
-                        ).toEntity(),
-                      )
-                      .toList(growable: false),
-                  searchQuery: searchQuery?.trim().isNotEmpty == true
-                      ? searchQuery!.trim()
-                      : null,
-                  activities: rawActivities
-                      .map((e) => e.toString())
-                      .toList(growable: false),
-                );
-                completed = true;
-                yield doneEvent;
-              default:
-                if (decoded.containsKey('text')) {
-                  yield ChatDeltaEvent(text: decoded['text'] as String);
-                }
-            }
-          } on ChatbotRemoteException {
-            rethrow;
-          } catch (_) {
+      await for (final event in decodeSse(lineStream.timeout(idleTimeout))) {
+        final currentEvent = event.event;
+        final rawData = event.data.trim();
+        if (rawData.isEmpty) continue;
+        if (rawData == '[DONE]') {
+          if (!completed) {
             throw const ChatbotRemoteException(
-              'ข้อมูลตอบกลับจากยืมหน่อย AI ไม่ถูกต้อง กรุณาลองใหม่',
+              'การตอบกลับไม่สมบูรณ์ กรุณาลองใหม่',
             );
           }
+          break;
+        }
+
+        try {
+          final decoded = jsonDecode(rawData);
+          if (decoded is! Map<String, dynamic>) continue;
+
+          if (currentEvent == 'error' || decoded['status'] == 'error') {
+            throw ChatbotRemoteException(
+              _modelError(
+                decoded['error_code'] as String?,
+                retryAfterSeconds: decoded['retry_after_seconds'],
+              ),
+              errorCode: decoded['error_code'] as String?,
+              retryAfterSeconds: _retrySeconds(decoded['retry_after_seconds']),
+            );
+          }
+          switch (currentEvent) {
+            case 'ready':
+              if (readyResponse != null) {
+                throw const FormatException('Duplicate ready response');
+              }
+              readyResponse = ChatResponseModel.fromJson(decoded).toEntity();
+              yield ChatReadyEvent(response: readyResponse);
+            case 'status':
+              yield ChatStatusEvent(
+                step: decoded['step'] as String? ?? '',
+                message: decoded['message'] as String? ?? '',
+              );
+            case 'metadata':
+              final rawItems =
+                  decoded['recommended_items'] as List<dynamic>? ?? const [];
+              final rawQuestions =
+                  decoded['questions'] as List<dynamic>? ?? const [];
+              yield ChatMetadataEvent(
+                mode: decoded['mode'] as String? ?? 'recommendation',
+                understanding: ChatUnderstandingModel.fromJson(decoded),
+                recommendedItems: rawItems
+                    .whereType<Map>()
+                    .map(
+                      (item) => RecommendedItemModel.fromJson(
+                        item.map((k, v) => MapEntry(k.toString(), v)),
+                      ).toEntity(),
+                    )
+                    .toList(growable: false),
+                questions: rawQuestions
+                    .whereType<Map>()
+                    .map(
+                      (q) => ClarificationQuestionModel.fromJson(
+                        q.map((k, v) => MapEntry(k.toString(), v)),
+                      ).toEntity(),
+                    )
+                    .toList(growable: false),
+              );
+            case 'delta':
+              final text = decoded['text'] as String? ?? '';
+              if (text.isNotEmpty) {
+                yield ChatDeltaEvent(text: text);
+              }
+            case 'done':
+              if (readyResponse != null &&
+                  ChatResponseModel.fromJson(decoded).toEntity() !=
+                      readyResponse) {
+                throw const FormatException(
+                  'Completed response differs from ready',
+                );
+              }
+              final rawReplies =
+                  decoded['suggested_replies'] as List<dynamic>? ?? const [];
+              final rawItems =
+                  decoded['recommended_items'] as List<dynamic>? ?? const [];
+              final rawQuestions =
+                  decoded['questions'] as List<dynamic>? ?? const [];
+              final rawSources =
+                  decoded['search_sources'] as List<dynamic>? ?? const [];
+              final thought = decoded['thought'] as String?;
+              final searchQuery = decoded['search_query'] as String?;
+              final answer = decoded['answer'] as String?;
+              final rawActivities =
+                  decoded['activities'] as List<dynamic>? ?? const [];
+              final doneEvent = ChatDoneEvent(
+                understanding: ChatUnderstandingModel.fromJson(decoded),
+                context: ChatContextModel.fromJson(decoded['context']),
+                references: ChatContextModel.references(decoded['references']),
+                answer: answer?.trim().isNotEmpty == true
+                    ? answer!.trim()
+                    : null,
+                suggestedReplies: rawReplies
+                    .map((e) => e.toString())
+                    .toList(growable: false),
+                recommendedItems: rawItems
+                    .whereType<Map>()
+                    .map(
+                      (item) => RecommendedItemModel.fromJson(
+                        item.map((k, v) => MapEntry(k.toString(), v)),
+                      ).toEntity(),
+                    )
+                    .toList(growable: false),
+                questions: rawQuestions
+                    .whereType<Map>()
+                    .map(
+                      (q) => ClarificationQuestionModel.fromJson(
+                        q.map((k, v) => MapEntry(k.toString(), v)),
+                      ).toEntity(),
+                    )
+                    .toList(growable: false),
+                thought: thought?.trim().isNotEmpty == true
+                    ? thought!.trim()
+                    : null,
+                searchSources: rawSources
+                    .whereType<Map>()
+                    .map(
+                      (s) => SearchSourceModel.fromJson(
+                        s.map((k, v) => MapEntry(k.toString(), v)),
+                      ).toEntity(),
+                    )
+                    .toList(growable: false),
+                searchQuery: searchQuery?.trim().isNotEmpty == true
+                    ? searchQuery!.trim()
+                    : null,
+                activities: rawActivities
+                    .map((e) => e.toString())
+                    .toList(growable: false),
+              );
+              completed = true;
+              yield doneEvent;
+            default:
+              if (decoded.containsKey('text')) {
+                yield ChatDeltaEvent(text: decoded['text'] as String);
+              }
+          }
+        } on ChatbotRemoteException {
+          rethrow;
+        } catch (_) {
+          throw const ChatbotRemoteException(
+            'ข้อมูลตอบกลับจากยืมหน่อย AI ไม่ถูกต้อง กรุณาลองใหม่',
+          );
         }
       }
     } on TimeoutException {

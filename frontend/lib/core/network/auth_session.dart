@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import '../cache/app_cache.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_session_validator.dart';
@@ -67,7 +70,7 @@ class AuthSession {
   }
 
   static Future<void> reject() async {
-    clear();
+    clear(purgeCache: true);
     if (SupabaseConfig.isInitialized) {
       try {
         await SupabaseConfig.client.auth.signOut(scope: SignOutScope.local);
@@ -81,7 +84,9 @@ class AuthSession {
     _accessToken = token;
   }
 
-  static void clear() {
+  static void clear({bool purgeCache = false}) {
+    final userId = _authorizedUserId;
+    if (purgeCache && userId != null) unawaited(AppCache.forgetUser(userId));
     _accessToken = null;
     _authorizedUserId = null;
   }

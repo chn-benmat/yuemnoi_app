@@ -73,6 +73,8 @@ Frontend ยังใช้ Supabase โดยตรงในบางฟีเ�
 | `cloud.google.com/go/auth`      | v0.20.0                                                     | Credentials, OAuth และ HTTP transport ของ Google |
 | `google.golang.org/api`         | v0.279.0                                                    | Client options สำหรับ Firebase SDK             |
 | `golang.org/x/time`             | v0.16.0                                                     | Token Bucket ผ่าน package `rate`               |
+| `github.com/jellydator/ttlcache/v3` | v3.4.1 | Cache อายุข้อมูลตาม TTL สำหรับ IP buckets และ FCM device tokens |
+| `github.com/lmittmann/tint`       | v1.2.1 | Console handler สำหรับ `log/slog` ในโหมด debug |
 | `github.com/stretchr/testify`    | v1.12.1                                                     | Assertions และ mocks ใน tests                  |
 | Go standard library              | ตาม Go toolchain                                            | `net/http`, `log/slog` และ Supabase Storage adapter |
 
@@ -186,7 +188,13 @@ go run main.go
 
 `main.go` เปิด HTTP server ด้วย Fiber `Listen` โดยตรง เมื่อแก้โค้ด ให้หยุดด้วย `Ctrl+C` แล้วรัน `go run main.go` ใหม่
 
-ในโหมด debug เมื่อแสดง log ใน terminal ค่า `status=2xx` เป็นสีเขียว, `status=4xx` (รวม 404) เป็นสีเหลือง และ `status=5xx` เป็นสีแดง พร้อมสีเหลืองสำหรับ `level=WARN` และสีแดงสำหรับ `level=ERROR` รองรับ Windows console ด้วย เมื่อ redirect ไปไฟล์หรือ pipe จะเป็นข้อความไม่มีสี ส่วน `APP_ENV=release` ใช้ JSON log
+ในโหมด debug ใช้รูปแบบและสีมาตรฐานของ `tint` เมื่อแสดง log ใน terminal รองรับ Windows console ด้วย เมื่อ redirect ไปไฟล์หรือ pipe จะเป็นข้อความไม่มีสี ส่วน `APP_ENV=release` ใช้ JSON log ระดับ Info ตามเดิม Access log เก็บเฉพาะ method, path, status และ latency โดยไม่เก็บ headers, query หรือ body
+
+CORS ใช้ Fiber middleware ร่วมกับการตรวจ origin ตาม hostname เดิม: `http`/`https` ของ `localhost`, `127.0.0.1`, `yuemnoi.com`, subdomains ของ `yuemnoi.com` และ `.ts.net` อนุญาต credentials เฉพาะ origin ที่ผ่านการตรวจ คำขอ native ที่ไม่มี Origin ใช้ `*` โดยไม่มี credentials และ OPTIONS ยังคงตอบ 204 ก่อนตรวจ app key เพิ่ม `Vary: Origin` เพื่อให้ HTTP cache แยก response ตาม origin
+
+Rate limiter ยังคงเป็น token bucket ของ `x/time/rate`: auth และ admin login แชร์ burst 5 เติม 1 token ทุก 12 วินาที, AI JSON/SSE แชร์ burst 15 เติม 1 token ทุก 4 วินาที และ identity/complaints แชร์ burst 5 อีกชุดหนึ่ง ทุกชุดแยกตาม client IP และเก็บ bucket ใน `ttlcache` จนไม่ได้ใช้งาน 10 นาที รวมคำขอที่ถูกปฏิเสธในการต่ออายุ idle TTL คำขอที่ถูกปฏิเสธไม่หัก token และคง JSON 429 กับข้อความเดิม ไม่เปลี่ยนเป็น fixed/sliding window
+
+FCM device-token cache ใช้ `ttlcache` อายุคงที่ 5 นาทีจากการอ่านฐานข้อมูลสำเร็จ โดย cache hit ไม่ต่ออายุและไม่ cache ค่าว่างหรือ error เมื่อหมดอายุจะอ่านจากฐานข้อมูลใหม่; token ที่ FCM ยืนยันว่า unregistered จะถูกลบจาก cache และฐานข้อมูล Cache ทั้งสองชนิดเป็น memory ของแต่ละ process และกวาดข้อมูลหมดอายุเมื่อมีงานถัดไป จึงไม่มี worker goroutine ที่ต้องปิดเมื่อ shutdown และไม่มี Redis เพิ่มเข้ามา
 
 เปิด terminal อีกหน้าตรวจ HTTP server:
 
@@ -296,9 +304,7 @@ go test ./...
 go vet ./...
 ```
 
-`go test ./...` รวม tests ใน `tests/` และ `internal/` ใช้ mock / httptest เป็นหลัก Live AI gateway test ต้อง opt-in และข้ามโดย default บาง tests ต้องมี sibling AI fixtures / runtime files ที่ตรงกับ checkout จึงควรตรวจว่าไฟล์เหล่านั้นมีครบก่อนรัน
-
-ผลตรวจ Fiber v3 ครบ 23 endpoint พร้อมกรณีผิดพลาด การแก้ไข และข้อจำกัดที่ยังเหลืออยู่: [รายงานทดสอบ API](tests/API_TEST_REPORT.md)
+Tests ปัจจุบันอยู่ใน `internal/` ใช้ mocks และ `httptest` โดยไม่ต้องมี credentials หรือบริการจริง; `tests/` ยังว่าง HTTP middleware tests ครอบคลุม CORS allowlist/preflight/native, Vary header, token-bucket refill และ burst แบบ concurrent, การแชร์ quota ข้าม routes และ proxy IP ส่วน FCM tests ตรวจ cache hit/miss/expiry/invalidation และ fixed TTL ที่ไม่ต่ออายุเมื่ออ่าน
 
 **Build บน Windows PowerShell**
 

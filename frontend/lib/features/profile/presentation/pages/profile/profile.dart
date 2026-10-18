@@ -177,7 +177,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await SupabaseConfig.client.auth.signOut();
       }
     } catch (_) {}
-    AuthSession.clear();
+    AuthSession.clear(purgeCache: true);
     if (!mounted) return;
     context.read<AuthBloc>().add(const AuthResetState());
     setState(() {});

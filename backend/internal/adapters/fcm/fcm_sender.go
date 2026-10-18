@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"cloud.google.com/go/auth/credentials"
@@ -17,6 +16,7 @@ import (
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
+	"github.com/jellydator/ttlcache/v3"
 	"google.golang.org/api/option"
 )
 
@@ -28,22 +28,26 @@ type TokenManager interface {
 	DeleteFCMToken(ctx context.Context, userID string) error
 }
 
-type fcmCachedToken struct {
-	token     string
-	expiresAt time.Time
-}
+const receiverTokenTTL = 5 * time.Minute
 
 // FCMSender ส่งแจ้งเตือนผ่าน Firebase Admin SDK และแคช device token ชั่วคราว
 type FCMSender struct {
 	tokenManager  TokenManager
 	client        *messaging.Client
-	fcmTokenCache sync.Map
+	fcmTokenCache *ttlcache.Cache[string, string]
+}
+
+func newReceiverTokenCache() *ttlcache.Cache[string, string] {
+	return ttlcache.New[string, string](
+		ttlcache.WithTTL[string, string](receiverTokenTTL),
+		ttlcache.WithDisableTouchOnHit[string, string](),
+	)
 }
 
 // NewFCMSender ใช้ไลบรารีของ Google จัดการ credentials การเซ็น JWT และ OAuth
 // คืน sender ที่ยังเรียกใช้งานได้พร้อม error เมื่อไม่มี credentials เพื่อให้ server เริ่มได้
 func NewFCMSender(tokenManager TokenManager, saPath, saJSON string, httpClient *http.Client) (*FCMSender, error) {
-	sender := &FCMSender{tokenManager: tokenManager}
+	sender := &FCMSender{tokenManager: tokenManager, fcmTokenCache: newReceiverTokenCache()}
 	data, err := loadServiceAccount(saPath, saJSON)
 	if err != nil {
 		return sender, err
@@ -134,10 +138,11 @@ func (s *FCMSender) SendChatPush(ctx context.Context, n domain.ChatPushNotificat
 
 // getReceiverToken ดึง token จาก cache หรือฐานข้อมูลผ่าน TokenManager
 func (s *FCMSender) getReceiverToken(ctx context.Context, receiverID string) (string, error) {
-	if val, ok := s.fcmTokenCache.Load(receiverID); ok {
-		cached := val.(fcmCachedToken)
-		if time.Now().Before(cached.expiresAt) {
-			return cached.token, nil
+	if s.fcmTokenCache != nil {
+		// ใช้ lazy eviction เพื่อไม่สร้าง goroutine และให้ฐานข้อมูลเป็นแหล่งข้อมูลหลักหลังครบ TTL
+		s.fcmTokenCache.DeleteExpired()
+		if cached := s.fcmTokenCache.Get(receiverID); cached != nil {
+			return cached.Value(), nil
 		}
 	}
 	if s.tokenManager == nil {
@@ -147,15 +152,17 @@ func (s *FCMSender) getReceiverToken(ctx context.Context, receiverID string) (st
 	if err != nil {
 		return "", err
 	}
-	if token != "" {
-		s.fcmTokenCache.Store(receiverID, fcmCachedToken{token, time.Now().Add(5 * time.Minute)})
+	if token != "" && s.fcmTokenCache != nil {
+		s.fcmTokenCache.Set(receiverID, token, ttlcache.DefaultTTL)
 	}
 	return token, nil
 }
 
 // invalidateReceiverToken ลบ token ที่หมดอายุออกจาก cache และฐานข้อมูล
 func (s *FCMSender) invalidateReceiverToken(ctx context.Context, receiverID string) {
-	s.fcmTokenCache.Delete(receiverID)
+	if s.fcmTokenCache != nil {
+		s.fcmTokenCache.Delete(receiverID)
+	}
 	if s.tokenManager != nil {
 		if err := s.tokenManager.DeleteFCMToken(ctx, receiverID); err != nil {
 			slog.Warn("ล้าง FCM token ที่หมดอายุไม่สำเร็จ")

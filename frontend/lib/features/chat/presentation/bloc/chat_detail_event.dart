@@ -28,6 +28,14 @@ class ChatMessagesUpdated extends ChatDetailEvent {
   List<Object?> get props => [messages];
 }
 
+class ChatMessagesLoadFailed extends ChatDetailEvent {
+  const ChatMessagesLoadFailed(this.message);
+  final String message;
+
+  @override
+  List<Object?> get props => [message];
+}
+
 class ChatOlderMessagesRequested extends ChatDetailEvent {
   const ChatOlderMessagesRequested(this.conversationId);
 
@@ -70,10 +78,7 @@ class ChatImageUploadedAndSent extends ChatDetailEvent {
 }
 
 class ChatImageData extends Equatable {
-  const ChatImageData({
-    required this.imageBytes,
-    required this.fileName,
-  });
+  const ChatImageData({required this.imageBytes, required this.fileName});
 
   final Uint8List imageBytes;
   final String fileName;
@@ -166,4 +171,3 @@ class ChatRetryMessageSent extends ChatDetailEvent {
   @override
   List<Object?> get props => [conversationId, tempMessageId];
 }
-

@@ -4,60 +4,39 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/jellydator/ttlcache/v3"
 	"golang.org/x/time/rate"
 )
 
-type rateLimiterEntry struct {
-	limiter  *rate.Limiter
-	lastSeen time.Time
-}
-
-// RateLimiter อิมพลีเมนต์ Token Bucket In-Memory ป้องกันการยิงสแปม/Brute-force
+// RateLimiter ใช้ token bucket ของ x/time/rate และให้ ttlcache ดูแลอายุข้อมูลแต่ละ IP
 type RateLimiter struct {
-	mu          sync.Mutex
-	rate        rate.Limit
-	capacity    int
-	entries     map[string]*rateLimiterEntry
-	nextCleanup time.Time
+	rate     rate.Limit
+	capacity int
+	entries  *ttlcache.Cache[string, *rate.Limiter]
 }
 
 // NewRateLimiter สร้าง RateLimiter ด้วยอัตราการสร้าง Token และขนาดบัคเก็ตสูงสุด
 func NewRateLimiter(tokensPerSecond float64, capacity float64) *RateLimiter {
-	rl := &RateLimiter{
-		rate:        rate.Limit(tokensPerSecond),
-		capacity:    int(capacity),
-		entries:     make(map[string]*rateLimiterEntry),
-		nextCleanup: time.Now().Add(5 * time.Minute),
+	return &RateLimiter{
+		rate:     rate.Limit(tokensPerSecond),
+		capacity: int(capacity),
+		entries: ttlcache.New[string, *rate.Limiter](
+			ttlcache.WithTTL[string, *rate.Limiter](10 * time.Minute),
+		),
 	}
-	return rl
 }
 
 // Allow ตรวจสอบว่าคำขอสำหรับ key ที่ระบุ (เช่น Client IP) ได้รับอนุญาตหรือไม่
 func (rl *RateLimiter) Allow(key string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	now := time.Now()
-	// กวาด IP ที่ไม่ได้ใช้งานเมื่อมีคำขอใหม่ จึงไม่มี goroutine ค้างหลังปิด app
-	if !now.Before(rl.nextCleanup) {
-		for key, entry := range rl.entries {
-			if now.Sub(entry.lastSeen) > 10*time.Minute {
-				delete(rl.entries, key)
-			}
-		}
-		rl.nextCleanup = now.Add(5 * time.Minute)
-	}
-	entry, exists := rl.entries[key]
-	if !exists {
-		entry = &rateLimiterEntry{limiter: rate.NewLimiter(rl.rate, rl.capacity)}
-		rl.entries[key] = entry
-	}
-	entry.lastSeen = now
-	return entry.limiter.AllowN(now, 1)
+	// กวาดเฉพาะข้อมูลหมดอายุเมื่อมีคำขอ จึงไม่สร้าง worker ที่ต้องปิดพร้อม app
+	rl.entries.DeleteExpired()
+	entry, _ := rl.entries.GetOrSetFunc(key, func() *rate.Limiter {
+		return rate.NewLimiter(rl.rate, rl.capacity)
+	})
+	return entry.Value().Allow()
 }
 
 // RateLimitMiddleware สร้าง Fiber middleware สำหรับจำกัดจำนวนคำขอตาม IP Address

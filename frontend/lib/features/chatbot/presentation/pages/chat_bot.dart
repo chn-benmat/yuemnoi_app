@@ -1,3 +1,4 @@
+import '../../../../core/widgets/package_chat_list.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -570,21 +571,35 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                             if (state.messages.isEmpty)
                               ChatbotWelcome(onSelect: _prefillMessage)
                             else
-                              ListView.separated(
+                              PackageChatList(
                                 key: const Key('chatbot-conversation'),
-                                controller: _scrollController,
-                                keyboardDismissBehavior:
-                                    ScrollViewKeyboardDismissBehavior.onDrag,
+                                scrollController: _scrollController,
                                 padding: const EdgeInsets.fromLTRB(
                                   16,
                                   20,
                                   16,
                                   24,
                                 ),
-                                itemCount:
-                                    visibleEntries.length + (waiting ? 1 : 0),
-                                separatorBuilder: (context, index) =>
-                                    const SizedBox(height: 20),
+                                entries: [
+                                  for (final (originalIndex, message)
+                                      in visibleEntries)
+                                    PackageChatEntry(
+                                      id: 'ai:${message.id.isEmpty ? 'entry-$originalIndex' : message.id}',
+                                      authorId: message.role.apiValue,
+                                      revision: Object.hash(
+                                        message,
+                                        state.failure,
+                                        state.currentStatusMessage,
+                                        hasActiveQuestionnaire,
+                                      ),
+                                    ),
+                                  if (waiting)
+                                    PackageChatEntry(
+                                      id: '__ai_waiting',
+                                      authorId: 'assistant',
+                                      revision: state.currentStatusMessage,
+                                    ),
+                                ],
                                 itemBuilder: (context, index) {
                                   if (index == visibleEntries.length) {
                                     return _TypingIndicator(
@@ -600,68 +615,78 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                                       originalIndex ==
                                           state.messages.length - 1;
                                   final failure = state.failure;
-                                  return _ConversationEntry(
-                                    key: ValueKey(
-                                      'chat-message-$originalIndex',
-                                    ),
-                                    keepAlive: active,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        if (failure?.messageId == message.id)
-                                          ChatbotFailureCard(
-                                            failure: failure!,
-                                            onRetry: () =>
-                                                context.read<ChatbotBloc>().add(
-                                                  ChatbotRetryRequested(
-                                                    message.id,
-                                                    timing: ChatTurnTiming(),
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 20),
+                                    child: _ConversationEntry(
+                                      key: ValueKey(
+                                        'chat-message-$originalIndex',
+                                      ),
+                                      keepAlive: active,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          if (failure?.messageId == message.id)
+                                            ChatbotFailureCard(
+                                              failure: failure!,
+                                              onRetry: () => context
+                                                  .read<ChatbotBloc>()
+                                                  .add(
+                                                    ChatbotRetryRequested(
+                                                      message.id,
+                                                      timing: ChatTurnTiming(),
+                                                    ),
                                                   ),
-                                                ),
-                                            onRevise: () => _prefillMessage(
-                                              message.userQuery ?? '',
-                                            ),
-                                          )
-                                        else
-                                          ChatMessageBubble(
-                                            message: message,
-                                            onRentPressed: _showRentMessage,
-                                            animateAssistantResponse:
-                                                _pendingAssistantAnimations
-                                                    .contains(originalIndex) &&
-                                                !_startedAssistantAnimations
-                                                    .contains(originalIndex),
-                                            onAnimationStarted: () =>
-                                                _markAssistantAnimationStarted(
-                                                  originalIndex,
-                                                ),
-                                            onTextProgress:
-                                                _keepLatestMessageVisible,
-                                            onContentRendered: () =>
-                                                _observeRender(message),
-                                            onCardRevealed:
-                                                _keepLatestMessageVisible,
-                                            onEdit:
-                                                message.role ==
-                                                        ChatMessageRole.user &&
-                                                    !state.isSending
-                                                ? () => _showMessageActions(
+                                              onRevise: () => _prefillMessage(
+                                                message.userQuery ?? '',
+                                              ),
+                                            )
+                                          else
+                                            ChatMessageBubble(
+                                              message: message,
+                                              onRentPressed: _showRentMessage,
+                                              animateAssistantResponse:
+                                                  _pendingAssistantAnimations
+                                                      .contains(
+                                                        originalIndex,
+                                                      ) &&
+                                                  !_startedAssistantAnimations
+                                                      .contains(originalIndex),
+                                              onAnimationStarted: () =>
+                                                  _markAssistantAnimationStarted(
                                                     originalIndex,
-                                                    message,
-                                                  )
-                                                : null,
-                                            onReviseQuery: () =>
-                                                _prefillMessage(
-                                                  message.userQuery ?? '',
-                                                ),
-                                            onOptionSelected: (choice) =>
-                                                _sendQuickReply(choice, state),
-                                            questionnaire: active
-                                                ? _questionnaire(state)
-                                                : null,
-                                          ),
-                                      ],
+                                                  ),
+                                              onTextProgress:
+                                                  _keepLatestMessageVisible,
+                                              onContentRendered: () =>
+                                                  _observeRender(message),
+                                              onCardRevealed:
+                                                  _keepLatestMessageVisible,
+                                              onEdit:
+                                                  message.role ==
+                                                          ChatMessageRole
+                                                              .user &&
+                                                      !state.isSending
+                                                  ? () => _showMessageActions(
+                                                      originalIndex,
+                                                      message,
+                                                    )
+                                                  : null,
+                                              onReviseQuery: () =>
+                                                  _prefillMessage(
+                                                    message.userQuery ?? '',
+                                                  ),
+                                              onOptionSelected: (choice) =>
+                                                  _sendQuickReply(
+                                                    choice,
+                                                    state,
+                                                  ),
+                                              questionnaire: active
+                                                  ? _questionnaire(state)
+                                                  : null,
+                                            ),
+                                        ],
+                                      ),
                                     ),
                                   );
                                 },

@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/utils/app_form_validators.dart';
 import '../../bloc/profile_cubit.dart';
 import '../../bloc/profile_state.dart';
 import '../../widgets/account/change_password_widgets.dart';
@@ -56,7 +57,9 @@ class _ProfileChangePasswordScreenState
           content: const Text('กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
       return;
@@ -140,11 +143,10 @@ class _ProfileChangePasswordScreenState
                       showPassword: _showCurrentPw,
                       onToggle: () =>
                           setState(() => _showCurrentPw = !_showCurrentPw),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'กรุณากรอกรหัสผ่านเดิม';
-                        if (v.length < 6) return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัว';
-                        return null;
-                      },
+                      validator: AppFormValidators.password(
+                        requiredMessage: 'กรุณากรอกรหัสผ่านเดิม',
+                        lengthMessage: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัว',
+                      ),
                     ),
                     const SizedBox(height: 14),
 
@@ -155,11 +157,10 @@ class _ProfileChangePasswordScreenState
                       hint: 'กรอกรหัสผ่านใหม่',
                       showPassword: _showNewPw,
                       onToggle: () => setState(() => _showNewPw = !_showNewPw),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'กรุณากรอกรหัสผ่านใหม่';
-                        if (v.length < 6) return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัว';
-                        return null;
-                      },
+                      validator: AppFormValidators.password(
+                        requiredMessage: 'กรุณากรอกรหัสผ่านใหม่',
+                        lengthMessage: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัว',
+                      ),
                     ),
                     const SizedBox(height: 14),
 
@@ -171,15 +172,10 @@ class _ProfileChangePasswordScreenState
                       showPassword: _showConfirmPw,
                       onToggle: () =>
                           setState(() => _showConfirmPw = !_showConfirmPw),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          return 'กรุณายืนยันรหัสผ่านใหม่';
-                        }
-                        if (v != _newPwCtrl.text) {
-                          return 'รหัสผ่านไม่ตรงกัน';
-                        }
-                        return null;
-                      },
+                      validator: AppFormValidators.confirmation(
+                        () => _newPwCtrl.text,
+                        requiredMessage: 'กรุณายืนยันรหัสผ่านใหม่',
+                      ),
                     ),
                     const SizedBox(height: 28),
 
@@ -189,9 +185,8 @@ class _ProfileChangePasswordScreenState
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryColor,
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor: AppColors.primaryColor.withValues(
-                          alpha: 0.6,
-                        ),
+                        disabledBackgroundColor: AppColors.primaryColor
+                            .withValues(alpha: 0.6),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(30),

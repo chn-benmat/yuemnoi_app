@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/utils/app_form_validators.dart';
 import '../../../../../core/utils/phone_formatter.dart';
 import '../../bloc/profile_cubit.dart';
 import '../../bloc/profile_state.dart';
@@ -73,7 +74,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
           content: const Text('กรุณาเข้าสู่ระบบก่อน'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
       return;
@@ -97,7 +100,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
         listener: (context, state) {
           if (state is ProfileLoaded) {
             if (_phoneCtrl.text.isEmpty && state.profile.phone.isNotEmpty) {
-              _phoneCtrl.text = PhoneFormatter.formatForDisplay(state.profile.phone);
+              _phoneCtrl.text = PhoneFormatter.formatForDisplay(
+                state.profile.phone,
+              );
             }
             if (_emailCtrl.text.isEmpty && state.profile.email.isNotEmpty) {
               _emailCtrl.text = state.profile.email;
@@ -177,15 +182,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
                       hint: '08X-XXX-XXXX',
                       icon: Icons.phone_outlined,
                       keyboardType: TextInputType.phone,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'กรุณากรอกเบอร์โทรศัพท์';
-                        }
-                        if (!PhoneFormatter.isValidPhone(v)) {
-                          return 'เบอร์โทรศัพท์ไม่ถูกต้อง (เช่น 0812345678)';
-                        }
-                        return null;
-                      },
+                      validator: AppFormValidators.thaiPhone(),
                     ),
                     const SizedBox(height: 28),
 
@@ -195,9 +192,8 @@ class _EditContactScreenState extends State<EditContactScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryColor,
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor: AppColors.primaryColor.withValues(
-                          alpha: 0.6,
-                        ),
+                        disabledBackgroundColor: AppColors.primaryColor
+                            .withValues(alpha: 0.6),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(30),

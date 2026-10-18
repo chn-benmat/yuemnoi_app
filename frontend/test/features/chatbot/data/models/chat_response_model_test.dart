@@ -4,6 +4,75 @@ import 'package:frontend/features/chatbot/data/models/chat_context_model.dart';
 import 'package:frontend/features/chatbot/domain/entities/chat_message.dart';
 
 void main() {
+  test('response keeps filtering, trimming and answer validation', () {
+    final response = ChatResponseModel.fromJson({
+      'answer': ' คำตอบ ',
+      'recommended_items': [
+        null,
+        'ignored',
+        {'id': '3'},
+      ],
+      'suggested_replies': [null, 1, ' ', ' ต่อไป '],
+      'questions': [
+        false,
+        {
+          'id': 4,
+          'options': [' A ', '', null, 1],
+          'step': '3',
+        },
+      ],
+      'thought': ' คิด ',
+      'search_query': ' ',
+      'search_sources': [
+        null,
+        {'title': 12, 'url': 'url', 'domain': 'domain'},
+      ],
+    });
+    expect(response.answer, 'คำตอบ');
+    expect(response.recommendedItems.single.id, 3);
+    expect(response.suggestedReplies, ['ต่อไป']);
+    expect(response.questions.single.id, '4');
+    expect(response.questions.single.options, ['A']);
+    expect(response.questions.single.step, 3);
+    expect(response.questions.single.totalSteps, 2);
+    expect(response.thought, 'คิด');
+    expect(response.searchQuery, isNull);
+    expect(response.searchSources.single.title, '12');
+    expect(response.context, isNull);
+    expect(response.understanding, isNull);
+    for (final answer in [null, '', ' ', 1]) {
+      expect(
+        () => ChatResponseModel.fromJson({'answer': answer}),
+        throwsFormatException,
+      );
+    }
+  });
+
+  test('response keeps context, references and understanding contracts', () {
+    final response = ChatResponseModel.fromJson({
+      'answer': 'คำตอบ',
+      'context': {'session_id': 'session', 'user_goal': 'goal'},
+      'references': [
+        {'id': 'r', 'kind': 'web', 'title': 'source', 'reference': 'url'},
+      ],
+      'request_scope': 'specific',
+      'information_sufficient': true,
+      'next_action': 'answer',
+      'response_flow': 'equipment',
+      'response_kind': 'recommendation',
+    });
+    expect(response.context!.sessionId, 'session');
+    expect(response.references.single.id, 'r');
+    expect(response.understanding!.responseKind, 'recommendation');
+    expect(
+      () => ChatResponseModel.fromJson({
+        'answer': 'a',
+        'request_scope': 'invalid',
+      }),
+      throwsFormatException,
+    );
+  });
+
   test(
     'adaptive choices retain dependency and exact billing values in return context',
     () {
@@ -47,6 +116,25 @@ void main() {
     },
   );
   group('RecommendedItemModel.fromJson', () {
+    test('preserves primary alias precedence and optional value filtering', () {
+      final model = RecommendedItemModel.fromJson({
+        'item_name': '',
+        'name': 'Fallback name',
+        'price': '350.5',
+        'image_url': '',
+        'image_urls': ['fallback image'],
+        'unit': false,
+        'status': ' ',
+        'category': 1,
+      });
+      expect(model.name, 'อุปกรณ์แนะนำ');
+      expect(model.price, 350.5);
+      expect(model.imageUrl, '');
+      expect(model.unit, 'วัน');
+      expect(model.status, isNull);
+      expect(model.category, isNull);
+    });
+
     test(
       'parses Python AI service DTO format (name, image_urls list, type)',
       () {

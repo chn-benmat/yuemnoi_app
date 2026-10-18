@@ -1,15 +1,32 @@
+import 'package:json_annotation/json_annotation.dart';
+
 import '../../domain/entities/user_profile.dart';
 
+part 'user_profile_model.g.dart';
+
 // คำอธิบาย: Model สำหรับแปลงข้อมูลโปรไฟล์ผู้ใช้ระหว่าง JSON / Map กับ Entity ในชั้น Data
+@JsonSerializable(fieldRename: FieldRename.snake)
 class UserProfileModel {
+  @JsonKey(readValue: _readUserId, fromJson: _string)
   final String userId;
+  @JsonKey(readValue: _readDisplayName, fromJson: _string)
   final String displayName;
+  @JsonKey(fromJson: _string)
   final String username;
+  @JsonKey(fromJson: _string)
   final String email;
+  @JsonKey(fromJson: _string)
   final String phone;
+  @JsonKey(fromJson: _string)
   final String bio;
+  @JsonKey(
+    name: 'user_image_url',
+    readValue: _readAvatar,
+    fromJson: _nullableString,
+  )
   final String? avatarUrl;
   final double rating;
+  @JsonKey(fromJson: _isTrue)
   final bool isVerified;
 
   const UserProfileModel({
@@ -24,35 +41,19 @@ class UserProfileModel {
     this.isVerified = false,
   });
 
-  factory UserProfileModel.fromJson(Map<String, dynamic> json) {
-    return UserProfileModel(
-      userId: json['user_id']?.toString() ?? json['id']?.toString() ?? '',
-      displayName: json['display_name']?.toString() ??
-          json['full_name']?.toString() ??
-          '',
-      username: json['username']?.toString() ?? '',
-      email: json['email']?.toString() ?? '',
-      phone: json['phone']?.toString() ?? '',
-      bio: json['bio']?.toString() ?? '',
-      avatarUrl: (json['user_image_url'] ?? json['avatar_url'] ?? json['picture'])?.toString(),
-      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-      isVerified: json['is_verified'] == true,
-    );
-  }
+  factory UserProfileModel.fromJson(Map<String, dynamic> json) =>
+      _$UserProfileModelFromJson(json);
 
-  Map<String, dynamic> toJson() {
-    return {
-      'user_id': userId,
-      'display_name': displayName,
-      'username': username,
-      'email': email,
-      'phone': phone,
-      'bio': bio,
-      'user_image_url': avatarUrl,
-      'rating': rating,
-      'is_verified': isVerified,
-    };
-  }
+  Map<String, dynamic> toJson() => _$UserProfileModelToJson(this);
+
+  static Object? _readUserId(Map json, String key) => json[key] ?? json['id'];
+  static Object? _readDisplayName(Map json, String key) =>
+      json[key] ?? json['full_name'];
+  static Object? _readAvatar(Map json, String key) =>
+      json[key] ?? json['avatar_url'] ?? json['picture'];
+  static String _string(Object? value) => value?.toString() ?? '';
+  static String? _nullableString(Object? value) => value?.toString();
+  static bool _isTrue(Object? value) => value == true;
 
   UserProfile toEntity() {
     return UserProfile(

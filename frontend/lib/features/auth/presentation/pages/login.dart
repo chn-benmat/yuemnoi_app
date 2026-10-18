@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../../core/utils/app_form_validators.dart';
 import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
 import '../../../../core/widgets/app_primary_button.dart';
@@ -91,11 +92,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
     FocusScope.of(context).unfocus();
     context.read<AuthBloc>().add(
-          AuthLoginRequested(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
-          ),
-        );
+      AuthLoginRequested(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      ),
+    );
   }
 
   @override
@@ -192,17 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: Icons.email_outlined,
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'กรุณากรอกอีเมล';
-                    }
-                    if (!RegExp(
-                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                    ).hasMatch(value)) {
-                      return 'รูปแบบอีเมลไม่ถูกต้อง';
-                    }
-                    return null;
-                  },
+                  validator: AppFormValidators.email(),
                 ),
                 const SizedBox(height: 24),
                 AppTextFormField(
@@ -224,15 +215,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       });
                     },
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'กรุณากรอกรหัสผ่าน';
-                    }
-                    if (value.length < 6) {
-                      return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
-                    }
-                    return null;
-                  },
+                  validator: AppFormValidators.password(),
                 ),
                 const SizedBox(height: 12),
                 Align(

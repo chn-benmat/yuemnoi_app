@@ -1,3 +1,4 @@
+import '../../../../core/widgets/package_chat_list.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -812,15 +813,26 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                       }
                     }
 
-                    return ListView.builder(
+                    return PackageChatList(
                       key: const ValueKey('chat-message-list'),
-                      reverse: true,
-                      controller: _scrollController,
-                      scrollCacheExtent: const ScrollCacheExtent.pixels(3500.0),
+                      reversed: true,
+                      scrollController: _scrollController,
+                      entries: [
+                        for (final item in renderItems)
+                          PackageChatEntry(
+                            id: item.message.id,
+                            authorId: item.message.senderId,
+                            createdAt: item.message.createdAt,
+                            revision: Object.hash(
+                              state,
+                              _highlightedMessageId,
+                              item.message,
+                            ),
+                          ),
+                      ],
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-                      itemCount: renderItems.length,
                       itemBuilder: (context, index) {
-                        final actualIndex = renderItems.length - 1 - index;
+                        final actualIndex = index;
                         final item = renderItems[actualIndex];
                         final showTimeDivider = _shouldShowTimeDivider(
                           renderItems,

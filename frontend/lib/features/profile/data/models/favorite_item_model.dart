@@ -1,15 +1,26 @@
 import 'dart:convert';
 
+import 'package:json_annotation/json_annotation.dart';
+
 import '../../domain/entities/favorite_item.dart';
 
+part 'favorite_item_model.g.dart';
+
 // คำอธิบาย: Model สำหรับแปลงข้อมูลอุปกรณ์ที่กดถูกใจในชั้น Data
+@JsonSerializable(createToJson: false)
 class FavoriteItemModel {
+  @JsonKey(defaultValue: 0)
   final int id;
+  @JsonKey(name: 'item_name', fromJson: _title)
   final String title;
+  @JsonKey(name: 'user_id', fromJson: _string)
   final String ownerId;
+  @JsonKey(name: '_owner_name', defaultValue: 'เจ้าของอุปกรณ์')
   final String ownerName;
+  @JsonKey(name: 'item_image_url', fromJson: _extractFirstImageUrl)
   final String? imageUrl;
   final double price;
+  @JsonKey(fromJson: _string)
   final String category;
 
   const FavoriteItemModel({
@@ -22,24 +33,13 @@ class FavoriteItemModel {
     this.category = '',
   });
 
-  factory FavoriteItemModel.fromJson(Map<String, dynamic> json, {String? ownerName}) {
-    final id = (json['id'] as num?)?.toInt() ?? 0;
-    final title = json['item_name']?.toString() ?? 'อุปกรณ์';
-    final ownerId = json['user_id']?.toString() ?? '';
-    final price = (json['price'] as num?)?.toDouble() ?? 0.0;
-    final imageUrl = _extractFirstImageUrl(json['item_image_url']);
-    final category = json['category']?.toString() ?? '';
+  factory FavoriteItemModel.fromJson(
+    Map<String, dynamic> json, {
+    String? ownerName,
+  }) => _$FavoriteItemModelFromJson({...json, '_owner_name': ownerName});
 
-    return FavoriteItemModel(
-      id: id,
-      title: title,
-      ownerId: ownerId,
-      ownerName: ownerName ?? 'เจ้าของอุปกรณ์',
-      imageUrl: imageUrl,
-      price: price,
-      category: category,
-    );
-  }
+  static String _title(Object? value) => value?.toString() ?? 'อุปกรณ์';
+  static String _string(Object? value) => value?.toString() ?? '';
 
   FavoriteItem toEntity() {
     return FavoriteItem(

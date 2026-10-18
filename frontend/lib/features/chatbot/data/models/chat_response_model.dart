@@ -1,7 +1,12 @@
+import 'package:json_annotation/json_annotation.dart';
+
 import '../../domain/entities/chat_message.dart';
 import 'chat_context_model.dart';
 import 'chat_understanding_model.dart';
 
+part 'chat_response_model.g.dart';
+
+@JsonSerializable(createToJson: false, fieldRename: FieldRename.snake)
 class ChatResponseModel {
   const ChatResponseModel({
     required this.answer,
@@ -16,92 +21,47 @@ class ChatResponseModel {
     this.understanding,
   });
 
-  factory ChatResponseModel.fromJson(Map<String, dynamic> json) {
-    final answer = json['answer'];
-    if (answer is! String || answer.trim().isEmpty) {
+  factory ChatResponseModel.fromJson(Map<String, dynamic> json) =>
+      _$ChatResponseModelFromJson(json);
+
+  @JsonKey(fromJson: _answer)
+  final String answer;
+  @JsonKey(fromJson: _items)
+  final List<RecommendedItemModel> recommendedItems;
+  @JsonKey(fromJson: _strings)
+  final List<String> suggestedReplies;
+  @JsonKey(fromJson: _questions)
+  final List<ClarificationQuestionModel> questions;
+  @JsonKey(fromJson: _nullableString)
+  final String? thought;
+  @JsonKey(fromJson: _sources)
+  final List<SearchSourceModel> searchSources;
+  @JsonKey(fromJson: _nullableString)
+  final String? searchQuery;
+  @JsonKey(fromJson: ChatContextModel.fromJson)
+  final ChatSessionContext? context;
+  @JsonKey(readValue: _readList, fromJson: ChatContextModel.references)
+  final List<EvidenceReference> references;
+  @JsonKey(
+    readValue: _readUnderstanding,
+    fromJson: ChatUnderstandingModel.fromJson,
+  )
+  final ChatUnderstanding? understanding;
+
+  static String _answer(Object? value) {
+    if (value is! String || value.trim().isEmpty) {
       throw const FormatException('Chat response must contain an answer');
     }
-
-    final rawItems = json['recommended_items'];
-    final items = rawItems is List
-        ? rawItems
-              .whereType<Map>()
-              .map(
-                (item) => RecommendedItemModel.fromJson(
-                  item.map((key, value) => MapEntry(key.toString(), value)),
-                ),
-              )
-              .toList(growable: false)
-        : const <RecommendedItemModel>[];
-
-    final rawReplies = json['suggested_replies'];
-    final replies = rawReplies is List
-        ? rawReplies
-              .whereType<String>()
-              .map((e) => e.trim())
-              .where((e) => e.isNotEmpty)
-              .toList(growable: false)
-        : const <String>[];
-
-    final rawQuestions = json['questions'];
-    final questions = rawQuestions is List
-        ? rawQuestions
-              .whereType<Map>()
-              .map(
-                (q) => ClarificationQuestionModel.fromJson(
-                  q.map((key, value) => MapEntry(key.toString(), value)),
-                ),
-              )
-              .toList(growable: false)
-        : const <ClarificationQuestionModel>[];
-
-    final rawThought = json['thought'];
-    final thought = rawThought is String && rawThought.trim().isNotEmpty
-        ? rawThought.trim()
-        : null;
-
-    final rawSearchQuery = json['search_query'];
-    final searchQuery =
-        rawSearchQuery is String && rawSearchQuery.trim().isNotEmpty
-        ? rawSearchQuery.trim()
-        : null;
-
-    final rawSources = json['search_sources'];
-    final searchSources = rawSources is List
-        ? rawSources
-              .whereType<Map>()
-              .map(
-                (s) => SearchSourceModel.fromJson(
-                  s.map((k, v) => MapEntry(k.toString(), v)),
-                ),
-              )
-              .toList(growable: false)
-        : const <SearchSourceModel>[];
-
-    return ChatResponseModel(
-      answer: answer.trim(),
-      recommendedItems: items,
-      suggestedReplies: replies,
-      questions: questions,
-      thought: thought,
-      searchSources: searchSources,
-      searchQuery: searchQuery,
-      context: ChatContextModel.fromJson(json['context']),
-      references: ChatContextModel.references(json['references']),
-      understanding: ChatUnderstandingModel.fromJson(json),
-    );
+    return value.trim();
   }
 
-  final String answer;
-  final List<RecommendedItemModel> recommendedItems;
-  final List<String> suggestedReplies;
-  final List<ClarificationQuestionModel> questions;
-  final String? thought;
-  final List<SearchSourceModel> searchSources;
-  final String? searchQuery;
-  final ChatSessionContext? context;
-  final List<EvidenceReference> references;
-  final ChatUnderstanding? understanding;
+  static Object? _readUnderstanding(Map json, String key) => json;
+  static List<RecommendedItemModel> _items(Object? value) =>
+      _models(value, RecommendedItemModel.fromJson);
+  static List<ClarificationQuestionModel> _questions(Object? value) =>
+      _models(value, ClarificationQuestionModel.fromJson);
+  static List<SearchSourceModel> _sources(Object? value) =>
+      _models(value, SearchSourceModel.fromJson);
 
   ChatResponse toEntity() {
     return ChatResponse(
@@ -125,6 +85,7 @@ class ChatResponseModel {
   }
 }
 
+@JsonSerializable(createToJson: false)
 class SearchSourceModel {
   const SearchSourceModel({
     required this.title,
@@ -133,19 +94,20 @@ class SearchSourceModel {
     this.snippet,
   });
 
-  factory SearchSourceModel.fromJson(Map<String, dynamic> json) {
-    return SearchSourceModel(
-      title: json['title']?.toString() ?? '',
-      url: json['url']?.toString() ?? '',
-      domain: json['domain']?.toString() ?? '',
-      snippet: json['snippet']?.toString(),
-    );
-  }
+  factory SearchSourceModel.fromJson(Map<String, dynamic> json) =>
+      _$SearchSourceModelFromJson(json);
 
+  @JsonKey(fromJson: _string)
   final String title;
+  @JsonKey(fromJson: _string)
   final String url;
+  @JsonKey(fromJson: _string)
   final String domain;
+  @JsonKey(fromJson: _optionalString)
   final String? snippet;
+
+  static String _string(Object? value) => value?.toString() ?? '';
+  static String? _optionalString(Object? value) => value?.toString();
 
   SearchSource toEntity() {
     return SearchSource(
@@ -157,6 +119,7 @@ class SearchSourceModel {
   }
 }
 
+@JsonSerializable(createToJson: false, fieldRename: FieldRename.snake)
 class ClarificationQuestionModel {
   const ClarificationQuestionModel({
     required this.id,
@@ -174,92 +137,72 @@ class ClarificationQuestionModel {
     this.branchChoices = const {},
   });
 
-  factory ClarificationQuestionModel.fromJson(Map<String, dynamic> json) {
-    final rawOptions = json['options'];
-    final options = rawOptions is List
-        ? rawOptions
-              .whereType<String>()
-              .map((e) => e.trim())
-              .where((e) => e.isNotEmpty)
-              .toList(growable: false)
-        : const <String>[];
+  factory ClarificationQuestionModel.fromJson(Map<String, dynamic> json) =>
+      _$ClarificationQuestionModelFromJson(json);
 
-    final rawStep = json['step'];
-    final step = rawStep is num
-        ? rawStep.toInt()
-        : (int.tryParse('$rawStep') ?? 1);
-
-    final rawTotal = json['total_steps'];
-    final totalSteps = rawTotal is num
-        ? rawTotal.toInt()
-        : (int.tryParse('$rawTotal') ?? 2);
-
-    Map<String, List<String>>? branchOptions;
-    if (json['branch_options'] is Map) {
-      branchOptions = {};
-      (json['branch_options'] as Map).forEach((k, v) {
-        if (v is List) {
-          branchOptions![k.toString()] = v.map((e) => e.toString()).toList();
-        }
-      });
-    }
-
-    Map<String, String>? branchTitles;
-    if (json['branch_titles'] is Map) {
-      branchTitles = {};
-      (json['branch_titles'] as Map).forEach((k, v) {
-        branchTitles![k.toString()] = v.toString();
-      });
-    }
-
-    return ClarificationQuestionModel(
-      id: json['id']?.toString() ?? '',
-      title: json['title']?.toString() ?? '',
-      options: options,
-      step: step,
-      totalSteps: totalSteps,
-      selectedOption: json['selected_option']?.toString(),
-      selectedOptionId: json['selected_option_id'] as String?,
-      dimension: json['dimension'] as String? ?? '',
-      choices: (json['choices'] as List? ?? [])
-          .map(
-            (c) => QuestionChoice(
-              id: c['id'] as String,
-              label: c['label'] as String,
-              actionValue: c['action_value'] as String,
-            ),
-          )
-          .toList(),
-      branchOptions: branchOptions,
-      branchTitles: branchTitles,
-      branchQuestionId: json['branch_question_id'] as String?,
-      branchChoices: {
-        for (final entry in (json['branch_choices'] as Map? ?? {}).entries)
-          entry.key as String: [
-            for (final choice in entry.value as List)
-              QuestionChoice(
-                id: choice['id'] as String,
-                label: choice['label'] as String,
-                actionValue: choice['action_value'] as String,
-              ),
-          ],
-      },
-    );
-  }
-
+  @JsonKey(fromJson: _string)
   final String id;
+  @JsonKey(fromJson: _string)
   final String title;
+  @JsonKey(fromJson: _strings)
   final List<String> options;
+  @JsonKey(fromJson: _step)
   final int step;
+  @JsonKey(fromJson: _totalSteps)
   final int totalSteps;
+  @JsonKey(fromJson: _optionalString)
   final String? selectedOption;
   final String? selectedOptionId;
   final String dimension;
+  @JsonKey(readValue: _readList, fromJson: _choices)
   final List<QuestionChoice> choices;
+  @JsonKey(fromJson: _branchOptions)
   final Map<String, List<String>>? branchOptions;
+  @JsonKey(fromJson: _branchTitles)
   final Map<String, String>? branchTitles;
   final String? branchQuestionId;
+  @JsonKey(readValue: _readMap, fromJson: _branchChoices)
   final Map<String, List<QuestionChoice>> branchChoices;
+
+  static String _string(Object? value) => value?.toString() ?? '';
+  static String? _optionalString(Object? value) => value?.toString();
+  static int _step(Object? value) => _integer(value) ?? 1;
+  static int _totalSteps(Object? value) => _integer(value) ?? 2;
+
+  static List<QuestionChoice> _choices(Object? value) =>
+      (value as List? ?? []).map((choice) => _choice(choice as Map)).toList();
+
+  static QuestionChoice _choice(Map value) => QuestionChoice(
+    id: value['id'] as String,
+    label: value['label'] as String,
+    actionValue: value['action_value'] as String,
+  );
+
+  static Map<String, List<QuestionChoice>> _branchChoices(Object? value) => {
+    for (final entry in (value as Map? ?? {}).entries)
+      entry.key as String: [
+        for (final choice in entry.value as List) _choice(choice as Map),
+      ],
+  };
+
+  static Map<String, List<String>>? _branchOptions(Object? value) {
+    if (value is! Map) return null;
+    return {
+      for (final entry in value.entries)
+        if (entry.value is List)
+          entry.key.toString(): [
+            for (final option in entry.value as List) option.toString(),
+          ],
+    };
+  }
+
+  static Map<String, String>? _branchTitles(Object? value) {
+    if (value is! Map) return null;
+    return {
+      for (final entry in value.entries)
+        entry.key.toString(): entry.value.toString(),
+    };
+  }
 
   ClarificationQuestion toEntity() {
     return ClarificationQuestion(
@@ -280,6 +223,7 @@ class ClarificationQuestionModel {
   }
 }
 
+@JsonSerializable(createToJson: false, fieldRename: FieldRename.snake)
 class RecommendedItemModel {
   const RecommendedItemModel({
     required this.id,
@@ -295,45 +239,47 @@ class RecommendedItemModel {
     this.statusDisplay,
   });
 
-  factory RecommendedItemModel.fromJson(Map<String, dynamic> json) {
-    final rawId = json['id'];
-    final rawPrice = json['price'];
-    final rawName = json['item_name'] ?? json['name'] ?? json['title'];
-    final rawImageUrl =
-        json['image_url'] ??
-        ((json['image_urls'] is List && (json['image_urls'] as List).isNotEmpty)
-            ? (json['image_urls'] as List).first
-            : null);
-    final rawUnit = json['unit'] ?? json['price_unit'] ?? json['type'];
+  factory RecommendedItemModel.fromJson(Map<String, dynamic> json) =>
+      _$RecommendedItemModelFromJson(json);
 
-    return RecommendedItemModel(
-      id: rawId is num ? rawId.toInt() : int.tryParse('$rawId'),
-      name: _stringValue(rawName, fallback: 'อุปกรณ์แนะนำ'),
-      price: rawPrice is num
-          ? rawPrice.toDouble()
-          : double.tryParse('$rawPrice'),
-      unit: _stringValue(rawUnit, fallback: 'วัน'),
-      imageUrl: _stringValue(rawImageUrl),
-      status: _nullableString(json['status']),
-      category: _nullableString(json['category']),
-      description: _nullableString(json['description']),
-      priceDisplay: _nullableString(json['price_display']),
-      unitDisplay: _nullableString(json['unit_display']),
-      statusDisplay: _nullableString(json['status_display']),
-    );
-  }
-
+  @JsonKey(fromJson: _integer)
   final int? id;
+  @JsonKey(readValue: _readName, fromJson: _name)
   final String name;
+  @JsonKey(fromJson: _price)
   final double? price;
+  @JsonKey(readValue: _readUnit, fromJson: _unit)
   final String unit;
+  @JsonKey(readValue: _readImageUrl, fromJson: _image)
   final String imageUrl;
+  @JsonKey(fromJson: _nullableString)
   final String? status;
+  @JsonKey(fromJson: _nullableString)
   final String? category;
+  @JsonKey(fromJson: _nullableString)
   final String? description;
+  @JsonKey(fromJson: _nullableString)
   final String? priceDisplay;
+  @JsonKey(fromJson: _nullableString)
   final String? unitDisplay;
+  @JsonKey(fromJson: _nullableString)
   final String? statusDisplay;
+
+  static Object? _readName(Map json, String key) =>
+      json['item_name'] ?? json[key] ?? json['title'];
+  static Object? _readUnit(Map json, String key) =>
+      json[key] ?? json['price_unit'] ?? json['type'];
+  static Object? _readImageUrl(Map json, String key) =>
+      json[key] ??
+      ((json['image_urls'] is List && (json['image_urls'] as List).isNotEmpty)
+          ? (json['image_urls'] as List).first
+          : null);
+  static double? _price(Object? value) =>
+      value is num ? value.toDouble() : double.tryParse('$value');
+  static String _name(Object? value) =>
+      _stringValue(value, fallback: 'อุปกรณ์แนะนำ');
+  static String _unit(Object? value) => _stringValue(value, fallback: 'วัน');
+  static String _image(Object? value) => _stringValue(value);
 
   RecommendedItem toEntity() {
     return RecommendedItem(
@@ -361,3 +307,32 @@ class RecommendedItemModel {
     return stringValue.isEmpty ? null : stringValue;
   }
 }
+
+int? _integer(Object? value) =>
+    value is num ? value.toInt() : int.tryParse('$value');
+
+Object? _readList(Map json, String key) => json[key] ?? [];
+Object? _readMap(Map json, String key) => json[key] ?? {};
+
+List<T> _models<T>(Object? value, T Function(Map<String, dynamic>) fromJson) =>
+    value is List
+    ? value
+          .whereType<Map>()
+          .map(
+            (map) => fromJson(
+              map.map((key, value) => MapEntry(key.toString(), value)),
+            ),
+          )
+          .toList(growable: false)
+    : List<T>.empty(growable: false);
+
+List<String> _strings(Object? value) => value is List
+    ? value
+          .whereType<String>()
+          .map((entry) => entry.trim())
+          .where((entry) => entry.isNotEmpty)
+          .toList(growable: false)
+    : const <String>[];
+
+String? _nullableString(Object? value) =>
+    value is String && value.trim().isNotEmpty ? value.trim() : null;
