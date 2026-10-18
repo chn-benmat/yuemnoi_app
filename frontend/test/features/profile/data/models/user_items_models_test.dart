@@ -4,6 +4,19 @@ import 'package:frontend/features/profile/data/models/user_item_model.dart';
 
 void main() {
   group('UserItemModel', () {
+    test('keeps category subtitles and flexible image representations', () {
+      final model = UserItemModel.fromJson({
+        'category': 'กล้อง',
+        'item_image_url': ' , https://img.com/1.jpg, ,https://img.com/2.jpg ',
+      });
+      expect(model.title, 'อุปกรณ์');
+      expect(model.subtitle, 'หมวดหมู่: กล้อง');
+      expect(model.imageUrl, 'https://img.com/1.jpg');
+      expect(model.imageCount, 2);
+      expect(UserItemModel.fromJson({}).imageCount, 1);
+      expect(UserItemModel.fromJson({}).subtitle, 'หมวดหมู่: ทั่วไป');
+    });
+
     test('fromJson parses correctly with json list of images', () {
       final json = {
         'id': 10,
@@ -45,6 +58,17 @@ void main() {
   });
 
   group('FavoriteItemModel', () {
+    test('keeps caller owner names separate from item payloads', () {
+      final model = FavoriteItemModel.fromJson({
+        'owner_name': 'Ignored payload name',
+        'item_image_url': [null, '', ' https://img.com/item.jpg '],
+      });
+      expect(model.id, 0);
+      expect(model.ownerName, 'เจ้าของอุปกรณ์');
+      expect(model.imageUrl, 'https://img.com/item.jpg');
+      expect(FavoriteItemModel.fromJson({}, ownerName: '').ownerName, '');
+    });
+
     test('fromJson parses correctly and converts toEntity', () {
       final json = {
         'id': 20,

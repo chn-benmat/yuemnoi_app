@@ -1,6 +1,11 @@
+import 'package:json_annotation/json_annotation.dart';
+
 import '../../domain/entities/feed_category.dart';
 
+part 'feed_category_model.g.dart';
+
 /// โมเดลข้อมูลหมวดหมู่ในเลเยอร์ Data
+@JsonSerializable(fieldRename: FieldRename.snake)
 class FeedCategoryModel extends FeedCategory {
   const FeedCategoryModel({
     required super.id,
@@ -8,25 +13,11 @@ class FeedCategoryModel extends FeedCategory {
     super.iconName,
   });
 
-  factory FeedCategoryModel.fromJson(Map<String, dynamic> json) {
-    return FeedCategoryModel(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      iconName: json['icon_name'] as String?,
-    );
-  }
+  factory FeedCategoryModel.fromJson(Map<String, dynamic> json) =>
+      _$FeedCategoryModelFromJson(json);
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'icon_name': iconName,
-    };
-  }
+  Map<String, dynamic> toJson() => _$FeedCategoryModelToJson(this);
 
-  FeedCategory toEntity() => FeedCategory(
-    id: id,
-    name: name,
-    iconName: iconName,
-  );
+  FeedCategory toEntity() =>
+      FeedCategory(id: id, name: name, iconName: iconName);
 }

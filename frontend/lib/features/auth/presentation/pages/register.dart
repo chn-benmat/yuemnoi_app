@@ -7,6 +7,7 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/utils/app_image_compressor.dart';
+import '../../../../core/utils/app_form_validators.dart';
 import '../../../../core/widgets/responsive_app_bar_title.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
 import '../../../../core/widgets/app_primary_button.dart';
@@ -48,8 +49,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _pickProfileImage() async {
     if (_isLoading) return;
 
-    final hasPermission =
-        await AppPermissionService.requestGalleryPermission(context);
+    final hasPermission = await AppPermissionService.requestGalleryPermission(
+      context,
+    );
     if (!hasPermission || !mounted) return;
 
     try {
@@ -178,12 +180,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   label: 'ชื่อ - นามสกุล',
                   hintText: 'กรุณากรอกชื่อ - นามสกุล',
                   controller: _nameController,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'กรุณากรอกชื่อ - นามสกุล';
-                    }
-                    return null;
-                  },
+                  validator: AppFormValidators.required(
+                    'กรุณากรอกชื่อ - นามสกุล',
+                  ),
                 ),
                 const SizedBox(height: 16),
                 // Email Field
@@ -192,17 +191,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   hintText: 'name@exemple.com',
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'กรุณากรอกอีเมล';
-                    }
-                    if (!RegExp(
-                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                    ).hasMatch(value)) {
-                      return 'รูปแบบอีเมลไม่ถูกต้อง';
-                    }
-                    return null;
-                  },
+                  validator: AppFormValidators.email(),
                 ),
                 const SizedBox(height: 16),
                 // Phone Field
@@ -215,15 +204,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(10),
                   ],
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'กรุณากรอกเบอร์โทรศัพท์';
-                    }
-                    if (!RegExp(r'^0[0-9]{9}$').hasMatch(value)) {
-                      return 'เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0';
-                    }
-                    return null;
-                  },
+                  validator: AppFormValidators.thaiPhone(localInputOnly: true),
                 ),
                 const SizedBox(height: 16),
                 // Password Field
@@ -245,15 +226,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       });
                     },
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'กรุณากรอกรหัสผ่าน';
-                    }
-                    if (value.length < 6) {
-                      return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
-                    }
-                    return null;
-                  },
+                  validator: AppFormValidators.password(),
                 ),
                 const SizedBox(height: 16),
                 // Confirm Password Field
@@ -275,15 +248,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       });
                     },
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'กรุณากรอกยืนยันรหัสผ่าน';
-                    }
-                    if (value != _passwordController.text) {
-                      return 'รหัสผ่านไม่ตรงกัน';
-                    }
-                    return null;
-                  },
+                  validator: AppFormValidators.confirmation(
+                    () => _passwordController.text,
+                  ),
                 ),
                 const SizedBox(height: 32),
                 // Register Button

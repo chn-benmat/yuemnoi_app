@@ -1,18 +1,13 @@
 import 'package:url_launcher/url_launcher.dart';
 
+import '../utils/phone_formatter.dart';
+
 abstract interface class PhoneCallService {
   Future<bool> call(String phoneNumber);
 }
 
 String normalizePhoneNumberForDialer(String phoneNumber) {
-  final compactPhone = phoneNumber.trim().replaceAll(RegExp(r'[\s()-]'), '');
-  if (!compactPhone.startsWith('+66')) return compactPhone;
-
-  var localNumber = compactPhone.substring(3);
-  if (localNumber.startsWith('0')) {
-    localNumber = localNumber.substring(1);
-  }
-  return localNumber.isEmpty ? '' : '0$localNumber';
+  return PhoneFormatter.formatForDialer(phoneNumber);
 }
 
 class UrlPhoneCallService implements PhoneCallService {

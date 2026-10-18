@@ -1,21 +1,28 @@
+import 'package:json_annotation/json_annotation.dart';
+
 import '../../domain/entities/feed_item.dart';
 
+part 'feed_item_model.g.dart';
+
 /// โมเดลข้อมูลอุปกรณ์ในเลเยอร์ Data
+@JsonSerializable(fieldRename: FieldRename.snake)
 class FeedItemModel extends FeedItem {
   const FeedItemModel({
     required super.id,
-    required super.title,
+    @JsonKey(readValue: _readTitle, defaultValue: '') required super.title,
     super.description = '',
+    @JsonKey(readValue: _readCategoryId, defaultValue: 'all')
     required super.categoryId,
-    super.rawCategory = '',
-    required super.price,
-    required super.priceUnit,
-    required super.rating,
-    required super.reviewCount,
-    required super.distanceKm,
+    @JsonKey(readValue: _readRawCategory) super.rawCategory = '',
+    @JsonKey(defaultValue: 0) required super.price,
+    @JsonKey(defaultValue: '/ วัน') required super.priceUnit,
+    @JsonKey(defaultValue: 0.0) required super.rating,
+    @JsonKey(defaultValue: 0) required super.reviewCount,
+    @JsonKey(defaultValue: 1.0) required super.distanceKm,
     required super.isVerified,
-    required super.ownerName,
+    @JsonKey(defaultValue: 'ผู้ใช้งาน') required super.ownerName,
     super.ownerAvatarUrl,
+    @JsonKey(readValue: _readImageUrl, defaultValue: '')
     required super.imageUrl,
     super.isCurated = false,
     super.isFavorite = false,
@@ -23,60 +30,37 @@ class FeedItemModel extends FeedItem {
     super.locationName = 'กรุงเทพฯ',
   });
 
-  factory FeedItemModel.fromJson(Map<String, dynamic> json) {
-    return FeedItemModel(
-      id: json['id']?.toString() ?? '',
-      title: json['title'] as String? ?? json['item_name'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      categoryId:
-          json['category_id'] as String? ??
-          json['category'] as String? ??
-          'all',
-      rawCategory:
-          json['raw_category'] as String? ?? json['category'] as String? ?? '',
-      price: (json['price'] as num?)?.toInt() ?? 0,
-      priceUnit: json['price_unit'] as String? ?? '/ วัน',
-      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-      reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
-      distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 1.0,
-      isVerified: json['is_verified'] == true,
-      ownerName: json['owner_name'] as String? ?? 'ผู้ใช้งาน',
-      ownerAvatarUrl: json['owner_avatar_url'] as String?,
-      imageUrl:
-          json['image_url'] as String? ??
-          json['item_image_url'] as String? ??
-          '',
-      isCurated: json['is_curated'] as bool? ?? false,
-      isFavorite: json['is_favorite'] as bool? ?? false,
-      tags:
-          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-          const [],
-      locationName: json['location_name'] as String? ?? 'กรุงเทพฯ',
-    );
-  }
+  // ตัวสร้างโค้ดอ่าน converter จาก getter แต่ไม่อ่านจาก super parameter
+  @override
+  @JsonKey(fromJson: _string)
+  String get id => super.id;
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'title': title,
-      'description': description,
-      'category_id': categoryId,
-      'raw_category': rawCategory,
-      'price': price,
-      'price_unit': priceUnit,
-      'rating': rating,
-      'review_count': reviewCount,
-      'distance_km': distanceKm,
-      'is_verified': isVerified,
-      'owner_name': ownerName,
-      'owner_avatar_url': ownerAvatarUrl,
-      'image_url': imageUrl,
-      'is_curated': isCurated,
-      'is_favorite': isFavorite,
-      'tags': tags,
-      'location_name': locationName,
-    };
-  }
+  @override
+  @JsonKey(fromJson: _isTrue)
+  bool get isVerified => super.isVerified;
+
+  @override
+  @JsonKey(fromJson: _tags)
+  List<String> get tags => super.tags;
+
+  factory FeedItemModel.fromJson(Map<String, dynamic> json) =>
+      _$FeedItemModelFromJson(json);
+
+  Map<String, dynamic> toJson() => _$FeedItemModelToJson(this);
+
+  static Object? _readTitle(Map json, String key) =>
+      json[key] as String? ?? json['item_name'] as String?;
+  static Object? _readCategoryId(Map json, String key) =>
+      json[key] as String? ?? json['category'] as String?;
+  static Object? _readRawCategory(Map json, String key) =>
+      json[key] as String? ?? json['category'] as String?;
+  static Object? _readImageUrl(Map json, String key) =>
+      json[key] as String? ?? json['item_image_url'] as String?;
+  static String _string(Object? value) => value?.toString() ?? '';
+  static bool _isTrue(Object? value) => value == true;
+  static List<String> _tags(Object? value) =>
+      (value as List<dynamic>?)?.map((tag) => tag.toString()).toList() ??
+      const [];
 
   @override
   FeedItemModel copyWith({

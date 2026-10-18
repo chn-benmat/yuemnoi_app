@@ -333,3 +333,28 @@ frontend/
 | AI timeout / quota เต็ม               | ตรวจ Go → AI URL / internal key / runtime / provider quotas ตาม AI README         |
 
 ---
+
+## Package adapters และ local cache
+
+- ช่อง OTP ใช้ `pinput 6.0.2` โดยยังส่งรหัสเมื่อกดยืนยัน; validators และเบอร์โทรใช้ `form_builder_validators` กับ `phone_numbers_parser` ผ่าน helpers กลาง เบอร์ไทยตรวจตาม metadata ของ package
+- Skeleton ใช้ `skeletonizer`; หน้าดูภาพใช้ `photo_view`; แชตผู้ใช้และ AI ใช้ `flutter_chat_ui 2.11.1` จัดการรายการข้อความ พร้อม custom builders สำหรับการ์ดเช่า/คืนและแบบสอบถามเดิม ตรึง pinput/chat UI รุ่นนี้เพื่อให้ใช้ Flutter Material ชุดเดียวกับแอป
+- JSON DTO ที่เป็นการแปลงข้อมูลตรงใช้ `json_serializable`; aliases และ coercions อยู่ใน converters ส่วนการรวมหลาย records และการคำนวณ business state ยังอยู่ใน mapper เดิม
+- SSE ใช้ EventFlux ผ่าน adapter ของ logical lines จาก `ApiClient` จึงคง Dio, app headers, HTTP error mapping และการยกเลิกคำขอไว้ส่วนกลาง ไม่เปิด reconnect POST อัตโนมัติ
+- Drift เก็บ Home snapshot และข้อความแชตที่ server ยืนยันแล้ว 50 รายการล่าสุดต่อห้อง โดยแยก owner ของแต่ละบัญชี ล้าง cache บัญชีเมื่อออกจากระบบ และไม่สร้าง offline outbox ภาพ signed URL ยังต้องเข้าถึง Storage ได้
+- Cache เดิมใน SharedPreferences ไม่ใช่แหล่งข้อมูลหลักและไม่ย้ายข้อมูลส่วนตัวที่ไม่มี owner กำกับ ฐานข้อมูลใหม่เติมจาก server เมื่อเปิดข้อมูลครั้งถัดไป; preferences เช่นประวัติค้นหาและการปักหมุดยังใช้ SharedPreferences ตามเดิม
+
+เมื่อแก้ DTO หรือ schema ให้รัน:
+
+```powershell
+dart run build_runner build --delete-conflicting-outputs
+```
+
+Web ต้องมี `web/sqlite3.wasm` จาก sqlite3.dart **3.7.1** และ `web/drift_worker.js` ที่คอมไพล์จาก Drift รุ่นใน lockfile พร้อม `cache_assets.LICENSE.txt` ซึ่งรวมไว้ใน checkout แล้ว เมื่ออัปเดต Drift/SQLite ให้สร้าง assets ให้ตรงกันและ build Web ใหม่:
+
+```powershell
+Invoke-WebRequest https://github.com/simolus3/sqlite3.dart/releases/download/sqlite3-3.7.1/sqlite3.wasm -OutFile web/sqlite3.wasm
+dart compile js -O2 --no-source-maps web/drift_worker.dart -o web/drift_worker.js
+flutter build web
+```
+
+Tests ของ cache ใช้ SQLite ในเครื่องและ HTTP fixtures จึงตรวจ persistence, account isolation, empty snapshots และ late responses ได้โดยไม่เรียกบริการจริง ส่วน live Supabase/AI tests ต้องเลือกแยกจากการตรวจ offline

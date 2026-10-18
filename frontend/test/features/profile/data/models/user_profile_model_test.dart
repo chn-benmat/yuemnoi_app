@@ -4,6 +4,39 @@ import 'package:frontend/features/profile/domain/entities/user_profile.dart';
 
 void main() {
   group('UserProfileModel', () {
+    test('keeps legacy aliases and the canonical output schema', () {
+      final model = UserProfileModel.fromJson({
+        'id': 42,
+        'full_name': 'Legacy Name',
+        'avatar_url': 123,
+        'phone': 812345678,
+        'is_verified': 'true',
+      });
+
+      expect(model.toJson(), {
+        'user_id': '42',
+        'display_name': 'Legacy Name',
+        'username': '',
+        'email': '',
+        'phone': '812345678',
+        'bio': '',
+        'user_image_url': '123',
+        'rating': 0.0,
+        'is_verified': false,
+      });
+      final preferred = UserProfileModel.fromJson({
+        'user_id': '',
+        'id': 'fallback',
+        'display_name': '',
+        'full_name': 'fallback',
+        'user_image_url': '',
+        'picture': 'fallback',
+      });
+      expect(preferred.userId, '');
+      expect(preferred.displayName, '');
+      expect(preferred.avatarUrl, '');
+    });
+
     test('fromJson converts map correctly to UserProfileModel', () {
       final json = {
         'user_id': 'u123',

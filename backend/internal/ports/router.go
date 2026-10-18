@@ -30,28 +30,7 @@ func SetupRouterWithOperations(
 	router.Use(redirectTrailingSlash())
 	router.Use(blockScannerPaths())
 
-	// ตั้งค่า CORS แบบปลอดภัย ไม่อนุญาตให้สะท้อน Arbitrary Origin ควบคู่กับ Credentials
-	router.Use(func(c fiber.Ctx) error {
-		origin := c.Get("Origin")
-		isAllowed := isAllowedOrigin(origin)
-
-		if isAllowed {
-			c.Set("Access-Control-Allow-Origin", origin)
-			c.Set("Access-Control-Allow-Credentials", "true")
-		} else if origin == "" {
-			// สำหรับ Mobile Native App ที่ไม่ได้ส่ง Origin Header มา
-			c.Set("Access-Control-Allow-Origin", "*")
-		}
-
-		c.Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
-		c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-App-Secret")
-
-		// ถ้าระบบส่ง OPTIONS มาถามทาง ให้ตอบกลับ 204 แล้วจบงานตรงนี้เลย
-		if c.Method() == "OPTIONS" {
-			return c.SendStatus(http.StatusNoContent)
-		}
-		return c.Next()
-	})
+	router.Use(corsMiddleware())
 	router.Use(verifyAppSecret(appSecretKey))
 	appGateway := appTokenVerifier{authGateway}
 	router.Use(operationsBusinessGuard(operations, appGateway))

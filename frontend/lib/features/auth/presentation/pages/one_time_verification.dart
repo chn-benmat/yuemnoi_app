@@ -24,11 +24,8 @@ class OneTimeVerificationScreen extends StatefulWidget {
 }
 
 class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
-  final List<TextEditingController> _controllers = List.generate(
-    6,
-    (_) => TextEditingController(),
-  );
-  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  final _otpController = TextEditingController();
+  final _otpFocusNode = FocusNode();
 
   Timer? _timer;
   int _secondsRemaining = 60;
@@ -69,19 +66,15 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    for (var controller in _controllers) {
-      controller.dispose();
-    }
-    for (var node in _focusNodes) {
-      node.dispose();
-    }
+    _otpController.dispose();
+    _otpFocusNode.dispose();
     super.dispose();
   }
 
   void _submitOtp() {
     if (_isVerifying || _isResending) return;
 
-    final otp = _controllers.map((controller) => controller.text).join();
+    final otp = _otpController.text;
     if (otp.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -98,11 +91,8 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
 
     FocusScope.of(context).unfocus();
     context.read<AuthBloc>().add(
-          AuthVerifyOtpRequested(
-            email: widget.email,
-            otpCode: otp,
-          ),
-        );
+      AuthVerifyOtpRequested(email: widget.email, otpCode: otp),
+    );
   }
 
   void _resendOtp() {
@@ -158,10 +148,8 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
           setState(() {
             _isResending = false;
           });
-          for (final controller in _controllers) {
-            controller.clear();
-          }
-          _focusNodes.first.requestFocus();
+          _otpController.clear();
+          _otpFocusNode.requestFocus();
           _startTimer();
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
@@ -213,7 +201,8 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
               // หัวข้อหลัก
               Text(
                 'ยืนยันรหัสOTP',
-                style: theme.textTheme.headlineLarge?.copyWith(
+                style:
+                    theme.textTheme.headlineLarge?.copyWith(
                       color: Colors.black,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -229,7 +218,8 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
               // คำอธิบายเพิ่มเติม
               Text(
                 'กรุณากรอกรหัส OTP ที่ส่งไปยังอีเมลของคุณ',
-                style: theme.textTheme.bodyLarge?.copyWith(
+                style:
+                    theme.textTheme.bodyLarge?.copyWith(
                       color: Colors.black54,
                       fontSize: 16,
                     ) ??
@@ -239,8 +229,8 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
               const SizedBox(height: 32),
               // ช่องกรอกรหัส OTP 6 หลัก
               OtpInputFields(
-                controllers: _controllers,
-                focusNodes: _focusNodes,
+                controller: _otpController,
+                focusNode: _otpFocusNode,
               ),
               const SizedBox(height: 32),
               // นับเวลาถอยหลังส่งรหัสใหม่ / ปุ่มส่งรหัสอีกครั้ง

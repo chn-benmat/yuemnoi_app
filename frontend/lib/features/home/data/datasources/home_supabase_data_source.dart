@@ -1,8 +1,8 @@
+import '../../../../core/cache/app_cache.dart';
+import '../../../../core/cache/cache_database.dart';
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/network/api_client.dart';
@@ -18,11 +18,15 @@ class HomeSupabaseDataSource {
     SupabaseClient? supabaseClient,
     ApiClient? apiClient,
     HomeMockDataSource? fallbackDataSource,
-  }) : _supabaseClient = supabaseClient,
+    CacheDatabase? cacheDatabase,
+  }) : _cacheDatabase = cacheDatabase ?? AppCache.database,
+       _supabaseClient = supabaseClient,
        _apiClient = apiClient ?? DioApiClient(),
        _fallbackDataSource = fallbackDataSource ?? HomeMockDataSource();
 
-  static const String _cacheKey = 'cached_home_feed_items_v2_ranked';
+  final CacheDatabase _cacheDatabase;
+  String get _cacheOwner =>
+      _activeSupabaseClient?.auth.currentUser?.id ?? 'guest';
 
   final SupabaseClient? _supabaseClient;
   final ApiClient _apiClient;
@@ -193,40 +197,40 @@ class HomeSupabaseDataSource {
 
   List<FeedItemModel>? _cachedFeedItems;
   DateTime? _lastFetchTime;
+  String? _memoryOwner;
 
   void clearMemoryCache() {
     _cachedFeedItems = null;
     _lastFetchTime = null;
   }
 
-  Future<void> _saveCachedItems(List<FeedItemModel> items) async {
+  Future<void> _saveCachedItems(
+    List<FeedItemModel> items,
+    String ownerId,
+  ) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonList = items.map((item) => jsonEncode(item.toJson())).toList();
-      await prefs.setStringList(_cacheKey, jsonList);
-    } catch (e) {
-      debugPrint('Save cached home items error: $e');
+      await _cacheDatabase.writeSnapshot(
+        'home',
+        'ranked_feed',
+        ownerId,
+        items.map((item) => item.toJson()).toList(),
+      );
+    } catch (_) {
+      // ข้อมูลจาก server ยังใช้ได้ แม้ cache ในเครื่องเขียนไม่สำเร็จ
     }
   }
 
-  Future<List<FeedItemModel>> _loadCachedItems() async {
+  Future<List<FeedItemModel>?> _loadCachedItems(String ownerId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final stringList = prefs.getStringList(_cacheKey);
-      if (stringList != null && stringList.isNotEmpty) {
-        final items = stringList.map((str) {
-          final decoded = jsonDecode(str);
-          final map = decoded is Map<String, dynamic>
-              ? decoded
-              : Map<String, dynamic>.from(decoded as Map);
-          return FeedItemModel.fromJson(map);
-        }).toList();
-        return items;
-      }
-    } catch (e) {
-      debugPrint('Load cached home items error: $e');
+      final entries = await _cacheDatabase.readSnapshot(
+        'home',
+        'ranked_feed',
+        ownerId,
+      );
+      return entries?.map(FeedItemModel.fromJson).toList();
+    } catch (_) {
+      return null;
     }
-    return const [];
   }
 
   /// ดึงหมวดหมู่มาตรฐาน 11 หมวดหมู่
@@ -501,9 +505,10 @@ class HomeSupabaseDataSource {
       }
     }
 
-    if (rawItems == null || rawItems.isEmpty) {
-      return const [];
+    if (rawItems == null) {
+      throw const FormatException('อ่านข้อมูล Supabase ไม่สำเร็จ');
     }
+    if (rawItems.isEmpty) return const [];
 
     final rawList = rawItems;
     final userIds = rawList
@@ -538,6 +543,12 @@ class HomeSupabaseDataSource {
   Future<List<FeedItemModel>> _fetchAllSupabaseItems({
     bool forceRefresh = false,
   }) async {
+    final ownerId = _cacheOwner;
+    if (_memoryOwner != ownerId) {
+      clearMemoryCache();
+      _favoriteItemIds.clear();
+      _memoryOwner = ownerId;
+    }
     if (!forceRefresh &&
         _cachedFeedItems != null &&
         _lastFetchTime != null &&
@@ -545,55 +556,50 @@ class HomeSupabaseDataSource {
       return _cachedFeedItems!;
     }
 
-    // Tier 1: Try Direct Supabase (ดึงข้อมูลจริงจาก Supabase)
+    List<FeedItemModel>? freshItems;
     if (_activeSupabaseClient != null) {
       try {
-        final items = await _fetchFromSupabaseDirectly();
-        if (items.isNotEmpty) {
-          _cachedFeedItems = items;
-          _lastFetchTime = DateTime.now();
-          unawaited(_saveCachedItems(items));
-          return items;
+        freshItems = await _fetchFromSupabaseDirectly();
+      } catch (_) {
+        // ลอง Go API ต่อเมื่อการอ่าน Supabase ล้มเหลวเท่านั้น
+      }
+    }
+    if (ownerId != _cacheOwner)
+      return _fetchAllSupabaseItems(forceRefresh: true);
+    if (freshItems == null) {
+      try {
+        final response = await _apiClient.get('/api/items');
+        if (response.statusCode == 200 && response.data is List) {
+          freshItems = _mapRawListToFeedItems(response.data as List);
         }
-      } catch (e) {
-        debugPrint('Home Supabase direct fetch error: $e');
+      } catch (_) {
+        // Cache เป็น fallback เมื่อบริการภายนอกติดต่อไม่ได้
       }
     }
-
-    // Tier 2: Try Go Backend API
-    try {
-      final response = await _apiClient.get('/api/items');
-      if (response.statusCode == 200 && response.data is List) {
-        final rawItems = response.data as List;
-        final items = _mapRawListToFeedItems(rawItems);
-        _cachedFeedItems = items;
-        _lastFetchTime = DateTime.now();
-        unawaited(_saveCachedItems(items));
-        return items;
-      }
-    } catch (e) {
-      debugPrint('Home Go Backend API fetch error: $e');
+    if (ownerId != _cacheOwner)
+      return _fetchAllSupabaseItems(forceRefresh: true);
+    if (freshItems != null) {
+      _cachedFeedItems = freshItems;
+      _lastFetchTime = DateTime.now();
+      await _saveCachedItems(freshItems, ownerId);
+      if (ownerId != _cacheOwner)
+        return _fetchAllSupabaseItems(forceRefresh: true);
+      return freshItems;
     }
-
-    // Tier 3: Try Local Cache from SharedPreferences
-    final cached = await _loadCachedItems();
-    if (cached.isNotEmpty) {
+    final cached = await _loadCachedItems(ownerId);
+    if (ownerId != _cacheOwner)
+      return _fetchAllSupabaseItems(forceRefresh: true);
+    if (cached != null) {
       _cachedFeedItems = cached;
       return cached;
     }
-
-    // Tier 4: Fallback to mock data if in testing or server unconfigured
     final fallbackItems = await _fallbackDataSource.fetchNearbyItems();
-    if (fallbackItems.isNotEmpty) {
-      return fallbackItems;
-    }
-
+    if (fallbackItems.isNotEmpty) return fallbackItems;
     throw const FormatException(
       'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่',
     );
   }
 
-  /// ดึงรายการแนะนำพิเศษ (Curated Daily) จาก Supabase / Backend
   Future<List<FeedItemModel>> fetchCuratedItems() async {
     final allItems = await _fetchAllSupabaseItems();
     final curated = allItems.where((i) => i.isCurated).toList();

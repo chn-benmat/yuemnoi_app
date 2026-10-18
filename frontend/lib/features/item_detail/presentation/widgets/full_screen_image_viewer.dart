@@ -1,5 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:photo_view/photo_view.dart';
+import 'package:photo_view/photo_view_gallery.dart';
 
 import '../../../../core/services/media_download_service.dart';
 
@@ -24,9 +26,9 @@ class FullScreenImageViewer extends StatefulWidget {
         barrierColor: Colors.black,
         pageBuilder: (context, animation, secondaryAnimation) =>
             FullScreenImageViewer(
-          imageUrls: imageUrls,
-          initialIndex: initialIndex,
-        ),
+              imageUrls: imageUrls,
+              initialIndex: initialIndex,
+            ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -41,7 +43,6 @@ class FullScreenImageViewer extends StatefulWidget {
 class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
   late final PageController _pageController;
   late int _currentIndex;
-  final Map<int, TransformationController> _transformControllers = {};
 
   @override
   void initState() {
@@ -53,28 +54,9 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
     _pageController = PageController(initialPage: _currentIndex);
   }
 
-  TransformationController _getController(int index) {
-    return _transformControllers.putIfAbsent(
-      index,
-      () => TransformationController(),
-    );
-  }
-
-  void _handleDoubleTap(int index) {
-    final controller = _getController(index);
-    if (controller.value != Matrix4.identity()) {
-      controller.value = Matrix4.identity();
-    } else {
-      controller.value = Matrix4.diagonal3Values(2.5, 2.5, 1.0);
-    }
-  }
-
   @override
   void dispose() {
     _pageController.dispose();
-    for (final controller in _transformControllers.values) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -92,11 +74,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF8B12BA),
-              Color(0xFF6E0099),
-              Color(0xFF4C006E),
-            ],
+            colors: [Color(0xFF8B12BA), Color(0xFF6E0099), Color(0xFF4C006E)],
           ),
         ),
         child: Stack(
@@ -111,78 +89,40 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
                 ),
               )
             else
-              PageView.builder(
-                controller: _pageController,
-                itemCount: urls.length,
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                  // Reset zoom on other pages
-                  for (final entry in _transformControllers.entries) {
-                    if (entry.key != index) {
-                      entry.value.value = Matrix4.identity();
-                    }
-                  }
-                },
-                itemBuilder: (context, index) {
-                  final controller = _getController(index);
-                  return GestureDetector(
-                    onDoubleTap: () => _handleDoubleTap(index),
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        top: topPadding,
-                        bottom: bottomPadding,
-                        left: 16,
-                        right: 16,
-                      ),
-                      child: Center(
-                        child: InteractiveViewer(
-                          transformationController: controller,
-                          minScale: 0.8,
-                          maxScale: 4.0,
-                          clipBehavior: Clip.none,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.35),
-                                  blurRadius: 20,
-                                  spreadRadius: 2,
-                                  offset: const Offset(0, 6),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(18),
-                              child: CachedNetworkImage(
-                                imageUrl: urls[index],
-                                fit: BoxFit.contain,
-                                placeholder: (context, url) => const Center(
-                                  child: SizedBox(
-                                    width: 36,
-                                    height: 36,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 3,
-                                    ),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) =>
-                                    const Center(
-                                  child: Icon(
-                                    Icons.broken_image_outlined,
-                                    color: Colors.white54,
-                                    size: 64,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(16, topPadding, 16, bottomPadding),
+                child: PhotoViewGallery.builder(
+                  pageController: _pageController,
+                  itemCount: urls.length,
+                  backgroundDecoration: const BoxDecoration(
+                    color: Colors.transparent,
+                  ),
+                  onPageChanged: (index) =>
+                      setState(() => _currentIndex = index),
+                  loadingBuilder: (context, progress) => const Center(
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 3,
                       ),
                     ),
-                  );
-                },
+                  ),
+                  builder: (context, index) => PhotoViewGalleryPageOptions(
+                    imageProvider: CachedNetworkImageProvider(urls[index]),
+                    initialScale: PhotoViewComputedScale.contained,
+                    minScale: PhotoViewComputedScale.contained * 0.8,
+                    maxScale: PhotoViewComputedScale.contained * 4,
+                    errorBuilder: (context, error, stackTrace) => const Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white54,
+                        size: 64,
+                      ),
+                    ),
+                  ),
+                ),
               ),
 
             // Top action bar
@@ -192,8 +132,10 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
               right: 0,
               child: SafeArea(
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [

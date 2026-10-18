@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:json_annotation/json_annotation.dart';
+
+part 'booking_request_model.g.dart';
 
 /// ประเภทการเช่า: รายชั่วโมง หรือ รายวัน
 enum BookingRentalType {
@@ -13,14 +16,23 @@ enum BookingRentalType {
 }
 
 /// ข้อมูลอุปกรณ์สำหรับการจอง
+@JsonSerializable()
 class BookingItemInfo {
+  @JsonKey(defaultValue: 1)
   final int id;
+  @JsonKey(defaultValue: 'อุปกรณ์เช่า')
   final String title;
+  @JsonKey(defaultValue: '')
   final String imageUrl;
+  @JsonKey(defaultValue: 0.0)
   final double rating;
+  @JsonKey(defaultValue: 0)
   final int reviewCount;
+  @JsonKey(defaultValue: 100.0)
   final double hourlyRate;
+  @JsonKey(defaultValue: 500.0)
   final double dailyRate;
+  @JsonKey(defaultValue: 'นัดรับตามตกลง')
   final String defaultLocation;
   final String ownerName;
   final double? latitude;
@@ -84,35 +96,10 @@ class BookingItemInfo {
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'imageUrl': imageUrl,
-    'rating': rating,
-    'reviewCount': reviewCount,
-    'hourlyRate': hourlyRate,
-    'dailyRate': dailyRate,
-    'defaultLocation': defaultLocation,
-    'ownerName': ownerName,
-    'latitude': latitude,
-    'longitude': longitude,
-  };
+  Map<String, dynamic> toJson() => _$BookingItemInfoToJson(this);
 
-  factory BookingItemInfo.fromJson(Map<String, dynamic> json) {
-    return BookingItemInfo(
-      id: (json['id'] as num?)?.toInt() ?? 1,
-      title: json['title'] as String? ?? 'อุปกรณ์เช่า',
-      imageUrl: json['imageUrl'] as String? ?? '',
-      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
-      hourlyRate: (json['hourlyRate'] as num?)?.toDouble() ?? 100.0,
-      dailyRate: (json['dailyRate'] as num?)?.toDouble() ?? 500.0,
-      defaultLocation: json['defaultLocation'] as String? ?? 'นัดรับตามตกลง',
-      ownerName: json['ownerName'] as String? ?? 'ผู้ปล่อยเช่า',
-      latitude: (json['latitude'] as num?)?.toDouble(),
-      longitude: (json['longitude'] as num?)?.toDouble(),
-    );
-  }
+  factory BookingItemInfo.fromJson(Map<String, dynamic> json) =>
+      _$BookingItemInfoFromJson(json);
 }
 
 /// ข้อมูลคำขอการจองเช่าอุปกรณ์ (รองรับทั้งรายชั่วโมงและรายวัน)
@@ -227,22 +214,13 @@ $metaStartTag$jsonString$metaEndTag''';
           final jsonStr = text.substring(startIdx, endIdx);
           final map = jsonDecode(jsonStr) as Map<String, dynamic>;
 
-          final item = BookingItemInfo(
-            id: (map['itemId'] as num?)?.toInt() ?? 1,
-            title: map['title'] as String? ?? 'อุปกรณ์เช่า',
-            imageUrl: (imageUrl != null && imageUrl.isNotEmpty)
+          final item = BookingItemInfo.fromJson({
+            ...map,
+            'id': map['itemId'],
+            'imageUrl': (imageUrl != null && imageUrl.isNotEmpty)
                 ? imageUrl
-                : (map['imageUrl'] as String? ?? ''),
-            rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
-            reviewCount: (map['reviewCount'] as num?)?.toInt() ?? 0,
-            hourlyRate: (map['hourlyRate'] as num?)?.toDouble() ?? 100.0,
-            dailyRate: (map['dailyRate'] as num?)?.toDouble() ?? 500.0,
-            defaultLocation:
-                map['defaultLocation'] as String? ?? 'นัดรับตามตกลง',
-            ownerName: map['ownerName'] as String? ?? 'ผู้ปล่อยเช่า',
-            latitude: (map['latitude'] as num?)?.toDouble(),
-            longitude: (map['longitude'] as num?)?.toDouble(),
-          );
+                : map['imageUrl'],
+          });
 
           final rentalType = map['rentalType'] == 'hourly'
               ? BookingRentalType.hourly
