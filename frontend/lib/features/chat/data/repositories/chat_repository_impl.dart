@@ -7,7 +7,7 @@ import '../datasources/chat_remote_data_source.dart';
 
 class ChatRepositoryImpl implements ChatRepository {
   ChatRepositoryImpl({ChatRemoteDataSource? remoteDataSource})
-      : _remoteDataSource = remoteDataSource ?? ChatRemoteDataSource();
+    : _remoteDataSource = remoteDataSource ?? ChatRemoteDataSource();
 
   final ChatRemoteDataSource _remoteDataSource;
 

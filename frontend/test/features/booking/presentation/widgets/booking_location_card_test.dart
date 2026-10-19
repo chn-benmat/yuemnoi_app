@@ -6,33 +6,38 @@ import 'package:frontend/features/booking/presentation/widgets/booking_location_
 
 void main() {
   group('BookingLocationCard Tests', () {
-    testWidgets('renders location title, note, and coordinates badge in editable mode', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: BookingLocationCard(
-                location: 'ซีคอน บางแค',
-                locationNote: 'เลือกโดยผู้ปล่อยเช่า',
-                latitude: 13.7126,
-                longitude: 100.4332,
-                isEditable: true,
+    testWidgets(
+      'renders location title, note, and coordinates badge in editable mode',
+      (tester) async {
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: BookingLocationCard(
+                  location: 'ซีคอน บางแค',
+                  locationNote: 'เลือกโดยผู้ปล่อยเช่า',
+                  latitude: 13.7126,
+                  longitude: 100.4332,
+                  isEditable: true,
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      // Verify location title and note
-      expect(find.text('สถานที่นัดพบ'), findsOneWidget);
-      expect(find.text('ซีคอน บางแค'), findsOneWidget);
-      expect(find.text('เลือกโดยผู้ปล่อยเช่า'), findsOneWidget);
+        // Verify location title and note
+        expect(find.text('สถานที่นัดพบ'), findsOneWidget);
+        expect(find.text('ซีคอน บางแค'), findsOneWidget);
+        expect(find.text('เลือกโดยผู้ปล่อยเช่า'), findsOneWidget);
 
-      // Verify map action label is shown
-      expect(find.text('แตะเพื่อเปลี่ยนจุดปักหมุด'), findsOneWidget);
-    });
+        // Verify map action label is shown
+        expect(find.text('แตะเพื่อเปลี่ยนจุดปักหมุด'), findsOneWidget);
+      },
+    );
 
-    testWidgets('renders non-editable mode with Google Maps action label', (tester) async {
+    testWidgets('renders non-editable mode with Google Maps action label', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(

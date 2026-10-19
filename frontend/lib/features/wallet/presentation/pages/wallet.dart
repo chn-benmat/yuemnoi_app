@@ -144,8 +144,7 @@ class _WalletScreenState extends State<WalletScreen>
   Widget build(BuildContext context) {
     return BlocBuilder<WalletCubit, WalletState>(
       builder: (context, state) {
-        final formattedBalance =
-            '${_currencyFormat.format(state.balance)}฿';
+        final formattedBalance = '${_currencyFormat.format(state.balance)}฿';
 
         return Scaffold(
           backgroundColor: Colors.white,

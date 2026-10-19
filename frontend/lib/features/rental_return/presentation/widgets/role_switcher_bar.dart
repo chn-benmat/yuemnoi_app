@@ -55,7 +55,9 @@ class RoleSwitcherBar extends StatelessWidget {
                         Icon(
                           Icons.person_rounded,
                           size: 16,
-                          color: isRenter ? AppColors.primaryColor : const Color(0xFF64748B),
+                          color: isRenter
+                              ? AppColors.primaryColor
+                              : const Color(0xFF64748B),
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -63,8 +65,12 @@ class RoleSwitcherBar extends StatelessWidget {
                           style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 12.5,
-                            fontWeight: isRenter ? FontWeight.bold : FontWeight.w500,
-                            color: isRenter ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                            fontWeight: isRenter
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: isRenter
+                                ? const Color(0xFF1E293B)
+                                : const Color(0xFF64748B),
                           ),
                         ),
                       ],
@@ -101,7 +107,9 @@ class RoleSwitcherBar extends StatelessWidget {
                         Icon(
                           Icons.storefront_rounded,
                           size: 16,
-                          color: !isRenter ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                          color: !isRenter
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFF64748B),
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -109,8 +117,12 @@ class RoleSwitcherBar extends StatelessWidget {
                           style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 12.5,
-                            fontWeight: !isRenter ? FontWeight.bold : FontWeight.w500,
-                            color: !isRenter ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                            fontWeight: !isRenter
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: !isRenter
+                                ? const Color(0xFF1E293B)
+                                : const Color(0xFF64748B),
                           ),
                         ),
                       ],

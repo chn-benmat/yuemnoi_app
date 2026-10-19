@@ -50,7 +50,10 @@ class CustomBottomNavbar extends StatelessWidget {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 6.0,
+                vertical: 8.0,
+              ),
               child: Row(
                 children: [
                   _NavItem(

@@ -50,4 +50,3 @@ abstract final class ChatMessageModel {
     };
   }
 }
-

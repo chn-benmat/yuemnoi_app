@@ -84,11 +84,14 @@ class ChatMessageBubble extends StatelessWidget {
     String? quotedImageUrl,
     String? quotedMessageId,
     String actualText,
-  }) _parseReplyContent(String raw) {
+  })
+  _parseReplyContent(String raw) {
     if (raw.startsWith('↩ ตอบกลับ:')) {
       final newlineIdx = raw.indexOf('\n');
       if (newlineIdx != -1) {
-        final headerPart = raw.substring('↩ ตอบกลับ:'.length, newlineIdx).trim();
+        final headerPart = raw
+            .substring('↩ ตอบกลับ:'.length, newlineIdx)
+            .trim();
         final actual = raw.substring(newlineIdx + 1);
 
         String target = '';
@@ -100,7 +103,9 @@ class ChatMessageBubble extends StatelessWidget {
           final parts = headerPart.split('|');
           target = parts.isNotEmpty ? parts[0].trim() : '';
           quote = parts.length > 1 ? parts[1].trim() : '';
-          msgId = parts.length > 2 && parts[2].trim().isNotEmpty ? parts[2].trim() : null;
+          msgId = parts.length > 2 && parts[2].trim().isNotEmpty
+              ? parts[2].trim()
+              : null;
           if (parts.length > 3 && parts[3].trim().isNotEmpty) {
             imgUrl = parts.sublist(3).join('|').trim();
           }
@@ -124,10 +129,14 @@ class ChatMessageBubble extends StatelessWidget {
         if (quote.contains('|')) {
           final subParts = quote.split('|');
           quote = subParts.first.trim();
-          if (msgId == null && subParts.length > 1 && subParts[1].trim().isNotEmpty) {
+          if (msgId == null &&
+              subParts.length > 1 &&
+              subParts[1].trim().isNotEmpty) {
             msgId = subParts[1].trim();
           }
-          if (imgUrl == null && subParts.length > 2 && subParts[2].trim().startsWith('http')) {
+          if (imgUrl == null &&
+              subParts.length > 2 &&
+              subParts[2].trim().startsWith('http')) {
             imgUrl = subParts.sublist(2).join('|').trim();
           }
         }
@@ -146,8 +155,15 @@ class ChatMessageBubble extends StatelessWidget {
 
         return (
           replyHeader: 'คุณตอบกลับ$target',
-          quotedText: quote.isNotEmpty ? quote : (imgUrl != null ? '📷 รูปภาพ' : null),
-          quotedImageUrl: (imgUrl != null && (imgUrl.startsWith('http://') || imgUrl.startsWith('https://'))) ? imgUrl : null,
+          quotedText: quote.isNotEmpty
+              ? quote
+              : (imgUrl != null ? '📷 รูปภาพ' : null),
+          quotedImageUrl:
+              (imgUrl != null &&
+                  (imgUrl.startsWith('http://') ||
+                      imgUrl.startsWith('https://')))
+              ? imgUrl
+              : null,
           quotedMessageId: msgId,
           actualText: actual,
         );
@@ -184,8 +200,8 @@ class ChatMessageBubble extends StatelessWidget {
     final effectiveImages = imageUrls.isNotEmpty
         ? imageUrls
         : (message.imageUrl != null && message.imageUrl!.isNotEmpty
-            ? [message.imageUrl!]
-            : <String>[]);
+              ? [message.imageUrl!]
+              : <String>[]);
 
     ChatMessageActionSheet.show(
       context,
@@ -230,8 +246,11 @@ class ChatMessageBubble extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.error_outline_rounded,
-                          color: Color(0xFFEF4444), size: 15),
+                      Icon(
+                        Icons.error_outline_rounded,
+                        color: Color(0xFFEF4444),
+                        size: 15,
+                      ),
                       SizedBox(width: 3),
                       Text(
                         'ส่งไม่สำเร็จ',
@@ -268,9 +287,7 @@ class ChatMessageBubble extends StatelessWidget {
                 key: const ValueKey('chat-message-delivery-status'),
                 width: 16,
                 height: 16,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                ),
+                decoration: const BoxDecoration(shape: BoxShape.circle),
                 child: ChatAvatar(
                   asset: otherAvatarAsset ?? 'assets/images/user.png',
                   size: 16,
@@ -291,8 +308,11 @@ class ChatMessageBubble extends StatelessWidget {
                       bookingCard,
                       if (statusTextWidget != null)
                         Padding(
-                          padding:
-                              const EdgeInsets.only(top: 3, right: 6, bottom: 2),
+                          padding: const EdgeInsets.only(
+                            top: 3,
+                            right: 6,
+                            bottom: 2,
+                          ),
                           child: statusTextWidget,
                         ),
                       if (avatarStatusWidget != null)
@@ -367,8 +387,11 @@ class ChatMessageBubble extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.error_outline_rounded,
-                          color: Color(0xFFEF4444), size: 15),
+                      Icon(
+                        Icons.error_outline_rounded,
+                        color: Color(0xFFEF4444),
+                        size: 15,
+                      ),
                       SizedBox(width: 3),
                       Text(
                         'ส่งไม่สำเร็จ',
@@ -405,9 +428,7 @@ class ChatMessageBubble extends StatelessWidget {
                 key: const ValueKey('chat-message-delivery-status'),
                 width: 16,
                 height: 16,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                ),
+                decoration: const BoxDecoration(shape: BoxShape.circle),
                 child: ChatAvatar(
                   asset: otherAvatarAsset ?? 'assets/images/user.png',
                   size: 16,
@@ -428,8 +449,11 @@ class ChatMessageBubble extends StatelessWidget {
                       inquiryCard,
                       if (statusTextWidget != null)
                         Padding(
-                          padding:
-                              const EdgeInsets.only(top: 3, right: 6, bottom: 2),
+                          padding: const EdgeInsets.only(
+                            top: 3,
+                            right: 6,
+                            bottom: 2,
+                          ),
                           child: statusTextWidget,
                         ),
                       if (avatarStatusWidget != null)
@@ -481,10 +505,11 @@ class ChatMessageBubble extends StatelessWidget {
     final effectiveImages = imageUrls.isNotEmpty
         ? imageUrls
         : (message.imageUrl != null && message.imageUrl!.isNotEmpty
-            ? [message.imageUrl!]
-            : <String>[]);
+              ? [message.imageUrl!]
+              : <String>[]);
     final hasImage = effectiveImages.isNotEmpty;
-    final hasText = message.message.isNotEmpty &&
+    final hasText =
+        message.message.isNotEmpty &&
         message.message != '📷 ส่งรูปภาพ' &&
         message.message != '[รูปภาพ]';
 
@@ -496,7 +521,11 @@ class ChatMessageBubble extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 15),
+                  Icon(
+                    Icons.error_outline_rounded,
+                    color: Color(0xFFEF4444),
+                    size: 15,
+                  ),
                   SizedBox(width: 3),
                   Text(
                     'ส่งไม่สำเร็จ',
@@ -530,9 +559,7 @@ class ChatMessageBubble extends StatelessWidget {
             key: const ValueKey('chat-message-delivery-status'),
             width: 16,
             height: 16,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-            ),
+            decoration: const BoxDecoration(shape: BoxShape.circle),
             child: ChatAvatar(
               asset: otherAvatarAsset ?? 'assets/images/user.png',
               size: 16,
@@ -549,10 +576,7 @@ class ChatMessageBubble extends StatelessWidget {
         onLongPress: () => _showActions(context),
         onTap: () {
           if (effectiveImages.length > 1) {
-            StackedImagesGridScreen.open(
-              context,
-              imageUrls: effectiveImages,
-            );
+            StackedImagesGridScreen.open(context, imageUrls: effectiveImages);
           } else {
             FullScreenImageViewer.open(
               context,
@@ -575,7 +599,11 @@ class ChatMessageBubble extends StatelessWidget {
                     imageCard,
                     if (statusTextWidget != null)
                       Padding(
-                        padding: const EdgeInsets.only(top: 3, right: 6, bottom: 2),
+                        padding: const EdgeInsets.only(
+                          top: 3,
+                          right: 6,
+                          bottom: 2,
+                        ),
                         child: statusTextWidget,
                       ),
                     if (avatarStatusWidget != null)
@@ -641,8 +669,9 @@ class ChatMessageBubble extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
-        crossAxisAlignment:
-            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           if (hasImage)
             GestureDetector(
@@ -683,20 +712,14 @@ class ChatMessageBubble extends StatelessWidget {
                     width: 220,
                     height: 140,
                     color: Colors.black12,
-                    child: const Icon(
-                      Icons.broken_image_rounded,
-                      size: 40,
-                    ),
+                    child: const Icon(Icons.broken_image_rounded, size: 40),
                   ),
                 ),
               ),
             ),
           if (hasText)
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Text(
                 replyData.actualText,
                 style: TextStyle(
@@ -713,8 +736,9 @@ class ChatMessageBubble extends StatelessWidget {
     final bubble = GestureDetector(
       onLongPress: () => _showActions(context),
       child: Column(
-        crossAxisAlignment:
-            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           // 1. Reply Header: ↩ คุณตอบกลับตัวเอง / chn.benmat
           if (replyData.replyHeader != null)
@@ -754,7 +778,9 @@ class ChatMessageBubble extends StatelessWidget {
               },
               child: Stack(
                 clipBehavior: Clip.none,
-                alignment: isMine ? Alignment.bottomRight : Alignment.bottomLeft,
+                alignment: isMine
+                    ? Alignment.bottomRight
+                    : Alignment.bottomLeft,
                 children: [
                   Container(
                     width: 220,
@@ -811,8 +837,9 @@ class ChatMessageBubble extends StatelessWidget {
               replyData.quotedText!.isNotEmpty)
             // Quoted Text bubble with reply bubble directly below it
             Column(
-              crossAxisAlignment:
-                  isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMine
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 GestureDetector(
                   onTap: () {
@@ -871,7 +898,11 @@ class ChatMessageBubble extends StatelessWidget {
                     bubble,
                     if (statusTextWidget != null)
                       Padding(
-                        padding: const EdgeInsets.only(top: 3, right: 6, bottom: 2),
+                        padding: const EdgeInsets.only(
+                          top: 3,
+                          right: 6,
+                          bottom: 2,
+                        ),
                         child: statusTextWidget,
                       ),
                     if (avatarStatusWidget != null)

@@ -53,7 +53,9 @@ class ReturnInspectionPhoto {
     this.locationText,
   });
 
-  bool get hasPhoto => (localPath != null && localPath!.isNotEmpty) || (imageUrl != null && imageUrl!.isNotEmpty);
+  bool get hasPhoto =>
+      (localPath != null && localPath!.isNotEmpty) ||
+      (imageUrl != null && imageUrl!.isNotEmpty);
 
   String get formattedTime {
     try {
@@ -176,14 +178,20 @@ class RentalReturnSession {
   /// แสดงกำหนดเวลาเช่าได้ถึง เช่น "วันนี้ เวลา 18:00 น." หรือ "12 ก.ย. 2569 เวลา 18:00 น."
   String get endAtFormatted {
     final now = DateTime.now();
-    final isToday = now.year == endAt.year && now.month == endAt.month && now.day == endAt.day;
+    final isToday =
+        now.year == endAt.year &&
+        now.month == endAt.month &&
+        now.day == endAt.day;
     final timeStr = DateFormat('HH:mm น.', 'th').format(endAt);
 
     if (isToday) {
       return 'วันนี้ เวลา $timeStr';
     }
     final tomorrow = now.add(const Duration(days: 1));
-    final isTomorrow = tomorrow.year == endAt.year && tomorrow.month == endAt.month && tomorrow.day == endAt.day;
+    final isTomorrow =
+        tomorrow.year == endAt.year &&
+        tomorrow.month == endAt.month &&
+        tomorrow.day == endAt.day;
     if (isTomorrow) {
       return 'พรุ่งนี้ เวลา $timeStr';
     }
@@ -440,7 +448,8 @@ class RentalReturnSession {
     };
 
     // เลือกข้อมูลตาม ID หากไม่มีให้หมุนเวียนตามโมดูลัส
-    final targetItem = catalog[effectiveId] ??
+    final targetItem =
+        catalog[effectiveId] ??
         catalog[catalog.keys.elementAt(effectiveId.abs() % catalog.length)]!;
 
     return RentalReturnSession(

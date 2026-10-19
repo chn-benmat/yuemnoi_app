@@ -70,4 +70,3 @@ class ToggleFavoriteRequested extends HomeEvent {
 class RefreshHomeFeedRequested extends HomeEvent {
   const RefreshHomeFeedRequested();
 }
-

@@ -7,7 +7,8 @@ class ChatTypingIndicatorBubble extends StatefulWidget {
   final String? avatarAsset;
 
   @override
-  State<ChatTypingIndicatorBubble> createState() => _ChatTypingIndicatorBubbleState();
+  State<ChatTypingIndicatorBubble> createState() =>
+      _ChatTypingIndicatorBubbleState();
 }
 
 class _ChatTypingIndicatorBubbleState extends State<ChatTypingIndicatorBubble>

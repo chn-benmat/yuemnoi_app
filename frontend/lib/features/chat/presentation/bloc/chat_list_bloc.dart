@@ -13,9 +13,9 @@ class ChatListBloc extends Bloc<ChatListEvent, ChatListState> {
   ChatListBloc({
     required GetConversationsUseCase getConversations,
     ChatRemoteDataSource? chatRemoteDataSource,
-  })  : _getConversations = getConversations,
-        _chatRemoteDataSource = chatRemoteDataSource ?? ChatRemoteDataSource(),
-        super(const ChatListState()) {
+  }) : _getConversations = getConversations,
+       _chatRemoteDataSource = chatRemoteDataSource ?? ChatRemoteDataSource(),
+       super(const ChatListState()) {
     on<LoadChatListStarted>(_onLoadChatListStarted);
     on<ChatListRefreshed>(_onChatListRefreshed);
     on<ChatConversationsUpdated>(_onConversationsUpdated);
@@ -34,25 +34,29 @@ class ChatListBloc extends Bloc<ChatListEvent, ChatListState> {
     emit(state.copyWith(status: ChatListStatus.loading));
     try {
       final conversations = await _getConversations();
-      emit(state.copyWith(
-        status: ChatListStatus.success,
-        conversations: conversations,
-      ));
+      emit(
+        state.copyWith(
+          status: ChatListStatus.success,
+          conversations: conversations,
+        ),
+      );
 
       // ฟังการเปลี่ยนแปลงของรายการแชทแบบ Realtime (ข้อความล่าสุด, เวลา, ลำดับห้องแชท)
       _conversationsSubscription?.cancel();
       _conversationsSubscription = _chatRemoteDataSource
           .streamConversations()
           .listen((updatedList) {
-        if (!isClosed) {
-          add(ChatConversationsUpdated(updatedList));
-        }
-      });
+            if (!isClosed) {
+              add(ChatConversationsUpdated(updatedList));
+            }
+          });
     } catch (e) {
-      emit(state.copyWith(
-        status: ChatListStatus.failure,
-        errorMessage: e.toString(),
-      ));
+      emit(
+        state.copyWith(
+          status: ChatListStatus.failure,
+          errorMessage: e.toString(),
+        ),
+      );
     }
   }
 
@@ -62,15 +66,19 @@ class ChatListBloc extends Bloc<ChatListEvent, ChatListState> {
   ) async {
     try {
       final conversations = await _getConversations();
-      emit(state.copyWith(
-        status: ChatListStatus.success,
-        conversations: conversations,
-      ));
+      emit(
+        state.copyWith(
+          status: ChatListStatus.success,
+          conversations: conversations,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: ChatListStatus.failure,
-        errorMessage: e.toString(),
-      ));
+      emit(
+        state.copyWith(
+          status: ChatListStatus.failure,
+          errorMessage: e.toString(),
+        ),
+      );
     }
   }
 
@@ -78,10 +86,12 @@ class ChatListBloc extends Bloc<ChatListEvent, ChatListState> {
     ChatConversationsUpdated event,
     Emitter<ChatListState> emit,
   ) {
-    emit(state.copyWith(
-      status: ChatListStatus.success,
-      conversations: event.conversations,
-    ));
+    emit(
+      state.copyWith(
+        status: ChatListStatus.success,
+        conversations: event.conversations,
+      ),
+    );
   }
 
   void _onConversationMarkedAsRead(

@@ -24,4 +24,3 @@ abstract class HomeRepository {
   /// ล้างแคชในหน่วยความจำเพื่อบังคับโหลดข้อมูลใหม่
   void clearCache() {}
 }
-

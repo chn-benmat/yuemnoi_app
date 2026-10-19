@@ -200,8 +200,6 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     }
   }
 
-
-
   // ==========================================
   // ดึงข้อมูลอุปกรณ์สิ่งที่ผู้เช่าสนใจ (Curated Items)
   // ==========================================
@@ -308,7 +306,9 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       _minRating = minRating;
     });
     _executeSearch(
-      _lastSubmittedQuery.isNotEmpty ? _lastSubmittedQuery : _searchController.text,
+      _lastSubmittedQuery.isNotEmpty
+          ? _lastSubmittedQuery
+          : _searchController.text,
     );
   }
 
@@ -320,7 +320,9 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       _minRating = null;
     });
     _executeSearch(
-      _lastSubmittedQuery.isNotEmpty ? _lastSubmittedQuery : _searchController.text,
+      _lastSubmittedQuery.isNotEmpty
+          ? _lastSubmittedQuery
+          : _searchController.text,
     );
   }
 
@@ -397,12 +399,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       padding: const EdgeInsets.fromLTRB(10, 10, 16, 12),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: Color(0xFFE4E4E7),
-            width: 1,
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFE4E4E7), width: 1)),
       ),
       child: Row(
         children: [
@@ -589,24 +586,17 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
         // รายการสินค้าแนะนำแบบ Item Cards (2-Column Grid)
         _buildCuratedGridSliver(),
 
-        const SliverToBoxAdapter(
-          child: SizedBox(height: 40),
-        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 40)),
       ],
     );
   }
 
-  Widget _buildHistoryRow(
-    List<String> items, {
-    bool showClearButton = false,
-  }) {
+  Widget _buildHistoryRow(List<String> items, {bool showClearButton = false}) {
     return Row(
       children: [
         for (int i = 0; i < items.length; i++) ...[
           if (i > 0) const SizedBox(width: 8),
-          Flexible(
-            child: _buildHistoryTag(items[i]),
-          ),
+          Flexible(child: _buildHistoryTag(items[i])),
         ],
         if (showClearButton) ...[
           if (items.isNotEmpty) const SizedBox(width: 8),
@@ -692,10 +682,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
           child: Center(
             child: Text(
               'ไม่มีอุปกรณ์แนะนำในขณะนี้',
-              style: TextStyle(
-                color: Color(0xFF71717A),
-                fontSize: 13.5,
-              ),
+              style: TextStyle(color: Color(0xFF71717A), fontSize: 13.5),
             ),
           ),
         ),
@@ -711,16 +698,10 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
           mainAxisSpacing: 10,
           childAspectRatio: 0.61,
         ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final item = _curatedItems[index];
-            return ShopeeProductCard(
-              item: item,
-              onTap: () => _onItemTap(item),
-            );
-          },
-          childCount: _curatedItems.length,
-        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final item = _curatedItems[index];
+          return ShopeeProductCard(item: item, onTap: () => _onItemTap(item));
+        }, childCount: _curatedItems.length),
       ),
     );
   }
@@ -760,34 +741,31 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
             physics: const BouncingScrollPhysics(),
             slivers: [
               if (_searchResults.isEmpty)
-                SliverToBoxAdapter(
-                  child: _buildEmptyResultsState(),
-                )
+                SliverToBoxAdapter(child: _buildEmptyResultsState())
               else
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 0.61,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final item = _searchResults[index];
-                        return ShopeeProductCard(
-                          item: item,
-                          onTap: () => _onItemTap(item),
-                        );
-                      },
-                      childCount: _searchResults.length,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 0.61,
+                        ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final item = _searchResults[index];
+                      return ShopeeProductCard(
+                        item: item,
+                        onTap: () => _onItemTap(item),
+                      );
+                    }, childCount: _searchResults.length),
                   ),
                 ),
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 50),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 50)),
             ],
           ),
         ),
@@ -803,8 +781,8 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     final heading = isCategorySearch
         ? 'ผลการค้นหาหมวดหมู่สำหรับ '
         : _lastSubmittedQuery.isNotEmpty
-            ? 'ผลการค้นหาสำหรับ '
-            : 'ผลการค้นหาตามตัวกรอง';
+        ? 'ผลการค้นหาสำหรับ '
+        : 'ผลการค้นหาตามตัวกรอง';
 
     return Container(
       color: Colors.white,
@@ -852,17 +830,14 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
                   minPrice: _minPrice,
                   maxPrice: _maxPrice,
                   minRating: _minRating,
-                  onApplyFilter: ({
-                    required categoryId,
-                    minPrice,
-                    maxPrice,
-                    minRating,
-                  }) => _applyFilter(
-                    categoryId: categoryId,
-                    minPrice: minPrice,
-                    maxPrice: maxPrice,
-                    minRating: minRating,
-                  ),
+                  onApplyFilter:
+                      ({required categoryId, minPrice, maxPrice, minRating}) =>
+                          _applyFilter(
+                            categoryId: categoryId,
+                            minPrice: minPrice,
+                            maxPrice: maxPrice,
+                            minRating: minRating,
+                          ),
                   onResetFilter: _resetFilter,
                 ),
               ],
@@ -924,8 +899,8 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
               _selectedCategoryId != 'all'
                   ? 'ไม่พบอุปกรณ์ในหมวดหมู่ "${CategoryFilterChips.getCategoryLabel(_selectedCategoryId)}"'
                   : _lastSubmittedQuery.isNotEmpty
-                      ? 'ไม่พบอุปกรณ์ที่ตรงกับ "$_lastSubmittedQuery"'
-                      : 'ไม่พบอุปกรณ์ที่ตรงกับตัวกรองนี้',
+                  ? 'ไม่พบอุปกรณ์ที่ตรงกับ "$_lastSubmittedQuery"'
+                  : 'ไม่พบอุปกรณ์ที่ตรงกับตัวกรองนี้',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Color(0xFF18181B),
@@ -949,7 +924,10 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
               onPressed: _resetToPreSearch,
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primaryColor,
-                side: const BorderSide(color: AppColors.primaryColor, width: 1.2),
+                side: const BorderSide(
+                  color: AppColors.primaryColor,
+                  width: 1.2,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -960,10 +938,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
               ),
               child: const Text(
                 'กลับไปดูอุปกรณ์แนะนำ',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -1004,17 +979,9 @@ class _SearchItemSkeletonCard extends StatelessWidget {
                     borderRadius: 6,
                   ),
                   SizedBox(height: 6),
-                  SkeletonBox(
-                    width: 90,
-                    height: 13,
-                    borderRadius: 6,
-                  ),
+                  SkeletonBox(width: 90, height: 13, borderRadius: 6),
                   SizedBox(height: 10),
-                  SkeletonBox(
-                    width: 70,
-                    height: 16,
-                    borderRadius: 6,
-                  ),
+                  SkeletonBox(width: 70, height: 16, borderRadius: 6),
                 ],
               ),
             ),

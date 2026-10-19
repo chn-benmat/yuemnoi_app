@@ -80,7 +80,10 @@ class BookingPaymentMethodCard extends StatelessWidget {
               // คำแนะนำเสริมตามตัวเลือก
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 9,
+                ),
                 decoration: BoxDecoration(
                   color: selectedMethod == 'cash'
                       ? const Color(0xFFF0FDF4)

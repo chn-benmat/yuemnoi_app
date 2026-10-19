@@ -2,11 +2,7 @@ import 'package:equatable/equatable.dart';
 
 /// เอนทิตีแทนหมวดหมู่ของอุปกรณ์ในหน้า Home Feed
 class FeedCategory extends Equatable {
-  const FeedCategory({
-    required this.id,
-    required this.name,
-    this.iconName,
-  });
+  const FeedCategory({required this.id, required this.name, this.iconName});
 
   /// รหัสหมวดหมู่ (เช่น 'all', 'phone', 'camera', 'laptop', 'gaming', 'camping', 'audio')
   final String id;

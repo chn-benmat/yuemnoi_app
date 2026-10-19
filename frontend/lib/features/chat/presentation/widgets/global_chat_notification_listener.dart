@@ -65,8 +65,7 @@ class _GlobalChatNotificationListenerState
 
   void _startListening() {
     try {
-      _incomingMsgSub =
-          _dataSource.streamIncomingMessages().listen((messages) {
+      _incomingMsgSub = _dataSource.streamIncomingMessages().listen((messages) {
         if (!mounted) return;
 
         for (final msg in messages) {
@@ -74,8 +73,9 @@ class _GlobalChatNotificationListenerState
           _notifiedMessageIds.add(msg.id);
 
           // ถ้ากำลังเปิดแชทกับคนนี้อยู่แล้ว ไม่ต้องแสดงการแจ้งเตือน
-          if (ActiveConversationTracker.instance
-              .isConversationActive(msg.conversationId)) {
+          if (ActiveConversationTracker.instance.isConversationActive(
+            msg.conversationId,
+          )) {
             continue;
           }
 

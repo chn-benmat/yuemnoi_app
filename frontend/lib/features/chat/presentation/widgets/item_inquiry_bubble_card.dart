@@ -26,7 +26,8 @@ class ItemInquiryBubbleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayImageUrl = (message.imageUrl != null && message.imageUrl!.isNotEmpty)
+    final displayImageUrl =
+        (message.imageUrl != null && message.imageUrl!.isNotEmpty)
         ? message.imageUrl!
         : (inquiryData.imageUrl ?? '');
     final itemId = inquiryData.itemId;
@@ -37,10 +38,7 @@ class ItemInquiryBubbleCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -177,10 +175,7 @@ class ItemInquiryBubbleCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: const Color(0xFFE2E8F0),
-                  width: 0.8,
-                ),
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,10 +248,7 @@ class ItemInquiryBubbleCard extends StatelessWidget {
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primaryColor,
-                    side: const BorderSide(
-                      color: Color(0xFFD8B4FE),
-                      width: 1,
-                    ),
+                    side: const BorderSide(color: Color(0xFFD8B4FE), width: 1),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -293,7 +285,9 @@ class ItemInquiryBubbleCard extends StatelessWidget {
                 width: double.infinity,
                 height: 36,
                 child: ElevatedButton.icon(
-                  key: ValueKey('inquiry-send-request-${inquiryData.itemId ?? inquiryData.itemName}'),
+                  key: ValueKey(
+                    'inquiry-send-request-${inquiryData.itemId ?? inquiryData.itemName}',
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,

@@ -19,7 +19,7 @@ class ProfileRemoteDataSource {
   final ApiClient _client;
 
   ProfileRemoteDataSource({ApiClient? client})
-      : _client = client ?? DioApiClient();
+    : _client = client ?? DioApiClient();
 
   Future<UserProfileModel> getProfile({
     required String userId,
@@ -58,7 +58,8 @@ class ProfileRemoteDataSource {
         final currentUser = SupabaseConfig.client.auth.currentUser;
         if (currentUser != null && currentUser.id == userId) {
           final meta = currentUser.userMetadata ?? {};
-          final name = meta['display_name'] as String? ??
+          final name =
+              meta['display_name'] as String? ??
               meta['full_name'] as String? ??
               currentUser.email?.split('@').first;
           if (name != null &&
@@ -139,8 +140,9 @@ class ProfileRemoteDataSource {
     }
 
     if (response.statusCode != 200) {
-      final errorMsg =
-          response.data is Map ? response.data['error']?.toString() : null;
+      final errorMsg = response.data is Map
+          ? response.data['error']?.toString()
+          : null;
       throw ProfileApiException(errorMsg ?? 'ไม่สามารถบันทึกข้อมูลโปรไฟล์ได้');
     }
 
@@ -177,8 +179,9 @@ class ProfileRemoteDataSource {
         data: {'phone': phone},
       );
       if (response.statusCode != 200) {
-        final errorMsg =
-            response.data is Map ? response.data['error']?.toString() : null;
+        final errorMsg = response.data is Map
+            ? response.data['error']?.toString()
+            : null;
         throw ProfileApiException(
           errorMsg ?? 'ไม่สามารถบันทึกเบอร์โทรศัพท์ได้',
         );
@@ -212,8 +215,9 @@ class ProfileRemoteDataSource {
       );
 
       if (response.statusCode != 200) {
-        final errorMsg =
-            response.data is Map ? response.data['error']?.toString() : null;
+        final errorMsg = response.data is Map
+            ? response.data['error']?.toString()
+            : null;
         throw ProfileApiException(errorMsg ?? 'ไม่สามารถเปลี่ยนรหัสผ่านได้');
       }
 

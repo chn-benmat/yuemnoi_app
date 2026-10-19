@@ -26,7 +26,8 @@ class _RentalIncomeScreenState extends State<RentalIncomeScreen> {
   @override
   void initState() {
     super.initState();
-    _getRentalIncomeUseCase = widget.getRentalIncomeUseCase ??
+    _getRentalIncomeUseCase =
+        widget.getRentalIncomeUseCase ??
         GetRentalIncomeUseCase(RentalManagementRepositoryImpl());
     _loadRentalIncome();
   }

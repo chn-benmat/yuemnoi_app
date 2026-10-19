@@ -9,8 +9,9 @@ class FavoriteCubit extends Cubit<FavoriteState> {
   final GetFavoritesUseCase getFavorites;
 
   FavoriteCubit({GetFavoritesUseCase? getFavorites})
-      : getFavorites = getFavorites ?? GetFavoritesUseCase(UserItemsRepositoryImpl()),
-        super(const FavoriteInitial());
+    : getFavorites =
+          getFavorites ?? GetFavoritesUseCase(UserItemsRepositoryImpl()),
+      super(const FavoriteInitial());
 
   Future<void> loadFavorites() async {
     emit(const FavoriteLoading());

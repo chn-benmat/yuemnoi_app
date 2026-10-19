@@ -52,13 +52,13 @@ class RentalReturnState extends Equatable {
 
   @override
   List<Object?> get props => [
-        status,
-        session,
-        activeRole,
-        isAlarmActive,
-        isSubmitting,
-        errorMessage,
-        successMessage,
-        merchantQrExpiry,
-      ];
+    status,
+    session,
+    activeRole,
+    isAlarmActive,
+    isSubmitting,
+    errorMessage,
+    successMessage,
+    merchantQrExpiry,
+  ];
 }

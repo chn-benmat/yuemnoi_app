@@ -96,10 +96,15 @@ class _RentalCountdownTimerWidgetState
   // 1. Compact View (สำหรับแท็กสั้นๆ ในรายการ)
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildCompactView(bool isOverdue, Duration diff) {
-    final bgColor = isOverdue ? const Color(0xFFFEF2F2) : const Color(0xFFF5F3FF);
-    final borderColor =
-        isOverdue ? const Color(0xFFFECACA) : const Color(0xFFDDD6FE);
-    final textColor = isOverdue ? const Color(0xFFDC2626) : AppColors.primaryColor;
+    final bgColor = isOverdue
+        ? const Color(0xFFFEF2F2)
+        : const Color(0xFFF5F3FF);
+    final borderColor = isOverdue
+        ? const Color(0xFFFECACA)
+        : const Color(0xFFDDD6FE);
+    final textColor = isOverdue
+        ? const Color(0xFFDC2626)
+        : AppColors.primaryColor;
 
     final String timeStr;
     final String statusLabel;
@@ -108,7 +113,8 @@ class _RentalCountdownTimerWidgetState
       final hours = diff.inHours;
       final minutes = diff.inMinutes % 60;
       final seconds = diff.inSeconds % 60;
-      timeStr = '+${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+      timeStr =
+          '+${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
       statusLabel = 'ส่งคืนเลท';
     } else {
       final days = diff.inDays;
@@ -117,9 +123,11 @@ class _RentalCountdownTimerWidgetState
       final seconds = diff.inSeconds % 60;
 
       if (days > 0) {
-        timeStr = '$days วัน ${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+        timeStr =
+            '$days วัน ${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
       } else {
-        timeStr = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+        timeStr =
+            '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
       }
       statusLabel = 'เหลือเวลาคืน';
     }
@@ -168,14 +176,18 @@ class _RentalCountdownTimerWidgetState
   // 2. Full Card View (Swiss Style & Clean SaaS - ไร้การ์ดซ้ำซ้อนและไร้กล่องตัวเลขเทอะทะ)
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildFullCardView(bool isOverdue, Duration diff) {
-    final cardBg =
-        isOverdue ? const Color(0xFFFFF8F8) : const Color(0xFFF8FAFC);
-    final borderColor =
-        isOverdue ? const Color(0xFFFECACA) : const Color(0xFFE2E8F0);
-    final accentColor =
-        isOverdue ? const Color(0xFFDC2626) : AppColors.primaryColor;
-    final headerBg =
-        isOverdue ? const Color(0xFFFEE2E2) : const Color(0xFFF1F5F9);
+    final cardBg = isOverdue
+        ? const Color(0xFFFFF8F8)
+        : const Color(0xFFF8FAFC);
+    final borderColor = isOverdue
+        ? const Color(0xFFFECACA)
+        : const Color(0xFFE2E8F0);
+    final accentColor = isOverdue
+        ? const Color(0xFFDC2626)
+        : AppColors.primaryColor;
+    final headerBg = isOverdue
+        ? const Color(0xFFFEE2E2)
+        : const Color(0xFFF1F5F9);
 
     final totalHours = diff.inHours;
     final days = diff.inDays;
@@ -185,8 +197,10 @@ class _RentalCountdownTimerWidgetState
 
     String endFormatted;
     try {
-      endFormatted = DateFormat('d MMM yyyy • HH:mm น.', 'th')
-          .format(widget.endDateTime);
+      endFormatted = DateFormat(
+        'd MMM yyyy • HH:mm น.',
+        'th',
+      ).format(widget.endDateTime);
     } catch (_) {
       endFormatted =
           '${widget.endDateTime.day}/${widget.endDateTime.month}/${widget.endDateTime.year} • ${widget.endDateTime.hour.toString().padLeft(2, '0')}:${widget.endDateTime.minute.toString().padLeft(2, '0')} น.';
@@ -207,7 +221,9 @@ class _RentalCountdownTimerWidgetState
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: headerBg,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(9),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -245,8 +261,10 @@ class _RentalCountdownTimerWidgetState
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(4),
@@ -527,16 +545,19 @@ class _RentalCountdownTimerWidgetState
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerRight,
-              child: valueWidget ??
+              child:
+                  valueWidget ??
                   Text(
                     value ?? '',
                     textAlign: TextAlign.end,
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 11.5,
-                      fontWeight:
-                          isHighlighted ? FontWeight.w700 : FontWeight.w600,
-                      color: valueColor ??
+                      fontWeight: isHighlighted
+                          ? FontWeight.w700
+                          : FontWeight.w600,
+                      color:
+                          valueColor ??
                           (isHighlighted
                               ? const Color(0xFFDC2626)
                               : const Color(0xFF0F172A)),

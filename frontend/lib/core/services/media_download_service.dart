@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:gal/gal.dart';
 
-
 class MediaDownloadService {
   MediaDownloadService._();
   static final MediaDownloadService instance = MediaDownloadService._();

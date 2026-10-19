@@ -63,10 +63,8 @@ void main() {
     blocTest<ProfileCubit, ProfileState>(
       'updatePhone emits [ProfileActionInProgress, ProfileActionSuccess]',
       build: () => buildCubit(FakeProfileRepository()),
-      act: (cubit) => cubit.updatePhone(
-        accessToken: 'token123',
-        phone: '0855555555',
-      ),
+      act: (cubit) =>
+          cubit.updatePhone(accessToken: 'token123', phone: '0855555555'),
       expect: () => [
         isA<ProfileActionInProgress>(),
         isA<ProfileActionSuccess>(),

@@ -21,7 +21,8 @@ class ItemInquiryData {
   final String? imageUrl;
   final String rawMessage;
 
-  static const String inquiryPrefix = 'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:';
+  static const String inquiryPrefix =
+      'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:';
   static const String legacyPrefix = 'ฉันสนใจจ้างงานของคุณตามรายละเอียดนี้:';
   static const String metaStartTag = '[ITEM_INQUIRY:';
   static const String metaEndTag = ']';
@@ -94,7 +95,8 @@ $metaStartTag$jsonString$metaEndTag''';
           final jsonStr = text.substring(startIdx, endIdx);
           final map = jsonDecode(jsonStr) as Map<String, dynamic>;
 
-          final parsedItemId = (map['itemId'] as num?)?.toInt() ?? defaultItemId;
+          final parsedItemId =
+              (map['itemId'] as num?)?.toInt() ?? defaultItemId;
           final parsedItemName = map['itemName'] as String? ?? 'อุปกรณ์เช่า';
           final parsedPrice = (map['price'] as num?)?.toDouble();
           final parsedUnitLabel = map['unitLabel'] as String?;
@@ -120,7 +122,9 @@ $metaStartTag$jsonString$metaEndTag''';
     try {
       String cleanText = text;
       if (cleanText.contains(metaStartTag)) {
-        cleanText = cleanText.substring(0, cleanText.indexOf(metaStartTag)).trim();
+        cleanText = cleanText
+            .substring(0, cleanText.indexOf(metaStartTag))
+            .trim();
       }
 
       final lines = cleanText.split('\n');
@@ -158,7 +162,9 @@ $metaStartTag$jsonString$metaEndTag''';
         itemId: defaultItemId,
         itemName: parsedItemName,
         price: parsedPrice,
-        priceFormatted: parsedPriceFormatted.isNotEmpty ? parsedPriceFormatted : null,
+        priceFormatted: parsedPriceFormatted.isNotEmpty
+            ? parsedPriceFormatted
+            : null,
         imageUrl: imageUrl,
         rawMessage: text,
       );

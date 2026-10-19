@@ -96,7 +96,11 @@ class _MerchantQrDialogState extends State<MerchantQrDialog> {
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.qr_code_2_rounded, color: Color(0xFF10B981), size: 26),
+                    Icon(
+                      Icons.qr_code_2_rounded,
+                      color: Color(0xFF10B981),
+                      size: 26,
+                    ),
                     SizedBox(width: 8),
                     Text(
                       'QR Code คืนอุปกรณ์',
@@ -154,7 +158,11 @@ class _MerchantQrDialogState extends State<MerchantQrDialog> {
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.error_outline_rounded, size: 50, color: Colors.red),
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          size: 50,
+                          color: Colors.red,
+                        ),
                         const SizedBox(height: 8),
                         const Text(
                           'QR Code หมดอายุแล้ว',
@@ -190,10 +198,16 @@ class _MerchantQrDialogState extends State<MerchantQrDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.timer_outlined, size: 16, color: Color(0xFF64748B)),
+                const Icon(
+                  Icons.timer_outlined,
+                  size: 16,
+                  color: Color(0xFF64748B),
+                ),
                 const SizedBox(width: 4),
                 Text(
-                  isExpired ? 'หมดอายุแล้ว' : 'รหัสใช้งานได้อีก: $timeFormatted นาที',
+                  isExpired
+                      ? 'หมดอายุแล้ว'
+                      : 'รหัสใช้งานได้อีก: $timeFormatted นาที',
                   style: TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 12,
@@ -209,7 +223,10 @@ class _MerchantQrDialogState extends State<MerchantQrDialog> {
             // รหัสสำรอง 6 หลัก (OTP fallback)
             if (widget.otp != null) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(14),

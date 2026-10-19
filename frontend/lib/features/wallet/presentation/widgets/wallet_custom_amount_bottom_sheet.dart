@@ -19,9 +19,8 @@ class WalletCustomAmountBottomSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => WalletCustomAmountBottomSheet(
-        onAmountConfirmed: onAmountConfirmed,
-      ),
+      builder: (context) =>
+          WalletCustomAmountBottomSheet(onAmountConfirmed: onAmountConfirmed),
     );
   }
 
@@ -132,12 +131,7 @@ class _WalletCustomAmountBottomSheetState
           topRight: Radius.circular(28),
         ),
       ),
-      padding: const EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 12,
-        bottom: 24,
-      ),
+      padding: const EdgeInsets.only(left: 20, right: 20, top: 12, bottom: 24),
       child: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -184,7 +178,10 @@ class _WalletCustomAmountBottomSheetState
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Color(0xFF6B7280)),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Color(0xFF6B7280),
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -261,7 +258,8 @@ class _WalletCustomAmountBottomSheetState
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: _quickAddAmounts.map((amt) {
-                  final label = '+${NumberFormat('#,###', 'en_US').format(amt)}';
+                  final label =
+                      '+${NumberFormat('#,###', 'en_US').format(amt)}';
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: InkWell(
@@ -273,7 +271,9 @@ class _WalletCustomAmountBottomSheetState
                           vertical: 7,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF3E8FF).withValues(alpha: 0.65),
+                          color: const Color(
+                            0xFFF3E8FF,
+                          ).withValues(alpha: 0.65),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: const Color(0xFFE9D5FF),
@@ -346,37 +346,13 @@ class _WalletCustomAmountBottomSheetState
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              _buildKey('1'),
-              _buildKey('2'),
-              _buildKey('3'),
-            ],
-          ),
+          Row(children: [_buildKey('1'), _buildKey('2'), _buildKey('3')]),
           const SizedBox(height: 4),
-          Row(
-            children: [
-              _buildKey('4'),
-              _buildKey('5'),
-              _buildKey('6'),
-            ],
-          ),
+          Row(children: [_buildKey('4'), _buildKey('5'), _buildKey('6')]),
           const SizedBox(height: 4),
-          Row(
-            children: [
-              _buildKey('7'),
-              _buildKey('8'),
-              _buildKey('9'),
-            ],
-          ),
+          Row(children: [_buildKey('7'), _buildKey('8'), _buildKey('9')]),
           const SizedBox(height: 4),
-          Row(
-            children: [
-              _buildKey('.'),
-              _buildKey('0'),
-              _buildBackspaceKey(),
-            ],
-          ),
+          Row(children: [_buildKey('.'), _buildKey('0'), _buildBackspaceKey()]),
         ],
       ),
     );

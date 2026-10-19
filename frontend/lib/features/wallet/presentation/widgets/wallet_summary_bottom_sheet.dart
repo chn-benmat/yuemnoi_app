@@ -24,10 +24,8 @@ class WalletSummaryBottomSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => WalletSummaryBottomSheet(
-        amount: amount,
-        onConfirm: onConfirm,
-      ),
+      builder: (context) =>
+          WalletSummaryBottomSheet(amount: amount, onConfirm: onConfirm),
     );
   }
 

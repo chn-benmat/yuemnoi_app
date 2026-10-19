@@ -6,6 +6,9 @@ abstract class RentalManagementRepository {
   Future<List<RentalBooking>> getRentingBookings(String userId);
   Future<List<RentalBooking>> getLendingBookings(String userId);
   Future<List<RentalBooking>> getRentalHistory(String userId);
-  Future<void> updateBookingStatus({required int bookingId, required String status});
+  Future<void> updateBookingStatus({
+    required int bookingId,
+    required String status,
+  });
   Future<RentalIncomeSummary> getRentalIncome(String userId);
 }

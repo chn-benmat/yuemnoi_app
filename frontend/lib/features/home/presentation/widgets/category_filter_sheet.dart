@@ -6,11 +6,7 @@ import '../../domain/entities/feed_category.dart';
 
 /// รายการตัวเลือกคะแนนรีวิว (1 ดาว ถึง 5 ดาว ไม่มีจุดทศนิยม)
 class RatingFilterOption {
-  const RatingFilterOption({
-    required this.label,
-    this.minRating,
-    this.stars,
-  });
+  const RatingFilterOption({required this.label, this.minRating, this.stars});
 
   final String label;
   final double? minRating;
@@ -49,7 +45,8 @@ class CategoryFilterButton extends StatelessWidget {
     int? minPrice,
     int? maxPrice,
     double? minRating,
-  }) onApplyFilter;
+  })
+  onApplyFilter;
   final VoidCallback onResetFilter;
 
   bool get isFilterActive =>
@@ -98,12 +95,7 @@ class CategoryFilterButton extends StatelessWidget {
           position: Tween<Offset>(
             begin: const Offset(0, -1),
             end: Offset.zero,
-          ).animate(
-            CurvedAnimation(
-              parent: anim1,
-              curve: Curves.easeOutCubic,
-            ),
-          ),
+          ).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic)),
           child: child,
         );
       },
@@ -204,7 +196,8 @@ class ActiveCategoryTag extends StatelessWidget {
     final categoryName = categories
         .firstWhere(
           (c) => c.id == selectedCategoryId,
-          orElse: () => FeedCategory(id: selectedCategoryId, name: selectedCategoryId),
+          orElse: () =>
+              FeedCategory(id: selectedCategoryId, name: selectedCategoryId),
         )
         .name;
 
@@ -295,11 +288,7 @@ class _FilterPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 13,
-            color: AppColors.primaryColor,
-          ),
+          Icon(icon, size: 13, color: AppColors.primaryColor),
           const SizedBox(width: 4),
           Text(
             label,
@@ -351,7 +340,8 @@ class _FilterTopSheetDialog extends StatefulWidget {
     int? minPrice,
     int? maxPrice,
     double? minRating,
-  ) onApply;
+  )
+  onApply;
   final VoidCallback onReset;
 
   @override
@@ -376,10 +366,14 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
     _minRating = widget.initialMinRating;
 
     _minPriceController = TextEditingController(
-      text: widget.initialMinPrice != null ? widget.initialMinPrice.toString() : '',
+      text: widget.initialMinPrice != null
+          ? widget.initialMinPrice.toString()
+          : '',
     );
     _maxPriceController = TextEditingController(
-      text: widget.initialMaxPrice != null ? widget.initialMaxPrice.toString() : '',
+      text: widget.initialMaxPrice != null
+          ? widget.initialMaxPrice.toString()
+          : '',
     );
   }
 
@@ -454,9 +448,7 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
       ),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(28),
-        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
             color: Colors.black26,
@@ -830,8 +822,16 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
           children: [
             _buildPricePresetChip(label: 'ไม่เกิน 500 ฿', min: 1, max: 500),
             _buildPricePresetChip(label: '500 - 1,000 ฿', min: 500, max: 1000),
-            _buildPricePresetChip(label: '1,000 - 2,000 ฿', min: 1000, max: 2000),
-            _buildPricePresetChip(label: '2,000 ฿ ขึ้นไป', min: 2000, max: null),
+            _buildPricePresetChip(
+              label: '1,000 - 2,000 ฿',
+              min: 1000,
+              max: 2000,
+            ),
+            _buildPricePresetChip(
+              label: '2,000 ฿ ขึ้นไป',
+              min: 2000,
+              max: null,
+            ),
           ],
         ),
       ],
@@ -996,8 +996,9 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
                         category.name,
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w500,
                           color: isSelected
                               ? AppColors.primaryColor
                               : const Color(0xFF334155),
@@ -1127,8 +1128,9 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
                         opt.label,
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w500,
                           color: isSelected
                               ? AppColors.primaryColor
                               : const Color(0xFF334155),
@@ -1153,4 +1155,3 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
     );
   }
 }
-

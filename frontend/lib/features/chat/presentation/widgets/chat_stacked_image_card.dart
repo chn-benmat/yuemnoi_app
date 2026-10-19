@@ -124,7 +124,10 @@ class ChatStackedImageCard extends StatelessWidget {
                         ),
                         errorWidget: (context, url, error) => Container(
                           color: const Color(0xFFE2E8F0),
-                          child: const Icon(Icons.broken_image_rounded, size: 40),
+                          child: const Icon(
+                            Icons.broken_image_rounded,
+                            size: 40,
+                          ),
                         ),
                       ),
 

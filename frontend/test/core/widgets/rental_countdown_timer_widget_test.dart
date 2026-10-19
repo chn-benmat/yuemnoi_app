@@ -9,15 +9,17 @@ void main() {
   });
 
   group('RentalCountdownTimerWidget Tests', () {
-    testWidgets('renders active countdown when endDateTime is in the future', (tester) async {
-      final futureDate = DateTime.now().add(const Duration(hours: 3, minutes: 25, seconds: 10));
+    testWidgets('renders active countdown when endDateTime is in the future', (
+      tester,
+    ) async {
+      final futureDate = DateTime.now().add(
+        const Duration(hours: 3, minutes: 25, seconds: 10),
+      );
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: RentalCountdownTimerWidget(
-              endDateTime: futureDate,
-            ),
+            body: RentalCountdownTimerWidget(endDateTime: futureDate),
           ),
         ),
       );
@@ -31,15 +33,17 @@ void main() {
       expect(find.text('วินาที'), findsOneWidget);
     });
 
-    testWidgets('renders overdue state when endDateTime is in the past', (tester) async {
-      final pastDate = DateTime.now().subtract(const Duration(hours: 1, minutes: 12));
+    testWidgets('renders overdue state when endDateTime is in the past', (
+      tester,
+    ) async {
+      final pastDate = DateTime.now().subtract(
+        const Duration(hours: 1, minutes: 12),
+      );
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: RentalCountdownTimerWidget(
-              endDateTime: pastDate,
-            ),
+            body: RentalCountdownTimerWidget(endDateTime: pastDate),
           ),
         ),
       );
@@ -51,7 +55,9 @@ void main() {
       expect(find.textContaining('ส่งคืนล่าช้า'), findsOneWidget);
     });
 
-    testWidgets('allows switching between normal and simulated overdue mode', (tester) async {
+    testWidgets('allows switching between normal and simulated overdue mode', (
+      tester,
+    ) async {
       final futureDate = DateTime.now().add(const Duration(hours: 5));
 
       await tester.pumpWidget(

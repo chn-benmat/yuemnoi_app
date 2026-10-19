@@ -72,7 +72,8 @@ class RentalReturnModal extends StatefulWidget {
 class _RentalReturnModalState extends State<RentalReturnModal> {
   late bool _isOwner;
   late final UpdateBookingStatusUseCase _updateBookingStatusUseCase;
-  int _currentStep = 0; // 0: ตรวจสภาพคืน, 1: คืนเงินประกัน/ค่าปรับ, 2: Return PIN, 3: สำเร็จ
+  int _currentStep =
+      0; // 0: ตรวจสภาพคืน, 1: คืนเงินประกัน/ค่าปรับ, 2: Return PIN, 3: สำเร็จ
 
   // สเต็ป 0: Checklist รับคืน
   bool _checkDeviceWorks = true;
@@ -90,7 +91,8 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
   void initState() {
     super.initState();
     _isOwner = widget.initialIsOwner;
-    _updateBookingStatusUseCase = widget.updateBookingStatusUseCase ??
+    _updateBookingStatusUseCase =
+        widget.updateBookingStatusUseCase ??
         UpdateBookingStatusUseCase(RentalManagementRepositoryImpl());
   }
 
@@ -110,7 +112,9 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
           bookingId: widget.bookingId!,
           status: 'completed',
         );
-        RentalNotificationService.instance.cancelRentalReminders(widget.bookingId!);
+        RentalNotificationService.instance.cancelRentalReminders(
+          widget.bookingId!,
+        );
       } catch (_) {}
     }
 
@@ -129,7 +133,8 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
       _completeReturn();
     } else {
       setState(() {
-        _pinErrorMessage = 'รหัส Return PIN ไม่ถูกต้อง (รหัสตัวอย่างคือ $_generatedReturnPin)';
+        _pinErrorMessage =
+            'รหัส Return PIN ไม่ถูกต้อง (รหัสตัวอย่างคือ $_generatedReturnPin)';
       });
     }
   }
@@ -139,7 +144,9 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
     RentalReviewDialog.show(
       context,
       itemTitle: widget.itemTitle,
-      partnerName: _isOwner ? (widget.renterName ?? 'ผู้เช่า') : widget.ownerName,
+      partnerName: _isOwner
+          ? (widget.renterName ?? 'ผู้เช่า')
+          : widget.ownerName,
       partnerRole: _isOwner ? 'ผู้เช่า' : 'ผู้ให้เช่า',
     );
   }
@@ -186,7 +193,10 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
 
               // การ์ดแสดงชื่ออุปกรณ์ที่ส่งคืน
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(12),
@@ -194,7 +204,11 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.inventory_2_outlined, size: 18, color: AppColors.primaryColor),
+                    const Icon(
+                      Icons.inventory_2_outlined,
+                      size: 18,
+                      color: AppColors.primaryColor,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -239,7 +253,6 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
       ),
     );
   }
-
 
   Widget _buildStepIndicator({required int stepIndex, required String label}) {
     final isPassed = _currentStep > stepIndex;
@@ -306,7 +319,11 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.compare_arrows_rounded, color: AppColors.primaryColor, size: 22),
+              const Icon(
+                Icons.compare_arrows_rounded,
+                color: AppColors.primaryColor,
+                size: 22,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -338,7 +355,13 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
         CheckboxListTile(
           value: _checkDeviceWorks,
           onChanged: (v) => setState(() => _checkDeviceWorks = v ?? false),
-          title: const Text('เครื่องยังทำงานได้ปกติ ไม่มีอาการผิดปกติ', style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13)),
+          title: const Text(
+            'เครื่องยังทำงานได้ปกติ ไม่มีอาการผิดปกติ',
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 13,
+            ),
+          ),
           controlAffinity: ListTileControlAffinity.leading,
           dense: true,
           contentPadding: EdgeInsets.zero,
@@ -346,8 +369,15 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
         ),
         CheckboxListTile(
           value: _checkAccessoriesReturned,
-          onChanged: (v) => setState(() => _checkAccessoriesReturned = v ?? false),
-          title: const Text('อุปกรณ์เสริมและกล่องบรรจุภัณฑ์คืนครบถ้วน', style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13)),
+          onChanged: (v) =>
+              setState(() => _checkAccessoriesReturned = v ?? false),
+          title: const Text(
+            'อุปกรณ์เสริมและกล่องบรรจุภัณฑ์คืนครบถ้วน',
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 13,
+            ),
+          ),
           controlAffinity: ListTileControlAffinity.leading,
           dense: true,
           contentPadding: EdgeInsets.zero,
@@ -356,7 +386,13 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
         CheckboxListTile(
           value: _checkNoNewDamage,
           onChanged: (v) => setState(() => _checkNoNewDamage = v ?? false),
-          title: const Text('ไม่มีรอยแตกร้าว บุบ หรือความเสียหายใหม่', style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13)),
+          title: const Text(
+            'ไม่มีรอยแตกร้าว บุบ หรือความเสียหายใหม่',
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 13,
+            ),
+          ),
           controlAffinity: ListTileControlAffinity.leading,
           dense: true,
           contentPadding: EdgeInsets.zero,
@@ -373,17 +409,27 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: _isConditionPerfect ? const Color(0xFFECFDF5) : Colors.white,
+                    color: _isConditionPerfect
+                        ? const Color(0xFFECFDF5)
+                        : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: _isConditionPerfect ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+                      color: _isConditionPerfect
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFFE2E8F0),
                       width: _isConditionPerfect ? 1.5 : 1,
                     ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.check_circle_rounded, size: 16, color: _isConditionPerfect ? const Color(0xFF10B981) : Colors.grey),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 16,
+                        color: _isConditionPerfect
+                            ? const Color(0xFF10B981)
+                            : Colors.grey,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'สมบูรณ์ 100%',
@@ -391,7 +437,9 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 12.5,
                           fontWeight: FontWeight.bold,
-                          color: _isConditionPerfect ? const Color(0xFF065F46) : const Color(0xFF64748B),
+                          color: _isConditionPerfect
+                              ? const Color(0xFF065F46)
+                              : const Color(0xFF64748B),
                         ),
                       ),
                     ],
@@ -406,17 +454,27 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: !_isConditionPerfect ? const Color(0xFFFEF2F2) : Colors.white,
+                    color: !_isConditionPerfect
+                        ? const Color(0xFFFEF2F2)
+                        : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: !_isConditionPerfect ? const Color(0xFFEF4444) : const Color(0xFFE2E8F0),
+                      color: !_isConditionPerfect
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFFE2E8F0),
                       width: !_isConditionPerfect ? 1.5 : 1,
                     ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.warning_amber_rounded, size: 16, color: !_isConditionPerfect ? const Color(0xFFEF4444) : Colors.grey),
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 16,
+                        color: !_isConditionPerfect
+                            ? const Color(0xFFEF4444)
+                            : Colors.grey,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'มีตำหนิ/เกินเวลา',
@@ -424,7 +482,9 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 12.5,
                           fontWeight: FontWeight.bold,
-                          color: !_isConditionPerfect ? const Color(0xFF991B1B) : const Color(0xFF64748B),
+                          color: !_isConditionPerfect
+                              ? const Color(0xFF991B1B)
+                              : const Color(0xFF64748B),
                         ),
                       ),
                     ],
@@ -440,17 +500,26 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
           width: double.infinity,
           height: 48,
           child: ElevatedButton(
-            onPressed: (_checkDeviceWorks && _checkAccessoriesReturned && _checkNoNewDamage)
+            onPressed:
+                (_checkDeviceWorks &&
+                    _checkAccessoriesReturned &&
+                    _checkNoNewDamage)
                 ? () => setState(() => _currentStep = 1)
                 : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryColor,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
             ),
             child: const Text(
               'ยืนยันการตรวจรับของคืน ➔ ขั้นตอนถัดไป',
-              style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.bold, fontSize: 14),
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
             ),
           ),
         ),
@@ -476,15 +545,27 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
           ),
           child: Column(
             children: [
-              const Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF10B981), size: 36),
+              const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: Color(0xFF10B981),
+                size: 36,
+              ),
               const SizedBox(height: 8),
               Text(
-                hasDeposit ? 'ยอดเงินประกันที่ต้องคืน' : 'สถานะการเคลียร์ยอดค่าเช่า',
-                style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13, color: Color(0xFF64748B)),
+                hasDeposit
+                    ? 'ยอดเงินประกันที่ต้องคืน'
+                    : 'สถานะการเคลียร์ยอดค่าเช่า',
+                style: const TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 13,
+                  color: Color(0xFF64748B),
+                ),
               ),
               const SizedBox(height: 4),
               Text(
-                hasDeposit ? '฿${widget.depositAmount.toStringAsFixed(0)}' : 'ไม่มีเงินประกันค้างชำระ',
+                hasDeposit
+                    ? '฿${widget.depositAmount.toStringAsFixed(0)}'
+                    : 'ไม่มีเงินประกันค้างชำระ',
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontSize: 22,
@@ -501,7 +582,9 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                 style: TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontSize: 12,
-                  color: _isConditionPerfect ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  color: _isConditionPerfect
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFFEF4444),
                 ),
               ),
             ],
@@ -522,12 +605,18 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                 icon: const Icon(Icons.check_circle_rounded, size: 18),
                 label: Text(
                   'โอนคืนเงินประกัน ฿${widget.depositAmount.toStringAsFixed(0)} เรียบร้อยแล้ว',
-                  style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.bold, fontSize: 13.5),
+                  style: const TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13.5,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF10B981),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                 ),
               ),
             ),
@@ -539,12 +628,18 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                 icon: const Icon(Icons.verified_rounded, size: 18),
                 label: const Text(
                   'ฉันได้รับเงินประกันคืนเรียบร้อยแล้ว',
-                  style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryColor,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                 ),
               ),
             ),
@@ -557,11 +652,17 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryColor,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
               ),
               child: const Text(
                 'ดำเนินการต่อ ➔ รหัสยืนยันการคืนของ',
-                style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.bold, fontSize: 14),
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),
@@ -626,7 +727,11 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
           const Text(
             'รอผู้เช่ากรอกรหัสยืนยันในเครื่องเพื่อจบรายการ...',
             textAlign: TextAlign.center,
-            style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13, color: Color(0xFF64748B)),
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 13,
+              color: Color(0xFF64748B),
+            ),
           ),
           const SizedBox(height: 14),
           OutlinedButton(
@@ -634,7 +739,9 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF059669),
               side: const BorderSide(color: Color(0xFFA7F3D0)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
             ),
             child: const Text('จำลอง: ผู้เช่ากรอกรหัสตรงกัน ➔ จบการเช่า'),
           ),
@@ -658,7 +765,10 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                   decoration: InputDecoration(
                     counterText: '',
                     hintText: '••••',
-                    hintStyle: const TextStyle(letterSpacing: 8, color: Color(0xFFCBD5E1)),
+                    hintStyle: const TextStyle(
+                      letterSpacing: 8,
+                      color: Color(0xFFCBD5E1),
+                    ),
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -668,7 +778,10 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.primaryColor, width: 2),
+                      borderSide: const BorderSide(
+                        color: AppColors.primaryColor,
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),
@@ -680,7 +793,11 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
             Text(
               _pinErrorMessage!,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 12, color: Color(0xFFEF4444)),
+              style: const TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontSize: 12,
+                color: Color(0xFFEF4444),
+              ),
             ),
           ],
           const SizedBox(height: 10),
@@ -691,7 +808,11 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
               },
               child: Text(
                 'คลิกเพื่อใส่รหัสทดสอบ ($_generatedReturnPin)',
-                style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 12, color: AppColors.primaryColor),
+                style: const TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 12,
+                  color: AppColors.primaryColor,
+                ),
               ),
             ),
           ),
@@ -703,13 +824,26 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
               ),
               child: _isSubmitting
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
                   : const Text(
                       'ยืนยันการส่งคืนอุปกรณ์',
-                      style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.bold, fontSize: 14),
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
             ),
           ),
@@ -731,7 +865,11 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
             color: const Color(0xFF10B981).withValues(alpha: 0.15),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.task_alt_rounded, color: Color(0xFF10B981), size: 48),
+          child: const Icon(
+            Icons.task_alt_rounded,
+            color: Color(0xFF10B981),
+            size: 48,
+          ),
         ),
         const SizedBox(height: 14),
         const Text(
@@ -764,12 +902,18 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
             icon: const Icon(Icons.star_rounded, size: 20),
             label: const Text(
               'ให้คะแนนรีวิว 5 ดาว',
-              style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.bold, fontSize: 14.5),
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontWeight: FontWeight.bold,
+                fontSize: 14.5,
+              ),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFF59E0B),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
             ),
           ),
         ),
@@ -778,7 +922,11 @@ class _RentalReturnModalState extends State<RentalReturnModal> {
           onPressed: () => Navigator.pop(context),
           child: const Text(
             'ปิดหน้าต่างนี้',
-            style: TextStyle(fontFamily: AppTextStyles.fontFamily, color: Color(0xFF64748B), fontSize: 13.5),
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              color: Color(0xFF64748B),
+              fontSize: 13.5,
+            ),
           ),
         ),
       ],

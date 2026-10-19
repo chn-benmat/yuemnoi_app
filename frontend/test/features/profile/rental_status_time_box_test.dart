@@ -8,7 +8,9 @@ void main() {
     testWidgets(
       'renders green status box and normal badge when rental is within deadline',
       (tester) async {
-        final futureEnd = DateTime.now().add(const Duration(hours: 3, minutes: 15));
+        final futureEnd = DateTime.now().add(
+          const Duration(hours: 3, minutes: 15),
+        );
         final item = RentalStatusItemData(
           bookingId: 101,
           itemId: 50,
@@ -27,9 +29,7 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             home: Scaffold(
-              body: SingleChildScrollView(
-                child: RentalStatusCard(item: item),
-              ),
+              body: SingleChildScrollView(child: RentalStatusCard(item: item)),
             ),
           ),
         );
@@ -41,7 +41,9 @@ void main() {
         // 2. FaIcon is rendered in the Time Status Box
         expect(
           find.byWidgetPredicate(
-            (w) => w is FaIcon && w.icon?.codePoint == FontAwesomeIcons.clock.codePoint,
+            (w) =>
+                w is FaIcon &&
+                w.icon?.codePoint == FontAwesomeIcons.clock.codePoint,
           ),
           findsOneWidget,
         );
@@ -82,9 +84,7 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             home: Scaffold(
-              body: SingleChildScrollView(
-                child: RentalStatusCard(item: item),
-              ),
+              body: SingleChildScrollView(child: RentalStatusCard(item: item)),
             ),
           ),
         );

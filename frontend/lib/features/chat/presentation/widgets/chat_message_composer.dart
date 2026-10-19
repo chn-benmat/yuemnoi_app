@@ -60,7 +60,10 @@ class ChatMessageComposer extends StatelessWidget {
             if (isReplying || isEditing)
               Container(
                 margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
@@ -103,8 +106,8 @@ class ChatMessageComposer extends StatelessWidget {
                             isEditing
                                 ? 'กำลังแก้ไขข้อความ'
                                 : (replyingMessage!.isMine
-                                    ? 'ตอบกลับตัวเอง'
-                                    : 'กำลังตอบกลับ'),
+                                      ? 'ตอบกลับตัวเอง'
+                                      : 'กำลังตอบกลับ'),
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -114,12 +117,17 @@ class ChatMessageComposer extends StatelessWidget {
                           const SizedBox(height: 1),
                           Text(
                             isEditing
-                                ? _extractActualTextMessage(editingMessage!.message)
+                                ? _extractActualTextMessage(
+                                    editingMessage!.message,
+                                  )
                                 : (replyingMessage!.message.isNotEmpty &&
-                                        replyingMessage!.message != '📷 ส่งรูปภาพ' &&
-                                        replyingMessage!.message != '[รูปภาพ]'
-                                    ? _extractActualTextMessage(replyingMessage!.message)
-                                    : '📷 รูปภาพ'),
+                                          replyingMessage!.message !=
+                                              '📷 ส่งรูปภาพ' &&
+                                          replyingMessage!.message != '[รูปภาพ]'
+                                      ? _extractActualTextMessage(
+                                          replyingMessage!.message,
+                                        )
+                                      : '📷 รูปภาพ'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -181,7 +189,9 @@ class ChatMessageComposer extends StatelessWidget {
                     decoration: InputDecoration(
                       hintText: isEditing
                           ? 'แก้ไขข้อความ...'
-                          : (isReplying ? 'ตอบกลับข้อความ...' : 'พิมพ์ข้อความ...'),
+                          : (isReplying
+                                ? 'ตอบกลับข้อความ...'
+                                : 'พิมพ์ข้อความ...'),
                       hintStyle: const TextStyle(
                         color: Color(0xFF7A8090),
                         fontSize: 13,

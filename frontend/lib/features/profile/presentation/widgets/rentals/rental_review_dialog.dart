@@ -148,8 +148,12 @@ class _RentalReviewDialogState extends State<RentalReviewDialog> {
                       style: TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
                         fontSize: 11.5,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? AppColors.primaryColor : const Color(0xFF4B5563),
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                        color: isSelected
+                            ? AppColors.primaryColor
+                            : const Color(0xFF4B5563),
                       ),
                     ),
                     selected: isSelected,
@@ -162,13 +166,17 @@ class _RentalReviewDialogState extends State<RentalReviewDialog> {
                         }
                       });
                     },
-                    selectedColor: AppColors.primaryColor.withValues(alpha: 0.12),
+                    selectedColor: AppColors.primaryColor.withValues(
+                      alpha: 0.12,
+                    ),
                     backgroundColor: const Color(0xFFF3F4F6),
                     checkmarkColor: AppColors.primaryColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                       side: BorderSide(
-                        color: isSelected ? AppColors.primaryColor : Colors.transparent,
+                        color: isSelected
+                            ? AppColors.primaryColor
+                            : Colors.transparent,
                       ),
                     ),
                   );

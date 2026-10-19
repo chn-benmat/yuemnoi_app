@@ -7,10 +7,7 @@ class VerifyOtpUseCase {
 
   VerifyOtpUseCase(this.repository);
 
-  Future<AuthTokens> execute({
-    required String email,
-    required String otpCode,
-  }) {
+  Future<AuthTokens> execute({required String email, required String otpCode}) {
     return repository.verifyOtp(email: email, otpCode: otpCode);
   }
 }

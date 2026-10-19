@@ -13,7 +13,8 @@ class UserPresenceService with WidgetsBindingObserver {
   RealtimeChannel? _presenceChannel;
 
   /// รายชื่อ User ID ของผู้ที่กำลังออนไลน์อยู่ในขณะนี้แบบ Real-time
-  final ValueNotifier<Set<String>> onlineUsersNotifier = ValueNotifier<Set<String>>({});
+  final ValueNotifier<Set<String>> onlineUsersNotifier =
+      ValueNotifier<Set<String>>({});
 
   bool isUserOnline(String userId) {
     if (userId.isEmpty) return false;
@@ -108,10 +109,13 @@ class UserPresenceService with WidgetsBindingObserver {
     if (userId == null || userId.isEmpty) return;
 
     try {
-      await client.from('profile_tb').update({
-        'is_online': isOnline,
-        'last_seen_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('user_id', userId);
+      await client
+          .from('profile_tb')
+          .update({
+            'is_online': isOnline,
+            'last_seen_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('user_id', userId);
     } catch (_) {}
   }
 

@@ -159,16 +159,19 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('ไม่สามารถเริ่มแชทได้: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('ไม่สามารถเริ่มแชทได้: $e')));
     }
   }
 
-  List<ChatConversation> _filterConversations(List<ChatConversation> conversations) {
+  List<ChatConversation> _filterConversations(
+    List<ChatConversation> conversations,
+  ) {
     final query = _searchController.text.trim().toLowerCase();
     final filtered = conversations.where((conversation) {
-      final matchesQuery = query.isEmpty ||
+      final matchesQuery =
+          query.isEmpty ||
           conversation.name.toLowerCase().contains(query) ||
           conversation.preview.toLowerCase().contains(query) ||
           (conversation.itemName?.toLowerCase().contains(query) ?? false);
@@ -214,7 +217,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
           }
         },
         builder: (context, authState) {
-          final isAuthenticated = AuthSession.isAuthenticated ||
+          final isAuthenticated =
+              AuthSession.isAuthenticated ||
               authState is LoginSuccess ||
               authState is GoogleLoginSuccess;
 
@@ -349,8 +353,9 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                   );
 
                   final isSearching = _searchController.text.trim().isNotEmpty;
-                  final activeUserIds =
-                      visibleConversations.map((c) => c.otherUserId).toSet();
+                  final activeUserIds = visibleConversations
+                      .map((c) => c.otherUserId)
+                      .toSet();
                   final discoveredUsers = _searchedUsers
                       .where(
                         (u) =>
@@ -553,8 +558,8 @@ class _ConversationCard extends StatelessWidget {
             },
             onDelete: () {
               context.read<ChatListBloc>().add(
-                    ChatConversationDeleted(conversation.id),
-                  );
+                ChatConversationDeleted(conversation.id),
+              );
             },
           );
         },
@@ -759,10 +764,7 @@ class _EmptySearch extends StatelessWidget {
 }
 
 class _DiscoveredUserCard extends StatelessWidget {
-  const _DiscoveredUserCard({
-    required this.user,
-    required this.onTap,
-  });
+  const _DiscoveredUserCard({required this.user, required this.onTap});
 
   final Map<String, dynamic> user;
   final VoidCallback onTap;
@@ -826,9 +828,14 @@ class _DiscoveredUserCard extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: onTap,
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryColor.withValues(alpha: 0.1),
+                  backgroundColor: AppColors.primaryColor.withValues(
+                    alpha: 0.1,
+                  ),
                   foregroundColor: AppColors.primaryColor,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   visualDensity: VisualDensity.compact,
                 ),
                 icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),

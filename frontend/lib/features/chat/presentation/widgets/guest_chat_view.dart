@@ -65,9 +65,9 @@ class GuestChatView extends StatelessWidget {
                     final loggedIn = await AppRoutes.pushLogin(context);
                     if (context.mounted) {
                       if (loggedIn == true || AuthSession.isAuthenticated) {
-                        context
-                            .read<ChatListBloc>()
-                            .add(const LoadChatListStarted());
+                        context.read<ChatListBloc>().add(
+                          const LoadChatListStarted(),
+                        );
                         onLoginSuccess?.call();
                       }
                     }

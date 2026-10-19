@@ -39,13 +39,14 @@ class _SwipeToReplyState extends State<SwipeToReply>
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
-    _anim = Tween<double>(begin: 0.0, end: 0.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
-    )..addListener(() {
-        setState(() {
-          _dragOffset = _anim.value;
+    _anim =
+        Tween<double>(begin: 0.0, end: 0.0).animate(
+          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+        )..addListener(() {
+          setState(() {
+            _dragOffset = _anim.value;
+          });
         });
-      });
   }
 
   @override

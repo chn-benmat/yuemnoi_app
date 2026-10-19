@@ -30,7 +30,8 @@ abstract final class ChatConversationModel {
         : (emailName.isNotEmpty ? emailName : 'ผู้ใช้งาน Yuemnoi');
     final avatarUrl = otherProfile?['user_image_url']?.toString().trim() ?? '';
 
-    final rawLastMessage = conversation['last_message']?.toString().trim() ?? '';
+    final rawLastMessage =
+        conversation['last_message']?.toString().trim() ?? '';
     final String cleanPreview;
     if (rawLastMessage.isEmpty) {
       cleanPreview = 'เริ่มการสนทนา';
@@ -59,7 +60,8 @@ abstract final class ChatConversationModel {
       cleanPreview = rawLastMessage;
     }
 
-    final lastMessageAtStr = conversation['last_message_at']?.toString() ??
+    final lastMessageAtStr =
+        conversation['last_message_at']?.toString() ??
         conversation['created_at']?.toString();
     final lastMessageAt = lastMessageAtStr != null
         ? DateTime.tryParse(lastMessageAtStr)?.toLocal()
@@ -132,8 +134,18 @@ abstract final class ChatConversationModel {
   }
 
   static const List<String> _thaiShortMonths = [
-    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+    'ม.ค.',
+    'ก.พ.',
+    'มี.ค.',
+    'เม.ย.',
+    'พ.ค.',
+    'มิ.ย.',
+    'ก.ค.',
+    'ส.ค.',
+    'ก.ย.',
+    'ต.ค.',
+    'พ.ย.',
+    'ธ.ค.',
   ];
 
   static String formatTimeLabel(DateTime? time) {

@@ -66,7 +66,8 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
       qrData: state.session.merchantQrToken!,
       otp: state.session.merchantOtp,
       expiryTime: state.merchantQrExpiry,
-      onRefresh: () => context.read<RentalReturnCubit>().confirmLenderInspection(),
+      onRefresh: () =>
+          context.read<RentalReturnCubit>().confirmLenderInspection(),
     );
   }
 
@@ -88,7 +89,9 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
               ),
               backgroundColor: const Color(0xFFEF4444),
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           );
         }
@@ -102,7 +105,9 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
               ),
               backgroundColor: const Color(0xFF10B981),
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           );
         }
@@ -113,12 +118,15 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
             context: context,
             session: state.session,
             onProceedToVerification: () {
-              context.read<RentalReturnCubit>().dismissAlarmAndStartVerification();
+              context
+                  .read<RentalReturnCubit>()
+                  .dismissAlarmAndStartVerification();
             },
           );
         }
 
-        if (state.session.step == RentalReturnStep.completed && !_didShowSuccess) {
+        if (state.session.step == RentalReturnStep.completed &&
+            !_didShowSuccess) {
           _didShowSuccess = true;
           ReturnCompletedDialog.show(
             context: context,
@@ -162,19 +170,16 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
             ),
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(1),
-              child: Container(
-                color: const Color(0xFFF1F5F9),
-                height: 1,
-              ),
+              child: Container(color: const Color(0xFFF1F5F9), height: 1),
             ),
           ),
           body: SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 110),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ข้อมูลอุปกรณ์และกำหนดเวลาคืน (อ่านง่าย)
-                  RentalTimeCard(session: session),
+            padding: const EdgeInsets.only(bottom: 110),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ข้อมูลอุปกรณ์และกำหนดเวลาคืน (อ่านง่าย)
+                RentalTimeCard(session: session),
 
                 // มุมมองตามบทบาท
                 if (isRenter) ...[
@@ -242,8 +247,8 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                             child: ElevatedButton.icon(
                               onPressed: session.merchantQrToken == null
                                   ? () => context
-                                      .read<RentalReturnCubit>()
-                                      .confirmLenderInspection()
+                                        .read<RentalReturnCubit>()
+                                        .confirmLenderInspection()
                                   : () => _openMerchantQrModal(context, state),
                               icon: const Icon(
                                 Icons.qr_code_2_rounded,

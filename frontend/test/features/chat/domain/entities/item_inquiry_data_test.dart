@@ -63,22 +63,28 @@ void main() {
       expect(parsed.imageUrl, equals('https://example.com/lens.jpg'));
     });
 
-    test('fromChatMessage correctly parses user reference screenshot format', () {
-      const userScreenshotText = '''ฉันสนใจจ้างงานของคุณตามรายละเอียดนี้:
+    test(
+      'fromChatMessage correctly parses user reference screenshot format',
+      () {
+        const userScreenshotText = '''ฉันสนใจจ้างงานของคุณตามรายละเอียดนี้:
 งาน: พัฒนา Mobile Application ทั้ง Android และ Ios ด้วย Flutter
 
 ราคา: 1,500 บาท''';
 
-      final parsed = ItemInquiryData.fromChatMessage(
-        userScreenshotText,
-        imageUrl: 'https://example.com/flutter.png',
-      );
+        final parsed = ItemInquiryData.fromChatMessage(
+          userScreenshotText,
+          imageUrl: 'https://example.com/flutter.png',
+        );
 
-      expect(parsed, isNotNull);
-      expect(parsed!.itemName, equals('พัฒนา Mobile Application ทั้ง Android และ Ios ด้วย Flutter'));
-      expect(parsed.price, equals(1500.0));
-      expect(parsed.displayPrice, contains('1,500 บาท'));
-      expect(parsed.imageUrl, equals('https://example.com/flutter.png'));
-    });
+        expect(parsed, isNotNull);
+        expect(
+          parsed!.itemName,
+          equals('พัฒนา Mobile Application ทั้ง Android และ Ios ด้วย Flutter'),
+        );
+        expect(parsed.price, equals(1500.0));
+        expect(parsed.displayPrice, contains('1,500 บาท'));
+        expect(parsed.imageUrl, equals('https://example.com/flutter.png'));
+      },
+    );
   });
 }

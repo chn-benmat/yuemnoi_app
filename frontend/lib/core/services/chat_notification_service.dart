@@ -8,8 +8,8 @@ class ChatNotificationService {
   ChatNotificationService({
     FlutterLocalNotificationsPlugin? notificationsPlugin,
     AudioPlayer? audioPlayer,
-  })  : _injectedPlugin = notificationsPlugin,
-        _injectedAudioPlayer = audioPlayer;
+  }) : _injectedPlugin = notificationsPlugin,
+       _injectedAudioPlayer = audioPlayer;
 
   static final ChatNotificationService instance = ChatNotificationService();
 
@@ -34,8 +34,9 @@ class ChatNotificationService {
     if (_isInitialized) return;
 
     try {
-      const androidSettings =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
       const iosSettings = DarwinInitializationSettings(
         requestAlertPermission: true,
         requestBadgePermission: true,
@@ -60,7 +61,8 @@ class ChatNotificationService {
       // Request notification permissions for Android 13+
       final androidPlatform = _notificationsPlugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       if (androidPlatform != null) {
         await androidPlatform.requestNotificationsPermission();
 
@@ -79,8 +81,8 @@ class ChatNotificationService {
         await androidPlatform.createNotificationChannel(chatChannel);
       }
 
-      final launchDetails =
-          await _notificationsPlugin.getNotificationAppLaunchDetails();
+      final launchDetails = await _notificationsPlugin
+          .getNotificationAppLaunchDetails();
       if (launchDetails?.didNotificationLaunchApp ?? false) {
         final response = launchDetails?.notificationResponse;
         if (response != null) {

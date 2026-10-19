@@ -52,14 +52,14 @@ class ChatDetailState extends Equatable {
 
   @override
   List<Object?> get props => [
-        status,
-        messages,
-        isSending,
-        isFetchingOlder,
-        hasReachedMax,
-        isUploadingImage,
-        isOtherUserTyping,
-        failedMessageIds,
-        errorMessage,
-      ];
+    status,
+    messages,
+    isSending,
+    isFetchingOlder,
+    hasReachedMax,
+    isUploadingImage,
+    isOtherUserTyping,
+    failedMessageIds,
+    errorMessage,
+  ];
 }

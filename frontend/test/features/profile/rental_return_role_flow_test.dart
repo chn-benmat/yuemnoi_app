@@ -34,9 +34,9 @@ void main() {
 
     setUp(() {
       mockRepository = _MockRentalReturnRepository();
-      when(() => mockRepository.getReturnSession(any())).thenAnswer(
-        (_) async => RentalReturnSession.createMockSession(),
-      );
+      when(
+        () => mockRepository.getReturnSession(any()),
+      ).thenAnswer((_) async => RentalReturnSession.createMockSession());
 
       mockAuthBloc = _MockAuthBloc();
       when(() => mockAuthBloc.state).thenReturn(const AuthInitial());
@@ -48,10 +48,7 @@ void main() {
       (tester) async {
         await tester.pumpWidget(
           MaterialApp(
-            home: RentalReturnPage(
-              isLender: false,
-              repository: mockRepository,
-            ),
+            home: RentalReturnPage(isLender: false, repository: mockRepository),
           ),
         );
         await tester.pump();
@@ -80,10 +77,7 @@ void main() {
       (tester) async {
         await tester.pumpWidget(
           MaterialApp(
-            home: RentalReturnPage(
-              isLender: true,
-              repository: mockRepository,
-            ),
+            home: RentalReturnPage(isLender: true, repository: mockRepository),
           ),
         );
         await tester.pump();
@@ -113,11 +107,7 @@ void main() {
         await tester.pumpWidget(
           BlocProvider<AuthBloc>.value(
             value: mockAuthBloc,
-            child: const MaterialApp(
-              home: Scaffold(
-                body: ProfileScreen(),
-              ),
-            ),
+            child: const MaterialApp(home: Scaffold(body: ProfileScreen())),
           ),
         );
         await tester.pumpAndSettle();

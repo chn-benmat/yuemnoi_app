@@ -10,13 +10,13 @@ void main() {
   });
 
   group('RentalNotificationBottomSheet Tests', () {
-    testWidgets('renders empty state when activeRentals is empty', (tester) async {
+    testWidgets('renders empty state when activeRentals is empty', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
-            body: RentalNotificationBottomSheet(
-              activeRentals: [],
-            ),
+            body: RentalNotificationBottomSheet(activeRentals: []),
           ),
         ),
       );
@@ -42,9 +42,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: RentalNotificationBottomSheet(
-              activeRentals: [item],
-            ),
+            body: RentalNotificationBottomSheet(activeRentals: [item]),
           ),
         ),
       );
@@ -55,12 +53,17 @@ void main() {
       expect(find.text('MacBook Air M2'), findsOneWidget);
       expect(find.text('ผู้ปล่อยเช่า: somchai'), findsOneWidget);
       expect(find.text('⏳ กำลังเช่า'), findsOneWidget);
-      expect(find.text('ใกล้ถึงกำหนดคืนแล้วนะ! เตรียมตัวส่งคืน'), findsOneWidget);
+      expect(
+        find.text('ใกล้ถึงกำหนดคืนแล้วนะ! เตรียมตัวส่งคืน'),
+        findsOneWidget,
+      );
       expect(find.text('ไปที่สถานะการเช่าทั้งหมด'), findsOneWidget);
     });
 
     testWidgets('renders overdue rental notification card', (tester) async {
-      final pastDate = DateTime.now().subtract(const Duration(hours: 2, minutes: 30));
+      final pastDate = DateTime.now().subtract(
+        const Duration(hours: 2, minutes: 30),
+      );
       final item = RentalBooking(
         bookingId: 102,
         title: 'Sony A7 IV',
@@ -74,9 +77,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: RentalNotificationBottomSheet(
-              activeRentals: [item],
-            ),
+            body: RentalNotificationBottomSheet(activeRentals: [item]),
           ),
         ),
       );
@@ -84,7 +85,10 @@ void main() {
 
       expect(find.text('Sony A7 IV'), findsOneWidget);
       expect(find.text('⚠️ เลยกำหนด'), findsOneWidget);
-      expect(find.text('เลยกำหนดส่งคืนแล้วนะ! กรุณานำส่งคืนทันที'), findsOneWidget);
+      expect(
+        find.text('เลยกำหนดส่งคืนแล้วนะ! กรุณานำส่งคืนทันที'),
+        findsOneWidget,
+      );
       expect(find.textContaining('เกินกำหนดมาแล้ว'), findsOneWidget);
     });
   });

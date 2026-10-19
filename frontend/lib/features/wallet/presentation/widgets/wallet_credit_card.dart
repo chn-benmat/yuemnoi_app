@@ -241,7 +241,9 @@ class WalletCreditCard extends StatelessWidget {
                                 height: 24,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: const Color(0xFFFF5252).withValues(alpha: 0.75),
+                                  color: const Color(
+                                    0xFFFF5252,
+                                  ).withValues(alpha: 0.75),
                                 ),
                               ),
                             ),
@@ -252,7 +254,9 @@ class WalletCreditCard extends StatelessWidget {
                                 height: 24,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: const Color(0xFFFFB74D).withValues(alpha: 0.75),
+                                  color: const Color(
+                                    0xFFFFB74D,
+                                  ).withValues(alpha: 0.75),
                                 ),
                               ),
                             ),
@@ -294,10 +298,7 @@ class WalletCreditCard extends StatelessWidget {
             offset: const Offset(0, 2),
           ),
         ],
-        border: Border.all(
-          color: const Color(0xFFBF8A00),
-          width: 0.8,
-        ),
+        border: Border.all(color: const Color(0xFFBF8A00), width: 0.8),
       ),
       child: Stack(
         children: [
