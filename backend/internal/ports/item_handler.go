@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"strconv"
@@ -33,6 +34,12 @@ func NewItemHandler(r domain.ItemRepository, tokenVerifier domain.TokenVerifier)
 }
 
 type createItemRequest struct {
+	PickupLocation  string   `json:"pickup_location" form:"pickup_location"`
+	PickupAddress   string   `json:"pickup_address" form:"pickup_address"`
+	PickupNote      string   `json:"pickup_note" form:"pickup_note"`
+	PickupLatitude  *float64 `json:"pickup_latitude" form:"pickup_latitude"`
+	PickupLongitude *float64 `json:"pickup_longitude" form:"pickup_longitude"`
+
 	ItemName     string   `json:"item_name" form:"item_name" validate:"required,min=1,max=150"`
 	ItemImageURL []string `json:"item_image_url" form:"item_image_url" validate:"omitempty,dive,max=2048"`
 	Description  string   `json:"description" form:"description" validate:"required,min=1,max=2000"`
@@ -42,6 +49,12 @@ type createItemRequest struct {
 }
 
 type updateItemRequest struct {
+	PickupLocation  string   `json:"pickup_location" form:"pickup_location"`
+	PickupAddress   string   `json:"pickup_address" form:"pickup_address"`
+	PickupNote      string   `json:"pickup_note" form:"pickup_note"`
+	PickupLatitude  *float64 `json:"pickup_latitude" form:"pickup_latitude"`
+	PickupLongitude *float64 `json:"pickup_longitude" form:"pickup_longitude"`
+
 	ItemName     *string   `json:"item_name" validate:"omitempty,min=1,max=150"`
 	ItemImageURL *[]string `json:"item_image_url" validate:"omitempty,dive,max=2048"`
 	Description  *string   `json:"description" validate:"omitempty,min=1,max=2000"`
@@ -49,6 +62,7 @@ type updateItemRequest struct {
 	Price        *int      `json:"price" validate:"omitempty,gt=0"`
 	Status       *string   `json:"status" validate:"omitempty,max=50"`
 	Type         *string   `json:"type" validate:"omitempty,max=100"`
+	OwnerHidden  *bool     `json:"owner_hidden"`
 }
 
 func parseItemID(c fiber.Ctx) (int64, bool) {
@@ -123,6 +137,26 @@ func (h *ItemHandler) GetItemByID(c fiber.Ctx) error {
 	if err != nil {
 		return writeItemError(c, err)
 	}
+	if item.OwnerHidden {
+		// รายการที่ซ่อนอ่านได้เฉพาะเจ้าของและผู้เช่าที่มีประวัติอ้างอิงอยู่
+		auth := strings.Fields(c.Get("Authorization"))
+		if len(auth) != 2 || !strings.EqualFold(auth[0], "Bearer") || h.tokenVerifier == nil {
+			return writeItemError(c, domain.ErrItemNotFound)
+		}
+		userID, err := h.tokenVerifier.UserIDFromToken(c.Context(), auth[1])
+		if err != nil || userID == "" {
+			return writeItemError(c, domain.ErrItemNotFound)
+		}
+		if userID != item.UserID {
+			allowed, err := h.repo.HasRentalAccess(c.Context(), id, userID)
+			if err != nil {
+				return writeItemError(c, err)
+			}
+			if !allowed {
+				return writeItemError(c, domain.ErrItemNotFound)
+			}
+		}
+	}
 
 	return c.Status(http.StatusOK).JSON(item)
 }
@@ -142,20 +176,28 @@ func (h *ItemHandler) CreateItem(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุชื่อ รายละเอียด และหมวดหมู่อุปกรณ์"})
 	}
 
+	if !validPickupLocation(req.PickupLocation, req.PickupLatitude, req.PickupLongitude) {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกจุดนัดรับสินค้าบนแผนที่"})
+	}
 	images, err := itemImagesFromRequest(c)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	item, err := h.repo.Insert(c.Context(), &domain.Item{
-		UserID:       userID,
-		ItemName:     strings.TrimSpace(req.ItemName),
-		ItemImageURL: req.ItemImageURL,
-		Description:  strings.TrimSpace(req.Description),
-		Category:     strings.TrimSpace(req.Category),
-		Price:        req.Price,
-		Status:       "available",
-		Type:         req.Type,
+		UserID:          userID,
+		PickupLocation:  strings.TrimSpace(req.PickupLocation),
+		PickupAddress:   strings.TrimSpace(req.PickupAddress),
+		PickupNote:      strings.TrimSpace(req.PickupNote),
+		PickupLatitude:  req.PickupLatitude,
+		PickupLongitude: req.PickupLongitude,
+		ItemName:        strings.TrimSpace(req.ItemName),
+		ItemImageURL:    req.ItemImageURL,
+		Description:     strings.TrimSpace(req.Description),
+		Category:        strings.TrimSpace(req.Category),
+		Price:           req.Price,
+		Status:          "available",
+		Type:            req.Type,
 	}, images)
 	if err != nil {
 		return writeItemError(c, err)
@@ -246,6 +288,16 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 	}
 
 	fields := make(map[string]interface{})
+	if req.ItemName != nil || req.Description != nil || req.Category != nil || req.Price != nil || req.Type != nil || req.PickupLocation != "" || req.PickupLatitude != nil || req.PickupLongitude != nil {
+		if !validPickupLocation(req.PickupLocation, req.PickupLatitude, req.PickupLongitude) {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกจุดนัดรับสินค้าบนแผนที่"})
+		}
+		fields["pickup_location"] = strings.TrimSpace(req.PickupLocation)
+		fields["pickup_address"] = strings.TrimSpace(req.PickupAddress)
+		fields["pickup_note"] = strings.TrimSpace(req.PickupNote)
+		fields["pickup_latitude"] = *req.PickupLatitude
+		fields["pickup_longitude"] = *req.PickupLongitude
+	}
 	if req.ItemName != nil {
 		fields["item_name"] = *req.ItemName
 	}
@@ -266,6 +318,9 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 	}
 	if req.Type != nil {
 		fields["type"] = *req.Type
+	}
+	if req.OwnerHidden != nil {
+		fields["owner_hidden"] = *req.OwnerHidden
 	}
 	if len(fields) == 0 {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุข้อมูลที่ต้องการแก้ไขอย่างน้อย 1 ช่อง"})
@@ -296,4 +351,10 @@ func (h *ItemHandler) DeleteItem(c fiber.Ctx) error {
 	}
 
 	return c.SendStatus(http.StatusNoContent)
+}
+
+func validPickupLocation(name string, lat, lng *float64) bool {
+	return strings.TrimSpace(name) != "" && len(name) <= 500 && lat != nil && lng != nil &&
+		!math.IsNaN(*lat) && !math.IsNaN(*lng) && !math.IsInf(*lat, 0) && !math.IsInf(*lng, 0) &&
+		*lat >= -90 && *lat <= 90 && *lng >= -180 && *lng <= 180
 }

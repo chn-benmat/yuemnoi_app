@@ -23,4 +23,7 @@ UserItemModel _$UserItemModelFromJson(Map<String, dynamic> json) =>
       category: json['category'] == null
           ? 'ทั่วไป'
           : UserItemModel._category(json['category']),
+      status: json['status'] as String? ?? '',
+      rentalType: json['type'] as String? ?? '',
+      ownerHidden: json['owner_hidden'] as bool? ?? false,
     );

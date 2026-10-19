@@ -5,7 +5,6 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../chat/data/datasources/chat_remote_data_source.dart';
 import '../../domain/entities/booking_request_model.dart';
-import 'location_picker_map_page.dart';
 import '../widgets/booking_location_card.dart';
 import '../widgets/booking_price_summary_card.dart';
 import '../widgets/booking_product_card.dart';
@@ -59,7 +58,9 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
           longitude: 100.4341077,
         );
     _selectedRentalType = _bookingData.rentalType;
-    _hasSelectedLocation = widget.isEditMode;
+    _hasSelectedLocation =
+        _bookingData.latitude != null && _bookingData.longitude != null;
+    _locationAddress = _bookingData.locationAddress;
   }
 
   bool get _isRentalPeriodValid {
@@ -119,32 +120,6 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     setState(() {
       _showRentalDatesError = false;
       _bookingData = _bookingData.copyWith(startTime: start, endTime: end);
-    });
-  }
-
-  void _onLocationChanged(String newLocation) {
-    setState(() {
-      _hasSelectedLocation = true;
-      _showLocationError = false;
-      _locationAddress = null;
-      _bookingData = _bookingData.copyWith(
-        location: newLocation,
-        locationNote: 'ระบุโดยคุณ',
-      );
-    });
-  }
-
-  void _onLocationResultChanged(LocationPickerResult result) {
-    setState(() {
-      _hasSelectedLocation = true;
-      _showLocationError = false;
-      _locationAddress = result.fullAddress;
-      _bookingData = _bookingData.copyWith(
-        location: result.locationName,
-        locationNote: result.locationNote,
-        latitude: result.latitude,
-        longitude: result.longitude,
-      );
     });
   }
 
@@ -615,8 +590,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                       locationAddress: _locationAddress,
                       latitude: _bookingData.latitude,
                       longitude: _bookingData.longitude,
-                      onLocationResultChanged: _onLocationResultChanged,
-                      onLocationChanged: _onLocationChanged,
+                      isEditable: false,
                       showError: _showLocationError,
                     ),
                     const SizedBox(height: 18),

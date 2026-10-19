@@ -202,7 +202,11 @@ func (r *supabaseRentalRepository) saveOfferMetadata(ctx context.Context, messag
 	if len(updated) != 1 {
 		return "", domain.ErrInvalidRental
 	}
-	return text, nil
+	saved, ok := updated[0]["message"].(string)
+	if !ok {
+		return "", domain.ErrInvalidRental
+	}
+	return saved, nil
 }
 
 func offerTime(raw string, hour, minute int) (time.Time, error) {

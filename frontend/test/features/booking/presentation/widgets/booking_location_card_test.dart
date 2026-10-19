@@ -54,7 +54,7 @@ void main() {
       expect(find.text('ระบุโดยคุณ'), findsOneWidget);
 
       // In non-editable mode, Google Maps action is present
-      expect(find.text('เปิดดูใน Google Maps'), findsOneWidget);
+      expect(find.text('เปิดดูแผนที่'), findsOneWidget);
     });
 
     test('LocationService popular landmarks are well populated', () {

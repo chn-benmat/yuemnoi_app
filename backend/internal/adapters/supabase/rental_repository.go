@@ -34,14 +34,18 @@ func (r *supabaseRentalRepository) CreateRental(
 
 func (r *supabaseRentalRepository) createRental(ctx context.Context, userID string, request domain.CreateRentalRequest) (*domain.RentalOrder, error) {
 	var rental domain.RentalOrder
-	err := r.client.DB.Rpc("create_rental_request", map[string]interface{}{
+	params := map[string]interface{}{
 		"p_user_id":         userID,
 		"p_item_id":         request.ItemID,
 		"p_start_at":        request.StartAt.UTC(),
 		"p_end_at":          request.EndAt.UTC(),
 		"p_rental_type":     request.RentalType,
 		"p_pickup_location": strings.TrimSpace(request.PickupLocation),
-	}).ExecuteWithContext(ctx, &rental)
+	}
+	if request.OfferMessageID != "" {
+		params["p_offer_message_id"] = request.OfferMessageID
+	}
+	err := r.client.DB.Rpc("create_rental_request", params).ExecuteWithContext(ctx, &rental)
 	if err != nil {
 		return nil, mapRentalRepositoryError("create rental request", err)
 	}

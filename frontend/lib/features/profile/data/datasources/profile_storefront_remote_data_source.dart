@@ -39,6 +39,7 @@ class ProfileStorefrontRemoteDataSource {
           )
           .eq('user_id', userId)
           .eq('moderation_hidden', false)
+          .eq('owner_hidden', false)
           .order('id', ascending: false)
           .range(offset, offset + pageSize - 1);
       result.addAll(rows);

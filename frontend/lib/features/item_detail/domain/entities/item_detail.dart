@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../core/models/pickup_location.dart';
 
 import '../../../rental_item/domain/entities/rental_item.dart';
 
@@ -49,6 +50,8 @@ class ItemDetail extends Equatable {
     required this.rentalType,
     required this.reviews,
     required this.isOwner,
+    this.ownerHidden = false,
+    this.pickupLocation,
   });
 
   final int id;
@@ -62,8 +65,26 @@ class ItemDetail extends Equatable {
   final String rentalType;
   final List<ItemReview> reviews;
   final bool isOwner;
+  final bool ownerHidden;
+  final PickupLocation? pickupLocation;
 
   String get unitLabel => rentalType == 'รายชั่วโมง' ? 'ชั่วโมง' : 'วัน';
+
+  ItemDetail withVisibility({required bool hidden}) => ItemDetail(
+    id: id,
+    owner: owner,
+    name: name,
+    imageUrls: imageUrls,
+    description: description,
+    category: category,
+    price: price,
+    status: status,
+    rentalType: rentalType,
+    reviews: reviews,
+    isOwner: isOwner,
+    ownerHidden: hidden,
+    pickupLocation: pickupLocation,
+  );
 
   double get averageRating {
     if (reviews.isEmpty) return 0;
@@ -84,6 +105,8 @@ class ItemDetail extends Equatable {
     rentalType,
     reviews,
     isOwner,
+    ownerHidden,
+    pickupLocation,
   ];
 }
 
@@ -97,6 +120,8 @@ class ItemEditDraft extends Equatable {
     required this.price,
     required this.retainedImageUrls,
     required this.newImages,
+    this.imageOrder,
+    this.pickupLocation,
   });
 
   final int itemId;
@@ -107,6 +132,37 @@ class ItemEditDraft extends Equatable {
   final int price;
   final List<String> retainedImageUrls;
   final List<RentalItemImage> newImages;
+  final List<RentalItemPhoto>? imageOrder;
+  final PickupLocation? pickupLocation;
+
+  List<String> resolveImageUrls(List<String> uploadedUrls) {
+    if (uploadedUrls.length != newImages.length) {
+      throw const FormatException('จำนวนรูปที่อัปโหลดไม่ครบ');
+    }
+    final order = imageOrder;
+    if (order == null) return [...retainedImageUrls, ...uploadedUrls];
+    final remainingRemote = [...retainedImageUrls];
+    final remainingLocal = [...newImages];
+    final urls = <String>[];
+    for (final photo in order) {
+      if (photo.remoteUrl case final url?) {
+        if (!remainingRemote.remove(url)) {
+          throw const FormatException('ลำดับรูปภาพไม่ถูกต้อง');
+        }
+        urls.add(url);
+      } else {
+        final image = photo.localImage;
+        if (!remainingLocal.remove(image)) {
+          throw const FormatException('ลำดับรูปภาพไม่ถูกต้อง');
+        }
+        urls.add(uploadedUrls[newImages.indexOf(image!)]);
+      }
+    }
+    if (remainingRemote.isNotEmpty || remainingLocal.isNotEmpty) {
+      throw const FormatException('ลำดับรูปภาพไม่ครบ');
+    }
+    return urls;
+  }
 
   @override
   List<Object?> get props => [
@@ -118,5 +174,7 @@ class ItemEditDraft extends Equatable {
     price,
     retainedImageUrls,
     newImages,
+    imageOrder,
+    pickupLocation,
   ];
 }

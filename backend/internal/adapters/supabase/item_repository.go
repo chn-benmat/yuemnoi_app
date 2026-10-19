@@ -33,13 +33,18 @@ func NewSupabaseItemRepository(sbClient *supabase.Client, serviceKey string) dom
 func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, images []domain.ItemImage) (*domain.Item, error) {
 	var items []domain.Item
 	payload := map[string]interface{}{
-		"user_id":     item.UserID,
-		"item_name":   item.ItemName,
-		"description": item.Description,
-		"category":    item.Category,
-		"price":       item.Price,
-		"status":      item.Status,
-		"type":        item.Type,
+		"user_id":          item.UserID,
+		"item_name":        item.ItemName,
+		"description":      item.Description,
+		"category":         item.Category,
+		"price":            item.Price,
+		"status":           item.Status,
+		"type":             item.Type,
+		"pickup_location":  item.PickupLocation,
+		"pickup_address":   item.PickupAddress,
+		"pickup_note":      item.PickupNote,
+		"pickup_latitude":  item.PickupLatitude,
+		"pickup_longitude": item.PickupLongitude,
 	}
 	if item.ItemImageURL != nil {
 		payload["item_image_url"] = item.ItemImageURL
@@ -186,6 +191,19 @@ func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domai
 	}
 
 	return item, nil
+}
+
+func (r *supabaseItemRepository) HasRentalAccess(ctx context.Context, id int64, userID string) (bool, error) {
+	var bookings []struct {
+		ID int64 `json:"id"`
+	}
+	err := r.client.DB.From("booking_tb").Select("id").Limit(1).
+		Eq("item_id", strconv.FormatInt(id, 10)).Eq("user_id", userID).
+		ExecuteWithContext(ctx, &bookings)
+	if err != nil {
+		return false, fmt.Errorf("check item rental access failed: %w", err)
+	}
+	return len(bookings) > 0, nil
 }
 
 func (r *supabaseItemRepository) Update(

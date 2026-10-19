@@ -2,7 +2,16 @@ import 'package:equatable/equatable.dart';
 
 import '../../domain/entities/item_detail.dart';
 
-enum ItemDetailStatus { initial, loading, loaded, updating, failure }
+enum ItemDetailStatus {
+  initial,
+  loading,
+  loaded,
+  updating,
+  changingVisibility,
+  deleting,
+  deleted,
+  failure,
+}
 
 class ItemDetailState extends Equatable {
   const ItemDetailState({
@@ -14,6 +23,12 @@ class ItemDetailState extends Equatable {
   final ItemDetailStatus status;
   final ItemDetail? item;
   final String? errorMessage;
+
+  bool get isBusy =>
+      status == ItemDetailStatus.loading ||
+      status == ItemDetailStatus.updating ||
+      status == ItemDetailStatus.changingVisibility ||
+      status == ItemDetailStatus.deleting;
 
   ItemDetailState copyWith({
     ItemDetailStatus? status,

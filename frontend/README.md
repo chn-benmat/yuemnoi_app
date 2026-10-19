@@ -27,7 +27,7 @@ Frontend คือแอป Flutter ของแพลตฟอร์มเช�
 
 | ส่วนของแอป       | สิ่งที่มีในโค้ด                                                           |
 | ---------------- | ------------------------------------------------------------------------- |
-| 🔑 Auth          | สมัครสมาชิก, Email/Password, Google OAuth, กู้รหัสผ่าน และเปิดดูแบบ Guest |
+| 🔑 Auth          | สมัครสมาชิก, Email/Password, Google Sign-In, กู้รหัสผ่าน และเปิดดูแบบ Guest |
 | 🔎 Discovery     | ฟีดอุปกรณ์, ค้นหา, กรองหมวดหมู่, รายละเอียดสินค้า และรายการโปรด           |
 | 📸 Listings      | ลงประกาศ / แก้ไขอุปกรณ์, เลือกรูป และบีบอัดรูปก่อนส่ง                     |
 | 📅 Rental        | ขอเช่า, ติดตามสถานะ, หน้าส่งมอบ / รับคืน และรีวิว                         |
@@ -146,7 +146,7 @@ APP_SECRET_KEY=replace-with-client-app-key
 | `SUPABASE_URL`             | ใช้ Auth / ข้อมูล / Realtime       | URL ของ Supabase project เดียวกับ Backend                                                                 |
 | `SUPABASE_PUBLISHABLE_KEY` | เริ่ม Supabase client              | Publishable key สำหรับแอป ดู [ประเภท API keys](https://supabase.com/docs/guides/getting-started/api-keys) |
 | `APP_SECRET_KEY`           | Backend ตั้ง app key ไว้           | ต้องเป็นหนึ่งในคีย์ที่ Backend รับ; ส่งผ่าน `X-App-Secret`                                                |
-| `GOOGLE_WEB_CLIENT_ID`     | ยังไม่มี consumer ใน flow ปัจจุบัน | AppConfig อ่านได้ แต่ Google login ปัจจุบันใช้ Supabase OAuth จึงไม่ต้องใส่เพื่อเปิด flow นี้             |
+| `GOOGLE_WEB_CLIENT_ID`     | Google login บน Android | Web OAuth client ID จาก Google Cloud ใช้เป็น `serverClientId` ของ native Google Sign-In และต้องอยู่ในรายการ Client IDs ของ Google provider ใน Supabase |
 
 [AppConfig](lib/core/config/app_config.dart) อ่านค่าจาก `--dart-define` ก่อน แล้ว fallback ไปที่ dotenv ส่วน API client มี fallback เป็น `http://127.0.0.1:8080` หากไม่ได้ตั้ง API URL ค่านี้ไม่เหมาะกับมือถือจริง
 
@@ -169,13 +169,28 @@ APP_SECRET_KEY=replace-with-client-app-key
 | Supabase Database | schema / views เช่น `item_tb`, `home_feed_ranked_v`, `public_profile_v`, `profile_tb`, `booking_tb`, `conversation_tb` และ `chat_message_tb` พร้อม RLS / grants; ขอ schema ฉบับของ environment จากทีม              |
 | Supabase Realtime | เปิดใช้งานตามตารางและ channels ของ chat / booking / presence                                                                                                                                                       |
 | Supabase Storage  | buckets `item_bk`, `profile_bk` และ `chat_bk`; แชตใช้ signed URLs และต้องมี policies ที่ตรงกับผู้ใช้                                                                                                               |
-| Google login      | เปิด Google provider ใน Supabase และตั้ง redirect allowlist เป็น `yuemnoi://login-callback/`; scheme นี้มีใน Android / iOS ดู [Google OAuth setup](https://supabase.com/docs/guides/auth/social-login/auth-google) |
+| Google login      | เปิด Google provider ใน Supabase; Android ต้องมี Web client ID และ Android OAuth client ที่ตรง package/SHA-1 ส่วน iOS / เว็บใช้ OAuth เดิมพร้อม redirect allowlist `yuemnoi://login-callback/` ดู [Google OAuth setup](https://supabase.com/docs/guides/auth/social-login/auth-google) |
 | Firebase Android  | เพิ่ม Android app ID `com.example.frontend` แล้ววาง `android/app/google-services.json` ที่ตรงกับ project                                                                                                           |
 | Firebase iOS      | เพิ่ม iOS app ให้ตรง bundle ID และเพิ่ม `GoogleService-Info.plist` เข้า Runner target; ตั้ง APNs / native capabilities เมื่อทดสอบ FCM                                                                              |
 
 รูปที่อัปโหลดใหม่ใช้ path `chat_bk/<conversation_id>/<filename>`, `item_bk/<owner_user_id>/<item_id>/<filename>` และ `profile_bk/<user_id>/<filename>` รวมถึงรูปตรวจสภาพคืนสินค้าที่อยู่ใต้เจ้าของและสินค้าเดียวกัน ต้องใช้ [migration สิทธิ์ Storage](../supabase/migrations/20261017151602_organize_storage_image_folders.sql) ร่วมกับแอปและ backend เวอร์ชันนี้ รูปแชตเก่ายังอ่านและลบได้ตามสิทธิ์ผู้ส่ง โดยไม่ได้ย้ายไฟล์เดิม
 
 Firebase initialization ใช้ `Firebase.initializeApp()` แบบ native และแจ้ง warning หากเริ่มไม่ได้ ดู [Firebase Flutter setup](https://firebase.google.com/docs/flutter/setup) ไฟล์ Firebase configuration ไม่ได้ติดมาใน repository และ checkout นี้ไม่มีชุด SQL migrations สำหรับสร้าง Supabase ทั้งระบบอัตโนมัติ
+
+#### Google Sign-In บน Android
+
+Android ใช้ `google_sign_in` 7.2.0 เปิดหน้าต่างเลือกบัญชีของระบบ แล้วส่ง Google ID token เข้า Supabase `signInWithIdToken` ก่อนตรวจสิทธิ์ผ่าน backend ตามเดิม แอปล้างสถานะบัญชี Google ก่อนเปิดตัวเลือกทุกครั้ง กดยกเลิกแล้วกลับสู่หน้า login และกดใหม่ได้ รูปแบบหน้าต่างขึ้นกับ Android และ Google Play services บนอุปกรณ์
+
+หากอุปกรณ์หรือ emulator ยังไม่มีบัญชี Google ในระบบ Google Play services จะเปิดหน้าเพิ่มบัญชีก่อน บัญชีที่ล็อกอินไว้เฉพาะใน Chrome ไม่ได้ทำให้มีรายการบัญชี Android โดยอัตโนมัติ
+
+1. ใน Google Cloud project ของ `GOOGLE_WEB_CLIENT_ID` เพิ่ม OAuth client ประเภท **Android** สำหรับ package `com.example.frontend` และ SHA-1 ของ certificate ที่เซ็นแอป ตรวจค่าจาก `android/` ด้วย `./gradlew signingReport` หรือ `./gradlew.bat signingReport` บน Windows
+2. กำหนด `GOOGLE_WEB_CLIENT_ID` เป็น client ประเภท **Web application** แล้วเพิ่ม ID เดียวกันใน Google provider ของ Supabase ห้ามใส่ client secret ในแอป
+3. ลงทะเบียน certificate ของทุก build ที่ใช้จริง รวมถึง Play App Signing สำหรับแอปจาก Play Store หากเปลี่ยน Firebase configuration ให้ดาวน์โหลด `google-services.json` ใหม่ โดยไฟล์ที่ไม่มี OAuth clients ยังต้องตั้ง Web client ID และลงทะเบียน Android client ใน Google Cloud ให้ครบ
+4. เพิ่ม native plugin แล้วต้องหยุดและรัน `flutter run` ใหม่ การ hot reload อย่างเดียวไม่ติดตั้ง plugin
+
+ดูรายละเอียด [การตั้งค่า Android ของ Flutter Google Sign-In](https://pub.dev/packages/google_sign_in_android) การเปิด browser เป็น fallback ไม่ถูกใช้เมื่อ native login บน Android ล้มเหลว
+
+หาก popup แสดงบัญชีได้ แต่เลือกแล้วกลับหน้า login ให้ตรวจ Logcat เฉพาะ `Auth` / `Auth.Api.Credentials` เมื่อพบ `UNREGISTERED_ON_API_CONSOLE` ต้องลงทะเบียน Android OAuth client ด้วย package และ certificate SHA-1 ใน Google Cloud project เดียวกับ Web client ID ที่แอปใช้ การตั้ง SHA-1 ใน Firebase คนละ project อย่างเดียวไม่เพียงพอ ข้อผิดพลาดนี้อาจถูก Android Credential Manager รายงานเป็นการยกเลิก จึงอาจไม่มีข้อความ error บนหน้า login
 
 แผนที่ปัจจุบันใช้ Google tile URL ส่วนค้นหาพิกัด / เส้นทางใช้ Nominatim และ OSRM จากโค้ด ไม่มี env สำหรับ map key ใน AppConfig
 
@@ -327,7 +342,8 @@ frontend/
 | API 404 หรือ path ซ้ำ                 | ตั้ง `API_URL` เป็น origin โดยไม่ต่อ `/api`                                    |
 | Android เรียก Backend ในเครื่องไม่ได้ | ตรวจ HTTPS / cleartext policy, emulator host, LAN และ firewall                    |
 | API ตอบ 401                           | ตรวจ `APP_SECRET_KEY` ให้ตรง Backend; flow ส่วนตัวต้องมี user session ด้วย        |
-| Google login ไม่กลับแอป               | ตรวจ Google provider, Supabase redirect allowlist และ `yuemnoi://login-callback/` |
+| Google login บน Android ไม่เปิดตัวเลือกบัญชี | ตรวจ `GOOGLE_WEB_CLIENT_ID`, Android OAuth package/SHA-1 และ Google Play services; รันแอปใหม่หลังเพิ่ม plugin |
+| Google login บน iOS / เว็บไม่กลับแอป | ตรวจ Google provider, Supabase redirect allowlist และ `yuemnoi://login-callback/` |
 | Google Services task ล้มเหลว          | ตรวจ `google-services.json` และ application ID ว่าตรงกัน                          |
 | ไม่มี push notification               | ตรวจ Firebase / APNs, permission, FCM token และ Backend service account           |
 | AI timeout / quota เต็ม               | ตรวจ Go → AI URL / internal key / runtime / provider quotas ตาม AI README         |

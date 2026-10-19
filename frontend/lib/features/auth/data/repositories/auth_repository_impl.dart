@@ -1,12 +1,21 @@
 import '../../domain/entities/auth_tokens.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_data_source.dart';
+import '../datasources/google_auth_data_source.dart';
 
 // คำอธิบาย: คลาสอิมพลีเมนต์ (Implementation) ของ AuthRepository ทำหน้าที่ประสานงานกับ Data Source
 class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource remoteDataSource;
+  final GoogleAuthDataSource _googleAuthDataSource;
 
-  AuthRepositoryImpl(this.remoteDataSource);
+  AuthRepositoryImpl(
+    this.remoteDataSource, {
+    GoogleAuthDataSource? googleAuthDataSource,
+  }) : _googleAuthDataSource =
+           googleAuthDataSource ?? GoogleAuthDataSource.instance;
+
+  @override
+  Future<bool> loginWithGoogle() => _googleAuthDataSource.login();
 
   @override
   Future<AuthTokens> login({
@@ -60,9 +69,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> sendOtp({
-    required String email,
-  }) {
+  Future<void> sendOtp({required String email}) {
     return remoteDataSource.sendOtp(email: email);
   }
 
@@ -78,12 +85,8 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<String> syncGoogleProfileImage({
-    required String accessToken,
-  }) {
-    return remoteDataSource.syncGoogleProfileImage(
-      accessToken: accessToken,
-    );
+  Future<String> syncGoogleProfileImage({required String accessToken}) {
+    return remoteDataSource.syncGoogleProfileImage(accessToken: accessToken);
   }
 
   @override

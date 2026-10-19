@@ -21,7 +21,9 @@ void main() {
   setUp(() => AuthSession.saveAccessToken('test-token'));
   tearDown(AuthSession.clear);
 
-  testWidgets('renders category and rental type dropdowns', (tester) async {
+  testWidgets('searches categories and selects an explicit rental unit', (
+    tester,
+  ) async {
     final bloc = RentalItemBloc(
       createItem: CreateRentalItemUseCase(NoopRentalItemRepository()),
     );
@@ -42,22 +44,26 @@ void main() {
     expect(find.text('ชื่ออุปกรณ์'), findsOneWidget);
     expect(find.text('หมวดหมู่'), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(const Key('rental-item-category')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('rental-item-category')));
     await tester.pumpAndSettle();
     expect(find.text('กล้องและอุปกรณ์ถ่ายภาพ'), findsWidgets);
-    expect(find.text('ดนตรีและเครื่องดนตรี'), findsWidgets);
-    expect(find.text('อื่น ๆ'), findsWidgets);
-
-    await tester.tap(find.byKey(const Key('rental-item-category')));
+    await tester.enterText(
+      find.byKey(const Key('rental-category-search')),
+      'ดนตรี',
+    );
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).last, const Offset(0, -520));
+    expect(find.text('กล้องและอุปกรณ์ถ่ายภาพ'), findsNothing);
+    await tester.tap(find.text('ดนตรีและเครื่องดนตรี'));
+    await tester.pumpAndSettle();
+    expect(find.text('ดนตรีและเครื่องดนตรี'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('rental-type-field')));
     await tester.pumpAndSettle();
     expect(find.text('ประเภทการให้เช่า'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('rental-type-field')));
+    await tester.tap(find.text('รายชั่วโมง'));
     await tester.pumpAndSettle();
-    expect(find.text('รายวัน'), findsWidgets);
-    expect(find.text('รายชั่วโมง'), findsWidgets);
+    expect(find.text('บาท / ชั่วโมง'), findsOneWidget);
   });
 
   testWidgets('shows an error when submitting without an image', (
@@ -79,7 +85,7 @@ void main() {
 
     await tester.drag(find.byType(ListView).first, const Offset(0, -1200));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('เพิ่ม'));
+    await tester.tap(find.byKey(const Key('add-rental-submit')));
     await tester.pump();
 
     await tester.drag(find.byType(ListView).first, const Offset(0, 1200));

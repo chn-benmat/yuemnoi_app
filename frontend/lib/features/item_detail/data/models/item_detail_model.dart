@@ -1,3 +1,4 @@
+import '../../../../core/models/pickup_location.dart';
 import '../../domain/entities/item_detail.dart';
 
 abstract final class ItemDetailModel {
@@ -35,6 +36,8 @@ abstract final class ItemDetailModel {
       status: _string(item['status']),
       rentalType: _normalizeRentalType(item['type']),
       reviews: mappedReviews,
+      ownerHidden: item['owner_hidden'] == true,
+      pickupLocation: PickupLocation.fromJson(item),
       isOwner: currentUserId != null && currentUserId == ownerId,
     );
   }
@@ -65,6 +68,8 @@ abstract final class ItemDetailModel {
       status: _string(item['status']),
       rentalType: _normalizeRentalType(item['type']),
       reviews: const [],
+      ownerHidden: item['owner_hidden'] == true,
+      pickupLocation: PickupLocation.fromJson(item),
       isOwner: currentUserId != null && currentUserId == ownerId,
     );
   }

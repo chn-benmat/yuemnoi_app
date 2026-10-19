@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import '../../../../core/models/pickup_location.dart';
 
 class RentalItem {
   const RentalItem({required this.id, required this.imageUrls});
@@ -14,6 +15,16 @@ class RentalItemImage {
   final String fileName;
 }
 
+class RentalItemPhoto {
+  const RentalItemPhoto.remote(String url) : remoteUrl = url, localImage = null;
+  const RentalItemPhoto.local(RentalItemImage image)
+    : localImage = image,
+      remoteUrl = null;
+
+  final String? remoteUrl;
+  final RentalItemImage? localImage;
+}
+
 class RentalItemDraft {
   const RentalItemDraft({
     required this.name,
@@ -22,6 +33,7 @@ class RentalItemDraft {
     required this.rentalType,
     required this.price,
     required this.images,
+    this.pickupLocation,
   });
 
   final String name;
@@ -30,4 +42,5 @@ class RentalItemDraft {
   final String rentalType;
   final int price;
   final List<RentalItemImage> images;
+  final PickupLocation? pickupLocation;
 }

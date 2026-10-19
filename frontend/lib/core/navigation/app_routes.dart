@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'item_detail_route_args.dart';
 import '../../features/identity/data/identity_api_repository.dart';
 import '../../features/identity/domain/identity_repository.dart';
 import '../../features/identity/presentation/identity_cubit.dart';
@@ -33,10 +34,12 @@ import '../../features/item_detail/data/repositories/item_detail_repository_impl
 import '../../features/item_detail/domain/entities/item_detail.dart';
 import '../../features/item_detail/domain/usecases/get_item_detail_usecase.dart';
 import '../../features/item_detail/domain/usecases/update_item_usecase.dart';
+import '../../features/item_detail/domain/usecases/manage_owner_item_usecase.dart';
 import '../../features/item_detail/presentation/bloc/item_detail_bloc.dart';
 import '../../features/item_detail/presentation/bloc/item_detail_event.dart';
 import '../../features/item_detail/presentation/pages/edit_item.dart';
 import '../../features/item_detail/presentation/pages/item_detail.dart';
+import '../../features/item_detail/presentation/pages/item_auto_reply_settings.dart';
 import '../../features/home/domain/entities/feed_category.dart';
 import '../../features/home/domain/entities/feed_item.dart';
 import '../../features/home/presentation/pages/equipment_search_screen.dart';
@@ -106,6 +109,7 @@ abstract final class AppRoutes {
   static const profileChangePassword = '/setting/change-password';
   static const itemDetail = '/items/:itemId';
   static const editRentalItem = '/items/:itemId/edit';
+  static const itemAutoReply = '/items/:itemId/auto-reply';
   static const wallet = '/wallet';
   static const walletPayment = '/wallet/payment';
   static const walletSuccess = '/wallet/success';
@@ -369,8 +373,14 @@ abstract final class AppRoutes {
                 create: (context) => ItemDetailBloc(
                   getItem: GetItemDetailUseCase(repository),
                   updateItem: UpdateItemUseCase(repository),
+                  manageItem: ManageOwnerItemUseCase(repository),
                 )..add(ItemDetailRequested(itemId)),
-                child: ItemDetailScreen(itemId: itemId),
+                child: ItemDetailScreen(
+                  itemId: itemId,
+                  ownerLoadingLayout:
+                      state.extra is ItemDetailRouteArgs &&
+                      (state.extra as ItemDetailRouteArgs).ownerLoadingLayout,
+                ),
               ),
             );
           },
@@ -388,11 +398,19 @@ abstract final class AppRoutes {
                 create: (context) => ItemDetailBloc(
                   getItem: GetItemDetailUseCase(repository),
                   updateItem: UpdateItemUseCase(repository),
+                  manageItem: ManageOwnerItemUseCase(repository),
                 ),
                 child: EditItemScreen(item: item),
               ),
             );
           },
+        ),
+        GoRoute(
+          path: itemAutoReply,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: ItemAutoReplyScreen(item: _requiredItemExtra(state)),
+          ),
         ),
         GoRoute(
           path: register,
@@ -887,8 +905,12 @@ abstract final class AppRoutes {
   static Future<void> openItemDetail(
     BuildContext context, {
     required int itemId,
+    bool ownerLoadingLayout = false,
   }) {
-    return context.push<void>('/items/$itemId');
+    return context.push<void>(
+      '/items/$itemId',
+      extra: ItemDetailRouteArgs(ownerLoadingLayout: ownerLoadingLayout),
+    );
   }
 
   static Future<void> openSearch(
@@ -924,6 +946,13 @@ abstract final class AppRoutes {
     required ItemDetail item,
   }) {
     return context.push<bool>('/items/${item.id}/edit', extra: item);
+  }
+
+  static Future<void> openItemAutoReply(
+    BuildContext context, {
+    required ItemDetail item,
+  }) {
+    return context.push<void>('/items/${item.id}/auto-reply', extra: item);
   }
 
   static Future<void> openRegister(BuildContext context) {

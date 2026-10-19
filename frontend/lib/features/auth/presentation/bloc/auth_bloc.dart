@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     hide AuthApiException, AuthState;
@@ -13,6 +12,7 @@ import '../../../../core/services/user_presence_service.dart';
 import '../../data/datasources/auth_remote_data_source.dart'; // สำหรับ AuthApiException
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/usecases/change_password_usecase.dart';
+import '../../domain/usecases/google_login_usecase.dart';
 import '../../domain/usecases/login_usecase.dart';
 import '../../domain/usecases/register_usecase.dart';
 import '../../domain/usecases/send_otp_usecase.dart';
@@ -97,6 +97,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthGoogleLoginRequested event,
     Emitter<AuthState> emit,
   ) async {
+    if (state is GoogleLoginLoading || state is LoginLoading) return;
+
     if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized) {
       emit(
         const LoginFailure(
@@ -110,26 +112,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(const GoogleLoginLoading());
 
     try {
-      final launched = await SupabaseConfig.client.auth.signInWithOAuth(
-        OAuthProvider.google,
-        redirectTo: kIsWeb ? null : SupabaseConfig.oauthRedirectUrl,
-        authScreenLaunchMode: kIsWeb
-            ? LaunchMode.platformDefault
-            : LaunchMode.externalApplication,
-        queryParams: const {'prompt': 'select_account'},
-      );
-
-      if (!launched) {
-        emit(
-          const LoginFailure(message: 'ไม่สามารถเปิดหน้าล็อกอิน Google ได้'),
-        );
+      final started = await GoogleLoginUseCase(authRepository).execute();
+      if (!started) {
+        emit(const AuthInitial());
       }
     } on AuthException catch (error) {
       emit(LoginFailure(message: error.message));
     } catch (_) {
       emit(
         const LoginFailure(
-          message: 'เกิดข้อผิดพลาดระหว่างเปิด Google Login กรุณาลองใหม่',
+          message: 'เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาลองใหม่',
         ),
       );
     }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../domain/entities/item_detail.dart';
 import '../models/item_detail_model.dart';
@@ -24,7 +25,11 @@ class ItemDetailRemoteDataSource {
 
   Future<ItemDetail> fetchById(int itemId) async {
     try {
-      final response = await _apiClient.get('/api/items/$itemId');
+      final token = AuthSession.accessToken;
+      final response = await _apiClient.get(
+        '/api/items/$itemId',
+        headers: token == null ? null : {'Authorization': 'Bearer $token'},
+      );
       if (response.statusCode == 200 && response.data is Map) {
         return ItemDetailModel.fromApiResponse(
           item: Map<String, dynamic>.from(response.data as Map),
@@ -44,7 +49,7 @@ class ItemDetailRemoteDataSource {
       final item = await _client
           .from('item_tb')
           .select(
-            'id,user_id,item_name,item_image_url,description,category,price,status,type',
+            'id,user_id,item_name,item_image_url,description,category,price,status,type,owner_hidden,pickup_location,pickup_address,pickup_note,pickup_latitude,pickup_longitude',
           )
           .eq('id', itemId)
           .maybeSingle();
@@ -98,12 +103,13 @@ class ItemDetailRemoteDataSource {
 
   Future<ItemDetail> update(ItemEditDraft draft) async {
     final user = _client.auth.currentUser;
-    final session = _client.auth.currentSession;
-    if (user == null || session == null) {
+    final token = AuthSession.accessToken;
+    if (user == null || token == null) {
       throw const ItemDetailRemoteException('กรุณาเข้าสู่ระบบก่อนแก้ไขอุปกรณ์');
     }
 
     final uploadedPaths = <String>[];
+    var saved = false;
     try {
       final uploadedUrls = <String>[];
       for (var index = 0; index < draft.newImages.length; index++) {
@@ -122,7 +128,7 @@ class ItemDetailRemoteDataSource {
         uploadedUrls.add(_client.storage.from(_bucket).getPublicUrl(path));
       }
 
-      final imageUrls = [...draft.retainedImageUrls, ...uploadedUrls];
+      final imageUrls = draft.resolveImageUrls(uploadedUrls);
       if (imageUrls.isEmpty) {
         throw const ItemDetailRemoteException(
           'กรุณาเพิ่มรูปภาพอย่างน้อย 1 รูป',
@@ -131,18 +137,20 @@ class ItemDetailRemoteDataSource {
 
       final response = await _apiClient.put(
         '/api/items/${draft.itemId}',
-        headers: {'Authorization': 'Bearer ${session.accessToken}'},
+        headers: {'Authorization': 'Bearer $token'},
         data: {
           'item_name': draft.name.trim(),
           'category': draft.category.trim(),
           'description': draft.description.trim(),
           'type': draft.rentalType,
           'price': draft.price,
+          ...?draft.pickupLocation?.toJson(),
           'item_image_url': imageUrls,
         },
       );
 
-      if (response.statusCode != 200) {
+      saved = response.statusCode == 200;
+      if (!saved || response.data is! Map) {
         final errorMsg = response.data is Map
             ? (response.data as Map)['error']?.toString()
             : null;
@@ -151,17 +159,21 @@ class ItemDetailRemoteDataSource {
         );
       }
 
-      return await fetchById(draft.itemId);
+      return ItemDetailModel.fromApiResponse(
+        item: Map<String, dynamic>.from(response.data as Map),
+        currentUserId: user.id,
+      );
     } on ItemDetailRemoteException {
-      await _removeNewUploads(uploadedPaths);
+      if (!saved) await _removeNewUploads(uploadedPaths);
       rethrow;
     } on StorageException catch (error) {
-      await _removeNewUploads(uploadedPaths);
+      if (!saved) await _removeNewUploads(uploadedPaths);
       throw ItemDetailRemoteException(
         error.message.isEmpty ? 'อัปโหลดรูปภาพไม่สำเร็จ' : error.message,
       );
     } catch (_) {
-      await _removeNewUploads(uploadedPaths);
+      // เมื่อบันทึกแถวแล้ว ต้องเก็บรูปที่แถวนั้นอ้างอิงไว้แม้แปลงผลตอบกลับไม่สำเร็จ
+      if (!saved) await _removeNewUploads(uploadedPaths);
       throw const ItemDetailRemoteException(
         'แก้ไขอุปกรณ์ไม่สำเร็จ กรุณาลองใหม่',
       );
@@ -175,6 +187,69 @@ class ItemDetailRemoteDataSource {
     } catch (_) {
       // Best-effort rollback: the database row remains unchanged.
     }
+  }
+
+  Map<String, String> _ownerHeaders() {
+    final token = AuthSession.accessToken;
+    if (token == null) {
+      throw const ItemDetailRemoteException(
+        'กรุณาเข้าสู่ระบบเพื่อจัดการอุปกรณ์',
+      );
+    }
+    return {'Authorization': 'Bearer $token'};
+  }
+
+  Future<ItemDetail> setVisibility(int itemId, {required bool hidden}) async {
+    final headers = _ownerHeaders();
+    try {
+      final response = await _apiClient.put(
+        '/api/items/$itemId',
+        headers: headers,
+        data: {'owner_hidden': hidden},
+      );
+      if (response.statusCode != 200 || response.data is! Map) {
+        throw ItemDetailRemoteException(
+          _mutationMessage(
+            response.data,
+            'เปลี่ยนการแสดงอุปกรณ์ไม่สำเร็จ กรุณาลองใหม่',
+          ),
+        );
+      }
+      return ItemDetailModel.fromApiResponse(
+        item: Map<String, dynamic>.from(response.data as Map),
+        currentUserId: _client.auth.currentUser?.id,
+      );
+    } on ItemDetailRemoteException {
+      rethrow;
+    } catch (_) {
+      throw const ItemDetailRemoteException(
+        'เปลี่ยนการแสดงอุปกรณ์ไม่สำเร็จ กรุณาลองใหม่',
+      );
+    }
+  }
+
+  Future<void> delete(int itemId) async {
+    final headers = _ownerHeaders();
+    try {
+      final response = await _apiClient.delete(
+        '/api/items/$itemId',
+        headers: headers,
+      );
+      if (response.statusCode != 204) {
+        throw ItemDetailRemoteException(
+          _mutationMessage(response.data, 'ลบอุปกรณ์ไม่สำเร็จ กรุณาลองใหม่'),
+        );
+      }
+    } on ItemDetailRemoteException {
+      rethrow;
+    } catch (_) {
+      throw const ItemDetailRemoteException('ลบอุปกรณ์ไม่สำเร็จ กรุณาลองใหม่');
+    }
+  }
+
+  static String _mutationMessage(Object? data, String fallback) {
+    final message = data is Map ? data['error']?.toString().trim() : null;
+    return message == null || message.isEmpty ? fallback : message;
   }
 
   static String _databaseMessage(PostgrestException error) {

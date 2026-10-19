@@ -1,3 +1,5 @@
+import '../../../item_detail/data/datasources/item_detail_remote_data_source.dart';
+import '../../../item_detail/domain/entities/item_detail.dart';
 import '../../../../core/widgets/package_chat_list.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -638,6 +640,31 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       price = (_conversation.itemPrice ?? 100).toDouble();
     }
 
+    final itemSource = ItemDetailRemoteDataSource();
+    final ItemDetail itemDetail;
+    try {
+      itemDetail = await itemSource.fetchById(itemId);
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('โหลดข้อมูลจุดนัดรับไม่สำเร็จ กรุณาลองใหม่'),
+          ),
+        );
+      return;
+    }
+    if (!mounted) return;
+    final pickup = itemDetail.pickupLocation;
+    if (pickup == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'กรุณาระบุจุดนัดรับสินค้าในหน้าแก้ไขอุปกรณ์ก่อนส่งข้อเสนอ',
+          ),
+        ),
+      );
+      return;
+    }
     final reviewStats = await ItemReviewService.fetchStats(itemId);
     if (!mounted) return;
 
@@ -658,7 +685,9 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       dailyRate: rentalType == BookingRentalType.daily
           ? price
           : (price * 8).roundToDouble(),
-      defaultLocation: 'นัดรับตามตกลง',
+      defaultLocation: pickup.name,
+      latitude: pickup.latitude,
+      longitude: pickup.longitude,
       ownerName: ownerDisplayName,
     );
 
@@ -680,10 +709,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
           : today,
       startTime: const TimeOfDay(hour: 9, minute: 0),
       endTime: const TimeOfDay(hour: 17, minute: 0),
-      location: 'นัดรับตามตกลง',
-      locationNote: _isCurrentUserOwner
-          ? 'เลือกโดยผู้ปล่อยเช่า'
-          : 'เลือกโดยผู้เช่า',
+      location: pickup.name,
+      locationNote: pickup.note,
+      locationAddress: pickup.address,
+      latitude: pickup.latitude,
+      longitude: pickup.longitude,
       conversationId: _conversation.id,
       ownerId: resolvedOwnerId,
     );

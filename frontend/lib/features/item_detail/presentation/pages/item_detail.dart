@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/pickup_location_field.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
@@ -26,11 +27,19 @@ import '../bloc/item_detail_bloc.dart';
 import '../bloc/item_detail_event.dart';
 import '../bloc/item_detail_state.dart';
 import '../widgets/full_screen_image_viewer.dart';
+import '../widgets/owner_item_controls.dart';
+import '../widgets/owner_item_detail_view.dart';
+import '../widgets/owner_item_detail_loading_view.dart';
 
 class ItemDetailScreen extends StatefulWidget {
-  const ItemDetailScreen({super.key, required this.itemId});
+  const ItemDetailScreen({
+    super.key,
+    required this.itemId,
+    this.ownerLoadingLayout = false,
+  });
 
   final int itemId;
+  final bool ownerLoadingLayout;
 
   @override
   State<ItemDetailScreen> createState() => _ItemDetailScreenState();
@@ -72,6 +81,21 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     if (updated == true && mounted) {
       context.read<ItemDetailBloc>().add(ItemDetailRequested(widget.itemId));
     }
+  }
+
+  Future<void> _deleteItem(ItemDetail item) async {
+    final confirmed = await confirmItemDeletion(context, item.name);
+    if (confirmed && mounted) {
+      context.read<ItemDetailBloc>().add(const ItemDeleteSubmitted());
+    }
+  }
+
+  Future<void> _refreshItem() async {
+    final bloc = context.read<ItemDetailBloc>();
+    if (bloc.state.isBusy) return;
+    final completed = bloc.stream.firstWhere((state) => !state.isBusy);
+    bloc.add(ItemDetailRequested(widget.itemId));
+    await completed;
   }
 
   bool _hasCurrentUserPhone() {
@@ -399,9 +423,59 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ItemDetailBloc, ItemDetailState>(
+    return BlocConsumer<ItemDetailBloc, ItemDetailState>(
+      listener: (context, state) {
+        if (state.status == ItemDetailStatus.deleted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('ลบอุปกรณ์แล้ว')));
+          AppRoutes.pop(context);
+        } else if (state.status == ItemDetailStatus.failure &&
+            state.item != null) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text(
+                  state.errorMessage ?? 'เกิดข้อผิดพลาด กรุณาลองใหม่',
+                ),
+              ),
+            );
+        }
+      },
       builder: (context, state) {
         final item = state.item;
+        if (item == null && widget.ownerLoadingLayout) {
+          return _ownerLayout(
+            state.status == ItemDetailStatus.initial ||
+                    state.status == ItemDetailStatus.loading
+                ? const OwnerItemDetailLoadingView()
+                : _LoadError(
+                    message:
+                        state.errorMessage ?? 'โหลดรายละเอียดอุปกรณ์ไม่สำเร็จ',
+                    onRetry: () => context.read<ItemDetailBloc>().add(
+                      ItemDetailRequested(widget.itemId),
+                    ),
+                  ),
+          );
+        }
+        if (item != null && item.isOwner) {
+          return _ownerLayout(
+            OwnerItemDetailView(
+              item: item,
+              busy: state.isBusy,
+              deleting: state.status == ItemDetailStatus.deleting,
+              onRefresh: _refreshItem,
+              onVisibilityChanged: (visible) => context
+                  .read<ItemDetailBloc>()
+                  .add(ItemVisibilityChanged(hidden: !visible)),
+              onEditBasic: () => _openEdit(item),
+              onAutoReply: () =>
+                  AppRoutes.openItemAutoReply(context, item: item),
+              onDelete: () => _deleteItem(item),
+            ),
+          );
+        }
         return Scaffold(
           backgroundColor: Colors.white,
           bottomNavigationBar: item == null
@@ -411,10 +485,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(28, 12, 28, 18),
                     child: AppPrimaryButton(
-                      text: item.isOwner ? 'แก้ไขอุปกรณ์ของคุณ' : 'แชท',
+                      text: 'แชท',
                       isLoading: _isChatLoading,
-                      onPressed: () =>
-                          item.isOwner ? _openEdit(item) : _openChat(item),
+                      onPressed: state.isBusy ? null : () => _openChat(item),
                     ),
                   ),
                 ),
@@ -442,6 +515,31 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       },
     );
   }
+
+  Widget _ownerLayout(Widget child) => Scaffold(
+    backgroundColor: const Color(0xFFF7F6FA),
+    appBar: AppBar(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      foregroundColor: const Color(0xFF211C35),
+      elevation: 0,
+      centerTitle: true,
+      leading: IconButton(
+        tooltip: 'ย้อนกลับ',
+        icon: const Icon(Icons.arrow_back_rounded),
+        onPressed: () => AppRoutes.pop(context),
+      ),
+      title: const Text(
+        'รายละเอียดอุปกรณ์',
+        style: TextStyle(
+          fontFamily: AppTextStyles.fontFamily,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+    body: SafeArea(top: false, child: child),
+  );
 
   Widget _body(ItemDetailState state) {
     final item = state.item;
@@ -895,6 +993,10 @@ class _DetailContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 40),
+              if (item.pickupLocation != null) ...[
+                PickupLocationCard(location: item.pickupLocation!),
+                const SizedBox(height: 24),
+              ],
               const _SectionTitle('รีวิวล่าสุด'),
               const SizedBox(height: 18),
               if (item.reviews.isEmpty)

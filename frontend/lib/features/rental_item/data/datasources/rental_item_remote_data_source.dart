@@ -32,6 +32,9 @@ class RentalItemRemoteDataSource {
           'description': draft.description.trim(),
           'type': draft.rentalType,
           'price': draft.price.toString(),
+          ...?draft.pickupLocation?.toJson().map(
+            (key, value) => MapEntry(key, value.toString()),
+          ),
         },
         files: draft.images
             .map(

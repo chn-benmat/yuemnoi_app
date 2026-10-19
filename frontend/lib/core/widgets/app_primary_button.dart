@@ -6,12 +6,14 @@ class AppPrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
   final bool isLoading;
+  final double borderRadius;
 
   const AppPrimaryButton({
     super.key,
     required this.text,
     required this.onPressed,
     this.isLoading = false,
+    this.borderRadius = 30,
   });
 
   @override
@@ -26,7 +28,7 @@ class AppPrimaryButton extends StatelessWidget {
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(borderRadius),
           ),
           padding: const EdgeInsets.symmetric(vertical: 16),
         ),

@@ -77,6 +77,7 @@ void main() {
         AppRoutes.otpVerification,
         AppRoutes.changePassword,
         AppRoutes.addRentalItem,
+        AppRoutes.itemAutoReply,
       ]),
     );
   });

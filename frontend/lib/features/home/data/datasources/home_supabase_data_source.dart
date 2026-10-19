@@ -498,6 +498,8 @@ class HomeSupabaseDataSource {
         rawItems = await client
             .from('item_tb')
             .select('*')
+            .eq('owner_hidden', false)
+            .eq('moderation_hidden', false)
             .inFilter('status', ['available', 'พร้อมใช้งาน'])
             .order('created_at', ascending: false);
       } catch (e) {

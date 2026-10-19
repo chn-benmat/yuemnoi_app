@@ -18,6 +18,17 @@ class ItemDetailRequested extends ItemDetailEvent {
   List<Object?> get props => [itemId];
 }
 
+class ItemVisibilityChanged extends ItemDetailEvent {
+  const ItemVisibilityChanged({required this.hidden});
+  final bool hidden;
+  @override
+  List<Object?> get props => [hidden];
+}
+
+class ItemDeleteSubmitted extends ItemDetailEvent {
+  const ItemDeleteSubmitted();
+}
+
 class ItemDetailUpdateSubmitted extends ItemDetailEvent {
   const ItemDetailUpdateSubmitted(this.draft);
 

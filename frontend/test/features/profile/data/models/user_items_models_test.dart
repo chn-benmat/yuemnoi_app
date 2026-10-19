@@ -1,9 +1,33 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/profile/data/models/favorite_item_model.dart';
 import 'package:frontend/features/profile/data/models/user_item_model.dart';
+import 'package:frontend/features/profile/domain/entities/user_item.dart';
 
 void main() {
   group('UserItemModel', () {
+    test('preserves listing status and the actual rental unit', () {
+      final item = UserItemModel.fromJson({
+        'status': ' renting ',
+        'owner_hidden': true,
+        'type': 'รายชั่วโมง',
+        'price': 125.5,
+      }).toEntity();
+      expect(item.listingStatus, UserItemStatus.rented);
+      expect(item.ownerHidden, isTrue);
+      expect(item.rentalType, 'รายชั่วโมง');
+      expect(item.price, 125.5);
+      final missing = UserItemModel.fromJson({}).toEntity();
+      expect(missing.listingStatus, UserItemStatus.unknown);
+      expect(missing.rentalType, isEmpty);
+      expect(missing.ownerHidden, isFalse);
+      expect(
+        UserItemModel.fromJson({
+          'status': 'new-status',
+        }).toEntity().listingStatus,
+        UserItemStatus.unknown,
+      );
+    });
+
     test('keeps category subtitles and flexible image representations', () {
       final model = UserItemModel.fromJson({
         'category': 'กล้อง',

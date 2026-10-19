@@ -3,7 +3,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../core/constants/colors.dart';
-import '../../../../core/services/location_service.dart';
+import '../../../../core/models/pickup_location.dart';
+import '../../../../core/widgets/pickup_location_field.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../pages/location_picker_map_page.dart';
 
@@ -33,11 +34,31 @@ class BookingLocationCard extends StatelessWidget {
   final bool showMiniMap;
   final bool showError;
 
-  LatLng get _resolvedLatLng {
-    return LocationService.resolveCoordinates(
-      locationName: location,
-      latitude: latitude,
-      longitude: longitude,
+  LatLng? get _resolvedLatLng {
+    if (latitude == null ||
+        longitude == null ||
+        !latitude!.isFinite ||
+        !longitude!.isFinite ||
+        latitude!.abs() > 90 ||
+        longitude!.abs() > 180)
+      return null;
+    return LatLng(latitude!, longitude!);
+  }
+
+  void _openMapView(BuildContext context) {
+    if (_resolvedLatLng == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PickupLocationMap(
+          location: PickupLocation(
+            name: location,
+            address: locationAddress ?? '',
+            note: locationNote,
+            latitude: latitude!,
+            longitude: longitude!,
+          ),
+        ),
+      ),
     );
   }
 
@@ -49,8 +70,8 @@ class BookingLocationCard extends StatelessWidget {
         builder: (_) => LocationPickerMapPage(
           initialLocationName: location,
           initialNote: locationNote,
-          initialLatitude: latitude ?? _resolvedLatLng.latitude,
-          initialLongitude: longitude ?? _resolvedLatLng.longitude,
+          initialLatitude: latitude ?? _resolvedLatLng?.latitude,
+          initialLongitude: longitude ?? _resolvedLatLng?.longitude,
         ),
       ),
     );
@@ -68,7 +89,8 @@ class BookingLocationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final latLng = _resolvedLatLng;
     final resolvedAddress = locationAddress?.trim();
-    final displaySubtitle = (resolvedAddress != null && resolvedAddress.isNotEmpty)
+    final displaySubtitle =
+        (resolvedAddress != null && resolvedAddress.isNotEmpty)
         ? resolvedAddress
         : locationNote.trim();
 
@@ -106,7 +128,9 @@ class BookingLocationCard extends StatelessWidget {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: isEditable ? () => _openRealMapPicker(context) : null,
+              onTap: isEditable
+                  ? () => _openRealMapPicker(context)
+                  : () => _openMapView(context),
               borderRadius: BorderRadius.circular(22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -169,7 +193,7 @@ class BookingLocationCard extends StatelessWidget {
                   ),
 
                   // 2. Mini Map Preview
-                  if (showMiniMap) ...[
+                  if (showMiniMap && latLng != null) ...[
                     ClipRRect(
                       borderRadius: const BorderRadius.vertical(
                         bottom: Radius.circular(22),
@@ -241,10 +265,7 @@ class BookingLocationCard extends StatelessWidget {
                               child: InkWell(
                                 onTap: isEditable
                                     ? () => _openRealMapPicker(context)
-                                    : () => LocationService.openInExternalMaps(
-                                        latLng.latitude,
-                                        latLng.longitude,
-                                      ),
+                                    : () => _openMapView(context),
                                 child: Container(
                                   alignment: Alignment.bottomRight,
                                   padding: const EdgeInsets.all(8),
@@ -285,7 +306,7 @@ class BookingLocationCard extends StatelessWidget {
                                         Text(
                                           isEditable
                                               ? 'แตะเพื่อเปลี่ยนจุดปักหมุด'
-                                              : 'เปิดดูใน Google Maps',
+                                              : 'เปิดดูแผนที่',
                                           style: const TextStyle(
                                             fontFamily:
                                                 AppTextStyles.fontFamily,

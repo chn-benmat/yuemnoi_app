@@ -65,7 +65,9 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
       latitude: _bookingData.latitude,
       longitude: _bookingData.longitude,
     );
-    unawaited(LocationService.instance.preloadDrivingRoute(destination));
+    if (_bookingData.latitude != null && _bookingData.longitude != null) {
+      unawaited(LocationService.instance.preloadDrivingRoute(destination));
+    }
   }
 
   bool get _isCurrentUserOwner {
@@ -524,6 +526,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     BookingLocationCard(
                       location: _bookingData.location,
                       locationNote: _bookingData.locationNote,
+                      locationAddress: _bookingData.locationAddress,
                       latitude: _bookingData.latitude,
                       longitude: _bookingData.longitude,
                       isEditable: false,

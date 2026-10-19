@@ -10,4 +10,8 @@ abstract interface class ItemDetailRepository {
   Future<ItemDetail> fetchById(int itemId);
 
   Future<ItemDetail> update(ItemEditDraft draft);
+
+  Future<ItemDetail> setVisibility(int itemId, {required bool hidden});
+
+  Future<void> delete(int itemId);
 }

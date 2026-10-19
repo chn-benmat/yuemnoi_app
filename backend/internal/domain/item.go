@@ -13,6 +13,12 @@ var (
 
 // Item ตรงกับตาราง item_tb ในฐานข้อมูล Supabase
 type Item struct {
+	PickupLocation  string   `json:"pickup_location" form:"pickup_location"`
+	PickupAddress   string   `json:"pickup_address" form:"pickup_address"`
+	PickupNote      string   `json:"pickup_note" form:"pickup_note"`
+	PickupLatitude  *float64 `json:"pickup_latitude" form:"pickup_latitude"`
+	PickupLongitude *float64 `json:"pickup_longitude" form:"pickup_longitude"`
+
 	ID             int64     `json:"id"`
 	UserID         string    `json:"user_id"`
 	ItemName       string    `json:"item_name"`
@@ -21,7 +27,8 @@ type Item struct {
 	Category       string    `json:"category"`
 	Price          int       `json:"price"`
 	Status         string    `json:"status"` // เช่น "pending", "verified", "rejected"
-	Type           string    `json:"type"`   // เช่น "รายวัน", "รายชั่วโมง"
+	OwnerHidden    bool      `json:"owner_hidden"`
+	Type           string    `json:"type"` // เช่น "รายวัน", "รายชั่วโมง"
 	OwnerName      string    `json:"owner_name,omitempty"`
 	IsVerified     bool      `json:"is_verified"`
 	OwnerAvatarURL string    `json:"owner_avatar_url,omitempty"`
@@ -48,6 +55,9 @@ type ItemRepository interface {
 	Insert(ctx context.Context, item *Item, images []ItemImage) (*Item, error)
 	FindAll(ctx context.Context) ([]RankedItem, error)
 	FindByID(ctx context.Context, id int64) (*Item, error)
+	HasRentalAccess(ctx context.Context, id int64, userID string) (bool, error)
 	Update(ctx context.Context, id int64, userID string, fields map[string]interface{}) (*Item, error)
 	Delete(ctx context.Context, id int64, userID string) error
+	GetAutoReply(ctx context.Context, id int64, userID string) (*ItemAutoReply, error)
+	SaveAutoReply(ctx context.Context, id int64, userID string, settings ItemAutoReply) (*ItemAutoReply, error)
 }
