@@ -2,10 +2,10 @@ import '../entities/auth_tokens.dart';
 
 // คำอธิบาย: อินเตอร์เฟสกำหนดข้อตกลง (Contract) การทำงานเกี่ยวกับการยืนยันตัวตนในชั้น Domain
 abstract class AuthRepository {
-  Future<AuthTokens> login({
-    required String email,
-    required String password,
-  });
+  /// คืน false เมื่อยกเลิก ส่วน session ที่สำเร็จรับผ่าน auth state listener
+  Future<bool> loginWithGoogle();
+
+  Future<AuthTokens> login({required String email, required String password});
 
   Future<void> register({
     required String displayName,
@@ -22,18 +22,14 @@ abstract class AuthRepository {
     required String otpCode,
   });
 
-  Future<void> sendOtp({
-    required String email,
-  });
+  Future<void> sendOtp({required String email});
 
   Future<void> changePassword({
     required String accessToken,
     required String newPassword,
   });
 
-  Future<String> syncGoogleProfileImage({
-    required String accessToken,
-  });
+  Future<String> syncGoogleProfileImage({required String accessToken});
 
   void close();
 }

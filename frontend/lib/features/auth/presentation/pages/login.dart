@@ -112,7 +112,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
-        if (state is LoginLoading) {
+        if (state is AuthInitial) {
+          setState(() {
+            _isLoading = false;
+            _isGoogleLoading = false;
+          });
+        } else if (state is LoginLoading) {
           setState(() {
             _isLoading = true;
             _isGoogleLoading = false;
