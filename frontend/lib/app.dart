@@ -7,15 +7,17 @@ import 'package:go_router/go_router.dart';
 
 import 'core/navigation/app_routes.dart';
 import 'core/navigation/item_deep_link.dart';
+import 'core/network/supabase_client.dart';
 import 'core/services/app_orientation_service.dart';
 import 'core/services/chat_notification_service.dart';
+import 'core/services/app_notification_service.dart';
+import 'core/services/fcm_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/chat/data/datasources/chat_remote_data_source.dart';
-import 'features/chat/domain/entities/chat_conversation.dart';
-import 'features/chat/presentation/widgets/global_chat_notification_listener.dart';
+import 'features/notification/presentation/widgets/global_app_notification_listener.dart';
 import 'features/wallet/presentation/bloc/wallet_cubit.dart';
 
 class YuemnoiApp extends StatefulWidget {
@@ -44,35 +46,73 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     );
     unawaited(_handleInitialDeepLink());
 
-    ChatNotificationService.instance.onNotificationTapped =
-        (conversationId) async {
-          if (conversationId.isNotEmpty) {
-            try {
-              final fullConv = await ChatRemoteDataSource().getConversationById(
-                conversationId,
-              );
-              if (fullConv != null) {
-                AppRoutes.openChatDetail(null, conversation: fullConv);
-                return;
-              }
-            } catch (_) {}
-
-            final conv = ChatConversation(
-              id: conversationId,
-              otherUserId: '',
-              name: 'ห้องแชท',
-              role: ChatParticipantRole.owner,
-              avatarAsset: 'assets/images/user.png',
-              preview: '',
-              timeLabel: '',
-            );
-            AppRoutes.openChatDetail(null, conversation: conv);
-          }
-        };
+    ChatNotificationService.instance.onNotificationTapped = (conversationId) =>
+        unawaited(_openConversation(conversationId));
+    AppNotificationService.instance.onOpen = _openNotification;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppOrientationService.setupOrientation();
+      // ผูก callback หลัง navigator พร้อม เพื่อไม่ทำการแตะ Push ตอน cold start หาย
+      FcmService.instance.onNotificationOpened = _openPush;
     });
+  }
+
+  Future<void> _openConversation(String conversationId) async {
+    if (!mounted || conversationId.isEmpty) return;
+    try {
+      final conversation = await ChatRemoteDataSource().getConversationById(
+        conversationId,
+      );
+      if (mounted && conversation != null) {
+        unawaited(AppRoutes.openChatDetail(null, conversation: conversation));
+        return;
+      }
+    } catch (_) {}
+    if (mounted) _router.go(AppRoutes.notification);
+  }
+
+  Future<void> _openNotification(AppNotification notification) async {
+    if (!mounted) return;
+    if (notification.conversationId != null) {
+      await _openConversation(notification.conversationId!);
+      return;
+    }
+    _navigateNotification(notification.data, notification.bookingId);
+  }
+
+  Future<void> _openPush(Map<String, dynamic> data) async {
+    if (!mounted) return;
+    final service = AppNotificationService.instance;
+    await service.refresh();
+    if (!mounted) return;
+    final id = data['notification_id']?.toString();
+    for (final item in service.inbox.value.items) {
+      if (item.id == id) {
+        await service.open(item);
+        return;
+      }
+    }
+    final conversationId = data['conversation_id']?.toString();
+    if (conversationId != null && conversationId.isNotEmpty) {
+      await _openConversation(conversationId);
+    } else {
+      _navigateNotification(data, data['booking_id']?.toString());
+    }
+  }
+
+  void _navigateNotification(Map<String, dynamic> data, String? bookingId) {
+    if (!mounted) return;
+    final destination = data['destination']?.toString();
+    if (bookingId != null) {
+      _router.push(
+        '${AppRoutes.rentalStatus}?booking_id=${Uri.encodeComponent(bookingId)}',
+      );
+    } else if (destination == AppRoutes.identity ||
+        destination == AppRoutes.myItems) {
+      _router.push(destination!);
+    } else {
+      _router.go(AppRoutes.notification);
+    }
   }
 
   Future<void> _handleInitialDeepLink() async {
@@ -106,6 +146,10 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       AppOrientationService.setupOrientation();
+      final userId = SupabaseConfig.isInitialized
+          ? SupabaseConfig.client.auth.currentUser?.id
+          : null;
+      if (userId != null) unawaited(FcmService.instance.syncUserToken(userId));
     }
   }
 
@@ -113,6 +157,8 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_deepLinkSubscription?.cancel());
+    FcmService.instance.onNotificationOpened = null;
+    AppNotificationService.instance.onOpen = null;
     _router.dispose();
     super.dispose();
   }
@@ -135,7 +181,7 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
         debugShowCheckedModeBanner: false,
         routerConfig: _router,
         builder: (context, child) {
-          return GlobalChatNotificationListener(
+          return GlobalAppNotificationListener(
             child: child ?? const SizedBox.shrink(),
           );
         },

@@ -20,12 +20,25 @@ type RateLimiter struct {
 
 // NewRateLimiter สร้าง RateLimiter ด้วยอัตราการสร้าง Token และขนาดบัคเก็ตสูงสุด
 func NewRateLimiter(tokensPerSecond float64, capacity float64) *RateLimiter {
+	return NewRateLimiterWithCache(tokensPerSecond, capacity, nil)
+}
+
+// NewRateLimiterCache กำหนดอายุ bucket กลางให้การประกอบทุกเส้นทางใช้นโยบายเดียวกัน
+func NewRateLimiterCache() *ttlcache.Cache[string, *rate.Limiter] {
+	return ttlcache.New[string, *rate.Limiter](
+		ttlcache.WithTTL[string, *rate.Limiter](10 * time.Minute),
+	)
+}
+
+// NewRateLimiterWithCache รับ cache จากผู้เรียกเพื่อควบคุมทรัพยากรและตรวจพฤติกรรมผ่าน Allow
+func NewRateLimiterWithCache(tokensPerSecond float64, capacity float64, cache *ttlcache.Cache[string, *rate.Limiter]) *RateLimiter {
+	if cache == nil {
+		cache = NewRateLimiterCache()
+	}
 	return &RateLimiter{
 		rate:     rate.Limit(tokensPerSecond),
 		capacity: int(capacity),
-		entries: ttlcache.New[string, *rate.Limiter](
-			ttlcache.WithTTL[string, *rate.Limiter](10 * time.Minute),
-		),
+		entries:  cache,
 	}
 }
 

@@ -1,229 +1,261 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
-import '../network/api_client.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../network/auth_session.dart';
+import '../network/notification_device_data_source.dart';
 import '../network/supabase_client.dart';
+import 'app_notification_service.dart';
 import 'chat_notification_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (kIsWeb) return;
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp();
-  } catch (_) {}
-  try {
-    if (!dotenv.isInitialized) {
-      await dotenv.load(fileName: '.env.local');
-    }
-    if (!SupabaseConfig.isInitialized) {
-      await SupabaseConfig.initialize();
-    }
-  } catch (_) {}
-
-  debugPrint(
-    'FCM Background Message Received: ${message.messageId} / Data: ${message.data}',
-  );
-
-  final data = message.data;
-  final type = data['type']?.toString() ?? '';
-
-  if (type == 'chat_message' || type == 'chat') {
-    final title =
-        data['sender_name']?.toString() ??
-        message.notification?.title ??
-        data['title']?.toString() ??
-        'ข้อความใหม่';
-    final rawBody =
-        data['message']?.toString() ??
-        message.notification?.body ??
-        data['body']?.toString() ??
-        'ส่งข้อความถึงคุณ';
-    final body = _extractCleanNotificationText(rawBody);
-    final conversationId = data['conversation_id']?.toString() ?? '';
-    final messageId = data['message_id']?.toString() ?? message.messageId ?? '';
-
-    await ChatNotificationService.instance.showSystemNotification(
-      id: conversationId.isNotEmpty
-          ? conversationId.hashCode
-          : message.hashCode,
-      title: title,
-      body: body,
-      payload: conversationId,
-      messageId: messageId,
-    );
-  }
-}
-
-/// สกัดเอาเฉพาะข้อความตอบกลับตัวจริง โดยตัดคำนำหน้า '↩ ตอบกลับ:...' ออก
-String _extractCleanNotificationText(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty) return 'ส่งข้อความถึงคุณ';
-  if (trimmed.startsWith('↩ ตอบกลับ:') ||
-      trimmed.startsWith('💬 ตอบกลับ') ||
-      trimmed.startsWith('↪ ตอบกลับ')) {
-    final newlineIdx = trimmed.indexOf('\n');
-    if (newlineIdx != -1) {
-      final actual = trimmed.substring(newlineIdx + 1).trim();
-      return actual.isNotEmpty ? actual : 'ส่งข้อความถึงคุณ';
-    }
-    final pipeParts = trimmed.split('|');
-    if (pipeParts.length >= 2) {
-      final actual = pipeParts[1].trim();
-      return actual.isNotEmpty ? actual : 'ส่งข้อความถึงคุณ';
-    }
-  }
-  return trimmed;
+  await Firebase.initializeApp();
+  // Backend ส่ง notification payload ให้ OS แสดงแล้ว จึงไม่สร้าง local ซ้ำจาก isolate
 }
 
 class FcmService {
   FcmService._();
   static final FcmService instance = FcmService._();
-
   bool _isInitialized = false;
+  Future<void>? _initializing;
+  FirebaseMessaging? _messaging;
   String? _cachedToken;
+  String? _userId;
+  String? _registeredUser;
+  String? _registeredToken;
+  Future<String>? _installation;
+  Timer? _retry;
+  int _retryCount = 0;
+  int _generation = 0;
+  Future<void> _registrationQueue = Future.value();
+  Future<void>? _unregistering;
+  Map<String, dynamic>? _pendingTap;
+  Future<void> Function(Map<String, dynamic>)? _onNotificationOpened;
 
-  /// ขอสิทธิ์การแจ้งเตือนจาก Firebase Cloud Messaging
+  set onNotificationOpened(
+    Future<void> Function(Map<String, dynamic>)? callback,
+  ) {
+    _onNotificationOpened = callback;
+    if (callback != null) unawaited(flushPendingTap());
+  }
+
   Future<NotificationSettings?> requestNotificationPermission() async {
     if (kIsWeb) return null;
     try {
-      final messaging = FirebaseMessaging.instance;
-      return await messaging.requestPermission(
+      await initialize();
+      final settings = await _messaging?.requestPermission(
         alert: true,
-        announcement: false,
         badge: true,
-        carPlay: false,
-        criticalAlert: true,
-        provisional: false,
         sound: true,
       );
-    } catch (e) {
-      debugPrint('FCM requestPermission error: $e');
+      final userId = _userId;
+      if (userId != null) unawaited(syncUserToken(userId));
+      return settings;
+    } catch (_) {
+      debugPrint('FCM: notification permission unavailable');
       return null;
     }
   }
 
-  Future<void> initialize() async {
-    if (kIsWeb) return;
-    if (_isInitialized) return;
+  Future<void> initialize() {
+    if (kIsWeb || _isInitialized) return Future.value();
+    return _initializing ??= _initialize().whenComplete(
+      () => _initializing = null,
+    );
+  }
 
+  Future<void> _initialize() async {
     try {
       await Firebase.initializeApp();
-
-      final messaging = FirebaseMessaging.instance;
-
+      final messaging = _messaging = FirebaseMessaging.instance;
       await messaging.setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
+        alert: false,
+        badge: false,
+        sound: false,
       );
-
-      // จัดการ Message เมื่อเปิดแอปค้างไว้ (Foreground)
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        _handleForegroundMessage(message);
+      FirebaseMessaging.onMessage.listen((message) {
+        if (_belongsToCurrentUser(message.data))
+          unawaited(AppNotificationService.instance.handlePush(message.data));
       });
-
-      // จัดการเมื่อแตะการแจ้งเตือนเพื่อเปิดแอป
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        _handleMessageOpenedApp(message);
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        _pendingTap = Map<String, dynamic>.from(message.data);
+        unawaited(flushPendingTap());
       });
-
-      // ฟังการเปลี่ยนแปลง Token
-      messaging.onTokenRefresh.listen((newToken) {
-        _cachedToken = newToken;
-        _saveTokenToSupabase(newToken);
+      messaging.onTokenRefresh.listen((token) {
+        _cachedToken = token;
+        final userId = _userId;
+        if (userId != null) unawaited(syncUserToken(userId));
       });
-
-      // ดึง Token ปัจจุบัน
-      _cachedToken = await messaging.getToken();
-      if (_cachedToken != null) {
-        _saveTokenToSupabase(_cachedToken!);
-      }
-
-      // ตรวจสอบการเปิดแอปจากการกดแจ้งเตือนขณะแอปถูกปิด (Terminated)
-      final initialMessage = await messaging.getInitialMessage();
-      if (initialMessage != null) {
-        _handleMessageOpenedApp(initialMessage);
-      }
-
+      final initial = await messaging.getInitialMessage();
+      if (initial != null)
+        _pendingTap = Map<String, dynamic>.from(initial.data);
       _isInitialized = true;
-      debugPrint('FCM Initialized successfully.');
-    } catch (e) {
-      debugPrint('FCM Initialization error: $e');
+      unawaited(flushPendingTap());
+    } catch (_) {
+      // ไม่พิมพ์ token หรือข้อความลง log และให้การ sync ครั้งถัดไปเริ่มใหม่ได้
+      debugPrint(
+        'FCM: initialization unavailable; retry on authenticated sync',
+      );
     }
+  }
+
+  bool _belongsToCurrentUser(Map<String, dynamic> data) {
+    if (!AuthSession.isAuthenticated || !SupabaseConfig.isInitialized)
+      return false;
+    final recipient = data['recipient_id']?.toString();
+    return recipient == null ||
+        recipient == SupabaseConfig.client.auth.currentUser?.id;
   }
 
   Future<void> syncUserToken(String userId) async {
-    if (kIsWeb || userId.isEmpty) return;
-    try {
-      final token = _cachedToken ?? await FirebaseMessaging.instance.getToken();
-      if (token != null && token.isNotEmpty) {
+    if (_unregistering != null) await _unregistering;
+    if (kIsWeb || userId.isEmpty || !AuthSession.isAuthenticated) return;
+    if (!SupabaseConfig.isInitialized ||
+        SupabaseConfig.client.auth.currentUser?.id != userId)
+      return;
+    if (_userId != userId) {
+      _generation++;
+      _userId = userId;
+      _registeredUser = null;
+      _registeredToken = null;
+      _retryCount = 0;
+    }
+    final generation = _generation;
+    // เรียงคำขอป้องกัน token เก่าที่ตอบช้าทับ token ใหม่หรือบัญชีที่สลับแล้ว
+    _registrationQueue = _registrationQueue.then((_) async {
+      if (generation != _generation || _userId != userId) return;
+      try {
+        await initialize();
+        final fetched = _cachedToken ?? await _messaging?.getToken();
+        // Token refresh อาจมาถึงระหว่างรอ getToken จึงให้ค่าที่ refresh แล้วมีลำดับก่อน
+        final token = _cachedToken ?? fetched;
+        if (token == null || token.isEmpty) throw StateError('token_not_ready');
         _cachedToken = token;
-        await _saveTokenToSupabaseWithUserId(token, userId);
+        final accessToken = AuthSession.accessToken;
+        if (generation != _generation || accessToken == null) return;
+        if (_registeredUser != userId || _registeredToken != token) {
+          final source = NotificationDeviceDataSource();
+          try {
+            await source.register(
+              accessToken: accessToken,
+              installationId: await _installationId(),
+              token: token,
+              platform: defaultTargetPlatform == TargetPlatform.iOS
+                  ? 'ios'
+                  : 'android',
+            );
+          } finally {
+            source.close();
+          }
+          if (generation != _generation) return;
+          _registeredUser = userId;
+          _registeredToken = token;
+        }
+        _retry?.cancel();
+        _retryCount = 0;
+        await flushPendingTap();
+      } catch (error) {
+        if (generation == _generation) {
+          debugPrint(
+            'FCM: device registration incomplete '
+            '(${_failureCode(error)}); retry scheduled',
+          );
+          _retry?.cancel();
+          final seconds = min(60, 3 * (1 << min(_retryCount++, 5)));
+          _retry = Timer(Duration(seconds: seconds), () {
+            if (_userId == userId) unawaited(syncUserToken(userId));
+          });
+        }
       }
-    } catch (e) {
-      debugPrint('Sync FCM token error: $e');
-    }
+    });
+    await _registrationQueue;
   }
 
-  Future<void> _saveTokenToSupabase(String token) async {
-    if (kIsWeb) return;
-    try {
-      if (!SupabaseConfig.isInitialized) return;
-      final currentUserId = SupabaseConfig.client.auth.currentUser?.id;
-      if (currentUserId != null && currentUserId.isNotEmpty) {
-        await _saveTokenToSupabaseWithUserId(token, currentUserId);
+  String _failureCode(Object error) {
+    // เก็บเฉพาะชนิดปัญหา ห้ามพิมพ์ exception เต็มซึ่งอาจมี token หรือข้อมูลผู้ใช้
+    if (error is NotificationDeviceException) {
+      return 'device_api_http_${error.statusCode}';
+    }
+    if (error is FirebaseException) {
+      final message = error.message ?? '';
+      if (message.contains('API_KEY_INVALID') ||
+          message.contains('BAD CONFIG')) {
+        return 'firebase_invalid_config';
       }
+      if (message.contains('FIS_AUTH_ERROR')) {
+        return 'firebase_installations_auth';
+      }
+      return 'firebase_unavailable';
+    }
+    return 'token_or_network_unavailable';
+  }
+
+  Future<String> _installationId() => _installation ??= () async {
+    final prefs = await SharedPreferences.getInstance();
+    final existing = prefs.getString('notification_installation_id');
+    if (existing != null && existing.length >= 16) return existing;
+    final random = Random.secure();
+    final id = List.generate(
+      24,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    await prefs.setString('notification_installation_id', id);
+    return id;
+  }();
+
+  Future<void> unregisterCurrentDevice() => _unregistering ??=
+      _unregisterCurrentDevice().whenComplete(() => _unregistering = null);
+
+  Future<void> _unregisterCurrentDevice() async {
+    final hadRegistration =
+        _userId != null || _registeredUser != null || _cachedToken != null;
+    _generation++;
+    _retry?.cancel();
+    _userId = null;
+    _pendingTap = null;
+    _registeredUser = null;
+    _registeredToken = null;
+    AppNotificationService.instance.setSession(null);
+    final accessToken = AuthSession.accessToken;
+    if (!kIsWeb && accessToken != null && hadRegistration) {
+      final source = NotificationDeviceDataSource();
+      try {
+        // รอ register เดิมจบก่อนถอนเครื่อง ป้องกันการผูกกลับหลัง logout
+        await _registrationQueue;
+        await source.unregister(
+          accessToken: accessToken,
+          installationId: await _installationId(),
+        );
+      } catch (_) {
+        debugPrint('FCM: unregister unavailable; invalidating device token');
+      } finally {
+        source.close();
+      }
+    }
+    try {
+      if (!kIsWeb && hadRegistration) await _messaging?.deleteToken();
     } catch (_) {}
+    _cachedToken = null;
+    await ChatNotificationService.instance.cancelAllNotifications();
+    AppNotificationService.instance.setSession(null);
   }
 
-  Future<void> _saveTokenToSupabaseWithUserId(
-    String token,
-    String userId,
-  ) async {
-    try {
-      if (!SupabaseConfig.isInitialized) return;
-
-      final session = SupabaseConfig.client.auth.currentSession;
-      final accessToken = session?.accessToken;
-      if (accessToken != null) {
-        final apiClient = DioApiClient();
-        await apiClient.post(
-          '/api/user/fcm-token',
-          headers: {'Authorization': 'Bearer $accessToken'},
-          data: {'fcm_token': token},
-        );
-        return;
-      }
-
-      await SupabaseConfig.client
-          .from('profile_tb')
-          .update({'fcm_token': token})
-          .eq('user_id', userId);
-    } catch (e) {
-      debugPrint('Save FCM token error: $e');
+  Future<void> flushPendingTap() async {
+    final data = _pendingTap;
+    final callback = _onNotificationOpened;
+    if (data == null || callback == null || !AuthSession.isAuthenticated)
+      return;
+    if (!_belongsToCurrentUser(data)) {
+      _pendingTap = null;
+      return;
     }
-  }
-
-  void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('FCM Foreground Message: ${message.data}');
-  }
-
-  void _handleMessageOpenedApp(RemoteMessage message) {
-    final data = message.data;
-    final type = data['type']?.toString() ?? '';
-
-    if (type == 'chat' || type == 'chat_message') {
-      final conversationId = data['conversation_id']?.toString() ?? '';
-      if (conversationId.isNotEmpty) {
-        ChatNotificationService.instance.onNotificationTapped?.call(
-          conversationId,
-        );
-      }
-    }
+    _pendingTap = null;
+    await callback(data);
   }
 }

@@ -49,7 +49,11 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   DateTime? _endDateTime;
   Timer? _countdownTimer;
 
-  bool get _isRentalActive => _rentalStatus == 'active';
+  bool get _isRentalActive => const {
+    'active',
+    'awaiting_return',
+    'return_ready',
+  }.contains(_rentalStatus);
 
   /// คำนวณกำหนดคืนจากเวลาเริ่มส่งมอบจริงและระยะเวลาเช่าที่ตกลงไว้
   DateTime get _effectiveEndDateTime {
@@ -100,6 +104,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
       _isConfirmed = const {
         'confirmed',
         'active',
+        'awaiting_return',
+        'return_ready',
+        'cancelled',
         'completed',
       }.contains(status);
     }
@@ -200,7 +207,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             cachedStatus != null &&
             cachedStatus.isNotEmpty) {
           _rentalStatus = cachedStatus;
-          if (_rentalStatus == 'active') {
+          if (_isRentalActive) {
             _startCountdownTimer();
           }
         }
@@ -259,9 +266,13 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             resolvedStatus = 'completed';
           } else if (widget.isHandoverCompleted ||
               rawDbStatus == 'active' ||
+              rawDbStatus == 'awaiting_return' ||
+              rawDbStatus == 'return_ready' ||
               rawDbStatus == 'กำลังเช่า' ||
               rawDbStatus == 'กำลังใช้งาน') {
             resolvedStatus = 'active';
+          } else if (rawDbStatus == 'cancelled') {
+            resolvedStatus = 'cancelled';
           } else if (rawDbStatus == 'confirmed') {
             resolvedStatus = widget.isHandoverCompleted
                 ? 'active'
@@ -274,6 +285,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             _isConfirmed = const {
               'confirmed',
               'active',
+              'awaiting_return',
+              'return_ready',
+              'cancelled',
               'completed',
             }.contains(resolvedStatus);
             _rentalStatus = resolvedStatus;
@@ -281,7 +295,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             if (parsedEndAt != null) {
               _endDateTime = parsedEndAt;
             }
-            if (_rentalStatus == 'active') {
+            if (_isRentalActive) {
               _startCountdownTimer();
             } else {
               _countdownTimer?.cancel();
@@ -656,12 +670,12 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             ],
 
             // 4. แถบนับเวลาถอยหลังและสถานะเมื่อกำลังเช่าอยู่
-            if (_rentalStatus == 'active') _buildActiveCountdownCard(),
+            if (_isRentalActive) _buildActiveCountdownCard(),
 
             const SizedBox(height: 12),
 
             // 5. ปุ่ม Action
-            if (_rentalStatus == 'active') ...[
+            if (_isRentalActive) ...[
               // ปุ่มส่งคืนอุปกรณ์ (หรือตรวจรับคืน)
               SizedBox(
                 width: double.infinity,
@@ -774,6 +788,11 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                   ),
                 ),
+              ),
+            ] else if (_rentalStatus == 'cancelled') ...[
+              OutlinedButton(
+                onPressed: () => AppRoutes.openRentalStatus(context),
+                child: const Text('ยกเลิกการเช่าแล้ว • ดูสถานะการเช่า'),
               ),
             ] else if (_rentalStatus == 'completed') ...[
               SizedBox(
@@ -1024,7 +1043,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   }
 
   String _getCardTitle(bool isMine, String senderText) {
-    if (_rentalStatus == 'active') {
+    if (_isRentalActive) {
       final isOwnerUser = _checkIsOwner();
       return isOwnerUser
           ? 'กำลังปล่อยเช่า • อุปกรณ์อยู่ในระหว่างการเช่า'
@@ -1040,7 +1059,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   }
 
   String _getCardSubtitle() {
-    if (_rentalStatus == 'active') {
+    if (_isRentalActive) {
       return _isExpired
           ? 'ถึงกำหนดส่งคืนอุปกรณ์แล้ว กรุณาส่งคืนตามจุดนัดพบ'
           : 'เริ่มต้นช่วงเวลาเช่าแล้ว สามารถส่งคืนได้เมื่อครบกำหนด';

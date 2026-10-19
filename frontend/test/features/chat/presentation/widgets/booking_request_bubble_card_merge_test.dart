@@ -85,17 +85,25 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('initial active status exposes the return action', (
-    tester,
-  ) async {
-    await pumpCard(tester, initialStatus: 'active');
+  for (final status in ['active', 'awaiting_return', 'return_ready']) {
+    testWidgets('$status exposes the canonical return action', (tester) async {
+      await pumpCard(tester, initialStatus: status);
+      expect(
+        find.byKey(const ValueKey('chat-booking-return-button')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 
+  testWidgets('cancelled booking cannot be accepted again', (tester) async {
+    await pumpCard(tester, initialStatus: 'cancelled');
+    expect(find.text('ยกเลิกการเช่าแล้ว • ดูสถานะการเช่า'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('chat-booking-return-button')),
-      findsOneWidget,
+      find.byKey(const ValueKey('chat-booking-action-button')),
+      findsNothing,
     );
-    expect(tester.takeException(), isNull);
-
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

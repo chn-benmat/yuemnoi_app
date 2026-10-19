@@ -3,13 +3,16 @@ package fcm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"cloud.google.com/go/auth/credentials"
 	"cloud.google.com/go/auth/httptransport"
@@ -33,21 +36,167 @@ const receiverTokenTTL = 5 * time.Minute
 // FCMSender ส่งแจ้งเตือนผ่าน Firebase Admin SDK และแคช device token ชั่วคราว
 type FCMSender struct {
 	tokenManager  TokenManager
-	client        *messaging.Client
+	client        MessageClient
 	fcmTokenCache *ttlcache.Cache[string, string]
 }
 
-func newReceiverTokenCache() *ttlcache.Cache[string, string] {
+// MessageClient เป็นขอบเขตสำหรับส่งข้อความผ่าน Firebase SDK หรือ client ที่ฉีดเข้ามา
+type MessageClient interface {
+	Send(context.Context, *messaging.Message) (string, error)
+}
+
+// เส้นทางใหม่ส่งไปยัง token ของงานที่ถูก claim โดยไม่อ่านหรือแก้ token ของบัญชีอื่น
+func (s *FCMSender) SendNotification(ctx context.Context, delivery domain.NotificationDelivery) error {
+	if s == nil || s.client == nil {
+		return errors.New("Firebase messaging is not configured")
+	}
+	if strings.TrimSpace(delivery.Token) == "" {
+		return domain.ErrPushTokenUnregistered
+	}
+	if !delivery.ExpiresAt.IsZero() && !delivery.ExpiresAt.After(time.Now()) {
+		return domain.ErrPushExpired
+	}
+	ctx, cancel := context.WithTimeout(ctx, pushTimeout)
+	defer cancel()
+	_, err := s.client.Send(ctx, buildNotificationMessage(delivery))
+	if messaging.IsUnregistered(err) {
+		return domain.ErrPushTokenUnregistered
+	}
+	if messaging.IsInvalidArgument(err) {
+		return domain.ErrPushPermanent
+	}
+	return err
+}
+
+func buildNotificationMessage(delivery domain.NotificationDelivery) *messaging.Message {
+	n := delivery.Payload
+	if n.ID == "" {
+		n.ID = delivery.NotificationID
+	}
+	title, body := notificationText(n.Title, 180), notificationText(n.Body, 700)
+	if title == "" {
+		title = "Yuemnoi"
+	}
+	if body == "" {
+		body = "คุณมีการแจ้งเตือนใหม่"
+	}
+	channelID := "yuemnoi_app_updates_v1"
+	tag := n.ID
+	if n.Category == "chat" {
+		channelID = "yuemnoi_chat_messages_v3"
+		if n.ConversationID != "" {
+			tag = "chat_" + n.ConversationID
+		}
+	} else if n.Category == "rental" {
+		channelID = "yuemnoi_rental_updates_v1"
+	}
+	data := map[string]string{
+		"notification_id": n.ID, "recipient_id": delivery.UserID, "category": n.Category, "type": n.Type,
+		"title": title, "body": body, "event_key": n.EventKey,
+		"conversation_id": n.ConversationID, "unread_count": strconv.Itoa(n.UnreadCount),
+	}
+	if n.BookingID != nil {
+		data["booking_id"] = strconv.FormatInt(*n.BookingID, 10)
+	}
+	if n.ItemID != nil {
+		data["item_id"] = strconv.FormatInt(*n.ItemID, 10)
+	}
+	if !n.UpdatedAt.IsZero() {
+		data["updated_at"] = n.UpdatedAt.UTC().Format(time.RFC3339Nano)
+	}
+	for _, key := range []string{"message_id", "sender_name", "sender_avatar"} {
+		if value, ok := n.Data[key].(string); ok {
+			data[key] = notificationText(value, 300)
+		}
+	}
+	if data["event_key"] == "" {
+		data["event_key"] = n.ID
+	}
+	for _, key := range []string{"event_key", "event_at", "destination", "message_id"} {
+		if value := notificationScalar(n.Data[key]); value != "" {
+			data[key] = notificationText(value, 200)
+		}
+	}
+	if data["event_at"] == "" {
+		data["event_at"] = data["updated_at"]
+	}
+	expiresAt := delivery.ExpiresAt
+	if expiresAt.IsZero() {
+		expiresAt = time.Now().UTC().Add(24 * time.Hour)
+	}
+	ttl := time.Until(expiresAt)
+	if ttl < 0 {
+		ttl = 0
+	}
+	if ttl > 28*24*time.Hour {
+		ttl = 28 * 24 * time.Hour
+	}
+	data["expires_at"] = expiresAt.UTC().Format(time.RFC3339Nano)
+	return &messaging.Message{
+		Token:        delivery.Token,
+		Notification: &messaging.Notification{Title: title, Body: body},
+		Data:         data,
+		Android: &messaging.AndroidConfig{
+			Priority:     "high",
+			TTL:          &ttl,
+			Notification: &messaging.AndroidNotification{ChannelID: channelID, Sound: "message_tone", Tag: tag},
+		},
+		APNS: &messaging.APNSConfig{
+			Headers: map[string]string{"apns-priority": "10", "apns-collapse-id": tag, "apns-expiration": strconv.FormatInt(expiresAt.Unix(), 10)},
+			Payload: &messaging.APNSPayload{Aps: &messaging.Aps{Sound: "message_tone.wav", ThreadID: tag}},
+		},
+	}
+}
+
+func notificationScalar(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case json.Number:
+		return v.String()
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case int:
+		return strconv.Itoa(v)
+	default:
+		return ""
+	}
+}
+
+func notificationText(value string, maxBytes int) string {
+	value = strings.TrimSpace(value)
+	if len(value) <= maxBytes {
+		return value
+	}
+	end := maxBytes - len("…")
+	for end > 0 && !utf8.RuneStart(value[end]) {
+		end--
+	}
+	return value[:end] + "…"
+}
+
+// NewReceiverTokenCache ใช้นโยบายอายุคงที่ร่วมกันทั้งการประกอบจริงและ client ที่ฉีดเข้ามา
+func NewReceiverTokenCache() *ttlcache.Cache[string, string] {
 	return ttlcache.New[string, string](
 		ttlcache.WithTTL[string, string](receiverTokenTTL),
 		ttlcache.WithDisableTouchOnHit[string, string](),
 	)
 }
 
+// NewFCMSenderWithClient รับ client และ cache ที่ผู้เรียกจัดการ เพื่อแทนบริการภายนอกได้
+func NewFCMSenderWithClient(tokenManager TokenManager, client MessageClient, cache *ttlcache.Cache[string, string]) *FCMSender {
+	if cache == nil {
+		cache = NewReceiverTokenCache()
+	}
+	return &FCMSender{tokenManager: tokenManager, client: client, fcmTokenCache: cache}
+}
+
 // NewFCMSender ใช้ไลบรารีของ Google จัดการ credentials การเซ็น JWT และ OAuth
 // คืน sender ที่ยังเรียกใช้งานได้พร้อม error เมื่อไม่มี credentials เพื่อให้ server เริ่มได้
 func NewFCMSender(tokenManager TokenManager, saPath, saJSON string, httpClient *http.Client) (*FCMSender, error) {
-	sender := &FCMSender{tokenManager: tokenManager, fcmTokenCache: newReceiverTokenCache()}
+	sender := NewFCMSenderWithClient(tokenManager, nil, nil)
 	data, err := loadServiceAccount(saPath, saJSON)
 	if err != nil {
 		return sender, err

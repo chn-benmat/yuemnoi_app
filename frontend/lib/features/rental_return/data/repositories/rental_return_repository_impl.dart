@@ -41,12 +41,11 @@ class RentalReturnRepositoryImpl implements RentalReturnRepository {
   }
 
   @override
-  Future<String> confirmMerchantReceipt({
+  Future<Map<String, String>> confirmMerchantReceipt({
     required int rentalId,
     required String merchantId,
   }) async {
-    final result = await _remoteDataSource.generateMerchantToken(rentalId);
-    return result['token'] ?? '';
+    return _remoteDataSource.generateMerchantToken(rentalId);
   }
 
   @override
@@ -54,15 +53,7 @@ class RentalReturnRepositoryImpl implements RentalReturnRepository {
     required int rentalId,
     required String tokenOrOtp,
   }) async {
-    // ตรวจสอบว่า token หรือ otp มีรูปแบบถูกต้อง
-    final isValid =
-        tokenOrOtp.contains('YUEMNOI_RETURN_$rentalId') ||
-        (tokenOrOtp.length == 6 && int.tryParse(tokenOrOtp) != null);
-
-    if (isValid) {
-      await _remoteDataSource.markCompleted(rentalId);
-      return true;
-    }
-    return false;
+    await _remoteDataSource.markCompleted(rentalId, tokenOrOtp: tokenOrOtp);
+    return true;
   }
 }

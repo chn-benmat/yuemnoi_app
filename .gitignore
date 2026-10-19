@@ -52,8 +52,7 @@ id_ed25519
 /.qa/
 
 # สถานะของเครื่องมือในเครื่อง; เก็บ migrations และ configuration ไว้ใน Git
-/supabase/.temp/
-/supabase/.branches/
+supabase/*
 
 # ไฟล์ของระบบปฏิบัติการและ IDE
 .DS_Store
@@ -66,3 +65,6 @@ ehthumbs.db
 Desktop.ini
 .idea/
 *.iml
+
+
+docs/*

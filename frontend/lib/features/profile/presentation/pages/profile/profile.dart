@@ -9,6 +9,7 @@ import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../../auth/presentation/bloc/auth_state.dart';
 import '../../../../../core/network/auth_session.dart';
+import '../../../../../core/services/fcm_service.dart';
 import '../../../../../core/utils/auth_guard.dart';
 import '../../../../auth/presentation/bloc/auth_event.dart';
 import 'user_profile_view_screen.dart';
@@ -172,6 +173,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _performLogout() async {
+    await FcmService.instance.unregisterCurrentDevice();
     try {
       if (SupabaseConfig.isInitialized) {
         await SupabaseConfig.client.auth.signOut();

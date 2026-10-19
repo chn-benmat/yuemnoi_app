@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -76,6 +74,26 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
     emit(state.copyWith(activeRole: role));
   }
 
+  Future<void> refreshSession() async {
+    if (state.status != RentalReturnStatus.loaded || state.isSubmitting) return;
+    try {
+      var session = await _repository.getReturnSession(state.session.rentalId);
+      if (isClosed || state.isSubmitting) return;
+      // เก็บภาพที่ยังไม่ส่งและรหัสที่เจ้าของเพิ่งได้รับไว้ระหว่างตรวจสถานะจากอีกเครื่อง
+      if (session.step == RentalReturnStep.inProgress) return;
+      if (session.step == RentalReturnStep.merchantQrReady &&
+          state.session.merchantQrToken != null) {
+        session = session.copyWith(
+          merchantQrToken: state.session.merchantQrToken,
+          merchantOtp: state.session.merchantOtp,
+        );
+      }
+      emit(state.copyWith(session: session));
+    } catch (_) {
+      // การตรวจสถานะเบื้องหลังลองใหม่ในรอบถัดไป โดยไม่ล้างภาพที่กำลังกรอก
+    }
+  }
+
   /// กระตุ้นการแจ้งเตือนฉุกเฉินกึ่งนาฬิกาปลุก (Urgent Alarm)
   Future<void> triggerUrgentAlarm() async {
     emit(
@@ -140,6 +158,7 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
 
   /// กดส่งผลตรวจสภาพสดไปยังร้านค้า
   Future<void> submitLiveConditionVerification() async {
+    if (!state.isRenter || state.isSubmitting) return;
     if (!state.session.hasAllMandatoryPhotos) {
       emit(state.copyWith(errorMessage: 'กรุณาถ่ายภาพให้ครบทั้ง 3 มุม'));
       return;
@@ -185,14 +204,21 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
 
   /// ฝ่ายร้านค้าตรวจสอบเครื่องแล้ว & กดยืนยัน -> สร้าง Dynamic QR Code
   Future<void> confirmLenderInspection() async {
+    if (state.isRenter || state.isSubmitting) return;
+    if (!state.session.hasAllMandatoryPhotos) {
+      emit(state.copyWith(errorMessage: 'กรุณารอผู้เช่าส่งภาพตรวจสภาพให้ครบ'));
+      return;
+    }
     emit(state.copyWith(isSubmitting: true));
 
     try {
-      final now = DateTime.now();
-      final otp = (100000 + Random().nextInt(900000)).toString();
-      final token =
-          'YUEMNOI_RETURN_${state.session.rentalId}_${otp}_${now.millisecondsSinceEpoch}';
-      final expiry = now.add(const Duration(minutes: 5));
+      final challenge = await _repository.confirmMerchantReceipt(
+        rentalId: state.session.rentalId,
+        merchantId: state.session.lenderId,
+      );
+      final token = challenge['token'];
+      final otp = challenge['otp'];
+      final expiry = DateTime.parse(challenge['expires_at']!).toLocal();
 
       emit(
         state.copyWith(
@@ -219,6 +245,7 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
 
   /// สแกน QR Code หรือกรอก OTP เพื่อจบกระบวนการคืน
   Future<bool> completeReturnWithQr(String tokenOrOtp) async {
+    if (!state.isRenter || state.isSubmitting) return false;
     emit(state.copyWith(isSubmitting: true));
 
     try {
@@ -235,8 +262,7 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
               step: RentalReturnStep.completed,
               completedAt: DateTime.now(),
             ),
-            successMessage:
-                'คืนอุปกรณ์สำเร็จเรียบร้อย! คืนเงินมัดจำเข้าบัญชีของคุณแล้ว',
+            successMessage: 'ยืนยันการคืนอุปกรณ์สำเร็จเรียบร้อยแล้ว',
           ),
         );
         return true;

@@ -8,6 +8,7 @@ import '../../../../core/network/app_session_validator.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/chat_notification_service.dart';
 import '../../../../core/services/fcm_service.dart';
+import '../../../../core/services/app_notification_service.dart';
 import '../../../../core/services/user_presence_service.dart';
 import '../../data/datasources/auth_remote_data_source.dart'; // สำหรับ AuthApiException
 import '../../domain/repositories/auth_repository.dart';
@@ -47,6 +48,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       _authStateSubscription = SupabaseConfig.client.auth.onAuthStateChange
           .listen(
             (authState) {
+              if (authState.event == AuthChangeEvent.signedOut) {
+                AppNotificationService.instance.setSession(null);
+                unawaited(FcmService.instance.unregisterCurrentDevice());
+              }
               if ((authState.event == AuthChangeEvent.signedIn ||
                       authState.event == AuthChangeEvent.tokenRefreshed) &&
                   authState.session != null) {
@@ -228,6 +233,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     UserPresenceService.instance.initialize();
     unawaited(ChatNotificationService.instance.initialize());
     final userId = event.session.user.id;
+    AppNotificationService.instance.setSession(userId);
     if (userId.isNotEmpty) {
       unawaited(FcmService.instance.syncUserToken(userId));
     }
