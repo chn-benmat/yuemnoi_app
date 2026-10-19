@@ -585,20 +585,7 @@ func (r *supabaseUserRepository) UpdateContact(ctx context.Context, userID strin
 }
 
 func (r *supabaseUserRepository) UpdateFCMToken(ctx context.Context, userID string, fcmToken string) error {
-	fields := map[string]interface{}{
-		"fcm_token": strings.TrimSpace(fcmToken),
-	}
-
-	var updated []map[string]interface{}
-	err := r.client.DB.From("profile_tb").
-		Update(fields).
-		Eq("user_id", userID).
-		ExecuteWithContext(ctx, &updated)
-	if err != nil {
-		return fmt.Errorf("update fcm token in profile_tb failed: %w", err)
-	}
-
-	return nil
+	return r.registerLegacyFCMToken(ctx, userID, fcmToken)
 }
 
 // GetFCMToken ดึง fcm_token ของผู้ใช้จาก profile_tb

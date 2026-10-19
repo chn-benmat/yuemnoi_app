@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -51,6 +50,21 @@ class _RentalReturnView extends StatefulWidget {
 class _RentalReturnViewState extends State<_RentalReturnView> {
   bool _didShowAlarm = false;
   bool _didShowSuccess = false;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) context.read<RentalReturnCubit>().refreshSession();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
 
   void _openQrScanner(BuildContext context) {
     RenterQrScannerSheet.show(
@@ -68,8 +82,13 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
       qrData: state.session.merchantQrToken!,
       otp: state.session.merchantOtp,
       expiryTime: state.merchantQrExpiry,
-      onRefresh: () =>
-          context.read<RentalReturnCubit>().confirmLenderInspection(),
+      onRefresh: () async {
+        final cubit = context.read<RentalReturnCubit>();
+        await cubit.confirmLenderInspection();
+        if (context.mounted && cubit.state.errorMessage == null) {
+          _openMerchantQrModal(context, cubit.state);
+        }
+      },
     );
   }
 
@@ -148,6 +167,17 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
             ),
           );
         }
+        if (state.status == RentalReturnStatus.error) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('การคืนอุปกรณ์')),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(state.errorMessage ?? 'โหลดรายการคืนไม่สำเร็จ'),
+              ),
+            ),
+          );
+        }
 
         final session = state.session;
         final isRenter = state.isRenter;
@@ -219,7 +249,12 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                             width: double.infinity,
                             height: 48,
                             child: ElevatedButton.icon(
-                              onPressed: () => _openQrScanner(context),
+                              onPressed:
+                                  state.isSubmitting ||
+                                      session.step !=
+                                          RentalReturnStep.merchantQrReady
+                                  ? null
+                                  : () => _openQrScanner(context),
                               icon: const Icon(
                                 Icons.qr_code_scanner_rounded,
                                 color: Colors.white,
@@ -248,9 +283,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                             height: 48,
                             child: ElevatedButton.icon(
                               onPressed: session.merchantQrToken == null
-                                  ? () => context
-                                        .read<RentalReturnCubit>()
-                                        .confirmLenderInspection()
+                                  ? null
                                   : () => _openMerchantQrModal(context, state),
                               icon: const Icon(
                                 Icons.qr_code_2_rounded,
@@ -259,7 +292,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                               ),
                               label: Text(
                                 session.merchantQrToken == null
-                                    ? 'ตรวจสอบเครื่องแล้ว & แสดง QR'
+                                    ? 'ยืนยันการตรวจสภาพด้านบนก่อน'
                                     : 'เปิดแสดง QR Code ให้ลูกค้าสแกน',
                                 style: const TextStyle(
                                   fontFamily: AppTextStyles.fontFamily,
@@ -285,6 +318,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
   }
 
   Future<void> _leaveReturnFlow(RentalReturnState state) async {
+    _refreshTimer?.cancel();
     if (state.isRenter) {
       await AppRoutes.openReview(
         context,

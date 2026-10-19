@@ -19,6 +19,7 @@ import 'core/services/rental_notification_service.dart';
 import 'core/services/chat_pin_service.dart';
 import 'core/services/favorite_service.dart';
 import 'core/services/fcm_service.dart';
+import 'core/services/app_notification_service.dart';
 import 'core/services/user_presence_service.dart';
 
 Future<void> main() async {
@@ -64,6 +65,7 @@ Future<void> main() async {
     unawaited(ChatNotificationService.instance.initialize());
     unawaited(RentalNotificationService.instance.initialize());
     final userId = SupabaseConfig.client.auth.currentUser?.id;
+    AppNotificationService.instance.setSession(userId);
     if (userId != null && userId.isNotEmpty && !kIsWeb) {
       unawaited(FcmService.instance.syncUserToken(userId));
     }

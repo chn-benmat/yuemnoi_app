@@ -20,7 +20,7 @@ abstract class RentalReturnRepository {
   });
 
   /// ฝ่ายร้านค้ายืนยันว่าตรวจรับเครื่องเรียบร้อย และสร้าง Dynamic QR
-  Future<String> confirmMerchantReceipt({
+  Future<Map<String, String>> confirmMerchantReceipt({
     required int rentalId,
     required String merchantId,
   });

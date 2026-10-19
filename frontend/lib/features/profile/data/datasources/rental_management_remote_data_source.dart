@@ -174,16 +174,22 @@ class RentalManagementRemoteDataSource {
     final String endpoint;
     if (status == 'active') {
       endpoint = '/api/rentals/$bookingId/handover';
-    } else if (status == 'completed') {
-      endpoint = '/api/rentals/$bookingId/return';
     } else {
-      endpoint = '/api/rentals/$bookingId/status';
+      throw StateError('กรุณาดำเนินการผ่านขั้นตอนตรวจสภาพและยืนยันการคืน');
     }
 
-    await _backendClient.post(
+    final response = await _backendClient.post(
       endpoint,
       headers: {'Authorization': 'Bearer $token'},
     );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final data = response.data;
+      throw StateError(
+        data is Map
+            ? data['error']?.toString() ?? 'อัปเดตสถานะไม่สำเร็จ'
+            : 'อัปเดตสถานะไม่สำเร็จ',
+      );
+    }
   }
 
   Future<RentalIncomeSummary> getRentalIncome(String userId) async {

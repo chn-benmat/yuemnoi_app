@@ -72,6 +72,8 @@ class RentalStatusItemData {
   bool get isActive {
     final code = statusCode.toLowerCase().trim();
     return code == 'active' ||
+        code == 'awaiting_return' ||
+        code == 'return_ready' ||
         code == 'in_use' ||
         code == 'ongoing' ||
         status.contains('กำลังเช่า') ||
@@ -715,6 +717,10 @@ class RentalStatusCard extends StatelessWidget {
   }
 
   void _showDetailModal(BuildContext context) {
+    showDetails(context, item);
+  }
+
+  static void showDetails(BuildContext context, RentalStatusItemData item) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -730,7 +736,7 @@ class RentalStatusCard extends StatelessWidget {
     if (!item.isActive) return false;
     final now = DateTime.now();
     final effectiveEnd = _computeEffectiveRentalEnd(item);
-    return effectiveEnd != null && now.isAfter(effectiveEnd);
+    return now.isAfter(effectiveEnd);
   }
 
   Widget _buildStatusBadge(RentalStatusItemData item) {
@@ -771,6 +777,14 @@ class RentalStatusCard extends StatelessWidget {
           border = const Color(0xFFA7F3D0);
           badgeIcon = Icons.play_circle_outline_rounded;
           badgeText = 'กำลังใช้งาน';
+          break;
+        case 'awaiting_return':
+        case 'return_ready':
+          bg = const Color(0xFFFFFBEB);
+          fg = const Color(0xFFD97706);
+          border = const Color(0xFFFDE68A);
+          badgeIcon = Icons.assignment_return_outlined;
+          badgeText = item.status;
           break;
         case 'completed':
         case 'finished':
@@ -827,7 +841,7 @@ class RentalStatusCard extends StatelessWidget {
     final now = DateTime.now();
     final effectiveEnd = _computeEffectiveRentalEnd(item);
 
-    final isExpired = effectiveEnd != null && now.isAfter(effectiveEnd);
+    final isExpired = now.isAfter(effectiveEnd);
     final bgColor = isExpired
         ? const Color(0xFFFEF2F2)
         : const Color(0xFFF5F3FF);
@@ -839,9 +853,7 @@ class RentalStatusCard extends StatelessWidget {
         : AppColors.primaryColor;
 
     String statusText;
-    if (effectiveEnd == null) {
-      statusText = 'กำลังอยู่ในระหว่างการเช่าอุปกรณ์ตามกำหนด';
-    } else if (isExpired) {
+    if (isExpired) {
       final diff = now.difference(effectiveEnd);
       final diffText = _formatDurationDiff(diff);
       statusText = 'เลยกำหนดส่งคืนแล้ว $diffText (กรุณาส่งคืนด่วน)';
@@ -1387,6 +1399,8 @@ class _RentalStatusDetailSheet extends StatelessWidget {
       case 'finished':
         return 3;
       case 'active':
+      case 'awaiting_return':
+      case 'return_ready':
         return 2;
       case 'confirmed':
         return 1;
@@ -1401,10 +1415,7 @@ class _RentalStatusDetailSheet extends StatelessWidget {
     final currentStep = _currentStepIndex();
     final isCancelled = currentStep == -1;
     final effectiveEnd = _computeEffectiveRentalEnd(item);
-    final isOverdue =
-        item.isActive &&
-        effectiveEnd != null &&
-        DateTime.now().isAfter(effectiveEnd);
+    final isOverdue = item.isActive && DateTime.now().isAfter(effectiveEnd);
 
     return SafeArea(
       child: Padding(
@@ -1601,7 +1612,7 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              if (item.isActive && effectiveEnd != null) ...[
+              if (item.isActive) ...[
                 RentalCountdownTimerWidget(
                   endDateTime: effectiveEnd,
                   startDateTime: item.startDate,

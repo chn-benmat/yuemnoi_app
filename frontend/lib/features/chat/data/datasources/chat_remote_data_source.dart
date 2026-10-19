@@ -415,6 +415,7 @@ class ChatRemoteDataSource {
           .update({'is_read': true})
           .eq('conversation_id', conversationId)
           .neq('sender_id', currentUserId);
+      // Trigger ซิงก์ประวัติแจ้งเตือนให้ทุกเครื่องจากสถานะอ่านของข้อความจริง
     } catch (_) {}
   }
 
@@ -602,11 +603,7 @@ class ChatRemoteDataSource {
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
     try {
-      final displayLastMsg = imageUrl != null && message.trim().isEmpty
-          ? '[รูปภาพ]'
-          : message.trim();
-
-      final inserted = await client
+      await client
           .from('chat_message_tb')
           .insert({
             'conversation_id': conversationId,
@@ -618,18 +615,9 @@ class ChatRemoteDataSource {
           .select('id')
           .maybeSingle();
 
-      final newMsgId = inserted?['id']?.toString() ?? '';
-
       // ฐานข้อมูลอัปเดตข้อความล่าสุดพร้อม auto reply ใน transaction เดียว
 
-      // ส่ง Push Notification ไปยังผู้รับในระบบ OS (ทำงานแบบ Background Non-blocking)
-      unawaited(
-        sendChatPushNotification(
-          conversationId: conversationId,
-          message: displayLastMsg,
-          messageId: newMsgId,
-        ),
-      );
+      // Trigger สร้างประวัติและคิว Push ใน transaction ที่บันทึกข้อความแล้ว
     } on PostgrestException catch (e) {
       throw ChatRemoteException('ส่งข้อความไม่สำเร็จ: ${e.message}');
     } catch (_) {

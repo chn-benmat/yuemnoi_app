@@ -36,6 +36,6 @@ go vet ./...
 go build ./...
 ```
 
-- วาง unit tests ข้าง package ตาม tests ที่มีอยู่; ใช้ `tests/` สำหรับ integration/HTTP contract tests ที่เหมาะสม ใช้ fake services สำหรับการตรวจแบบ offline และ opt-in เมื่อต้องเรียกบริการจริง
-- `tests/` ใน checkout นี้ยังว่าง; ไม่มี `tests/api_contract_test.go` หรือ `tests/API_TEST_REPORT.md` ให้ตรวจ coverage จากไฟล์ที่มีจริง
+- วางไฟล์ทดสอบทั้งหมดใน `tests/` แยกโฟลเดอร์ตาม package ต้นทาง เช่น `tests/adapters/fcm`, `tests/domain`, `tests/ports` ใช้ package ภายนอก (`fcm_test`, `domain_test`, `ports_test`) และทดสอบผ่าน API ของ package; ฉีด client/cache ผ่าน constructor เมื่อจำเป็นต้องควบคุม dependency
+- ใช้ fake services และ `httptest` สำหรับการตรวจแบบ offline และ opt-in เมื่อต้องเรียกบริการจริง วัด coverage ของโค้ดต้นทางด้วย `go test '-coverpkg=github.com/chn-benmat/yuemnoi_app/backend/internal/...' ./tests/...`
 - เมื่อเปลี่ยน AI gateway ให้ตรวจ JSON/SSE และ configuration ร่วมกับ `../ai_service/` รายงานผลตรวจและข้อจำกัดโดยแยก local tests จาก live end-to-end

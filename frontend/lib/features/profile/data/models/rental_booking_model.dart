@@ -181,6 +181,14 @@ class RentalBookingModel {
         return 'ยืนยันแล้ว / นัดรับของ';
       case 'active':
         return 'กำลังเช่า';
+      case 'awaiting_return':
+        return isRenter
+            ? 'ส่งหลักฐานแล้ว / รอเจ้าของตรวจรับ'
+            : 'รอตรวจรับอุปกรณ์คืน';
+      case 'return_ready':
+        return isRenter
+            ? 'รอยืนยันรหัสคืนอุปกรณ์'
+            : 'ตรวจรับแล้ว / รอผู้เช่ายืนยัน';
       case 'completed':
       case 'finished':
         return 'เสร็จสิ้น';

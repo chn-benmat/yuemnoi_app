@@ -45,12 +45,17 @@ func main() {
 	itemRepo := supabase.NewSupabaseItemRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
 	authGateway := supabase.NewSupabaseUserRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
 	contactRepository := supabase.NewSupabaseConversationContactRepository(supabaseClient)
-	rentalRepository := supabase.NewSupabaseRentalRepository(supabaseClient)
+	rentalRepository := supabase.NewSupabaseRentalRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
+	notificationRepository := supabase.NewSupabaseNotificationRepository(supabaseClient)
 
 	// สร้าง FCM Notification Adapter
 	fcmSender, err := fcm.NewFCMSender(authGateway, cfg.FirebaseSAPath, cfg.FirebaseSAJSON, nil)
 	if err != nil {
 		slog.Warn("Failed to initialize FCM sender", slog.Any("error", err))
+	}
+	var deviceSender domain.DevicePushSender
+	if err == nil {
+		deviceSender = fcmSender
 	}
 
 	// สร้าง AI Chatbot Gateway Adapter พร้อม Primary Internal Service Secret Key
@@ -74,6 +79,7 @@ func main() {
 	}
 	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
 	defer stopCleanup()
+	go domain.NewNotificationWorker(notificationRepository, deviceSender).Run(cleanupCtx)
 	if ops.Store != nil {
 		go func() {
 			ticker := time.NewTicker(ops.CleanupInterval)

@@ -35,7 +35,7 @@
 ```
 
 - เมื่อต้องติดตั้ง dependencies ใช้ Python ของ venv กับ `-m pip install -r requirements.txt`
-- วาง Python tests ใน `tests/` และรันเฉพาะชุดที่มีจริงด้วย `.\.venv\Scripts\python.exe -m pytest tests/<test_file>.py -q`
-- checkout นี้ยังไม่มี test files ใน `tests/` และไม่มี `evaluation/`; ตัวอย่าง pytest หลายคำสั่งใน README จึงใช้ไม่ได้ทันที ให้รายงานว่าขาดชุดทดสอบแทนการอ้างว่าผ่าน
+- วาง Python tests ใน `tests/` แยกตามส่วนของ `app/` ตาม `tests/README.md` และรันเฉพาะชุดที่มีจริงด้วย `.\.venv\Scripts\python.exe -m pytest tests/<layer>/<test_file>.py -q`
+- `tests/` เตรียมโครงสร้างไว้แล้วแต่ยังไม่มี test cases และ checkout นี้ไม่มี `evaluation/`; ให้รายงานว่าขาดชุดทดสอบแทนการอ้างว่าผ่าน
 - สำหรับ syntax check ใช้ `.\.venv\Scripts\python.exe -m compileall -q app main.py`; ผลนี้ตรวจ syntax เท่านั้น ไม่ยืนยัน runtime, response quality หรือ latency
 - ใช้ fake adapters สำหรับการตรวจ offline ตรวจ prerequisites ก่อน live calls ที่ใช้ quota และรายงานคำสั่ง ผลตรวจ กับข้อจำกัดตามจริง

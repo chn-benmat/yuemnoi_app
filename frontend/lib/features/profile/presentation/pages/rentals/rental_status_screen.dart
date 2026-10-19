@@ -13,7 +13,9 @@ import '../../../domain/entities/rental_booking.dart';
 import '../../widgets/rentals/rental_status_widgets.dart';
 
 class RentalStatusScreen extends StatefulWidget {
-  const RentalStatusScreen({super.key});
+  const RentalStatusScreen({super.key, this.initialBookingId});
+
+  final int? initialBookingId;
 
   @override
   State<RentalStatusScreen> createState() => _RentalStatusScreenState();
@@ -25,6 +27,7 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
   late final RentalStatusCubit _cubit;
   RealtimeChannel? _realtimeChannel;
   bool _isGuest = false;
+  bool _didOpenInitialBooking = false;
 
   @override
   void initState() {
@@ -94,6 +97,23 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
     });
 
     await _cubit.loadBookings(currentUserId);
+    if (!mounted || _didOpenInitialBooking || widget.initialBookingId == null)
+      return;
+    final state = _cubit.state;
+    if (state is! RentalStatusLoaded) return;
+    final renting = state.rentingList
+        .where((b) => b.bookingId == widget.initialBookingId)
+        .firstOrNull;
+    final lending = state.lendingList
+        .where((b) => b.bookingId == widget.initialBookingId)
+        .firstOrNull;
+    final booking = renting ?? lending;
+    if (booking == null) return;
+    _didOpenInitialBooking = true;
+    _tabController.index = lending != null ? 1 : 0;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) RentalStatusCard.showDetails(context, _toItemData(booking));
+    });
   }
 
   Color _mapStatusColor(String? rawStatus, DateTime? startDate) {
@@ -104,6 +124,8 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
       case 'confirmed':
         return const Color(0xFF2563EB); // Electric blue
       case 'active':
+      case 'awaiting_return':
+      case 'return_ready':
         return const Color(0xFF059669); // Emerald
       case 'completed':
       case 'finished':

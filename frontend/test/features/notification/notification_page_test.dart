@@ -1,50 +1,103 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/services/app_notification_service.dart';
 import 'package:frontend/core/widgets/custom_bottom_navbar.dart';
 import 'package:frontend/features/notification/presentation/pages/page.dart';
+
+import 'support/fake_notification_repository.dart';
 
 void main() {
   group('NotificationPage UI Tests', () {
     testWidgets(
-      'renders NotificationPage with two distinct sections, ดูทั้งหมด, and อ่านทั้งหมด',
+      'renders real rental, grouped chat and app history without mock announcements',
       (tester) async {
-        await tester.pumpWidget(const MaterialApp(home: NotificationPage()));
+        await tester.binding.setSurfaceSize(const Size(500, 1200));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final repository = FakeNotificationRepository()
+          ..page = inboxPage([
+            notification(
+              id: 'rental',
+              category: AppNotificationCategory.rental,
+              title: 'รายการเช่ายืนยันแล้ว',
+            ),
+            notification(
+              id: 'chat',
+              category: AppNotificationCategory.chat,
+              conversationId: 'room',
+              unreadCount: 3,
+              title: 'ข้อความล่าสุดจากสมชาย',
+            ),
+            notification(id: 'app', title: 'ยืนยันตัวตนสำเร็จ'),
+          ]);
+        final service = AppNotificationService(repository: repository);
+        addTearDown(service.dispose);
+        service.setSession('alice');
+        await service.refresh();
+        await tester.pumpWidget(
+          MaterialApp(home: NotificationPage(service: service)),
+        );
         await tester.pumpAndSettle();
 
         expect(find.text('การแจ้งเตือน'), findsOneWidget);
         expect(find.text('สถานะอุปกรณ์'), findsOneWidget);
+        expect(find.text('ข้อความแชต'), findsOneWidget);
         expect(find.text('อัปเดตและข้อความระบบ'), findsOneWidget);
-        expect(find.text('ยินดีต้อนรับสู่ Yuemnoi'), findsOneWidget);
-        expect(find.text('การชำระเงินปลอดภัย'), findsOneWidget);
-
-        // หมวดสถานะอุปกรณ์แสดงปุ่ม "ดูทั้งหมด"
-        expect(find.text('ดูทั้งหมด'), findsOneWidget);
-        // หมวดข้อความระบบแสดงปุ่ม "อ่านทั้งหมด"
+        expect(find.text('ยินดีต้อนรับสู่ Yuemnoi'), findsNothing);
+        expect(find.text('การชำระเงินปลอดภัย'), findsNothing);
+        expect(find.text('รายการเช่ายืนยันแล้ว'), findsOneWidget);
+        expect(find.text('ข้อความล่าสุดจากสมชาย'), findsOneWidget);
+        expect(find.text('3 ข้อความที่ยังไม่อ่าน'), findsOneWidget);
+        expect(find.text('ยืนยันตัวตนสำเร็จ'), findsOneWidget);
         expect(find.text('อ่านทั้งหมด'), findsOneWidget);
-
-        // ไม่มีปุ่มรกรุงรังภายในตัวการ์ดอุปกรณ์
-        expect(find.text('ส่งคืนอุปกรณ์'), findsNothing);
-        expect(find.text('ดูรายละเอียด'), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        service.dispose();
       },
     );
 
-    testWidgets('tap system mark all as read triggers feedback snackbar', (
+    testWidgets('mark all persists read state and updates unread badge', (
       tester,
     ) async {
-      await tester.pumpWidget(const MaterialApp(home: NotificationPage()));
+      final repository = FakeNotificationRepository()
+        ..page = inboxPage([notification(id: 'app')]);
+      final service = AppNotificationService(repository: repository);
+      addTearDown(service.dispose);
+      service.setSession('alice');
+      await service.refresh();
+      await tester.pumpWidget(
+        MaterialApp(home: NotificationPage(service: service)),
+      );
       await tester.pumpAndSettle();
-
-      // แตะปุ่ม "อ่านทั้งหมด" ของหมวดข้อความระบบ
+      expect(service.inbox.value.unreadCount, 1);
       await tester.tap(find.text('อ่านทั้งหมด'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
+      await tester.pumpAndSettle();
+      expect(service.inbox.value.unreadCount, 0);
       expect(find.textContaining('ทำเครื่องหมายอ่านแล้ว'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      service.dispose();
+    });
+
+    testWidgets('guest sees sign-in message and no private history', (
+      tester,
+    ) async {
+      final service = AppNotificationService(
+        repository: FakeNotificationRepository(),
+      );
+      addTearDown(service.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: NotificationPage(service: service)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('เข้าสู่ระบบเพื่อดูการแจ้งเตือน'), findsOneWidget);
+      expect(find.text('การชำระเงินปลอดภัย'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      service.dispose();
     });
   });
 
   group('CustomBottomNavbar with Notification Tab', () {
-    testWidgets('renders 5 tabs including Notification tab', (tester) async {
+    testWidgets('renders current 4 tabs including Notification tab', (
+      tester,
+    ) async {
       int tappedIndex = -1;
       await tester.pumpWidget(
         MaterialApp(
@@ -61,7 +114,6 @@ void main() {
       expect(find.byKey(const ValueKey('nav-home')), findsOneWidget);
       expect(find.byKey(const ValueKey('nav-chat')), findsOneWidget);
       expect(find.byKey(const ValueKey('nav-notification')), findsOneWidget);
-      expect(find.byKey(const ValueKey('nav-wallet')), findsOneWidget);
       expect(find.byKey(const ValueKey('nav-profile')), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('nav-notification')));

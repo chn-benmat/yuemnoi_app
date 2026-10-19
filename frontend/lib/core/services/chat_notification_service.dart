@@ -79,6 +79,24 @@ class ChatNotificationService {
           sound: const RawResourceAndroidNotificationSound('message_tone'),
         );
         await androidPlatform.createNotificationChannel(chatChannel);
+        for (final channel in const [
+          AndroidNotificationChannel(
+            'yuemnoi_rental_updates_v1',
+            'สถานะการเช่า Yuemnoi',
+            description: 'คำขอและกำหนดคืนสินค้า',
+            importance: Importance.high,
+            playSound: true,
+          ),
+          AndroidNotificationChannel(
+            'yuemnoi_app_updates_v1',
+            'แจ้งเตือนระบบ Yuemnoi',
+            description: 'สถานะบัญชีและการอัปเดตจากระบบ',
+            importance: Importance.high,
+            playSound: true,
+          ),
+        ]) {
+          await androidPlatform.createNotificationChannel(channel);
+        }
       }
 
       final launchDetails = await _notificationsPlugin

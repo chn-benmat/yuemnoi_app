@@ -1,104 +1,52 @@
 package ports
 
 import (
-	"context"
-	"log/slog"
-	"net/http"
-	"strings"
-
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/gofiber/fiber/v3"
+	"net/http"
+	"strconv"
+	"strings"
 )
 
-// PushHandler จัดการคำขอ HTTP สำหรับการส่ง Push Notification
 type PushHandler struct {
-	sender   domain.PushNotificationSender
-	auth     domain.AuthGateway
-	verifier domain.TokenVerifier
+	verifier  domain.TokenVerifier
+	validator domain.ChatPushValidator
 }
 
-// NewPushHandler สร้าง PushHandler ใหม่โดยรับ PushNotificationSender และ AuthGateway เข้ามาผ่าน DI
-func NewPushHandler(sender domain.PushNotificationSender, authGateway domain.AuthGateway) *PushHandler {
-	return &PushHandler{
-		sender:   sender,
-		auth:     authGateway,
-		verifier: authGateway,
-	}
+func NewPushHandler(_ domain.PushNotificationSender, gateway domain.AuthGateway) *PushHandler {
+	return &PushHandler{verifier: gateway}
 }
 
-// SendChatPushRequest เป็น request body สำหรับส่ง push notification ของข้อความแชท
 type SendChatPushRequest struct {
-	ReceiverID     string `json:"receiver_id" validate:"required"`
-	ConversationID string `json:"conversation_id" validate:"required"`
+	ReceiverID     string `json:"receiver_id"`
+	ConversationID string `json:"conversation_id"`
 	MessageID      string `json:"message_id"`
 	SenderName     string `json:"sender_name"`
 	SenderAvatar   string `json:"sender_avatar"`
 	Message        string `json:"message"`
 }
 
-// SendChatPush รับคำขอส่ง Push Notification ของข้อความแชทและประมวลผลใน Background (Non-blocking)
+// รองรับ client เดิมโดยตรวจข้อความจริง แต่ไม่ส่งซ้ำกับ outbox จาก database trigger
 func (h *PushHandler) SendChatPush(c fiber.Ctx) error {
 	senderID, ok := authenticatedUserID(c, h.verifier)
 	if !ok {
 		return nil
 	}
-
 	var req SendChatPushRequest
 	if err := c.Bind().JSON(&req); err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลไม่ครบถ้วน: " + err.Error()})
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลแจ้งเตือนไม่ถูกต้อง"})
 	}
 	req.ReceiverID = strings.TrimSpace(req.ReceiverID)
 	req.ConversationID = strings.TrimSpace(req.ConversationID)
-	if req.ReceiverID == "" || req.ConversationID == "" {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุผู้รับและห้องสนทนา"})
+	messageID, err := strconv.ParseInt(req.MessageID, 10, 64)
+	if err != nil || messageID <= 0 || !notificationUUID.MatchString(req.ReceiverID) || !notificationUUID.MatchString(req.ConversationID) || req.ReceiverID == senderID {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุข้อความและคู่สนทนาที่ถูกต้อง"})
 	}
-
-	if senderID == req.ReceiverID {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ไม่สามารถส่งแจ้งเตือนหาตนเองได้"})
+	if h.validator == nil {
+		return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "ระบบแจ้งเตือนยังไม่พร้อม"})
 	}
-
-	// ค้นหาชื่อและรูปของผู้ส่งตัวจริงจากฐานข้อมูลเพื่อป้องกันการปลอมแปลงชื่อผู้ส่ง (Sender Spoofing)
-	senderName := "ผู้ใช้งาน Yuemnoi"
-	senderAvatar := ""
-	if h.auth != nil {
-		if profile, err := h.auth.GetProfile(c.Context(), senderID); err == nil && profile != nil {
-			if profile.DisplayName != "" {
-				senderName = profile.DisplayName
-			} else if profile.Email != "" {
-				if idx := strings.Index(profile.Email, "@"); idx != -1 {
-					senderName = profile.Email[:idx]
-				}
-			}
-			senderAvatar = profile.UserImageURL
-		}
+	if err := h.validator.ValidateChatPush(c.Context(), senderID, domain.ChatPushNotification{ReceiverID: req.ReceiverID, ConversationID: req.ConversationID, MessageID: req.MessageID}); err != nil {
+		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "ไม่มีสิทธิ์ส่งแจ้งเตือนข้อความนี้"})
 	}
-
-	// ตอบกลับ 200 OK ให้ Client ทันทีแบบ Non-blocking Fast Response
-	if err := c.Status(http.StatusOK).JSON(fiber.Map{"status": "queued"}); err != nil {
-		return err
-	}
-
-	if h.sender == nil {
-		return nil
-	}
-
-	// ประมวลผลและยิง Push Notification ใน Background Goroutine โดยใช้ชื่อและรูปที่ตรวจสอบแล้ว
-	go func(r SendChatPushRequest, sName, sAvatar string) {
-		err := h.sender.SendChatPush(context.Background(), domain.ChatPushNotification{
-			ReceiverID:     r.ReceiverID,
-			ConversationID: r.ConversationID,
-			MessageID:      r.MessageID,
-			SenderName:     sName,
-			SenderAvatar:   sAvatar,
-			Message:        r.Message,
-		})
-		if err != nil {
-			slog.Error("ส่ง FCM chat push ใน background ล้มเหลว",
-				slog.String("receiver_id", r.ReceiverID),
-				slog.String("conversation_id", r.ConversationID),
-				slog.Any("error", err),
-			)
-		}
-	}(req, senderName, senderAvatar)
-	return nil
+	return c.JSON(fiber.Map{"status": "recorded"})
 }

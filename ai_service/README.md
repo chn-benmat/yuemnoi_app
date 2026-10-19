@@ -390,23 +390,11 @@ Groq ใช้แผนที่บัญชีเลือกไว้; ผู�
 
 ## 🧪 ตรวจงาน & ข้อจำกัดของชุดทดสอบ
 
-ตัวอย่างชุดทดสอบที่ใช้ mocks / temporary files สำหรับ knowledge, cascade, shared quota, catalog pool และ response-ready deadline:
+เตรียม [tests/](tests/) แยกตามส่วนของ `app/` แล้ว แต่ **ยังไม่มี test cases** ดูแนวทางเพิ่มไฟล์และคำสั่งรัน pytest ใน [tests/README.md](tests/README.md) โดยใช้ fake adapters และ temporary files สำหรับการทดสอบ offline
 
-**Windows PowerShell**
+ชื่อไฟล์ทดสอบที่อ้างถึงในส่วนอื่นของเอกสารยังไม่มีใน checkout นี้ จึงยังใช้คำสั่งเหล่านั้นไม่ได้ การสร้างโครงสร้างโฟลเดอร์ไม่ใช่ผลยืนยันว่าพฤติกรรมของ service ผ่านการทดสอบแล้ว
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_app_knowledge.py tests/test_model_cascade.py tests/test_shared_quota.py tests/test_catalog_pool.py tests/test_response_ready_deadline.py -v
-```
-
-**macOS / Linux**
-
-```bash
-.venv/bin/python -m pytest tests/test_app_knowledge.py tests/test_model_cascade.py tests/test_shared_quota.py tests/test_catalog_pool.py tests/test_response_ready_deadline.py -v
-```
-
-ชุดเต็มเรียกด้วย `python -m pytest tests/ -v` จาก venv แต่ **checkout นี้ขาด modules / fixtures ภายใต้ `evaluation` ที่ tests หลายไฟล์ import** จึงต้องคืนไฟล์เหล่านั้นก่อนคาดหวังให้ทั้งชุด collect / run ได้ครบ นอกจากนี้ API health test บางตัวเรียก Supabase จริง อย่าใช้ full suite เป็น offline check โดยไม่ตรวจ prerequisites
-
-ชุดประเมินและ reports ที่ README เดิมอ้างถึง เช่น `evaluation/CURRENT.md`, Step reports และ acceptance scripts ไม่มีใน checkout นี้ จึงไม่ใส่ลิงก์หรือคำสั่งที่ชี้ไปไฟล์เหล่านั้น การผ่านชุด mocks ข้างบนยังไม่ยืนยันผลการประเมินกับ models จริง
+ชุดประเมินและ reports เช่น `evaluation/CURRENT.md`, Step reports และ acceptance scripts ไม่มีใน checkout นี้เช่นกัน การทดสอบ offline ในอนาคตยังต้องแยกจากการประเมินกับ models จริงที่ใช้ quota
 
 ### หลักฐานของคำขอและการกู้คำตอบ
 
@@ -448,7 +436,7 @@ ai_service/
 │   └── interface/api/        # FastAPI endpoints / router
 ├── config/                   # Runtime JSON และ schemas
 ├── knowledge/                # Knowledge / interpretation policy JSON
-├── tests/
+├── tests/                    # โครงสร้างทดสอบตามส่วนของ app; ยังไม่มี test cases
 ├── .state/                   # Local quota / locks — ignored by Git
 ├── .env                      # Secrets / configuration — สร้างเอง
 ├── main.py
@@ -482,6 +470,6 @@ ai_service/
 | `runtime_document_invalid`                      | ใช้ approved document ที่ schema / digest ตรงกัน                                        |
 | `runtime_changed_restart_required`              | Restart หลังใช้ runtime / policy ฉบับอนุมัติใหม่                                        |
 | `quota_ledger_invalid` / lock failure           | ตรวจ shared path, permissions และ state เสียหาย; แก้สาเหตุก่อนเปลี่ยน state             |
-| pytest หา `evaluation.*` ไม่พบ                  | คืน evaluation package / fixtures หรือรันชุด mocks ที่ระบุด้านบน                        |
+| pytest รายงาน `no tests ran`                    | `tests/` ยังเป็นโครงสร้างเปล่า; เพิ่ม test cases ตาม `tests/README.md` ก่อนรัน             |
 
 ---

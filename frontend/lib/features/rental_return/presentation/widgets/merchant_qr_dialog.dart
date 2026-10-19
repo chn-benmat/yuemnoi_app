@@ -50,7 +50,7 @@ class _MerchantQrDialogState extends State<MerchantQrDialog> {
     super.initState();
     if (widget.expiryTime != null) {
       final diff = widget.expiryTime!.difference(DateTime.now()).inSeconds;
-      _secondsRemaining = diff > 0 ? diff : 300;
+      _secondsRemaining = diff > 0 ? diff : 0;
     }
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -174,10 +174,8 @@ class _MerchantQrDialogState extends State<MerchantQrDialog> {
                         ),
                         TextButton.icon(
                           onPressed: () {
+                            Navigator.pop(context);
                             widget.onRefresh();
-                            setState(() {
-                              _secondsRemaining = 300;
-                            });
                           },
                           icon: const Icon(Icons.refresh_rounded),
                           label: const Text('สร้างรหัสใหม่'),

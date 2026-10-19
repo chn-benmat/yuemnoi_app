@@ -142,7 +142,13 @@ func (h *RentalHandler) ReturnRental(c fiber.Ctx) error {
 		return nil
 	}
 
-	order, err := h.rentalRepository.UpdateRentalStatus(c.Context(), userID, id, "completed")
+	var req struct {
+		Token string `json:"token_or_otp"`
+	}
+	if err := c.Bind().JSON(&req); err != nil || strings.TrimSpace(req.Token) == "" || len(req.Token) > 200 {
+		return c.Status(400).JSON(fiber.Map{"error": "กรุณาสแกน QR หรือกรอกรหัสยืนยันจากเจ้าของอุปกรณ์"})
+	}
+	order, err := h.rentalRepository.CompleteRentalReturn(c.Context(), userID, id, strings.TrimSpace(req.Token))
 	if err != nil {
 		return writeRentalStatusError(c, err)
 	}
@@ -156,6 +162,10 @@ func (h *RentalHandler) ReturnRental(c fiber.Ctx) error {
 
 func writeRentalStatusError(c fiber.Ctx, err error) error {
 	switch {
+	case errors.Is(err, domain.ErrInvalidRental):
+		return c.Status(400).JSON(fiber.Map{"error": "ข้อมูลหรือหลักฐานการเช่าไม่ครบถ้วน"})
+	case errors.Is(err, domain.ErrRentalReturnToken):
+		return c.Status(400).JSON(fiber.Map{"error": "รหัสยืนยันไม่ถูกต้องหรือหมดอายุ กรุณาขอรหัสใหม่จากเจ้าของอุปกรณ์", "code": "invalid_return_token"})
 	case errors.Is(err, domain.ErrRentalNotFound):
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบรายการเช่านี้"})
 	case errors.Is(err, domain.ErrRentalForbidden):

@@ -146,9 +146,9 @@ Preview ไม่ดึงข้อมูลจริงและปิดปุ
 | `npm run check` | ตรวจ TypeScript |
 | `npm run build` | สร้าง production build |
 | `npm run start -- --port 3000` | เปิด production server หลัง build |
-| `npm test` | รัน `tests/*.test.ts` เมื่อมีไฟล์ทดสอบและ Node.js รองรับ `--experimental-strip-types` |
+| `npm test` | รัน `tests/**/*.test.ts` รวมโฟลเดอร์ย่อย เมื่อมีไฟล์ทดสอบและ Node.js รองรับ `--experimental-strip-types` |
 
-ตอนนี้ `tests/` ยังไม่มีไฟล์ทดสอบ จึงยังใช้ `npm test` ยืนยัน coverage ไม่ได้ สำหรับการแก้โค้ดให้ตรวจด้วย `npm run check` และ `npm run build` พร้อมเปิดหน้าที่เกี่ยวข้องตรวจพฤติกรรมจริง
+เตรียม [tests/](tests/) แยกตามส่วนของ `src/` แล้ว แต่ยังไม่มี test cases ดูแนวทางเพิ่มไฟล์ใน [tests/README.md](tests/README.md) จึงยังใช้ `npm test` ยืนยันพฤติกรรมหรือ coverage ไม่ได้ สำหรับการแก้โค้ดให้ตรวจด้วย `npm run check` และ `npm run build` พร้อมเปิดหน้าที่เกี่ยวข้องตรวจพฤติกรรมจริง
 
 ### โครงสร้างที่ควรรู้
 
@@ -162,6 +162,7 @@ admin/
 │   ├── components/            # Dashboard, identity และ UI ที่ใช้ร่วมกัน
 │   ├── fonts/                 # Prompt font ที่โหลดจากไฟล์ในโปรเจ็กต์
 │   └── lib/                   # API helpers, catalog, reports และ CSV export
+├── tests/                    # โครงสร้างทดสอบตามส่วนของ src; ยังไม่มี test cases
 ├── .env.local                 # ค่าตั้งเฉพาะ environment — สร้างเอง
 ├── next.config.ts             # Next.js และ security headers
 └── package.json               # Dependencies และ scripts
@@ -195,7 +196,7 @@ Development และ production scripts ฟังที่ `127.0.0.1` หา�
 | Preview เปิดแล้ว 404 | ต้องรัน development, ตั้ง `ADMIN_PREVIEW=true` และ restart server แล้ว |
 | แสดงข้อผิดพลาดระหว่างโหลดข้อมูล | ตรวจ Backend, schema/RPC ของ environment และ session เจ้าหน้าที่ |
 | อนุมัติคำขอไม่ได้ | ตรวจการยืนยันหลักฐาน การติดตั้ง migration สำหรับฟอร์มอนุมัติ และ error ที่ Backend ส่งกลับ |
-| `npm test` ไม่มีชุดทดสอบให้รัน | `tests/` ยังว่าง ให้ตรวจโค้ดด้วย `npm run check` และ `npm run build` ตามขอบเขตงาน |
+| `npm test` ไม่มีชุดทดสอบให้รัน | `tests/` ยังไม่มี test cases ดูแนวทางเพิ่มไฟล์ใน `tests/README.md` |
 
 ---
 
