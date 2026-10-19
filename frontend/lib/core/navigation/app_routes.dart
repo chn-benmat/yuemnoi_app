@@ -264,7 +264,11 @@ abstract final class AppRoutes {
           path: rentalStatus,
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
-            child: const RentalStatusScreen(),
+            child: RentalStatusScreen(
+              initialBookingId: int.tryParse(
+                state.uri.queryParameters['booking_id'] ?? '',
+              ),
+            ),
           ),
         ),
         GoRoute(

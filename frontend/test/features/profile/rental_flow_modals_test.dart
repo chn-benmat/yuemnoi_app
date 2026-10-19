@@ -7,7 +7,7 @@ import 'package:frontend/features/profile/presentation/widgets/rentals/rental_re
 void main() {
   group('Rental Flow Modals and Dialogs', () {
     testWidgets(
-      'RentalHandoverModal renders correctly and switches between Renter and Owner roles',
+      'Renter inspection exposes evidence-based cancellation before payment',
       (tester) async {
         await tester.pumpWidget(
           const MaterialApp(
@@ -27,32 +27,16 @@ void main() {
         expect(find.text('ตรวจรับ & ชำระเงิน'), findsOneWidget);
         expect(find.text('Sony A7 IV'), findsOneWidget);
 
-        // Verify role toggle
-        expect(find.text('มุมมองผู้เช่า'), findsOneWidget);
-        expect(find.text('ผู้ปล่อยเช่า'), findsOneWidget);
-
-        // Verify checklist items
-        expect(find.textContaining('เปิดติด'), findsOneWidget);
-        expect(find.textContaining('อุปกรณ์เสริมครบถ้วน'), findsOneWidget);
-
-        // Tap owner toggle
-        await tester.tap(find.text('ผู้ปล่อยเช่า'));
-        await tester.pumpAndSettle();
-
-        // Proceed to Step 1 (Payment)
-        final step1Btn = find.textContaining('ยืนยันการตรวจสภาพ');
-        expect(step1Btn, findsOneWidget);
-        await tester.tap(step1Btn);
-        await tester.pumpAndSettle();
-
-        // Verify PromptPay QR code box is visible for owner
-        expect(find.textContaining('PromptPay:'), findsOneWidget);
-        expect(find.textContaining('฿1500'), findsWidgets);
+        expect(
+          find.text('ยกเลิกการเช่า (สินค้ามีปัญหา / ไม่พร้อมใช้งาน)'),
+          findsOneWidget,
+        );
+        expect(find.text('ไปยังการชำระเงิน'), findsOneWidget);
       },
     );
 
     testWidgets(
-      'RentalReturnModal renders return checklist and deposit refund workflow',
+      'Legacy return entry delegates to canonical flow without mock completion',
       (tester) async {
         await tester.pumpWidget(
           const MaterialApp(
@@ -67,23 +51,13 @@ void main() {
           ),
         );
 
-        // Verify Return modal title
-        expect(find.text('ส่งคืนอุปกรณ์ & จบการเช่า'), findsOneWidget);
-        expect(find.text('DJI Mini 4 Pro'), findsOneWidget);
-
-        // Checklist inspection
-        expect(find.textContaining('เครื่องยังทำงานได้ปกติ'), findsOneWidget);
-        expect(find.textContaining('อุปกรณ์เสริม'), findsOneWidget);
-
-        // Move to Step 1: Deposit refund
-        final stepDepositBtn = find.textContaining('ยืนยันการตรวจรับของคืน');
-        expect(stepDepositBtn, findsOneWidget);
-        await tester.tap(stepDepositBtn);
         await tester.pumpAndSettle();
-
-        // Verify deposit amount
-        expect(find.textContaining('฿2000'), findsWidgets);
-        expect(find.textContaining('โอนคืนเงินประกัน'), findsOneWidget);
+        expect(
+          find.textContaining('กรุณาเลือกรายการเช่าที่ต้องการคืน'),
+          findsWidgets,
+        );
+        expect(find.text('โอนคืนเงินประกัน'), findsNothing);
+        expect(find.textContaining('รหัสตัวอย่าง'), findsNothing);
       },
     );
 

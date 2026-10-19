@@ -17,6 +17,7 @@ import '../../../../../core/theme/app_text_styles.dart';
 import '../../../data/repositories/rental_management_repository_impl.dart';
 import '../../../domain/usecases/update_booking_status_usecase.dart';
 import '../../pages/rentals/rental_payment_success_screen.dart';
+import '../../../../rental_return/data/datasources/rental_return_remote_data_source.dart';
 
 /// Modal สำหรับกระบวนการ "ตรวจรับอุปกรณ์ & ชำระเงิน" เมื่อนัดพบกัน (In-Person Handover)
 class RentalHandoverModal extends StatefulWidget {
@@ -432,7 +433,31 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   }
 
   Future<void> _completeHandover() async {
+    if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
+
+    // บันทึกให้สำเร็จก่อนประกาศผล เพื่อไม่ให้สองเครื่องเห็นสถานะที่ server ปฏิเสธ
+    try {
+      if (widget.bookingId == null || widget.bookingId! <= 0) {
+        throw StateError('ไม่พบรายการเช่าสำหรับการส่งมอบ');
+      }
+      await _updateBookingStatusUseCase.execute(
+        bookingId: widget.bookingId!,
+        status: 'active',
+      );
+      await BookingConfirmationTracker.markHandoverStarted(
+        bookingId: widget.bookingId,
+        startTime: DateTime.now(),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('ยืนยันส่งมอบไม่สำเร็จ: $e')));
+      }
+      return;
+    }
 
     // 1. ส่ง Realtime Broadcast แจ้งฝั่งผู้เช่าทันที
     try {
@@ -449,23 +474,6 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
       }
     } catch (e) {
       debugPrint('Error sending realtime broadcast: $e');
-    }
-
-    // 2. บันทึกลง booking_tb ผ่าน UseCase เป็น status 'active' (ถ้ามี bookingId)
-    final handoverNow = DateTime.now();
-    if (widget.bookingId != null && widget.bookingId! > 0) {
-      await BookingConfirmationTracker.markHandoverStarted(
-        bookingId: widget.bookingId,
-        startTime: handoverNow,
-      );
-      try {
-        await _updateBookingStatusUseCase.execute(
-          bookingId: widget.bookingId!,
-          status: 'active',
-        );
-      } catch (e) {
-        debugPrint('Error updating booking status: $e');
-      }
     }
 
     // 3. แจ้งในข้อความแชต (ถ้ามี conversationId) เพื่อให้สถานะทั้งสองฝั่งตรงกัน
@@ -2070,7 +2078,7 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
           ],
         ),
         content: const Text(
-          'คุณต้องการยกเลิกการเช่าอุปกรณ์นี้ใช่หรือไม่? ระบบจะบันทึกสาเหตุและรูปภาพหลักฐานไว้ และไม่คิดค่าบริการ',
+          'คุณต้องการยกเลิกการเช่าอุปกรณ์นี้ใช่หรือไม่? ระบบจะบันทึกสาเหตุและรูปภาพหลักฐานไว้',
           style: TextStyle(
             fontFamily: AppTextStyles.fontFamily,
             fontSize: 13.5,
@@ -2113,15 +2121,31 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
 
     setState(() => _isSubmitting = true);
 
-    if (widget.bookingId != null) {
-      try {
-        await widget.updateBookingStatusUseCase.execute(
-          bookingId: widget.bookingId!,
-          status: 'cancelled',
-        );
-      } catch (e) {
-        debugPrint('Error updating booking status to cancelled: $e');
+    try {
+      if (widget.bookingId == null || widget.bookingId! <= 0) {
+        throw StateError('ไม่พบรายการเช่าสำหรับการยกเลิก');
       }
+      final reasons = <String>[
+        if (_reasonPowerIssue) 'อุปกรณ์เปิดไม่ติดหรือทำงานผิดปกติ',
+        if (_reasonDamage) 'อุปกรณ์มีรอยเสียหาย',
+        if (_reasonMissingAccessories) 'อุปกรณ์เสริมไม่ครบ',
+        if (_reasonNotAsDescribed) 'ไม่ตรงตามรายละเอียด',
+        if (_reasonOther) _otherReasonController.text.trim(),
+      ];
+      await RentalReturnRemoteDataSource().cancelRental(
+        rentalId: widget.bookingId!,
+        reason: reasons.join(', '),
+        note: _noteController.text.trim(),
+        photos: _attachedImages,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('ยกเลิกไม่สำเร็จ: $e')));
+      }
+      return;
     }
 
     if (!mounted) return;

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -35,8 +34,6 @@ class ReturnCompletedDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormatter = NumberFormat('#,##0.00', 'en_US');
-
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       backgroundColor: Colors.white,
@@ -88,7 +85,7 @@ class ReturnCompletedDialog extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // กล่องสรุปการคืนเงินมัดจำ
+            // กล่องสรุปการคืนอุปกรณ์
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -102,7 +99,7 @@ class ReturnCompletedDialog extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'สถานะเงินมัดจำ:',
+                        'สถานะรายการ:',
                         style: TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 13,
@@ -119,7 +116,7 @@ class ReturnCompletedDialog extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
-                          'ปลดล็อกคืนแล้ว',
+                          'ยืนยันการคืนแล้ว',
                           style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 11,
@@ -135,7 +132,7 @@ class ReturnCompletedDialog extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'ยอดมัดจำที่ได้รับคืน:',
+                        'เลขที่การเช่า:',
                         style: TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 13,
@@ -143,7 +140,7 @@ class ReturnCompletedDialog extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${currencyFormatter.format(session.depositAmount)} ฿',
+                        session.orderNumber,
                         style: const TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 15,

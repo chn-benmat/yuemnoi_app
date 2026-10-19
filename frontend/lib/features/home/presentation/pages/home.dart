@@ -4,7 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/auth_session.dart';
-import '../../../../core/network/supabase_client.dart';
+import '../../../../core/services/app_notification_service.dart';
 import '../../../../core/widgets/custom_bottom_navbar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
@@ -16,7 +16,6 @@ import '../../../chat/presentation/bloc/chat_list_event.dart';
 import '../../../chat/presentation/bloc/chat_list_state.dart';
 import '../../../chat/presentation/pages/chat.dart';
 import '../../../notification/presentation/pages/page.dart';
-import '../../../profile/data/repositories/rental_management_repository_impl.dart';
 import '../../../profile/presentation/pages/profile/profile.dart';
 import '../../data/repositories/home_repository_impl.dart';
 import '../../domain/usecases/get_home_feed_usecase.dart';
@@ -73,7 +72,6 @@ class _HomeScreenContent extends StatefulWidget {
 
 class _HomeScreenContentState extends State<_HomeScreenContent> {
   late int _selectedIndex;
-  bool _hasActiveRentals = false;
 
   @override
   void initState() {
@@ -83,23 +81,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
   }
 
   Future<void> _checkNotifications() async {
-    try {
-      final userId = SupabaseConfig.isInitialized
-          ? SupabaseConfig.client.auth.currentUser?.id
-          : null;
-      if (userId == null || userId.isEmpty) return;
-
-      final bookings = await RentalManagementRepositoryImpl()
-          .getRentingBookings(userId);
-      final hasActive = bookings.any(
-        (b) => b.statusCode.toLowerCase().trim() == 'active',
-      );
-      if (mounted) {
-        setState(() {
-          _hasActiveRentals = hasActive;
-        });
-      }
-    } catch (_) {}
+    await AppNotificationService.instance.refresh();
   }
 
   @override
@@ -157,18 +139,21 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
               (c) => c.hasUnreadMessage,
             );
 
-            return CustomBottomNavbar(
-              selectedIndex: _selectedIndex,
-              hasUnreadChat: hasUnread,
-              hasUnreadNotification: _hasActiveRentals,
-              onTabChange: (index) {
-                setState(() {
-                  _selectedIndex = index;
-                });
-                if (index == 2) {
-                  _checkNotifications();
-                }
-              },
+            return ValueListenableBuilder<NotificationInboxState>(
+              valueListenable: AppNotificationService.instance.inbox,
+              builder: (context, notifications, _) => CustomBottomNavbar(
+                selectedIndex: _selectedIndex,
+                hasUnreadChat: hasUnread,
+                hasUnreadNotification: notifications.unreadCount > 0,
+                onTabChange: (index) {
+                  setState(() {
+                    _selectedIndex = index;
+                  });
+                  if (index == 2) {
+                    _checkNotifications();
+                  }
+                },
+              ),
             );
           },
         ),

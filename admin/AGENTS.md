@@ -34,7 +34,7 @@ npm run check
 npm run build
 ```
 
-- `npm test` มี script แล้ว แต่ `tests/` ใน checkout นี้ยังว่าง รันเมื่อมี test files และรายงาน coverage ตามจริง
+- วาง tests ใน `tests/` แยกตามส่วนของ `src/` ตาม `tests/README.md`; `npm test` รองรับโฟลเดอร์ย่อยแล้ว แต่ยังไม่มี test cases ให้รายงานว่าขาดชุดทดสอบแทนการอ้างว่าผ่าน
 - เมื่อต้องแก้ UI ให้ตรวจหน้าที่เกี่ยวข้องใน browser รวม loading/error/empty states; ใช้ preview สำหรับตรวจหน้าตาโดยไม่มีข้อมูลจริง
 - ตัวอย่าง env และภาพใน `design/` ที่ README อ้างยังไม่มีใน checkout นี้ ให้ตรวจไฟล์ที่มีจริงก่อนใช้อ้างอิง
 

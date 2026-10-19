@@ -35,7 +35,9 @@ Go Backend เป็น REST API หลักของ **Yuemnoi** เชื่�
 | 🔔 Push         | ส่งแจ้งเตือนแชตผ่าน FCM HTTP v1 และจัดการ device token ที่หมดอายุ          |
 | 🤖 AI Gateway   | ส่งคำขอ JSON / SSE ไป Python พร้อม internal service key                    |
 
-การสร้างคำขอเช่าเรียก RPC `create_rental_request` ส่วน endpoint ส่งมอบ / รับคืนเปลี่ยนสถานะ booking เป็น `active` / `completed` ตามสิทธิ์และเงื่อนไขในโค้ด การหัก Wallet, คืนเงินมัดจำ และตรวจ OTP / QR ไม่ได้อยู่ใน handlers เหล่านี้ ต้องตรวจ logic ของฐานข้อมูลและระบบชำระเงินแยกก่อนอ้างว่า flow การเงินทำงานครบ
+การสร้างคำขอเช่าเรียก RPC `create_rental_request` และส่งมอบเป็น `active` ขั้นตอนคืนใช้ `return-evidence` (ผู้เช่าส่งรูป 3 รูปและ checklist) -> `return-inspection` (เจ้าของตรวจและสร้าง QR/OTP) -> `return` (ผู้เช่าส่ง `token_or_otp` ให้ server ตรวจ) สถานะผ่าน `awaiting_return` และ `return_ready` ก่อน `completed`; รหัสหมดอายุใน 5 นาที จำกัด 5 ครั้งและใช้ซ้ำไม่ได้ การยกเลิกก่อนส่งมอบใช้ `cancel` พร้อมเหตุผลและหลักฐาน ไม่มีการหัก Wallet หรือคืนเงินจริงใน flow นี้
+
+แจ้งเตือนแชต การเช่า และระบบเก็บใน `notification_tb` พร้อม outbox จาก transaction ของเหตุการณ์ Worker ส่ง FCM ไปยังทุกอุปกรณ์ใน `notification_device_tb`; ไม่ใช้ `profile_tb.fcm_token` เป็นแหล่งส่งอีกแล้ว API ประวัติ/อ่าน/ลงทะเบียนเครื่องอยู่ที่ `/api/notifications` รายละเอียดและ SQL tests อยู่ใน [ข้อตกลงระบบแจ้งเตือน](../docs/notifications.md)
 
 การยืนยันข้อเสนอจากแชทมีสองขั้นตอน: `POST /api/rentals` พร้อม `offer_message_id` สร้างหรือเรียกใช้ booking เดิมเป็น `pending` และผูก `bookingId` / `status` ในข้อความเดิม จากนั้นเมื่อผู้เช่ากดปุ่ม “ยืนยันการเช่า” ในหน้าสรุป จึงเรียก `POST /api/rentals/:id/confirm` พร้อม `offer_message_id` เพื่อเปลี่ยนเป็น `confirmed` และเผยแพร่สถานะให้ทั้งสองเครื่อง Backend ตรวจผู้เช่า เจ้าของสินค้าจริง คู่สนทนา เงื่อนไขข้อเสนอ และเลข booking ที่ผูกกับข้อความซ้ำก่อนยืนยัน การเปิดหรือปิดหน้าสรุปไม่เปลี่ยนสถานะ การลองใหม่ใช้เลขรายการเดิมโดยไม่สร้างซ้ำ รายการ `pending` ยังไม่แสดงในหน้าสถานะการเช่า
 
@@ -194,7 +196,7 @@ CORS ใช้ Fiber middleware ร่วมกับการตรวจ origi
 
 Rate limiter ยังคงเป็น token bucket ของ `x/time/rate`: auth และ admin login แชร์ burst 5 เติม 1 token ทุก 12 วินาที, AI JSON/SSE แชร์ burst 15 เติม 1 token ทุก 4 วินาที และ identity/complaints แชร์ burst 5 อีกชุดหนึ่ง ทุกชุดแยกตาม client IP และเก็บ bucket ใน `ttlcache` จนไม่ได้ใช้งาน 10 นาที รวมคำขอที่ถูกปฏิเสธในการต่ออายุ idle TTL คำขอที่ถูกปฏิเสธไม่หัก token และคง JSON 429 กับข้อความเดิม ไม่เปลี่ยนเป็น fixed/sliding window
 
-FCM device-token cache ใช้ `ttlcache` อายุคงที่ 5 นาทีจากการอ่านฐานข้อมูลสำเร็จ โดย cache hit ไม่ต่ออายุและไม่ cache ค่าว่างหรือ error เมื่อหมดอายุจะอ่านจากฐานข้อมูลใหม่; token ที่ FCM ยืนยันว่า unregistered จะถูกลบจาก cache และฐานข้อมูล Cache ทั้งสองชนิดเป็น memory ของแต่ละ process และกวาดข้อมูลหมดอายุเมื่อมีงานถัดไป จึงไม่มี worker goroutine ที่ต้องปิดเมื่อ shutdown และไม่มี Redis เพิ่มเข้ามา
+Push ใช้ durable outbox และ token ของอุปกรณ์ที่ยังผูกกับผู้รับใน `notification_device_tb` ตรวจการสลับบัญชี การอ่าน และวันหมดอายุก่อน claim งาน Worker ทำงานทุก 10 วินาทีพร้อม lease และ retry แบบจำกัด; token ที่ FCM ยืนยันว่า unregistered จะถูกปิดเฉพาะค่าที่ส่งจริง Adapter cache ของเส้นทางเก่ายังคงอยู่เพื่อ compatibility แต่เส้นทางแจ้งเตือนใหม่ไม่อ่าน cache นั้น
 
 เปิด terminal อีกหน้าตรวจ HTTP server:
 
@@ -311,7 +313,9 @@ go test ./...
 go vet ./...
 ```
 
-Tests ปัจจุบันอยู่ใน `internal/` ใช้ mocks และ `httptest` โดยไม่ต้องมี credentials หรือบริการจริง; `tests/` ยังว่าง HTTP middleware tests ครอบคลุม CORS allowlist/preflight/native, Vary header, token-bucket refill และ burst แบบ concurrent, การแชร์ quota ข้าม routes และ proxy IP ส่วน FCM tests ตรวจ cache hit/miss/expiry/invalidation และ fixed TTL ที่ไม่ต่ออายุเมื่ออ่าน
+ไฟล์ทดสอบทั้งหมดอยู่ใน `tests/` แยกเป็น `adapters/fcm`, `adapters/supabase`, `domain` และ `ports` ใช้ package ภายนอกที่ import โค้ดจาก `internal/` พร้อม mocks และ `httptest` จึงไม่ต้องมี credentials หรือบริการจริง HTTP middleware tests ครอบคลุม CORS allowlist/preflight/native, Vary header, token-bucket refill และ burst แบบ concurrent, การแชร์ quota ข้าม routes และ proxy IP ส่วน FCM tests ตรวจ cache hit/miss/expiry/invalidation และ fixed TTL ที่ไม่ต่ออายุเมื่ออ่าน การทดสอบภาพหลักฐานและพิกัดเรียกผ่าน HTTP handler จริง
+
+รันเฉพาะชุดทดสอบด้วย `go test ./tests/...` หรือเลือกโฟลเดอร์ เช่น `go test ./tests/ports` และวัด coverage ของโค้ดต้นทางด้วย `go test '-coverpkg=github.com/chn-benmat/yuemnoi_app/backend/internal/...' ./tests/...` คำสั่ง `go test ./...` ด้านบนยังครอบคลุมทุกชุดตามเดิม
 
 **Build บน Windows PowerShell**
 
@@ -344,7 +348,7 @@ backend/
 │   │   ├── fcm/             # FCM HTTP v1
 │   │   └── aiservice/       # Python JSON / SSE client
 │   └── ports/               # Fiber handlers, router, middleware
-├── tests/                   # Tests และ HTTP mocks
+├── tests/                   # External tests แยก adapters/, domain/, ports/
 ├── .env                     # Server configuration — สร้างเอง
 ├── go.mod
 └── go.sum

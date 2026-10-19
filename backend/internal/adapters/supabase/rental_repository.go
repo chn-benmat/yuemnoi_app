@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/nedpals/supabase-go"
@@ -14,11 +12,16 @@ import (
 )
 
 type supabaseRentalRepository struct {
-	client *supabase.Client
+	client  *supabase.Client
+	storage *storageClient
 }
 
-func NewSupabaseRentalRepository(sbClient *supabase.Client) domain.RentalRepository {
-	return &supabaseRentalRepository{client: sbClient}
+func NewSupabaseRentalRepository(sbClient *supabase.Client, serviceKeys ...string) domain.RentalRepository {
+	key := ""
+	if len(serviceKeys) > 0 {
+		key = serviceKeys[0]
+	}
+	return &supabaseRentalRepository{client: sbClient, storage: newStorageClient(sbClient, key)}
 }
 
 func (r *supabaseRentalRepository) CreateRental(
@@ -58,80 +61,10 @@ func (r *supabaseRentalRepository) UpdateRentalStatus(
 	rentalID int64,
 	targetStatus string,
 ) (*domain.RentalOrder, error) {
-	// 1. ตรวจสอบข้อมูลการจองใน booking_tb
-	var bookings []struct {
-		ID         int64  `json:"id"`
-		UserID     string `json:"user_id"`
-		ItemID     int64  `json:"item_id"`
-		Status     string `json:"status"`
-		TotalPrice int64  `json:"total_price"`
-	}
-
-	idStr := strconv.FormatInt(rentalID, 10)
-	err := r.client.DB.From("booking_tb").
-		Select("id,user_id,item_id,status,total_price").
-		Eq("id", idStr).
-		ExecuteWithContext(ctx, &bookings)
-	if err != nil {
-		return nil, fmt.Errorf("load booking failed: %w", err)
-	}
-	if len(bookings) == 0 {
-		return nil, domain.ErrRentalNotFound
-	}
-	booking := bookings[0]
-
-	// 2. ค้นหาเจ้าของอุปกรณ์
-	var items []struct {
-		UserID string `json:"user_id"`
-	}
-	err = r.client.DB.From("item_tb").
-		Select("user_id").
-		Eq("id", strconv.FormatInt(booking.ItemID, 10)).
-		ExecuteWithContext(ctx, &items)
-	if err != nil || len(items) == 0 {
-		return nil, domain.ErrItemNotFound
-	}
-	ownerID := items[0].UserID
-
-	// อนุญาตเฉพาะคู่สัญญา (ผู้เช่า หรือเจ้าของอุปกรณ์)
-	isRenter := (booking.UserID == userID)
-	isOwner := (ownerID == userID)
-	if !isRenter && !isOwner {
-		return nil, domain.ErrRentalForbidden
-	}
-
-	// 3. ตรวจสอบการเปลี่ยนผ่านสถานะ (State Transition Validation)
-	// targetStatus "active" (Handover) หรือ "completed" (Return)
-	switch targetStatus {
-	case "active":
-		if booking.Status == "active" || booking.Status == "completed" || booking.Status == "cancelled" {
-			return nil, domain.ErrRentalStatusTransition
-		}
-	case "completed":
-		if booking.Status != "active" {
-			return nil, domain.ErrRentalStatusTransition
-		}
-	default:
+	if targetStatus != "active" {
 		return nil, domain.ErrRentalStatusTransition
 	}
-
-	// 4. บันทึกสถานะใหม่ลง booking_tb ผ่านสิทธิ์ Backend Service Role
-	var updated []domain.RentalOrder
-	err = r.client.DB.From("booking_tb").
-		Update(map[string]interface{}{
-			"status":     targetStatus,
-			"updated_at": time.Now().UTC(),
-		}).
-		Eq("id", idStr).
-		ExecuteWithContext(ctx, &updated)
-	if err != nil {
-		return nil, fmt.Errorf("update booking status failed: %w", err)
-	}
-	if len(updated) == 0 {
-		return nil, domain.ErrRentalNotFound
-	}
-
-	return &updated[0], nil
+	return r.rentalAction(ctx, userID, rentalID, "handover", map[string]any{})
 }
 
 func mapRentalRepositoryError(operation string, err error) error {

@@ -478,7 +478,8 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                 width: double.infinity,
                 height: 44,
                 child: ElevatedButton.icon(
-                  onPressed: !_isPhysicallyChecked || state.isSubmitting
+                  onPressed:
+                      !hasPhotos || !_isPhysicallyChecked || state.isSubmitting
                       ? null
                       : () => cubit.confirmLenderInspection(),
                   icon: const Icon(

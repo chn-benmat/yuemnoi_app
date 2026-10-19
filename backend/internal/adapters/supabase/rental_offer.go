@@ -165,7 +165,7 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 	}
 	if confirm && rental.Status == "pending" {
 		var updated []domain.RentalOrder
-		if err := r.client.DB.From("booking_tb").Update(map[string]any{"status": "confirmed", "updated_at": time.Now().UTC()}).Eq("id", strconv.FormatInt(rental.ID, 10)).Eq("status", "pending").ExecuteWithContext(ctx, &updated); err != nil {
+		if err := r.client.DB.From("booking_tb").Update(map[string]any{"status": "confirmed", "updated_at": time.Now().UTC(), "notification_actor_id": userID}).Eq("id", strconv.FormatInt(rental.ID, 10)).Eq("status", "pending").ExecuteWithContext(ctx, &updated); err != nil {
 			return nil, fmt.Errorf("confirm accepted offer: %w", err)
 		}
 		if len(updated) != 1 {
