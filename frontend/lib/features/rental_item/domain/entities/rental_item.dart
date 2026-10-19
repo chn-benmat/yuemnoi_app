@@ -15,6 +15,16 @@ class RentalItemImage {
   final String fileName;
 }
 
+class RentalItemPhoto {
+  const RentalItemPhoto.remote(String url) : remoteUrl = url, localImage = null;
+  const RentalItemPhoto.local(RentalItemImage image)
+    : localImage = image,
+      remoteUrl = null;
+
+  final String? remoteUrl;
+  final RentalItemImage? localImage;
+}
+
 class RentalItemDraft {
   const RentalItemDraft({
     required this.name,

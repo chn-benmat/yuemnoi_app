@@ -69,7 +69,7 @@ void main() {
         ),
       ),
     );
-    expect(find.text('รูปภาพสินค้า'), findsOneWidget);
+    expect(find.text('รูปภาพอุปกรณ์'), findsOneWidget);
     expect(find.byKey(const Key('edit-item-name')), findsOneWidget);
     expect(find.byKey(const Key('edit-item-category')), findsOneWidget);
     await tester.scrollUntilVisible(
@@ -85,7 +85,7 @@ void main() {
     expect(find.byKey(const Key('edit-item-rental-type')), findsOneWidget);
     expect(find.byKey(const Key('edit-item-price')), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('บันทึก'),
+      find.text('บันทึกการแก้ไข'),
       150,
       scrollable: find
           .descendant(
@@ -94,7 +94,7 @@ void main() {
           )
           .first,
     );
-    expect(find.text('บันทึก'), findsOneWidget);
+    expect(find.text('บันทึกการแก้ไข'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

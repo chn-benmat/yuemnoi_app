@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import '../constants/colors.dart';
 import '../models/pickup_location.dart';
 import '../navigation/app_routes.dart';
+import '../theme/app_form_field_styles.dart';
 
 class PickupLocationField extends StatelessWidget {
   const PickupLocationField({
@@ -12,10 +13,12 @@ class PickupLocationField extends StatelessWidget {
     this.value,
     required this.onChanged,
     this.enabled = true,
+    this.variant = AppFormFieldVariant.filled,
   });
   final PickupLocation? value;
   final ValueChanged<PickupLocation> onChanged;
   final bool enabled;
+  final AppFormFieldVariant variant;
 
   @override
   Widget build(BuildContext context) => FormField<PickupLocation>(
@@ -35,8 +38,21 @@ class PickupLocationField extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Material(
-          color: const Color(0xFFF0F1F2),
-          borderRadius: BorderRadius.circular(24),
+          color: variant == AppFormFieldVariant.outlined
+              ? Colors.white
+              : const Color(0xFFF0F1F2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              variant == AppFormFieldVariant.outlined ? 16 : 24,
+            ),
+            side: variant == AppFormFieldVariant.outlined
+                ? BorderSide(
+                    color: field.hasError
+                        ? Theme.of(context).colorScheme.error
+                        : AppFormFieldStyles.outlinedBorderColor,
+                  )
+                : BorderSide.none,
+          ),
           child: ListTile(
             key: const Key('pickup-location-field'),
             shape: RoundedRectangleBorder(
@@ -55,7 +71,15 @@ class PickupLocationField extends StatelessWidget {
                       value!.note,
                     ].where((s) => s.isNotEmpty).join('\n'),
                   ),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: variant == AppFormFieldVariant.outlined && value != null
+                ? const Text(
+                    'เปลี่ยน',
+                    style: TextStyle(
+                      color: AppColors.primaryColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                : const Icon(Icons.chevron_right),
             onTap: !enabled
                 ? null
                 : () async {

@@ -120,6 +120,7 @@ class ItemEditDraft extends Equatable {
     required this.price,
     required this.retainedImageUrls,
     required this.newImages,
+    this.imageOrder,
     this.pickupLocation,
   });
 
@@ -131,7 +132,37 @@ class ItemEditDraft extends Equatable {
   final int price;
   final List<String> retainedImageUrls;
   final List<RentalItemImage> newImages;
+  final List<RentalItemPhoto>? imageOrder;
   final PickupLocation? pickupLocation;
+
+  List<String> resolveImageUrls(List<String> uploadedUrls) {
+    if (uploadedUrls.length != newImages.length) {
+      throw const FormatException('จำนวนรูปที่อัปโหลดไม่ครบ');
+    }
+    final order = imageOrder;
+    if (order == null) return [...retainedImageUrls, ...uploadedUrls];
+    final remainingRemote = [...retainedImageUrls];
+    final remainingLocal = [...newImages];
+    final urls = <String>[];
+    for (final photo in order) {
+      if (photo.remoteUrl case final url?) {
+        if (!remainingRemote.remove(url)) {
+          throw const FormatException('ลำดับรูปภาพไม่ถูกต้อง');
+        }
+        urls.add(url);
+      } else {
+        final image = photo.localImage;
+        if (!remainingLocal.remove(image)) {
+          throw const FormatException('ลำดับรูปภาพไม่ถูกต้อง');
+        }
+        urls.add(uploadedUrls[newImages.indexOf(image!)]);
+      }
+    }
+    if (remainingRemote.isNotEmpty || remainingLocal.isNotEmpty) {
+      throw const FormatException('ลำดับรูปภาพไม่ครบ');
+    }
+    return urls;
+  }
 
   @override
   List<Object?> get props => [
@@ -143,6 +174,7 @@ class ItemEditDraft extends Equatable {
     price,
     retainedImageUrls,
     newImages,
+    imageOrder,
     pickupLocation,
   ];
 }

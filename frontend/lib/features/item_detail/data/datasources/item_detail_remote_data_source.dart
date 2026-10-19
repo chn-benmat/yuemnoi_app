@@ -128,7 +128,7 @@ class ItemDetailRemoteDataSource {
         uploadedUrls.add(_client.storage.from(_bucket).getPublicUrl(path));
       }
 
-      final imageUrls = [...draft.retainedImageUrls, ...uploadedUrls];
+      final imageUrls = draft.resolveImageUrls(uploadedUrls);
       if (imageUrls.isEmpty) {
         throw const ItemDetailRemoteException(
           'กรุณาเพิ่มรูปภาพอย่างน้อย 1 รูป',
