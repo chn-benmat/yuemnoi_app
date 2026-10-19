@@ -62,10 +62,11 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
     _selectedPaymentMethod = _bookingData.paymentMethod;
     final destination = LocationService.resolveCoordinates(
       locationName: _bookingData.location,
-      latitude: _bookingData.latitude,
-      longitude: _bookingData.longitude,
+      latitude: _bookingData.latitude ?? _bookingData.item.latitude,
+      longitude: _bookingData.longitude ?? _bookingData.item.longitude,
     );
-    if (_bookingData.latitude != null && _bookingData.longitude != null) {
+    if ((_bookingData.latitude ?? _bookingData.item.latitude) != null &&
+        (_bookingData.longitude ?? _bookingData.item.longitude) != null) {
       unawaited(LocationService.instance.preloadDrivingRoute(destination));
     }
   }
@@ -527,8 +528,10 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                       location: _bookingData.location,
                       locationNote: _bookingData.locationNote,
                       locationAddress: _bookingData.locationAddress,
-                      latitude: _bookingData.latitude,
-                      longitude: _bookingData.longitude,
+                      latitude:
+                          _bookingData.latitude ?? _bookingData.item.latitude,
+                      longitude:
+                          _bookingData.longitude ?? _bookingData.item.longitude,
                       isEditable: false,
                     ),
                     const SizedBox(height: 18),

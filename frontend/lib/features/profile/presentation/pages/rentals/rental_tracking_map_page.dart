@@ -285,8 +285,11 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     _isOwner = widget.isOwner ?? false;
 
     // Resolve Destination Coordinates
-    final destLat = b?.latitude ?? widget.destinationLat;
-    final destLng = b?.longitude ?? widget.destinationLng;
+    // พิกัดจุดรับเป็นของประกาศอุปกรณ์ เลือกโดยเจ้าของตอนเพิ่มอุปกรณ์
+    final destLat =
+        b?.latitude ?? b?.item.latitude ?? widget.destinationLat;
+    final destLng =
+        b?.longitude ?? b?.item.longitude ?? widget.destinationLng;
 
     if (_hasDestinationCoordinates) {
       _destinationLocation = LatLng(destLat!, destLng!);
@@ -537,8 +540,12 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   }
 
   bool get _hasDestinationCoordinates {
-    final lat = widget.bookingData?.latitude ?? widget.destinationLat;
-    final lng = widget.bookingData?.longitude ?? widget.destinationLng;
+    final lat = widget.bookingData?.latitude ??
+        widget.bookingData?.item.latitude ??
+        widget.destinationLat;
+    final lng = widget.bookingData?.longitude ??
+        widget.bookingData?.item.longitude ??
+        widget.destinationLng;
     return lat != null &&
         lng != null &&
         lat.isFinite &&

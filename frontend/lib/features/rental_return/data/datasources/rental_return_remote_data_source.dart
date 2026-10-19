@@ -224,6 +224,7 @@ class RentalReturnRemoteDataSource {
 
         return RentalReturnSession(
           rentalId: effectiveOrderId,
+          itemId: itemId > 0 ? itemId : null,
           itemName:
               itemData['item_name']?.toString() ??
               'อุปกรณ์เช่า #${effectiveOrderId.toString().padLeft(5, '0')}',

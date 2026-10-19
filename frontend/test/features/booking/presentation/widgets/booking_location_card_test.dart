@@ -71,7 +71,7 @@ void main() {
       expect(seacon.longitude, 100.4341077);
     });
 
-    test('BookingRequestData serializes and deserializes coordinates', () {
+    test('BookingRequestData leaves pickup coordinates on the item record', () {
       final now = DateTime(2026, 9, 10);
       final req = BookingRequestData(
         item: BookingItemInfo.defaultMockItem,
@@ -87,15 +87,15 @@ void main() {
 
       final payload = req.toChatMessagePayload();
       expect(payload, contains('ไอคอนสยาม (ICONSIAM)'));
-      expect(payload, contains('"latitude":13.7267'));
-      expect(payload, contains('"longitude":100.5108'));
+      expect(payload, isNot(contains('"latitude":13.7267')));
+      expect(payload, isNot(contains('"longitude":100.5108')));
 
       final parsed = BookingRequestData.fromChatMessage(payload);
       expect(parsed, isNotNull);
       expect(parsed!.location, 'ไอคอนสยาม (ICONSIAM)');
       expect(parsed.locationNote, 'หน้าร้านกาแฟ ชั้น G');
-      expect(parsed.latitude, 13.7267);
-      expect(parsed.longitude, 100.5108);
+      expect(parsed.latitude, isNull);
+      expect(parsed.longitude, isNull);
     });
   });
 }
