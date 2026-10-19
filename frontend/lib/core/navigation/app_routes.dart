@@ -593,8 +593,20 @@ abstract final class AppRoutes {
         ),
         GoRoute(
           path: review,
-          pageBuilder: (context, state) =>
-              const MaterialPage<void>(child: RentalReviewScreen()),
+          pageBuilder: (context, state) {
+            final extra = state.extra;
+            final args = extra is Map ? extra : const <String, dynamic>{};
+            return MaterialPage<void>(
+              child: RentalReviewScreen(
+                itemName: args['itemName'] as String? ?? 'อุปกรณ์ที่เช่า',
+                itemId: args['itemId'] is num
+                    ? (args['itemId'] as num).toInt()
+                    : null,
+                ownerName: args['ownerName'] as String? ?? 'ผู้ปล่อยเช่า',
+                itemImageUrl: args['itemImageUrl'] as String?,
+              ),
+            );
+          },
         ),
         GoRoute(
           path: rentalReturn,
@@ -676,8 +688,22 @@ abstract final class AppRoutes {
     return context.push<void>(chatbot);
   }
 
-  static Future<void> openReview(BuildContext context) {
-    return context.push<void>(review);
+  static Future<void> openReview(
+    BuildContext context, {
+    String? itemName,
+    int? itemId,
+    String? ownerName,
+    String? itemImageUrl,
+  }) {
+    return context.push<void>(
+      review,
+      extra: {
+        if (itemName != null) 'itemName': itemName,
+        if (itemId != null) 'itemId': itemId,
+        if (ownerName != null) 'ownerName': ownerName,
+        if (itemImageUrl != null) 'itemImageUrl': itemImageUrl,
+      },
+    );
   }
 
   static Future<void> openChatDetail(

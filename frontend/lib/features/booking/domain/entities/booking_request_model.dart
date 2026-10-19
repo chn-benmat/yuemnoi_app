@@ -181,8 +181,6 @@ class BookingRequestData {
       'location': location,
       'locationNote': locationNote,
       'locationAddress': locationAddress,
-      if (latitude != null) 'latitude': latitude,
-      if (longitude != null) 'longitude': longitude,
       'totalPrice': totalPrice,
       'paymentMethod': paymentMethod,
       'conversationId': conversationId,
@@ -251,13 +249,6 @@ $metaStartTag$jsonString$metaEndTag''';
           final resolvedOriginalMessageId =
               (map['originalMessageId'] as String?) ?? messageId;
 
-          final double? lat =
-              (map['latitude'] as num?)?.toDouble() ??
-              ((map['location'] == 'ซีคอน บางแค') ? 13.7115884 : null);
-          final double? lng =
-              (map['longitude'] as num?)?.toDouble() ??
-              ((map['location'] == 'ซีคอน บางแค') ? 100.4341077 : null);
-
           return BookingRequestData(
             item: item,
             bookingId: (map['bookingId'] as num?)?.toInt(),
@@ -271,8 +262,9 @@ $metaStartTag$jsonString$metaEndTag''';
             locationNote:
                 map['locationNote'] as String? ?? 'เลือกโดยผู้ปล่อยเช่า',
             locationAddress: map['locationAddress'] as String?,
-            latitude: lat,
-            longitude: lng,
+            // พิกัดเป็นข้อมูลของประกาศอุปกรณ์ ไม่อ่านจากข้อมูลคำขอเช่าเก่า
+            latitude: null,
+            longitude: null,
             conversationId: map['conversationId'] as String?,
             ownerId: map['ownerId'] as String?,
             originalMessageId: resolvedOriginalMessageId,
@@ -304,8 +296,6 @@ $metaStartTag$jsonString$metaEndTag''';
         startTime: const TimeOfDay(hour: 9, minute: 0),
         endTime: const TimeOfDay(hour: 17, minute: 0),
         location: 'นัดรับตามตกลง',
-        latitude: 13.7115884,
-        longitude: 100.4341077,
         originalMessageId: messageId,
       );
     }

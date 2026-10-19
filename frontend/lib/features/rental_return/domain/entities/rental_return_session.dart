@@ -87,6 +87,7 @@ class ReturnInspectionPhoto {
 /// ข้อมูลการเช่าและขั้นตอนการคืนอุปกรณ์ทั้งหมด
 class RentalReturnSession {
   final int rentalId;
+  final int? itemId;
   final String itemName;
   final String itemImageUrl;
   final String category;
@@ -111,6 +112,7 @@ class RentalReturnSession {
 
   const RentalReturnSession({
     required this.rentalId,
+    this.itemId,
     required this.itemName,
     required this.itemImageUrl,
     required this.category,
@@ -243,6 +245,7 @@ class RentalReturnSession {
   }) {
     return RentalReturnSession(
       rentalId: rentalId,
+      itemId: itemId,
       itemName: itemName,
       itemImageUrl: itemImageUrl,
       category: category,

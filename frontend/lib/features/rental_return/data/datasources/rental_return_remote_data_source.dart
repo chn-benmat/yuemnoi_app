@@ -99,6 +99,8 @@ class RentalReturnRemoteDataSource {
     );
     return RentalReturnSession(
       rentalId: rentalId,
+      itemId:
+          (item['id'] as num?)?.toInt() ?? (booking['item_id'] as num?)?.toInt(),
       itemName: item['item_name']?.toString() ?? 'อุปกรณ์เช่า',
       itemImageUrl: image is List
           ? image.firstOrNull?.toString() ?? ''

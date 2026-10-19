@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/repositories/rental_return_repository_impl.dart';
 import '../../domain/entities/rental_return_session.dart';
@@ -14,7 +15,6 @@ import '../widgets/merchant_qr_dialog.dart';
 import '../widgets/rental_time_card.dart';
 import '../widgets/renter_qr_scanner_sheet.dart';
 import '../../domain/repositories/rental_return_repository.dart';
-import '../widgets/return_completed_dialog.dart';
 import '../widgets/urgent_return_alarm_dialog.dart';
 
 class RentalReturnPage extends StatelessWidget {
@@ -117,7 +117,12 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
           );
         }
 
-        if (state.successMessage != null && state.successMessage!.isNotEmpty) {
+        final returnCompleted =
+            state.session.step == RentalReturnStep.completed &&
+            state.successMessage != null;
+        if (!returnCompleted &&
+            state.successMessage != null &&
+            state.successMessage!.isNotEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -147,15 +152,10 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
         }
 
         if (state.session.step == RentalReturnStep.completed &&
+            state.successMessage != null &&
             !_didShowSuccess) {
           _didShowSuccess = true;
-          ReturnCompletedDialog.show(
-            context: context,
-            session: state.session,
-            onDismiss: () {
-              Navigator.of(context).pop(true);
-            },
-          );
+          unawaited(_leaveReturnFlow(state));
         }
       },
       builder: (context, state) {
@@ -315,5 +315,19 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
         );
       },
     );
+  }
+
+  Future<void> _leaveReturnFlow(RentalReturnState state) async {
+    _refreshTimer?.cancel();
+    if (state.isRenter) {
+      await AppRoutes.openReview(
+        context,
+        itemName: state.session.itemName,
+        itemId: state.session.itemId,
+        ownerName: state.session.lenderName,
+        itemImageUrl: state.session.itemImageUrl,
+      );
+    }
+    if (mounted) AppRoutes.goToHome(context);
   }
 }

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/network/supabase_client.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
 /// หน้าจอ UI สำหรับรีวิวประสบการณ์การเช่าสินค้า (Rental Review Screen)
-/// ออกแบบตามแบบและเสริมลูกเล่นระดับ Senior Frontend (Interactive Rating, Quick Tags, Real-time Counter, Success Dialog)
+/// แบบฟอร์มรีวิวพร้อมบันทึกผลลง Supabase หลังยืนยันการส่ง
 class RentalReviewScreen extends StatefulWidget {
   final String itemName;
+  final int? itemId;
   final String itemSubtitle;
   final String ownerName;
   final String? itemImageUrl;
@@ -14,9 +17,10 @@ class RentalReviewScreen extends StatefulWidget {
 
   const RentalReviewScreen({
     super.key,
-    this.itemName = 'Sony Alpha A7 III',
-    this.itemSubtitle = 'กล้องดิจิทัล Mirrorless ฟูลเฟรม',
-    this.ownerName = 'Jessica',
+    this.itemName = 'อุปกรณ์ที่เช่า',
+    this.itemId,
+    this.itemSubtitle = '',
+    this.ownerName = 'ผู้ปล่อยเช่า',
     this.itemImageUrl,
     this.ownerAvatarUrl,
   });
@@ -26,9 +30,10 @@ class RentalReviewScreen extends StatefulWidget {
 }
 
 class _RentalReviewScreenState extends State<RentalReviewScreen> {
-  int _selectedRating = 5;
+  int _selectedRating = 0;
+  bool _isSubmitting = false;
   late final TextEditingController _reviewController;
-  final Set<String> _selectedTags = {'📦 สภาพสินค้าดีเยี่ยม'};
+  final Set<String> _selectedTags = {};
 
   // ตัวเลือกข้อความประทับใจด่วน (2 คอลัมน์)
   static const List<String> _quickTags = [
@@ -41,8 +46,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
   @override
   void initState() {
     super.initState();
-    // ค่าเริ่มต้นจำลองตามภาพตัวอย่าง
-    _reviewController = TextEditingController(text: 'สุดยอดสุดยอดเยี่ยมจริงๆ');
+    _reviewController = TextEditingController();
   }
 
   @override
@@ -64,7 +68,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
       case 1:
         return 'เป็นประสบการณ์ที่ไม่น่าประทับใจ 😞';
       default:
-        return 'เป็นประสบการณ์';
+        return 'แตะดาวเพื่อให้คะแนน';
     }
   }
 
@@ -78,15 +82,64 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
     });
   }
 
-  void _handleSubmitReview() {
+  Future<void> _handleSubmitReview() async {
     FocusScope.of(context).unfocus();
 
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildSuccessModal(context),
-    );
+    final client = SupabaseConfig.isInitialized ? SupabaseConfig.client : null;
+    final itemId = widget.itemId;
+    final userId = client?.auth.currentUser?.id;
+    if (client == null ||
+        itemId == null ||
+        itemId <= 0 ||
+        userId == null ||
+        userId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'ไม่พบข้อมูลการเช่าหรือบัญชีผู้ใช้ กรุณาเปิดรีวิวจากรายการเช่า',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final comment = _reviewController.text.trim();
+    final tags = _selectedTags.toList(growable: false);
+    final description = [
+      if (comment.isNotEmpty) comment,
+      if (tags.isNotEmpty) 'จุดที่ประทับใจ: ${tags.join(', ')}',
+    ].join('\n');
+
+    setState(() => _isSubmitting = true);
+    try {
+      await client.from('review_tb').insert({
+        'user_id': userId,
+        'item_id': itemId,
+        'rating': _selectedRating.toString(),
+        'description': description.isEmpty ? null : description,
+      });
+
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _buildSuccessModal(context),
+      );
+    } catch (error) {
+      debugPrint('Failed to submit rental review: $error');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ส่งรีวิวไม่สำเร็จ กรุณาลองอีกครั้ง'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Color(0xFFB42318),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override
@@ -94,12 +147,12 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        backgroundColor: AppColors.primaryColor,
+        backgroundColor: const Color(0xFFFFFCFF),
         elevation: 0,
         centerTitle: false,
         titleSpacing: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
+          icon: const Icon(Icons.arrow_back, size: 24),
           tooltip: 'ย้อนกลับ',
           onPressed: () => Navigator.of(context).maybePop(),
         ),
@@ -107,7 +160,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
           'รีวิว',
           style: TextStyle(
             fontFamily: AppTextStyles.fontFamily,
-            color: Colors.white,
+            color: Color(0xFF24212A),
             fontSize: 20,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.3,
@@ -122,6 +175,20 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 8),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryColor.withValues(alpha: 0.09),
+                  borderRadius: BorderRadius.circular(17),
+                ),
+                child: const Icon(
+                  Icons.rate_review_rounded,
+                  color: AppColors.primaryColor,
+                  size: 27,
+                ),
+              ),
+              const SizedBox(height: 16),
 
               // ── 1. Headline & Description ──
               const Text(
@@ -129,15 +196,15 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1E2022),
-                  height: 1.25,
+                  fontSize: 25,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF25212B),
+                  height: 1.3,
                 ),
               ),
               const SizedBox(height: 12),
               const Text(
-                'ช่วยให้คำรีวิว และ คะแนนให้กับผู้ปล่อยเช่า\nจากประสบการณ์การเช่าของคุณ',
+                'แบ่งปันประสบการณ์จริงของคุณ เพื่อช่วยให้\nผู้เช่าคนต่อไปตัดสินใจได้ง่ายขึ้น',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
@@ -152,49 +219,45 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
               // ── 2. Rental Item & Owner Card ──
               _buildItemAndOwnerCard(),
 
-              const SizedBox(height: 28),
-
-              // ── 3. Star Rating Section ──
-              const Text(
-                'การให้คะแนนของคุณ',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF4A4D4F),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFFEDE7F2)),
                 ),
-              ),
-              const SizedBox(height: 14),
-
-              // 5 Stars Row
-              _buildInteractiveStars(),
-
-              const SizedBox(height: 10),
-
-              // Sentiment dynamic feedback text
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                transitionBuilder: (child, animation) {
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.2),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
+                child: Column(
+                  children: [
+                    const Text(
+                      'ให้คะแนนผู้ปล่อยเช่า',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF34303A),
+                      ),
                     ),
-                  );
-                },
-                child: Text(
-                  _getSentimentLabel(_selectedRating),
-                  key: ValueKey<int>(_selectedRating),
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primaryColor,
-                  ),
+                    const SizedBox(height: 10),
+                    _buildInteractiveStars(),
+                    const SizedBox(height: 8),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: Text(
+                        _getSentimentLabel(_selectedRating),
+                        key: ValueKey<int>(_selectedRating),
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _selectedRating == 0
+                              ? const Color(0xFF89838F)
+                              : AppColors.primaryColor,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
@@ -220,6 +283,14 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
       ),
     );
   }
+
+  Widget _buildItemImageFallback() => const Center(
+    child: Icon(
+      Icons.camera_alt_rounded,
+      color: Color(0xFF8C9098),
+      size: 36,
+    ),
+  );
 
   /// การ์ดข้อมูลสินค้าและผู้ปล่อยเช่า สไตล์โมเดิร์น
   Widget _buildItemAndOwnerCard() {
@@ -253,17 +324,13 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.asset(
-                  'assets/images/chat_lens_set.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const Center(
-                    child: Icon(
-                      Icons.camera_alt_rounded,
-                      color: Color(0xFF8C9098),
-                      size: 36,
-                    ),
-                  ),
-                ),
+                widget.itemImageUrl?.isNotEmpty == true
+                    ? Image.network(
+                        widget.itemImageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _buildItemImageFallback(),
+                      )
+                    : _buildItemImageFallback(),
               ],
             ),
           ),
@@ -286,6 +353,19 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
                     color: Color(0xFF1E2022),
                   ),
                 ),
+                if (widget.itemSubtitle.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    widget.itemSubtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 12,
+                      color: Color(0xFF77717D),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
 
                 // ผู้ปล่อยเช่า row
@@ -307,14 +387,19 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
                             ),
                           ),
                           clipBehavior: Clip.antiAlias,
-                          child: Image.asset(
-                            'assets/images/chat_sarah.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Image.asset(
-                              'assets/images/user.png',
-                              fit: BoxFit.cover,
-                            ),
-                          ),
+                          child: widget.ownerAvatarUrl?.isNotEmpty == true
+                              ? Image.network(
+                                  widget.ownerAvatarUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Image.asset(
+                                    'assets/images/user.png',
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Image.asset(
+                                  'assets/images/user.png',
+                                  fit: BoxFit.cover,
+                                ),
                         ),
                         Positioned(
                           right: 0,
@@ -552,9 +637,9 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            color: const Color(0xFFEFF1F4),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE8E2ED)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           child: TextField(
@@ -589,47 +674,62 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
 
   /// ปุ่ม "ให้คะแนน" สไตล์พรีเมียมแคปซูล
   Widget _buildSubmitButton() {
+    final canSubmit = _selectedRating > 0 && !_isSubmitting;
     return Container(
       width: double.infinity,
       height: 54,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7400C9), Color(0xFF8F19E8)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF7400C9).withValues(alpha: 0.32),
-            blurRadius: 18,
-            offset: const Offset(0, 7),
-          ),
-        ],
+        color: canSubmit ? null : const Color(0xFFE7E3EA),
+        gradient: canSubmit
+            ? const LinearGradient(
+                colors: [Color(0xFF7400C9), Color(0xFF8F19E8)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              )
+            : null,
+        boxShadow: canSubmit
+            ? [
+                BoxShadow(
+                  color: AppColors.primaryColor.withValues(alpha: 0.22),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ]
+            : const [],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(30),
-          onTap: _handleSubmitReview,
-          child: const Center(
-            child: Text(
-              'ให้คะแนน',
-              style: TextStyle(
-                fontFamily: AppTextStyles.fontFamily,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                letterSpacing: 0.5,
-              ),
-            ),
+          onTap: canSubmit ? _handleSubmitReview : null,
+          child: Center(
+            child: _isSubmitting
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    'ส่งรีวิว',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: canSubmit ? Colors.white : const Color(0xFF8E8993),
+                      letterSpacing: 0.3,
+                    ),
+                  ),
           ),
         ),
       ),
     );
   }
 
-  /// หน้าต่าง Modal สรุปผลการรีวิวแบบจำลอง
+  /// หน้าต่างยืนยันเมื่อบันทึกรีวิวสำเร็จ
   Widget _buildSuccessModal(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -668,7 +768,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
           const SizedBox(height: 16),
 
           const Text(
-            'ส่งรีวิวสำเร็จ! (ตัวอย่าง UI)',
+            'ส่งรีวิวสำเร็จ',
             style: TextStyle(
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 20,
@@ -738,16 +838,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
               ),
               onPressed: () {
                 Navigator.of(context).pop();
-                ScaffoldMessenger.of(this.context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'การจำลองให้คะแนนรีวิวเรียบร้อยแล้ว',
-                      style: TextStyle(fontFamily: AppTextStyles.fontFamily),
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: AppColors.primaryColor,
-                  ),
-                );
+                AppRoutes.goToHome(this.context);
               },
               child: const Text(
                 'ตกลง',

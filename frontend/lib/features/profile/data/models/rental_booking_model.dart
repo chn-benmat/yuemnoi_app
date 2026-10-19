@@ -86,8 +86,9 @@ class RentalBookingModel {
       duration: duration,
       totalPrice: price,
       pickupLocation: booking['pickup_location']?.toString(),
-      latitude: double.tryParse('${booking['latitude']}'),
-      longitude: double.tryParse('${booking['longitude']}'),
+      // ใช้จุดที่เจ้าของเลือกไว้บนประกาศอุปกรณ์ ไม่อ่านพิกัดซ้ำจาก booking_tb
+      latitude: double.tryParse('${itemData?['pickup_latitude']}'),
+      longitude: double.tryParse('${itemData?['pickup_longitude']}'),
       pickupNote: booking['pickup_note']?.toString(),
       isOwner: isOwner,
     );
