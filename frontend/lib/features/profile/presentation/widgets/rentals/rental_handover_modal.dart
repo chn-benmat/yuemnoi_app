@@ -53,7 +53,10 @@ class RentalHandoverModal extends StatefulWidget {
     if (itemId != null && itemId > 0) {
       return 'handover_progress_step_item_$itemId';
     }
-    final clean = (itemTitle ?? 'default').replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+    final clean = (itemTitle ?? 'default').replaceAll(
+      RegExp(r'[^a-zA-Z0-9_]'),
+      '_',
+    );
     return 'handover_progress_step_title_$clean';
   }
 
@@ -184,7 +187,8 @@ class RentalHandoverModal extends StatefulWidget {
 class _RentalHandoverModalState extends State<RentalHandoverModal> {
   late bool _isOwner;
   late final UpdateBookingStatusUseCase _updateBookingStatusUseCase;
-  int _currentStep = 0; // 0: ตรวจสภาพ, 1: ชำระเงิน, 2: รหัสยืนยัน PIN, 3: สำเร็จ
+  int _currentStep =
+      0; // 0: ตรวจสภาพ, 1: ชำระเงิน, 2: รหัสยืนยัน PIN, 3: สำเร็จ
   int _maxStepReached = 0;
 
   // สเต็ป 3: Handover PIN & QR Code
@@ -215,7 +219,10 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
     if (widget.itemId != null && widget.itemId! > 0) {
       return 'handover_i_${widget.itemId}';
     }
-    final clean = widget.itemTitle.replaceAll(RegExp(r'[^a-zA-Z0-9_\u0E00-\u0E7F]'), '_');
+    final clean = widget.itemTitle.replaceAll(
+      RegExp(r'[^a-zA-Z0-9_\u0E00-\u0E7F]'),
+      '_',
+    );
     return 'handover_$clean';
   }
 
@@ -223,11 +230,13 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   void initState() {
     super.initState();
     _isOwner = widget.initialIsOwner;
-    _updateBookingStatusUseCase = widget.updateBookingStatusUseCase ??
+    _updateBookingStatusUseCase =
+        widget.updateBookingStatusUseCase ??
         UpdateBookingStatusUseCase(RentalManagementRepositoryImpl());
 
     if (_isOwner) {
-      _currentStep = 2; // ฝั่งผู้ปล่อยเช่าเริ่มที่ขั้นตอนเดียวคือ รับรหัสส่งมอบ ทันที
+      _currentStep =
+          2; // ฝั่งผู้ปล่อยเช่าเริ่มที่ขั้นตอนเดียวคือ รับรหัสส่งมอบ ทันที
       _maxStepReached = 2;
     } else {
       final key = _storageKey;
@@ -300,12 +309,14 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
       final key = _storageKey;
       RentalHandoverModal._memoryProgressCache[key] = _currentStep;
       RentalHandoverModal._memoryMaxStepCache[key] = _maxStepReached;
-      SharedPreferences.getInstance().then((prefs) {
-        prefs.setInt(key, _currentStep);
-        prefs.setInt('${key}_max', _maxStepReached);
-      }).catchError((dynamic e) {
-        debugPrint('Error saving handover step: $e');
-      });
+      SharedPreferences.getInstance()
+          .then((prefs) {
+            prefs.setInt(key, _currentStep);
+            prefs.setInt('${key}_max', _maxStepReached);
+          })
+          .catchError((dynamic e) {
+            debugPrint('Error saving handover step: $e');
+          });
     }
   }
 
@@ -368,7 +379,9 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
     // 3. Fallback Polling ตรวจสอบทุก 1.5 วินาที สำหรับฝั่งผู้เช่า
     if (!_isOwner) {
       _statusPollTimer?.cancel();
-      _statusPollTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) async {
+      _statusPollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
+        _,
+      ) async {
         if (!mounted) return;
         try {
           if (widget.bookingId != null && widget.bookingId! > 0) {
@@ -456,12 +469,15 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
     }
 
     // 3. แจ้งในข้อความแชต (ถ้ามี conversationId) เพื่อให้สถานะทั้งสองฝั่งตรงกัน
-    if (widget.conversationId != null && widget.conversationId!.isNotEmpty && SupabaseConfig.isInitialized) {
+    if (widget.conversationId != null &&
+        widget.conversationId!.isNotEmpty &&
+        SupabaseConfig.isInitialized) {
       try {
         await SupabaseConfig.client.from('chat_message_tb').insert({
           'conversation_id': widget.conversationId,
           'sender_id': SupabaseConfig.client.auth.currentUser?.id,
-          'message': '✅ ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว เริ่มต้นช่วงเวลาเช่า',
+          'message':
+              '✅ ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว เริ่มต้นช่วงเวลาเช่า',
           'is_read': false,
         });
       } catch (_) {}
@@ -479,7 +495,8 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
       _completeHandover();
     } else {
       setState(() {
-        _pinErrorMessage = 'รหัส PIN ไม่ถูกต้อง (รหัสตัวอย่างคือ $_generatedPin)';
+        _pinErrorMessage =
+            'รหัส PIN ไม่ถูกต้อง (รหัสตัวอย่างคือ $_generatedPin)';
       });
     }
   }
@@ -526,13 +543,17 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
               Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
               SizedBox(width: 8),
               Expanded(
-                child: Text('ยกเลิกการเช่าเรียบร้อยแล้ว ระบบได้บันทึกหลักฐานแล้ว'),
+                child: Text(
+                  'ยกเลิกการเช่าเรียบร้อยแล้ว ระบบได้บันทึกหลักฐานแล้ว',
+                ),
               ),
             ],
           ),
           backgroundColor: const Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     }
@@ -556,92 +577,98 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
           ),
           child: SingleChildScrollView(
             child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ขีดจับลาก
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4.5,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(3),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ขีดจับลาก
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4.5,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
                   ),
                 ),
-              ),
 
-              // หัวแถว: ชื่อหัวข้อ
-              Text(
-                _isOwner ? 'รับรหัสส่งมอบ' : 'ตรวจรับ & ชำระเงิน',
-                style: const TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
-                  color: Color(0xFF0F172A),
+                // หัวแถว: ชื่อหัวข้อ
+                Text(
+                  _isOwner ? 'รับรหัสส่งมอบ' : 'ตรวจรับ & ชำระเงิน',
+                  style: const TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                    color: Color(0xFF0F172A),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
+                const SizedBox(height: 10),
 
-              // การ์ดแสดงชื่ออุปกรณ์ที่ตรวจรับ
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.inventory_2_outlined, size: 16, color: Color(0xFF64748B)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        widget.itemTitle,
-                        style: const TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0F172A),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                // การ์ดแสดงชื่ออุปกรณ์ที่ตรวจรับ
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.inventory_2_outlined,
+                        size: 16,
+                        color: Color(0xFF64748B),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          widget.itemTitle,
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF0F172A),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-              // สเต็ปบาร์ (Step Progress) - แสดงเฉพาะฝั่งผู้เช่าที่มี 3 ขั้นตอน
-              if (!_isOwner && _currentStep < 3) ...[
-                Row(
-                  children: [
-                    _buildStepIndicator(stepIndex: 0, label: '1. ตรวจสภาพ'),
-                    _buildStepLine(isActive: _currentStep >= 1),
-                    _buildStepIndicator(stepIndex: 1, label: '2. ชำระเงิน'),
-                    _buildStepLine(isActive: _currentStep >= 2),
-                    _buildStepIndicator(stepIndex: 2, label: '3. รหัสส่งมอบ'),
-                  ],
-                ),
-                const SizedBox(height: 18),
+                // สเต็ปบาร์ (Step Progress) - แสดงเฉพาะฝั่งผู้เช่าที่มี 3 ขั้นตอน
+                if (!_isOwner && _currentStep < 3) ...[
+                  Row(
+                    children: [
+                      _buildStepIndicator(stepIndex: 0, label: '1. ตรวจสภาพ'),
+                      _buildStepLine(isActive: _currentStep >= 1),
+                      _buildStepIndicator(stepIndex: 1, label: '2. ชำระเงิน'),
+                      _buildStepLine(isActive: _currentStep >= 2),
+                      _buildStepIndicator(stepIndex: 2, label: '3. รหัสส่งมอบ'),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                ],
+
+                // เนื้อหาตามสเต็ป
+                if (_currentStep == 0) _buildStepInspection(),
+                if (_currentStep == 1) _buildStepPayment(),
+                if (_currentStep == 2) _buildStepPinVerification(),
+                if (_currentStep == 3) _buildStepSuccess(),
               ],
-
-              // เนื้อหาตามสเต็ป
-              if (_currentStep == 0) _buildStepInspection(),
-              if (_currentStep == 1) _buildStepPayment(),
-              if (_currentStep == 2) _buildStepPinVerification(),
-              if (_currentStep == 3) _buildStepSuccess(),
-            ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   Widget _buildStepIndicator({required int stepIndex, required String label}) {
     final isPassed = _currentStep > stepIndex;
@@ -651,7 +678,9 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
     final Color badgeBg = isCurrent
         ? AppColors.primaryColor
         : (isPassed ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9));
-    final Color badgeFg = isCurrent || isPassed ? Colors.white : const Color(0xFF94A3B8);
+    final Color badgeFg = isCurrent || isPassed
+        ? Colors.white
+        : const Color(0xFF94A3B8);
     final Color textColor = isCurrent
         ? AppColors.primaryColor
         : (isPassed ? const Color(0xFF0F172A) : const Color(0xFF94A3B8));
@@ -672,7 +701,11 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: isPassed
-                  ? const Icon(Icons.check_rounded, size: 13, color: Colors.white)
+                  ? const Icon(
+                      Icons.check_rounded,
+                      size: 13,
+                      color: Colors.white,
+                    )
                   : Text(
                       '${stepIndex + 1}',
                       style: TextStyle(
@@ -726,7 +759,11 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.info_outline_rounded, color: Color(0xFF64748B), size: 18),
+              const Icon(
+                Icons.info_outline_rounded,
+                color: Color(0xFF64748B),
+                size: 18,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -754,11 +791,17 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
               backgroundColor: AppColors.primaryColor,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text(
               'ไปยังการชำระเงิน',
-              style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.w700, fontSize: 14),
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
             ),
           ),
         ),
@@ -771,7 +814,9 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: Color(0xFFFECACA)),
               backgroundColor: const Color(0xFFFFF5F5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               elevation: 0,
             ),
             child: const Text(
@@ -834,7 +879,10 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(8),
@@ -869,11 +917,19 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.qr_code_2_rounded, size: 105, color: Color(0xFF0F172A)),
+                  const Icon(
+                    Icons.qr_code_2_rounded,
+                    size: 105,
+                    color: Color(0xFF0F172A),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     'PromptPay: ${widget.ownerName}',
-                    style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 10.5, color: Color(0xFF64748B)),
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 10.5,
+                      color: Color(0xFF64748B),
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -887,7 +943,11 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                 ? 'ให้ผู้เช่าสแกน QR Code นี้ผ่านแอปธนาคาร เมื่อเงินเข้าบัญชีแล้วให้กดยืนยันด้านล่าง'
                 : 'สแกน QR Code เพื่อโอนเงินยอด ฿${widget.totalPrice.toStringAsFixed(0)} แล้วกดยืนยันการโอนเงิน',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 12.5, color: Color(0xFF64748B)),
+            style: const TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 12.5,
+              color: Color(0xFF64748B),
+            ),
           ),
         ] else ...[
           // กรณีเงินสด - Clean Swiss Neutral Card (No neon green pastel slop)
@@ -900,7 +960,11 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
             ),
             child: Column(
               children: [
-                const Icon(Icons.payments_outlined, color: Color(0xFF0F172A), size: 28),
+                const Icon(
+                  Icons.payments_outlined,
+                  color: Color(0xFF0F172A),
+                  size: 28,
+                ),
                 const SizedBox(height: 8),
                 Text(
                   _isOwner
@@ -928,20 +992,32 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
             child: ElevatedButton.icon(
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('คุณได้แจ้งชำระเงินแล้ว กำลังรอผู้ปล่อยเช่ายืนยัน')),
+                  const SnackBar(
+                    content: Text(
+                      'คุณได้แจ้งชำระเงินแล้ว กำลังรอผู้ปล่อยเช่ายืนยัน',
+                    ),
+                  ),
                 );
                 _setStep(2);
               },
               icon: const Icon(Icons.check_rounded, size: 18),
               label: Text(
-                isPromptPay ? 'ฉันโอนเงินเรียบร้อยแล้ว' : 'ฉันส่งมอบเงินสดเรียบร้อยแล้ว',
-                style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.w700, fontSize: 14),
+                isPromptPay
+                    ? 'ฉันโอนเงินเรียบร้อยแล้ว'
+                    : 'ฉันส่งมอบเงินสดเรียบร้อยแล้ว',
+                style: const TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryColor,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -950,7 +1026,11 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
             height: 40,
             child: TextButton.icon(
               onPressed: () => _setStep(0),
-              icon: const Icon(Icons.arrow_back_rounded, size: 16, color: Color(0xFF64748B)),
+              icon: const Icon(
+                Icons.arrow_back_rounded,
+                size: 16,
+                color: Color(0xFF64748B),
+              ),
               label: const Text(
                 'ย้อนกลับไปตรวจสภาพ',
                 style: TextStyle(
@@ -972,13 +1052,19 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
               icon: const Icon(Icons.verified_rounded, size: 18),
               label: Text(
                 'ยืนยันว่าได้รับเงินครบถ้วนแล้ว [฿${widget.totalPrice.toStringAsFixed(0)}]',
-                style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.w700, fontSize: 13.5),
+                style: const TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryColor,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -1071,7 +1157,11 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(width: 28, height: 1, color: const Color(0xFFE2E8F0)),
+                      Container(
+                        width: 28,
+                        height: 1,
+                        color: const Color(0xFFE2E8F0),
+                      ),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8),
                         child: Text(
@@ -1083,7 +1173,11 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                           ),
                         ),
                       ),
-                      Container(width: 28, height: 1, color: const Color(0xFFE2E8F0)),
+                      Container(
+                        width: 28,
+                        height: 1,
+                        color: const Color(0xFFE2E8F0),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -1100,7 +1194,9 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                           color: const Color(0xFFF5F3FF),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppColors.primaryColor.withValues(alpha: 0.35),
+                            color: AppColors.primaryColor.withValues(
+                              alpha: 0.35,
+                            ),
                             width: 1.5,
                           ),
                         ),
@@ -1123,20 +1219,31 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                       Clipboard.setData(ClipboardData(text: _generatedPin));
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('คัดลอกรหัส PIN $_generatedPin เรียบร้อยแล้ว'),
+                          content: Text(
+                            'คัดลอกรหัส PIN $_generatedPin เรียบร้อยแล้ว',
+                          ),
                           behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           duration: const Duration(seconds: 2),
                         ),
                       );
                     },
                     borderRadius: BorderRadius.circular(12),
                     child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.copy_rounded, size: 14, color: AppColors.primaryColor),
+                          Icon(
+                            Icons.copy_rounded,
+                            size: 14,
+                            color: AppColors.primaryColor,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'คัดลอกรหัส PIN',
@@ -1254,7 +1361,10 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                   decoration: InputDecoration(
                     counterText: '',
                     hintText: '••••',
-                    hintStyle: const TextStyle(letterSpacing: 8, color: Color(0xFFCBD5E1)),
+                    hintStyle: const TextStyle(
+                      letterSpacing: 8,
+                      color: Color(0xFFCBD5E1),
+                    ),
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -1264,7 +1374,10 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.primaryColor, width: 2),
+                      borderSide: const BorderSide(
+                        color: AppColors.primaryColor,
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),
@@ -1352,13 +1465,15 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
             color: const Color(0xFF10B981).withValues(alpha: 0.15),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 48),
+          child: const Icon(
+            Icons.check_circle_rounded,
+            color: Color(0xFF10B981),
+            size: 48,
+          ),
         ),
         const SizedBox(height: 14),
         Text(
-          _isOwner
-              ? 'ส่งมอบอุปกรณ์สำเร็จ!'
-              : 'ส่งมอบและเริ่มการเช่าสำเร็จ!',
+          _isOwner ? 'ส่งมอบอุปกรณ์สำเร็จ!' : 'ส่งมอบและเริ่มการเช่าสำเร็จ!',
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontFamily: AppTextStyles.fontFamily,
@@ -1389,11 +1504,17 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryColor,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
             ),
             child: const Text(
               'เสร็จสิ้น',
-              style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.bold, fontSize: 15),
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
             ),
           ),
         ),
@@ -1512,7 +1633,11 @@ class _OwnerQrScannerDialogState extends State<_OwnerQrScannerDialog>
             children: [
               const Row(
                 children: [
-                  Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
+                  Icon(
+                    Icons.qr_code_scanner_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'สแกน QR Code ของผู้เช่า',
@@ -1530,8 +1655,12 @@ class _OwnerQrScannerDialogState extends State<_OwnerQrScannerDialog>
                   IconButton(
                     tooltip: 'เปิด/ปิดแฟลช',
                     icon: Icon(
-                      _isTorchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                      color: _isTorchOn ? const Color(0xFFFFD700) : Colors.white70,
+                      _isTorchOn
+                          ? Icons.flash_on_rounded
+                          : Icons.flash_off_rounded,
+                      color: _isTorchOn
+                          ? const Color(0xFFFFD700)
+                          : Colors.white70,
                     ),
                     onPressed: () async {
                       await _scannerController.toggleTorch();
@@ -1540,12 +1669,18 @@ class _OwnerQrScannerDialogState extends State<_OwnerQrScannerDialog>
                   ),
                   IconButton(
                     tooltip: 'สลับกล้องหน้า/หลัง',
-                    icon: const Icon(Icons.flip_camera_ios_rounded, color: Colors.white70),
+                    icon: const Icon(
+                      Icons.flip_camera_ios_rounded,
+                      color: Colors.white70,
+                    ),
                     onPressed: () => _scannerController.switchCamera(),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white70,
+                    ),
                   ),
                 ],
               ),
@@ -1596,7 +1731,11 @@ class _OwnerQrScannerDialogState extends State<_OwnerQrScannerDialog>
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.camera_alt_outlined, color: Colors.white54, size: 40),
+                              const Icon(
+                                Icons.camera_alt_outlined,
+                                color: Colors.white54,
+                                size: 40,
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 'ไม่สามารถเปิดกล้องได้: ${error.errorCode.name}',
@@ -1617,7 +1756,9 @@ class _OwnerQrScannerDialogState extends State<_OwnerQrScannerDialog>
                       width: scanSize,
                       height: scanSize,
                       child: CustomPaint(
-                        painter: _ScannerCornerPainter(color: const Color(0xFFC084FC)),
+                        painter: _ScannerCornerPainter(
+                          color: const Color(0xFFC084FC),
+                        ),
                       ),
                     ),
                     // Animated scan line
@@ -1642,7 +1783,9 @@ class _OwnerQrScannerDialogState extends State<_OwnerQrScannerDialog>
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFC084FC).withValues(alpha: 0.8),
+                                  color: const Color(
+                                    0xFFC084FC,
+                                  ).withValues(alpha: 0.8),
                                   blurRadius: 8,
                                   spreadRadius: 2,
                                 ),
@@ -1710,16 +1853,32 @@ class _ScannerCornerPainter extends CustomPainter {
     canvas.drawLine(const Offset(0, 0), const Offset(0, length), paint);
 
     // Top-Right
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width - length, 0), paint);
+    canvas.drawLine(
+      Offset(size.width, 0),
+      Offset(size.width - length, 0),
+      paint,
+    );
     canvas.drawLine(Offset(size.width, 0), Offset(size.width, length), paint);
 
     // Bottom-Left
     canvas.drawLine(Offset(0, size.height), Offset(length, size.height), paint);
-    canvas.drawLine(Offset(0, size.height), Offset(0, size.height - length), paint);
+    canvas.drawLine(
+      Offset(0, size.height),
+      Offset(0, size.height - length),
+      paint,
+    );
 
     // Bottom-Right
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width - length, size.height), paint);
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width, size.height - length), paint);
+    canvas.drawLine(
+      Offset(size.width, size.height),
+      Offset(size.width - length, size.height),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(size.width, size.height),
+      Offset(size.width, size.height - length),
+      paint,
+    );
   }
 
   @override
@@ -1740,7 +1899,8 @@ class RentalCancellationModal extends StatefulWidget {
   });
 
   @override
-  State<RentalCancellationModal> createState() => _RentalCancellationModalState();
+  State<RentalCancellationModal> createState() =>
+      _RentalCancellationModalState();
 }
 
 class _RentalCancellationModalState extends State<RentalCancellationModal> {
@@ -1839,9 +1999,18 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                     color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB)),
+                  child: const Icon(
+                    Icons.camera_alt_rounded,
+                    color: Color(0xFF2563EB),
+                  ),
                 ),
-                title: const Text('ถ่ายภาพด้วยกล้อง', style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.w600)),
+                title: const Text(
+                  'ถ่ายภาพด้วยกล้อง',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickImage(ImageSource.camera);
@@ -1854,9 +2023,18 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                     color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFF64748B)),
+                  child: const Icon(
+                    Icons.photo_library_rounded,
+                    color: Color(0xFF64748B),
+                  ),
                 ),
-                title: const Text('เลือกจากคลังรูปภาพ', style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.w600)),
+                title: const Text(
+                  'เลือกจากคลังรูปภาพ',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickImage(ImageSource.gallery);
@@ -1993,7 +2171,11 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context, false),
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 22),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Color(0xFF64748B),
+                      size: 22,
+                    ),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -2003,7 +2185,10 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
 
               // การ์ดชื่อสินค้า
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(12),
@@ -2011,7 +2196,11 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.inventory_2_outlined, size: 16, color: Color(0xFF64748B)),
+                    const Icon(
+                      Icons.inventory_2_outlined,
+                      size: 16,
+                      color: Color(0xFF64748B),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -2042,7 +2231,11 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                 child: const Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: Color(0xFFEF4444),
+                      size: 18,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -2073,8 +2266,15 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
               const SizedBox(height: 4),
               CheckboxListTile(
                 value: _reasonPowerIssue,
-                onChanged: (v) => setState(() => _reasonPowerIssue = v ?? false),
-                title: const Text('เครื่องเปิดไม่ติด / ใช้งานไม่ได้', style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13)),
+                onChanged: (v) =>
+                    setState(() => _reasonPowerIssue = v ?? false),
+                title: const Text(
+                  'เครื่องเปิดไม่ติด / ใช้งานไม่ได้',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 13,
+                  ),
+                ),
                 controlAffinity: ListTileControlAffinity.leading,
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -2083,7 +2283,13 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
               CheckboxListTile(
                 value: _reasonDamage,
                 onChanged: (v) => setState(() => _reasonDamage = v ?? false),
-                title: const Text('มีตำหนิ แตกหัก หรือชำรุดเสียหาย', style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13)),
+                title: const Text(
+                  'มีตำหนิ แตกหัก หรือชำรุดเสียหาย',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 13,
+                  ),
+                ),
                 controlAffinity: ListTileControlAffinity.leading,
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -2091,8 +2297,15 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
               ),
               CheckboxListTile(
                 value: _reasonMissingAccessories,
-                onChanged: (v) => setState(() => _reasonMissingAccessories = v ?? false),
-                title: const Text('อุปกรณ์เสริมไม่ครบตามที่ระบุไว้', style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13)),
+                onChanged: (v) =>
+                    setState(() => _reasonMissingAccessories = v ?? false),
+                title: const Text(
+                  'อุปกรณ์เสริมไม่ครบตามที่ระบุไว้',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 13,
+                  ),
+                ),
                 controlAffinity: ListTileControlAffinity.leading,
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -2100,8 +2313,15 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
               ),
               CheckboxListTile(
                 value: _reasonNotAsDescribed,
-                onChanged: (v) => setState(() => _reasonNotAsDescribed = v ?? false),
-                title: const Text('สินค้าไม่ตรงกับรุ่นหรือสภาพที่ลงประกาศไว้', style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13)),
+                onChanged: (v) =>
+                    setState(() => _reasonNotAsDescribed = v ?? false),
+                title: const Text(
+                  'สินค้าไม่ตรงกับรุ่นหรือสภาพที่ลงประกาศไว้',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 13,
+                  ),
+                ),
                 controlAffinity: ListTileControlAffinity.leading,
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -2110,7 +2330,13 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
               CheckboxListTile(
                 value: _reasonOther,
                 onChanged: (v) => setState(() => _reasonOther = v ?? false),
-                title: const Text('อื่นๆ', style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13)),
+                title: const Text(
+                  'อื่นๆ',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 13,
+                  ),
+                ),
                 controlAffinity: ListTileControlAffinity.leading,
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -2124,13 +2350,32 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
                       hintText: 'โปรดระบุสาเหตุอื่นๆ...',
-                      hintStyle: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 12.5, color: Color(0xFF94A3B8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFEF4444))),
+                      hintStyle: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 12.5,
+                        color: Color(0xFF94A3B8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFEF4444)),
+                      ),
                     ),
-                    style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13),
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ],
@@ -2191,7 +2436,9 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                           color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: _attachedImages.isEmpty ? const Color(0xFFFCA5A5) : const Color(0xFFCBD5E1),
+                            color: _attachedImages.isEmpty
+                                ? const Color(0xFFFCA5A5)
+                                : const Color(0xFFCBD5E1),
                             width: 1.5,
                           ),
                         ),
@@ -2201,7 +2448,9 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                             Icon(
                               Icons.add_a_photo_rounded,
                               size: 24,
-                              color: _attachedImages.isEmpty ? const Color(0xFFEF4444) : const Color(0xFF64748B),
+                              color: _attachedImages.isEmpty
+                                  ? const Color(0xFFEF4444)
+                                  : const Color(0xFF64748B),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -2210,7 +2459,9 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                                 fontFamily: AppTextStyles.fontFamily,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: _attachedImages.isEmpty ? const Color(0xFFEF4444) : const Color(0xFF64748B),
+                                color: _attachedImages.isEmpty
+                                    ? const Color(0xFFEF4444)
+                                    : const Color(0xFF64748B),
                               ),
                             ),
                           ],
@@ -2229,7 +2480,9 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                             margin: const EdgeInsets.only(right: 8),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                              border: Border.all(
+                                color: const Color(0xFFE2E8F0),
+                              ),
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(11),
@@ -2254,7 +2507,11 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                                   color: Colors.black54,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.close, size: 13, color: Colors.white),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 13,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
@@ -2283,13 +2540,29 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                 maxLines: 2,
                 decoration: InputDecoration(
                   hintText: 'รายละเอียดเพิ่มเติมเพื่อแจ้งผู้ปล่อยเช่า...',
-                  hintStyle: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 12.5, color: Color(0xFF94A3B8)),
+                  hintStyle: const TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 12.5,
+                    color: Color(0xFF94A3B8),
+                  ),
                   contentPadding: const EdgeInsets.all(12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFEF4444))),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFEF4444)),
+                  ),
                 ),
-                style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 13),
+                style: const TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 13,
+                ),
               ),
 
               const SizedBox(height: 20),
@@ -2305,21 +2578,26 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
                     disabledBackgroundColor: const Color(0xFFE2E8F0),
                     foregroundColor: Colors.white,
                     disabledForegroundColor: const Color(0xFF94A3B8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                     elevation: _canSubmit ? 2 : 0,
                   ),
                   child: _isSubmitting
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : Text(
                           !_hasSelectedReason
                               ? 'กรุณาเลือกปัญหาอย่างน้อย 1 ข้อ'
                               : (_attachedImages.isEmpty
-                                  ? 'แนบภาพถ่ายก่อนจึงจะกดยกเลิกได้'
-                                  : 'ยืนยันการยกเลิกการเช่า'),
+                                    ? 'แนบภาพถ่ายก่อนจึงจะกดยกเลิกได้'
+                                    : 'ยืนยันการยกเลิกการเช่า'),
                           style: const TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontWeight: FontWeight.bold,

@@ -5,27 +5,28 @@ import 'package:frontend/features/notification/presentation/pages/page.dart';
 
 void main() {
   group('NotificationPage UI Tests', () {
-    testWidgets('renders NotificationPage with two distinct sections, ดูทั้งหมด, and อ่านทั้งหมด', (
-      tester,
-    ) async {
-      await tester.pumpWidget(const MaterialApp(home: NotificationPage()));
-      await tester.pumpAndSettle();
+    testWidgets(
+      'renders NotificationPage with two distinct sections, ดูทั้งหมด, and อ่านทั้งหมด',
+      (tester) async {
+        await tester.pumpWidget(const MaterialApp(home: NotificationPage()));
+        await tester.pumpAndSettle();
 
-      expect(find.text('การแจ้งเตือน'), findsOneWidget);
-      expect(find.text('สถานะอุปกรณ์'), findsOneWidget);
-      expect(find.text('อัปเดตและข้อความระบบ'), findsOneWidget);
-      expect(find.text('ยินดีต้อนรับสู่ Yuemnoi'), findsOneWidget);
-      expect(find.text('การชำระเงินปลอดภัย'), findsOneWidget);
+        expect(find.text('การแจ้งเตือน'), findsOneWidget);
+        expect(find.text('สถานะอุปกรณ์'), findsOneWidget);
+        expect(find.text('อัปเดตและข้อความระบบ'), findsOneWidget);
+        expect(find.text('ยินดีต้อนรับสู่ Yuemnoi'), findsOneWidget);
+        expect(find.text('การชำระเงินปลอดภัย'), findsOneWidget);
 
-      // หมวดสถานะอุปกรณ์แสดงปุ่ม "ดูทั้งหมด"
-      expect(find.text('ดูทั้งหมด'), findsOneWidget);
-      // หมวดข้อความระบบแสดงปุ่ม "อ่านทั้งหมด"
-      expect(find.text('อ่านทั้งหมด'), findsOneWidget);
+        // หมวดสถานะอุปกรณ์แสดงปุ่ม "ดูทั้งหมด"
+        expect(find.text('ดูทั้งหมด'), findsOneWidget);
+        // หมวดข้อความระบบแสดงปุ่ม "อ่านทั้งหมด"
+        expect(find.text('อ่านทั้งหมด'), findsOneWidget);
 
-      // ไม่มีปุ่มรกรุงรังภายในตัวการ์ดอุปกรณ์
-      expect(find.text('ส่งคืนอุปกรณ์'), findsNothing);
-      expect(find.text('ดูรายละเอียด'), findsNothing);
-    });
+        // ไม่มีปุ่มรกรุงรังภายในตัวการ์ดอุปกรณ์
+        expect(find.text('ส่งคืนอุปกรณ์'), findsNothing);
+        expect(find.text('ดูรายละเอียด'), findsNothing);
+      },
+    );
 
     testWidgets('tap system mark all as read triggers feedback snackbar', (
       tester,

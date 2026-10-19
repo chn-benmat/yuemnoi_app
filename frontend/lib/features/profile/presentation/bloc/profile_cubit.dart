@@ -24,15 +24,18 @@ class ProfileCubit extends Cubit<ProfileState> {
     UpdateUserProfileUseCase? updateUserProfile,
     UpdateContactPhoneUseCase? updateContactPhone,
     ChangeProfilePasswordUseCase? changeProfilePassword,
-  })  : getUserProfile = getUserProfile ??
-            GetUserProfileUseCase(ProfileRepositoryImpl()),
-        updateUserProfile = updateUserProfile ??
-            UpdateUserProfileUseCase(ProfileRepositoryImpl()),
-        updateContactPhone = updateContactPhone ??
-            UpdateContactPhoneUseCase(ProfileRepositoryImpl()),
-        changeProfilePassword = changeProfilePassword ??
-            ChangeProfilePasswordUseCase(ProfileRepositoryImpl()),
-        super(const ProfileInitial());
+  }) : getUserProfile =
+           getUserProfile ?? GetUserProfileUseCase(ProfileRepositoryImpl()),
+       updateUserProfile =
+           updateUserProfile ??
+           UpdateUserProfileUseCase(ProfileRepositoryImpl()),
+       updateContactPhone =
+           updateContactPhone ??
+           UpdateContactPhoneUseCase(ProfileRepositoryImpl()),
+       changeProfilePassword =
+           changeProfilePassword ??
+           ChangeProfilePasswordUseCase(ProfileRepositoryImpl()),
+       super(const ProfileInitial());
 
   @override
   void emit(ProfileState state) {
@@ -55,10 +58,12 @@ class ProfileCubit extends Cubit<ProfileState> {
       emit(ProfileLoaded(profile));
     } catch (e) {
       if (isClosed) return;
-      emit(ProfileActionFailure(
-        message: e.toString(),
-        currentProfile: _currentProfile,
-      ));
+      emit(
+        ProfileActionFailure(
+          message: e.toString(),
+          currentProfile: _currentProfile,
+        ),
+      );
     }
   }
 
@@ -82,25 +87,31 @@ class ProfileCubit extends Cubit<ProfileState> {
       );
       if (isClosed) return false;
       _currentProfile = updated;
-      emit(ProfileActionSuccess(
-        message: 'บันทึกข้อมูลส่วนตัวเรียบร้อย',
-        updatedProfile: updated,
-      ));
+      emit(
+        ProfileActionSuccess(
+          message: 'บันทึกข้อมูลส่วนตัวเรียบร้อย',
+          updatedProfile: updated,
+        ),
+      );
       emit(ProfileLoaded(updated));
       return true;
     } on ProfileApiException catch (e) {
       if (isClosed) return false;
-      emit(ProfileActionFailure(
-        message: e.message,
-        currentProfile: _currentProfile,
-      ));
+      emit(
+        ProfileActionFailure(
+          message: e.message,
+          currentProfile: _currentProfile,
+        ),
+      );
       return false;
     } catch (e) {
       if (isClosed) return false;
-      emit(ProfileActionFailure(
-        message: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: $e',
-        currentProfile: _currentProfile,
-      ));
+      emit(
+        ProfileActionFailure(
+          message: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: $e',
+          currentProfile: _currentProfile,
+        ),
+      );
       return false;
     }
   }
@@ -111,35 +122,38 @@ class ProfileCubit extends Cubit<ProfileState> {
   }) async {
     emit(ProfileActionInProgress(currentProfile: _currentProfile));
     try {
-      await updateContactPhone.execute(
-        accessToken: accessToken,
-        phone: phone,
-      );
+      await updateContactPhone.execute(accessToken: accessToken, phone: phone);
       if (isClosed) return false;
       if (_currentProfile != null) {
         _currentProfile = _currentProfile!.copyWith(phone: phone);
       }
-      emit(ProfileActionSuccess(
-        message: 'บันทึกข้อมูลติดต่อเรียบร้อย',
-        updatedProfile: _currentProfile,
-      ));
+      emit(
+        ProfileActionSuccess(
+          message: 'บันทึกข้อมูลติดต่อเรียบร้อย',
+          updatedProfile: _currentProfile,
+        ),
+      );
       if (_currentProfile != null) {
         emit(ProfileLoaded(_currentProfile!));
       }
       return true;
     } on ProfileApiException catch (e) {
       if (isClosed) return false;
-      emit(ProfileActionFailure(
-        message: e.message,
-        currentProfile: _currentProfile,
-      ));
+      emit(
+        ProfileActionFailure(
+          message: e.message,
+          currentProfile: _currentProfile,
+        ),
+      );
       return false;
     } catch (e) {
       if (isClosed) return false;
-      emit(ProfileActionFailure(
-        message: 'เกิดข้อผิดพลาดในการบันทึกเบอร์โทร: $e',
-        currentProfile: _currentProfile,
-      ));
+      emit(
+        ProfileActionFailure(
+          message: 'เกิดข้อผิดพลาดในการบันทึกเบอร์โทร: $e',
+          currentProfile: _currentProfile,
+        ),
+      );
       return false;
     }
   }
@@ -155,27 +169,33 @@ class ProfileCubit extends Cubit<ProfileState> {
         newPassword: newPassword,
       );
       if (isClosed) return false;
-      emit(ProfileActionSuccess(
-        message: 'เปลี่ยนรหัสผ่านเรียบร้อย',
-        updatedProfile: _currentProfile,
-      ));
+      emit(
+        ProfileActionSuccess(
+          message: 'เปลี่ยนรหัสผ่านเรียบร้อย',
+          updatedProfile: _currentProfile,
+        ),
+      );
       if (_currentProfile != null) {
         emit(ProfileLoaded(_currentProfile!));
       }
       return true;
     } on ProfileApiException catch (e) {
       if (isClosed) return false;
-      emit(ProfileActionFailure(
-        message: e.message,
-        currentProfile: _currentProfile,
-      ));
+      emit(
+        ProfileActionFailure(
+          message: e.message,
+          currentProfile: _currentProfile,
+        ),
+      );
       return false;
     } catch (e) {
       if (isClosed) return false;
-      emit(ProfileActionFailure(
-        message: 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน: $e',
-        currentProfile: _currentProfile,
-      ));
+      emit(
+        ProfileActionFailure(
+          message: 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน: $e',
+          currentProfile: _currentProfile,
+        ),
+      );
       return false;
     }
   }

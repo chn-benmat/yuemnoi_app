@@ -6,10 +6,7 @@ class ItemReviewStats {
   final double rating;
   final int reviewCount;
 
-  const ItemReviewStats({
-    required this.rating,
-    required this.reviewCount,
-  });
+  const ItemReviewStats({required this.rating, required this.reviewCount});
 
   static const empty = ItemReviewStats(rating: 0.0, reviewCount: 0);
 
@@ -57,10 +54,7 @@ class ItemReviewService {
       if (count == 0) return ItemReviewStats.empty;
 
       final average = double.parse((sum / count).toStringAsFixed(1));
-      return ItemReviewStats(
-        rating: average,
-        reviewCount: count,
-      );
+      return ItemReviewStats(rating: average, reviewCount: count);
     } catch (e) {
       debugPrint('Error fetching review stats for item $itemId: $e');
       return ItemReviewStats.empty;

@@ -6,10 +6,7 @@ class UpdateContactPhoneUseCase {
 
   const UpdateContactPhoneUseCase(this.repository);
 
-  Future<void> execute({
-    required String accessToken,
-    required String phone,
-  }) {
+  Future<void> execute({required String accessToken, required String phone}) {
     return repository.updateContactPhone(
       accessToken: accessToken,
       phone: phone,

@@ -41,14 +41,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final meta = user?.userMetadata ?? {};
 
     _displayNameCtrl = TextEditingController(
-      text: (meta['display_name'] ??
-              meta['full_name'] ??
-              user?.email?.split('@').first ??
-              '')
-          .toString(),
+      text:
+          (meta['display_name'] ??
+                  meta['full_name'] ??
+                  user?.email?.split('@').first ??
+                  '')
+              .toString(),
     );
     _usernameCtrl = TextEditingController(
-      text: (meta['username'] ?? user?.email?.split('@').first ?? '').toString(),
+      text: (meta['username'] ?? user?.email?.split('@').first ?? '')
+          .toString(),
     );
     _bioCtrl = TextEditingController(text: (meta['bio'] ?? '').toString());
     _avatarUrl = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
@@ -105,7 +107,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           content: const Text('กรุณาเข้าสู่ระบบก่อน'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
       return;
@@ -128,10 +132,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       child: BlocConsumer<ProfileCubit, ProfileState>(
         listener: (context, state) {
           if (state is ProfileLoaded) {
-            if (_displayNameCtrl.text.isEmpty && state.profile.displayName.isNotEmpty) {
+            if (_displayNameCtrl.text.isEmpty &&
+                state.profile.displayName.isNotEmpty) {
               _displayNameCtrl.text = state.profile.displayName;
             }
-            if (_usernameCtrl.text.isEmpty && state.profile.username.isNotEmpty) {
+            if (_usernameCtrl.text.isEmpty &&
+                state.profile.username.isNotEmpty) {
               _usernameCtrl.text = state.profile.username;
             }
             if (_bioCtrl.text.isEmpty && state.profile.bio.isNotEmpty) {
@@ -225,7 +231,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       fit: BoxFit.cover,
                                     )
                                   : _avatarUrl != null
-                                  ? Image.network(_avatarUrl!, fit: BoxFit.cover)
+                                  ? Image.network(
+                                      _avatarUrl!,
+                                      fit: BoxFit.cover,
+                                    )
                                   : Container(
                                       color: const Color(0xFFF3E8FF),
                                       child: const Icon(
@@ -265,8 +274,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       label: 'ชื่อแสดงตัวตน',
                       hint: 'กรอกชื่อที่ต้องการแสดง',
                       icon: Icons.badge_outlined,
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'กรุณากรอกชื่อ' : null,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'กรุณากรอกชื่อ'
+                          : null,
                     ),
                     const SizedBox(height: 14),
                     EditProfileFormField(
@@ -291,9 +301,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryColor,
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor: AppColors.primaryColor.withValues(
-                          alpha: 0.6,
-                        ),
+                        disabledBackgroundColor: AppColors.primaryColor
+                            .withValues(alpha: 0.6),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(30),

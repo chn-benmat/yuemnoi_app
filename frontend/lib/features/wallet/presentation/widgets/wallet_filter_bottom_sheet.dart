@@ -363,7 +363,9 @@ class _WalletFilterBottomSheetState extends State<WalletFilterBottomSheet> {
             fontFamily: AppTextStyles.fontFamily,
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? AppColors.primaryColor : const Color(0xFF374151),
+            color: isSelected
+                ? AppColors.primaryColor
+                : const Color(0xFF374151),
           ),
         ),
       ),

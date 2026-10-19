@@ -40,10 +40,7 @@ class RegisterProfileImagePicker extends StatelessWidget {
                           size: 56,
                           color: AppColors.labelColor,
                         )
-                      : Image.memory(
-                          profileImageBytes!,
-                          fit: BoxFit.cover,
-                        ),
+                      : Image.memory(profileImageBytes!, fit: BoxFit.cover),
                 ),
                 Positioned(
                   bottom: 0,
@@ -54,10 +51,7 @@ class RegisterProfileImagePicker extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.primaryColor,
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white,
-                        width: 2.5,
-                      ),
+                      border: Border.all(color: Colors.white, width: 2.5),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.1),

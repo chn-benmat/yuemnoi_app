@@ -89,9 +89,15 @@ class _ActiveRentalHeaderBannerState extends State<ActiveRentalHeaderBanner> {
     final remainingText = _formatRemainingTime();
     final itemTitle = widget.bookingData.item.title;
 
-    final primaryBg = isExpired ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4);
-    final borderColor = isExpired ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0);
-    final accentColor = isExpired ? const Color(0xFFDC2626) : const Color(0xFF16A34A);
+    final primaryBg = isExpired
+        ? const Color(0xFFFEF2F2)
+        : const Color(0xFFF0FDF4);
+    final borderColor = isExpired
+        ? const Color(0xFFFECACA)
+        : const Color(0xFFBBF7D0);
+    final accentColor = isExpired
+        ? const Color(0xFFDC2626)
+        : const Color(0xFF16A34A);
 
     return Container(
       key: const ValueKey('chat-active-rental-banner'),
@@ -161,10 +167,14 @@ class _ActiveRentalHeaderBannerState extends State<ActiveRentalHeaderBanner> {
                           ),
                         ),
                       ),
-                      if (widget.bookingId != null && widget.bookingId! > 0) ...[
+                      if (widget.bookingId != null &&
+                          widget.bookingId! > 0) ...[
                         const SizedBox(width: 5),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(4),
@@ -207,8 +217,9 @@ class _ActiveRentalHeaderBannerState extends State<ActiveRentalHeaderBanner> {
                           style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 11,
-                            fontWeight:
-                                isExpired ? FontWeight.w700 : FontWeight.w500,
+                            fontWeight: isExpired
+                                ? FontWeight.w700
+                                : FontWeight.w500,
                             color: isExpired
                                 ? const Color(0xFFB91C1C)
                                 : const Color(0xFF15803D),
@@ -277,7 +288,9 @@ class _ActiveRentalHeaderBannerState extends State<ActiveRentalHeaderBanner> {
               decoration: BoxDecoration(
                 color: isExpired
                     ? const Color(0xFFDC2626)
-                    : (widget.isOwner ? const Color(0xFF10B981) : AppColors.primaryColor),
+                    : (widget.isOwner
+                          ? const Color(0xFF10B981)
+                          : AppColors.primaryColor),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(

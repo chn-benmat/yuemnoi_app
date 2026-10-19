@@ -45,14 +45,20 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
         if (currentUserId != null && currentUserId.isNotEmpty) {
           final bookingsResp = await client
               .from('booking_tb')
-              .select('id, user_id, item_id, status, price, total_price, start_at, end_at, pickup_location')
+              .select(
+                'id, user_id, item_id, status, price, total_price, start_at, end_at, pickup_location',
+              )
               .eq('user_id', currentUserId);
 
           if (bookingsResp.isNotEmpty) {
             final List<_StatusItemData> loaded = [];
             for (final b in bookingsResp) {
-              final statusLower = (b['status']?.toString() ?? '').toLowerCase().trim();
-              if (statusLower == 'pending' || statusLower == 'rejected' || statusLower == 'reject') {
+              final statusLower = (b['status']?.toString() ?? '')
+                  .toLowerCase()
+                  .trim();
+              if (statusLower == 'pending' ||
+                  statusLower == 'rejected' ||
+                  statusLower == 'reject') {
                 continue;
               }
               final rentalId = (b['id'] as num?)?.toInt() ?? 0;
@@ -63,13 +69,17 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                 try {
                   itemData = await client
                       .from('item_tb')
-                      .select('item_name, category, price, item_image_url, user_id')
+                      .select(
+                        'item_name, category, price, item_image_url, user_id',
+                      )
                       .eq('id', itemId)
                       .maybeSingle();
                 } catch (_) {}
               }
 
-              final title = itemData?['item_name']?.toString() ?? 'อุปกรณ์เช่า #$rentalId';
+              final title =
+                  itemData?['item_name']?.toString() ??
+                  'อุปกรณ์เช่า #$rentalId';
               final category = itemData?['category']?.toString() ?? 'ทั่วไป';
               final rawImages = itemData?['item_image_url'];
               String? imgUrl;
@@ -79,7 +89,8 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                 imgUrl = rawImages;
               }
 
-              final price = (b['total_price'] as num?)?.toDouble() ??
+              final price =
+                  (b['total_price'] as num?)?.toDouble() ??
                   (b['price'] as num?)?.toDouble() ??
                   500.0;
 
@@ -97,7 +108,8 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                   deposit: price * 2.5,
                   deadlineText: 'วันนี้ 18:00 น.',
                   remainingText: 'อีกประมาณ 2 ชม.',
-                  locationText: b['pickup_location']?.toString() ?? 'สยามพารากอน ชั้น 3',
+                  locationText:
+                      b['pickup_location']?.toString() ?? 'สยามพารากอน ชั้น 3',
                   category: category,
                 ),
               );
@@ -302,14 +314,8 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
           : TabBarView(
               controller: _tabController,
               children: [
-                _StatusList(
-                  items: _rentingItems,
-                  onRefresh: _loadStatusData,
-                ),
-                _StatusList(
-                  items: _lendingItems,
-                  onRefresh: _loadStatusData,
-                ),
+                _StatusList(items: _rentingItems, onRefresh: _loadStatusData),
+                _StatusList(items: _lendingItems, onRefresh: _loadStatusData),
               ],
             ),
     );
@@ -358,10 +364,7 @@ class _StatusList extends StatelessWidget {
   final List<_StatusItemData> items;
   final Future<void> Function() onRefresh;
 
-  const _StatusList({
-    required this.items,
-    required this.onRefresh,
-  });
+  const _StatusList({required this.items, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -461,7 +464,11 @@ class _StatusCard extends StatelessWidget {
                                 size: 30,
                               ),
                             )
-                          : Icon(item.iconData, color: Colors.white54, size: 30),
+                          : Icon(
+                              item.iconData,
+                              color: Colors.white54,
+                              size: 30,
+                            ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -491,7 +498,9 @@ class _StatusCard extends StatelessWidget {
                                 color: item.statusColor.withValues(alpha: 0.25),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: item.statusColor.withValues(alpha: 0.7),
+                                  color: item.statusColor.withValues(
+                                    alpha: 0.7,
+                                  ),
                                 ),
                               ),
                               child: Text(
@@ -548,7 +557,10 @@ class _StatusCard extends StatelessWidget {
 
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
@@ -637,4 +649,3 @@ class _StatusCard extends StatelessWidget {
     );
   }
 }
-

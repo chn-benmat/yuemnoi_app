@@ -268,10 +268,6 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
         }
 
         return AlertDialog(
-          icon: Icon(
-            widget.isEditing ? Icons.save_outlined : Icons.add_box_outlined,
-            color: AppColors.primaryColor,
-          ),
           title: Text(
             widget.isEditing
                 ? 'ยืนยันการบันทึกการแก้ไข?'
@@ -425,7 +421,7 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
               index: 0,
               id: 'name',
               label: 'ชื่ออุปกรณ์',
-              hint: 'เช่น กล้อง Canon EOS R50 พร้อมเลนส์',
+              hint: 'กรุณาระบุชื่ออปุกรณ์ที่จะปล่อยเช่า',
               controller: _name,
               focus: _nameFocus,
               maxLength: 150,

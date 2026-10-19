@@ -53,10 +53,10 @@ class AppPermissionService {
     }
   }
 
-
-
   /// ตรวจสอบและเรียก Popup ขอสิทธิ์การแจ้งเตือนของระบบ OS (Android / iOS Native Dialog) โดยตรง
-  static Future<bool> requestNotificationPermission([BuildContext? context]) async {
+  static Future<bool> requestNotificationPermission([
+    BuildContext? context,
+  ]) async {
     if (kIsWeb) return true;
 
     try {
@@ -78,7 +78,9 @@ class AppPermissionService {
   }
 
   /// ตรวจสอบและเรียก Popup ขอสิทธิ์การแจ้งเตือนของระบบ OS โดยตรงเมื่อเข้าหน้า Login
-  static Future<void> checkAndPromptNotificationPermission([BuildContext? context]) async {
+  static Future<void> checkAndPromptNotificationPermission([
+    BuildContext? context,
+  ]) async {
     if (kIsWeb) return;
 
     try {

@@ -38,24 +38,27 @@ class _MockFailingHomeRepository implements HomeRepository {
 
 void main() {
   group('HomeBloc Fallback Error handling', () {
-    test('emits HomeError with connection error message when server is down', () async {
-      final repo = _MockFailingHomeRepository();
-      final bloc = HomeBloc(
-        homeRepository: repo,
-        getHomeFeed: GetHomeFeedUseCase(repo),
-      );
+    test(
+      'emits HomeError with connection error message when server is down',
+      () async {
+        final repo = _MockFailingHomeRepository();
+        final bloc = HomeBloc(
+          homeRepository: repo,
+          getHomeFeed: GetHomeFeedUseCase(repo),
+        );
 
-      bloc.add(const LoadHomeFeedStarted());
+        bloc.add(const LoadHomeFeedStarted());
 
-      await expectLater(
-        bloc.stream,
-        emitsInOrder([
-          const HomeLoading(),
-          const HomeError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่'),
-        ]),
-      );
+        await expectLater(
+          bloc.stream,
+          emitsInOrder([
+            const HomeLoading(),
+            const HomeError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่'),
+          ]),
+        );
 
-      bloc.close();
-    });
+        bloc.close();
+      },
+    );
   });
 }

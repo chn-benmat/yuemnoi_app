@@ -84,17 +84,20 @@ void main() {
   });
 
   group('Rental Management UseCases', () {
-    test('GetRentalBookingsUseCase returns renting and lending bookings', () async {
-      final useCase = GetRentalBookingsUseCase(repository);
+    test(
+      'GetRentalBookingsUseCase returns renting and lending bookings',
+      () async {
+        final useCase = GetRentalBookingsUseCase(repository);
 
-      final renting = await useCase.executeRenting('user1');
-      final lending = await useCase.executeLending('user1');
+        final renting = await useCase.executeRenting('user1');
+        final lending = await useCase.executeLending('user1');
 
-      expect(renting.length, 1);
-      expect(renting.first.title, 'Sony A7 IV');
-      expect(lending.length, 1);
-      expect(lending.first.title, 'MacBook Pro');
-    });
+        expect(renting.length, 1);
+        expect(renting.first.title, 'Sony A7 IV');
+        expect(lending.length, 1);
+        expect(lending.first.title, 'MacBook Pro');
+      },
+    );
 
     test('UpdateBookingStatusUseCase delegates update to repository', () async {
       final useCase = UpdateBookingStatusUseCase(repository);
@@ -114,15 +117,18 @@ void main() {
       expect(history.first.bookingId, 1);
     });
 
-    test('GetRentalIncomeUseCase returns income summary and transactions', () async {
-      final useCase = GetRentalIncomeUseCase(repository);
+    test(
+      'GetRentalIncomeUseCase returns income summary and transactions',
+      () async {
+        final useCase = GetRentalIncomeUseCase(repository);
 
-      final income = await useCase.execute('user1');
+        final income = await useCase.execute('user1');
 
-      expect(income.totalIncome, 12500.0);
-      expect(income.pendingIncome, 1200.0);
-      expect(income.transactions.length, 1);
-      expect(income.transactions.first.itemName, 'Sony A7 IV');
-    });
+        expect(income.totalIncome, 12500.0);
+        expect(income.pendingIncome, 1200.0);
+        expect(income.transactions.length, 1);
+        expect(income.transactions.first.itemName, 'Sony A7 IV');
+      },
+    );
   });
 }

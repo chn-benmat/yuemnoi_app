@@ -15,7 +15,8 @@ class ChatToast {
     _currentEntry?.remove();
     _currentEntry = null;
 
-    final overlay = Overlay.maybeOf(context, rootOverlay: true) ??
+    final overlay =
+        Overlay.maybeOf(context, rootOverlay: true) ??
         Navigator.of(context, rootNavigator: true).overlay;
     if (overlay == null) return;
 
@@ -117,10 +118,7 @@ class _ToastAnimationWidgetState extends State<_ToastAnimationWidget>
             animation: _controller,
             builder: (context, child) => Opacity(
               opacity: _opacity.value,
-              child: Transform.scale(
-                scale: _scale.value,
-                child: child,
-              ),
+              child: Transform.scale(scale: _scale.value, child: child),
             ),
             child: Material(
               color: Colors.transparent,

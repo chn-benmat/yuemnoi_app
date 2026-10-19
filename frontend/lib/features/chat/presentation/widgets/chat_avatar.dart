@@ -19,7 +19,8 @@ class ChatAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isNetwork = asset.startsWith('http://') || asset.startsWith('https://');
+    final isNetwork =
+        asset.startsWith('http://') || asset.startsWith('https://');
     final Widget imageWidget = isNetwork
         ? CachedNetworkImage(
             imageUrl: asset,
@@ -67,11 +68,15 @@ class ChatAvatar extends StatelessWidget {
               right: -1,
               bottom: 2,
               child: Container(
-                key: ValueKey(isOnline ? 'avatar-status-online' : 'avatar-status-offline'),
+                key: ValueKey(
+                  isOnline ? 'avatar-status-online' : 'avatar-status-offline',
+                ),
                 width: dotSize,
                 height: dotSize,
                 decoration: BoxDecoration(
-                  color: isOnline ? const Color(0xFF10B981) : const Color(0xFF9CA3AF),
+                  color: isOnline
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFF9CA3AF),
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2),
                   boxShadow: [

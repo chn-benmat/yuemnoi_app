@@ -6,10 +6,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/booking_request_model.dart';
 
 class BookingPriceSummaryCard extends StatelessWidget {
-  const BookingPriceSummaryCard({
-    super.key,
-    required this.bookingData,
-  });
+  const BookingPriceSummaryCard({super.key, required this.bookingData});
 
   final BookingRequestData bookingData;
 
@@ -74,10 +71,7 @@ class BookingPriceSummaryCard extends StatelessWidget {
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(
-                  height: 1,
-                  color: Color(0xFFEBEBEF),
-                ),
+                child: Divider(height: 1, color: Color(0xFFEBEBEF)),
               ),
               // แถวยอดรวม
               Row(

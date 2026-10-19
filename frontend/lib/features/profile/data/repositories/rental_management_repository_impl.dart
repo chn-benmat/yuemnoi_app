@@ -7,8 +7,10 @@ import '../datasources/rental_management_remote_data_source.dart';
 class RentalManagementRepositoryImpl implements RentalManagementRepository {
   final RentalManagementRemoteDataSource remoteDataSource;
 
-  RentalManagementRepositoryImpl({RentalManagementRemoteDataSource? remoteDataSource})
-      : remoteDataSource = remoteDataSource ?? RentalManagementRemoteDataSource();
+  RentalManagementRepositoryImpl({
+    RentalManagementRemoteDataSource? remoteDataSource,
+  }) : remoteDataSource =
+           remoteDataSource ?? RentalManagementRemoteDataSource();
 
   @override
   Future<List<RentalBooking>> getRentingBookings(String userId) async {

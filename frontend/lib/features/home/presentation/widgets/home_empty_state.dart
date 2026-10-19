@@ -4,11 +4,7 @@ import '../../../../core/constants/colors.dart';
 
 /// วิดเจ็ตแสดงผลเมื่อไม่พบรายการอุปกรณ์จากการค้นหาหรือเลือกหมวดหมู่
 class HomeEmptyState extends StatelessWidget {
-  const HomeEmptyState({
-    super.key,
-    this.searchQuery = '',
-    this.onReset,
-  });
+  const HomeEmptyState({super.key, this.searchQuery = '', this.onReset});
 
   final String searchQuery;
   final VoidCallback? onReset;
@@ -50,10 +46,7 @@ class HomeEmptyState extends StatelessWidget {
             const Text(
               'ลองค้นหาด้วยคำอื่น หรือเลือกหมวดหมู่อื่นดูนะ',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF7A7E82),
-                fontSize: 13,
-              ),
+              style: TextStyle(color: Color(0xFF7A7E82), fontSize: 13),
             ),
             if (onReset != null) ...[
               const SizedBox(height: 16),

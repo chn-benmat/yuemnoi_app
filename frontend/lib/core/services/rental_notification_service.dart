@@ -16,8 +16,8 @@ class RentalNotificationService {
   RentalNotificationService({
     FlutterLocalNotificationsPlugin? notificationsPlugin,
     ChatNotificationService? chatNotificationService,
-  })  : _injectedPlugin = notificationsPlugin,
-        _chatNotificationService = chatNotificationService;
+  }) : _injectedPlugin = notificationsPlugin,
+       _chatNotificationService = chatNotificationService;
 
   static final RentalNotificationService instance = RentalNotificationService();
 
@@ -44,7 +44,8 @@ class RentalNotificationService {
 
       final androidPlatform = _notificationsPlugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
       if (androidPlatform != null) {
         // Channel พิเศษสำหรับการแจ้งเตือนกำหนดเวลาส่งคืนอุปกรณ์
@@ -251,7 +252,7 @@ class RentalNotificationService {
 
   /// คำนวณหัวข้อและข้อความแจ้งเตือนตามระยะเวลาที่เหลือหรือเลยกำหนด
   static ({String title, String body, bool isOverdue, String durationText})
-      buildNotificationContent({
+  buildNotificationContent({
     required String itemTitle,
     required DateTime endDateTime,
     DateTime? now,

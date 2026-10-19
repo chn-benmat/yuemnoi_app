@@ -6,7 +6,7 @@ class RentalReturnRepositoryImpl implements RentalReturnRepository {
   final RentalReturnRemoteDataSource _remoteDataSource;
 
   RentalReturnRepositoryImpl({RentalReturnRemoteDataSource? remoteDataSource})
-      : _remoteDataSource = remoteDataSource ?? RentalReturnRemoteDataSource();
+    : _remoteDataSource = remoteDataSource ?? RentalReturnRemoteDataSource();
 
   @override
   Future<RentalReturnSession> getReturnSession([int? rentalId]) {
@@ -55,7 +55,8 @@ class RentalReturnRepositoryImpl implements RentalReturnRepository {
     required String tokenOrOtp,
   }) async {
     // ตรวจสอบว่า token หรือ otp มีรูปแบบถูกต้อง
-    final isValid = tokenOrOtp.contains('YUEMNOI_RETURN_$rentalId') ||
+    final isValid =
+        tokenOrOtp.contains('YUEMNOI_RETURN_$rentalId') ||
         (tokenOrOtp.length == 6 && int.tryParse(tokenOrOtp) != null);
 
     if (isValid) {

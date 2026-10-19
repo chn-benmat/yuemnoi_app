@@ -80,7 +80,10 @@ class RentalStatusItemData {
 
   bool get isConfirmed {
     final code = statusCode.toLowerCase().trim();
-    return code == 'confirmed' || status.contains('ยืนยัน') || status.contains('นัดรับ');
+    return !isPending &&
+        (code == 'confirmed' ||
+            status.contains('ยืนยันแล้ว') ||
+            status.contains('นัดรับ'));
   }
 
   bool get isCompleted {
@@ -223,11 +226,7 @@ class RentalStatusEmptyView extends StatelessWidget {
                 color: Color(0xFFF3E8FF),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                icon,
-                color: AppColors.primaryColor,
-                size: 40,
-              ),
+              child: Icon(icon, color: AppColors.primaryColor, size: 40),
             ),
             const SizedBox(height: 20),
             Text(
@@ -328,7 +327,9 @@ class _RentalStatusListState extends State<RentalStatusList> {
       return widget.items.where((it) => it.isActive).toList();
     }
     if (_activeFilter == 'completed') {
-      return widget.items.where((it) => it.isCompleted || it.isCancelled).toList();
+      return widget.items
+          .where((it) => it.isCompleted || it.isCancelled)
+          .toList();
     }
     return widget.items;
   }
@@ -372,7 +373,9 @@ class _RentalStatusListState extends State<RentalStatusList> {
     final filtered = _filteredItems;
 
     // หา item ที่กำลังใช้งานตัวแรกเพื่อแสดง Banner ด่วน
-    final activeUrgentItem = widget.items.where((it) => it.isActive).firstOrNull;
+    final activeUrgentItem = widget.items
+        .where((it) => it.isActive)
+        .firstOrNull;
 
     final content = CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(
@@ -391,18 +394,34 @@ class _RentalStatusListState extends State<RentalStatusList> {
                   _buildFilterChip('all', 'ทั้งหมด', widget.items.length),
                   const SizedBox(width: 8),
                   if (_countPending > 0 || _activeFilter == 'pending') ...[
-                    _buildFilterChip('pending', 'รอการยืนยัน', _countPending,
-                        activeColor: const Color(0xFFF59E0B)),
+                    _buildFilterChip(
+                      'pending',
+                      'รอการยืนยัน',
+                      _countPending,
+                      activeColor: const Color(0xFFF59E0B),
+                    ),
                     const SizedBox(width: 8),
                   ],
-                  _buildFilterChip('confirmed', 'รอนัดรับ', _countConfirmed,
-                      activeColor: const Color(0xFF3B82F6)),
+                  _buildFilterChip(
+                    'confirmed',
+                    'รอนัดรับ',
+                    _countConfirmed,
+                    activeColor: const Color(0xFF3B82F6),
+                  ),
                   const SizedBox(width: 8),
-                  _buildFilterChip('active', 'กำลังใช้งาน', _countActive,
-                      activeColor: const Color(0xFF10B981)),
+                  _buildFilterChip(
+                    'active',
+                    'กำลังใช้งาน',
+                    _countActive,
+                    activeColor: const Color(0xFF10B981),
+                  ),
                   const SizedBox(width: 8),
-                  _buildFilterChip('completed', 'เสร็จสิ้น', _countCompleted,
-                      activeColor: const Color(0xFF64748B)),
+                  _buildFilterChip(
+                    'completed',
+                    'เสร็จสิ้น',
+                    _countCompleted,
+                    activeColor: const Color(0xFF64748B),
+                  ),
                 ],
               ),
             ),
@@ -438,16 +457,13 @@ class _RentalStatusListState extends State<RentalStatusList> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
             sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final item = filtered[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: RentalStatusCard(item: item),
-                  );
-                },
-                childCount: filtered.length,
-              ),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final item = filtered[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: RentalStatusCard(item: item),
+                );
+              }, childCount: filtered.length),
             ),
           ),
         ],
@@ -564,12 +580,16 @@ class _RentalStatusListState extends State<RentalStatusList> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: isOverdue ? const Color(0xFFFEE2E2) : const Color(0xFFEDE9FE),
+              color: isOverdue
+                  ? const Color(0xFFFEE2E2)
+                  : const Color(0xFFEDE9FE),
               shape: BoxShape.circle,
             ),
             child: Icon(
               isOverdue ? Icons.warning_amber_rounded : Icons.timer_outlined,
-              color: isOverdue ? const Color(0xFFDC2626) : AppColors.primaryColor,
+              color: isOverdue
+                  ? const Color(0xFFDC2626)
+                  : AppColors.primaryColor,
               size: 20,
             ),
           ),
@@ -579,7 +599,9 @@ class _RentalStatusListState extends State<RentalStatusList> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isOverdue ? 'เลยกำหนดส่งคืนอุปกรณ์!' : 'กำลังใช้งานอยู่ขณะนี้',
+                  isOverdue
+                      ? 'เลยกำหนดส่งคืนอุปกรณ์!'
+                      : 'กำลังใช้งานอยู่ขณะนี้',
                   style: TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 12.5,
@@ -612,8 +634,9 @@ class _RentalStatusListState extends State<RentalStatusList> {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  isOverdue ? const Color(0xFFDC2626) : AppColors.primaryColor,
+              backgroundColor: isOverdue
+                  ? const Color(0xFFDC2626)
+                  : AppColors.primaryColor,
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -661,10 +684,6 @@ DateTime _computeEffectiveRentalEnd(RentalStatusItemData item) {
     return handoverStart.add(duration);
   }
 
-  if (initialEnd != null && initialEnd.isBefore(now)) {
-    return now.add(duration);
-  }
-
   return initialEnd ?? now.add(duration);
 }
 
@@ -673,7 +692,7 @@ class RentalStatusCard extends StatelessWidget {
   const RentalStatusCard({super.key, required this.item});
 
   void _openTrackingMap(BuildContext context) {
-    final isOwner = item.partnerRole == 'ผู้เช่า';
+    final isOwner = item.isOwner;
     AppRoutes.openRentalTrackingMap(
       context,
       isOwner: isOwner,
@@ -710,10 +729,7 @@ class RentalStatusCard extends StatelessWidget {
   bool _isItemOverdue(RentalStatusItemData item) {
     if (!item.isActive) return false;
     final now = DateTime.now();
-    DateTime? effectiveEnd = item.endDate;
-    if (effectiveEnd == null && item.startDate != null) {
-      effectiveEnd = item.startDate!.add(const Duration(days: 1));
-    }
+    final effectiveEnd = _computeEffectiveRentalEnd(item);
     return effectiveEnd != null && now.isAfter(effectiveEnd);
   }
 
@@ -809,15 +825,18 @@ class RentalStatusCard extends StatelessWidget {
     if (!item.isActive) return const SizedBox.shrink();
 
     final now = DateTime.now();
-    DateTime? effectiveEnd = item.endDate;
-    if (effectiveEnd == null && item.startDate != null) {
-      effectiveEnd = item.startDate!.add(const Duration(days: 1));
-    }
+    final effectiveEnd = _computeEffectiveRentalEnd(item);
 
     final isExpired = effectiveEnd != null && now.isAfter(effectiveEnd);
-    final bgColor = isExpired ? const Color(0xFFFEF2F2) : const Color(0xFFF5F3FF);
-    final borderColor = isExpired ? const Color(0xFFFECACA) : const Color(0xFFDDD6FE);
-    final accentColor = isExpired ? const Color(0xFFDC2626) : AppColors.primaryColor;
+    final bgColor = isExpired
+        ? const Color(0xFFFEF2F2)
+        : const Color(0xFFF5F3FF);
+    final borderColor = isExpired
+        ? const Color(0xFFFECACA)
+        : const Color(0xFFDDD6FE);
+    final accentColor = isExpired
+        ? const Color(0xFFDC2626)
+        : AppColors.primaryColor;
 
     String statusText;
     if (effectiveEnd == null) {
@@ -907,7 +926,9 @@ class RentalStatusCard extends StatelessWidget {
 
   String _formatRentalDates(RentalStatusItemData item) {
     if (item.startDate == null || item.endDate == null) {
-      return item.duration?.isNotEmpty == true ? item.duration! : 'ระยะเวลาตามสัญญา';
+      return item.duration?.isNotEmpty == true
+          ? item.duration!
+          : 'ระยะเวลาตามสัญญา';
     }
     try {
       final f = DateFormat('d MMM', 'th');
@@ -961,7 +982,8 @@ class RentalStatusCard extends StatelessWidget {
                           color: const Color(0xFFF1F5F9),
                           border: Border.all(color: const Color(0xFFF1F5F9)),
                         ),
-                        child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                        child:
+                            item.imageUrl != null && item.imageUrl!.isNotEmpty
                             ? CachedNetworkImage(
                                 imageUrl: item.imageUrl!,
                                 fit: BoxFit.cover,
@@ -1021,35 +1043,34 @@ class RentalStatusCard extends StatelessWidget {
                               color: Color(0xFF0F172A),
                             ),
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (item.duration != null ||
-                            item.totalPrice != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                item.partnerRole.contains('เจ้าของ')
-                                    ? Icons.storefront_outlined
-                                    : Icons.person_outline_rounded,
-                                size: 13,
-                                color: const Color(0xFF64748B),
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  '${item.partnerRole}: ${item.ownerName}',
-                                  style: const TextStyle(
-                                    fontFamily: AppTextStyles.fontFamily,
-                                    fontSize: 12,
-                                    color: Color(0xFF64748B),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                          if (item.duration != null ||
+                              item.totalPrice != null) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  item.partnerRole.contains('เจ้าของ')
+                                      ? Icons.storefront_outlined
+                                      : Icons.person_outline_rounded,
+                                  size: 13,
+                                  color: const Color(0xFF64748B),
                                 ),
-                              ),
-                            ],
-                          ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    '${item.partnerRole}: ${item.ownerName}',
+                                    style: const TextStyle(
+                                      fontFamily: AppTextStyles.fontFamily,
+                                      fontSize: 12,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1067,7 +1088,10 @@ class RentalStatusCard extends StatelessWidget {
                     item.pickupLocation!.isNotEmpty) ...[
                   Container(
                     margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(8),
@@ -1102,7 +1126,10 @@ class RentalStatusCard extends StatelessWidget {
 
                 // ── 4. Period & Pricing Bar ──
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(10),
@@ -1189,114 +1216,124 @@ class RentalStatusCard extends StatelessWidget {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
                               ),
                             )
                           : item.isConfirmed
-                              ? ElevatedButton.icon(
-                                  onPressed: () => _openTrackingMap(context),
-                                  icon: const Icon(
-                                    Icons.near_me_outlined,
-                                    size: 15,
-                                    color: Colors.white,
-                                  ),
-                                  label: const Text(
-                                    'ดูจุดนัดรับ & เส้นทาง',
-                                    style: TextStyle(
-                                      fontFamily: AppTextStyles.fontFamily,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
+                          ? ElevatedButton.icon(
+                              onPressed: () => _openTrackingMap(context),
+                              icon: const Icon(
+                                Icons.near_me_outlined,
+                                size: 15,
+                                color: Colors.white,
+                              ),
+                              label: const Text(
+                                'ดูจุดนัดรับ & เส้นทาง',
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2563EB),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shadowColor: Colors.transparent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
+                              ),
+                            )
+                          : item.isPending
+                          ? item.isOwner
+                                ? ElevatedButton.icon(
+                                    onPressed: () => _showDetailModal(context),
+                                    icon: const Icon(
+                                      Icons.assignment_ind_outlined,
+                                      size: 15,
                                       color: Colors.white,
                                     ),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF2563EB),
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    shadowColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                  ),
-                                )
-                              : item.isPending
-                                  ? item.isOwner
-                                      ? ElevatedButton.icon(
-                                          onPressed: () => _showDetailModal(context),
-                                          icon: const Icon(
-                                            Icons.assignment_ind_outlined,
-                                            size: 15,
-                                            color: Colors.white,
-                                          ),
-                                          label: const Text(
-                                            'ตรวจสอบคำขอเช่า',
-                                            style: TextStyle(
-                                              fontFamily: AppTextStyles.fontFamily,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(0xFFF59E0B),
-                                            foregroundColor: Colors.white,
-                                            elevation: 0,
-                                            shadowColor: Colors.transparent,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            padding: const EdgeInsets.symmetric(vertical: 10),
-                                          ),
-                                        )
-                                      : OutlinedButton.icon(
-                                          onPressed: () => _showDetailModal(context),
-                                          icon: const Icon(
-                                            Icons.hourglass_empty_rounded,
-                                            size: 15,
-                                            color: Color(0xFFD97706),
-                                          ),
-                                          label: const Text(
-                                            'รอการยืนยันจากเจ้าของ',
-                                            style: TextStyle(
-                                              fontFamily: AppTextStyles.fontFamily,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.bold,
-                                              color: Color(0xFFD97706),
-                                            ),
-                                          ),
-                                          style: OutlinedButton.styleFrom(
-                                            backgroundColor: const Color(0xFFFFFBEB),
-                                            side: const BorderSide(
-                                              color: Color(0xFFFDE68A),
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            padding: const EdgeInsets.symmetric(vertical: 10),
-                                          ),
-                                        )
-                                  : OutlinedButton(
-                                      onPressed: () => _showDetailModal(context),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: AppColors.primaryColor,
-                                        side: const BorderSide(
-                                          color: Color(0xFFE2E8F0),
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(vertical: 10),
-                                      ),
-                                      child: const Text(
-                                        'ดูรายละเอียดการเช่า',
-                                        style: TextStyle(
-                                          fontFamily: AppTextStyles.fontFamily,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                    label: const Text(
+                                      'ตรวจสอบคำขอเช่า',
+                                      style: TextStyle(
+                                        fontFamily: AppTextStyles.fontFamily,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
                                       ),
                                     ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFF59E0B),
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                  )
+                                : OutlinedButton.icon(
+                                    onPressed: () => _showDetailModal(context),
+                                    icon: const Icon(
+                                      Icons.hourglass_empty_rounded,
+                                      size: 15,
+                                      color: Color(0xFFD97706),
+                                    ),
+                                    label: const Text(
+                                      'รอการยืนยันจากเจ้าของ',
+                                      style: TextStyle(
+                                        fontFamily: AppTextStyles.fontFamily,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFFD97706),
+                                      ),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFFFFBEB),
+                                      side: const BorderSide(
+                                        color: Color(0xFFFDE68A),
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                  )
+                          : OutlinedButton(
+                              onPressed: () => _showDetailModal(context),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primaryColor,
+                                side: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
+                              ),
+                              child: const Text(
+                                'ดูรายละเอียดการเช่า',
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                     ),
                     const SizedBox(width: 8),
                     // Secondary detail button
@@ -1363,6 +1400,11 @@ class _RentalStatusDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentStep = _currentStepIndex();
     final isCancelled = currentStep == -1;
+    final effectiveEnd = _computeEffectiveRentalEnd(item);
+    final isOverdue =
+        item.isActive &&
+        effectiveEnd != null &&
+        DateTime.now().isAfter(effectiveEnd);
 
     return SafeArea(
       child: Padding(
@@ -1372,7 +1414,6 @@ class _RentalStatusDetailSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Drag handle
               Center(
                 child: Container(
                   width: 40,
@@ -1384,18 +1425,17 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                   ),
                 ),
               ),
-
-              // Title Row
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'รายละเอียดสถานะการเช่า',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
+                  const Expanded(
+                    child: Text(
+                      'รายละเอียดสถานะการเช่า',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
                     ),
                   ),
                   IconButton(
@@ -1405,14 +1445,10 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-
-              // Step-by-Step Progress Stepper
               if (!isCancelled) ...[
                 _buildTimelineStepper(currentStep),
                 const SizedBox(height: 16),
               ],
-
-              // Item Preview Card
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -1424,24 +1460,22 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Container(
+                      child: SizedBox(
                         width: 56,
                         height: 56,
-                        color: const Color(0xFFF3E8FF),
-                        child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                        child:
+                            item.imageUrl != null && item.imageUrl!.isNotEmpty
                             ? CachedNetworkImage(
                                 imageUrl: item.imageUrl!,
                                 fit: BoxFit.cover,
                                 errorWidget: (context, url, error) => Icon(
                                   item.iconData,
                                   color: AppColors.primaryColor,
-                                  size: 26,
                                 ),
                               )
                             : Icon(
                                 item.iconData,
                                 color: AppColors.primaryColor,
-                                size: 26,
                               ),
                       ),
                     ),
@@ -1458,7 +1492,6 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                               fontFamily: AppTextStyles.fontFamily,
                               fontWeight: FontWeight.bold,
                               fontSize: 14.5,
-                              color: Color(0xFF0F172A),
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -1467,7 +1500,6 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
                               fontSize: 12,
                               color: Color(0xFF64748B),
                             ),
@@ -1479,7 +1511,6 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                       Text(
                         '฿${item.totalPrice}',
                         style: const TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                           color: AppColors.primaryColor,
@@ -1489,53 +1520,44 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-            ],
-            if ((item.statusCode.toLowerCase() == 'active' ||
-                    item.status.contains('กำลังเช่า')) &&
-                item.endDate != null &&
-                DateTime.now().isAfter(item.endDate!)) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
+              if (isOverdue) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFECACA)),
+                  ),
+                  child: const Text(
+                    'เลยกำหนดส่งคืนอุปกรณ์',
+                    style: TextStyle(
+                      color: Color(0xFFDC2626),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-
-              const SizedBox(height: 14),
-
+                const SizedBox(height: 14),
+              ],
               if (isCancelled) ...[
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFECACA)),
                   ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.cancel_outlined,
-                        color: Color(0xFFDC2626),
-                        size: 20,
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'รายการเช่านี้ถูกยกเลิกแล้ว',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            color: Color(0xFFDC2626),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: const Text(
+                    'รายการเช่านี้ถูกยกเลิกแล้ว',
+                    style: TextStyle(
+                      color: Color(0xFFDC2626),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 14),
               ],
-
-              // Rental Details Info Box
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -1547,22 +1569,27 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                   children: [
                     if (item.bookingId != null) ...[
                       _buildInfoRow('รหัสคำขอเช่า', '#BK${item.bookingId}'),
-                      const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                      const Divider(height: 16),
                     ],
-                    _buildInfoRow('สถานะปัจจุบัน', item.status, valueColor: item.statusColor),
+                    _buildInfoRow(
+                      'สถานะปัจจุบัน',
+                      item.status,
+                      valueColor: item.statusColor,
+                    ),
                     if (item.startDate != null && item.endDate != null) ...[
-                      const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                      const Divider(height: 16),
                       _buildInfoRow(
                         'ระยะเวลาเช่า',
                         '${_formatDate(item.startDate!)} - ${_formatDate(item.endDate!)}',
                       ),
                     ],
-                    if (item.pickupLocation != null && item.pickupLocation!.isNotEmpty) ...[
-                      const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                    if (item.pickupLocation != null &&
+                        item.pickupLocation!.isNotEmpty) ...[
+                      const Divider(height: 16),
                       _buildInfoRow('สถานที่นัดรับ', item.pickupLocation!),
                     ],
                     if (item.totalPrice != null) ...[
-                      const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                      const Divider(height: 16),
                       _buildInfoRow(
                         'ยอดรวมทั้งหมด',
                         '฿${item.totalPrice}',
@@ -1573,60 +1600,15 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-            ],
-            // Rental Details Box
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Column(
-                children: [
-                  if (item.bookingId != null) ...[
-                    _buildInfoRow('รหัสคำขอเช่า', '#${item.bookingId}'),
-                    const Divider(height: 16),
-                  ],
-                  _buildInfoRow(
-                    'สถานะปัจจุบัน',
-                    item.status,
-                    valueColor: item.statusColor,
-                  ),
-                  if (item.startDate != null && item.endDate != null) ...[
-                    const Divider(height: 16),
-                    _buildInfoRow(
-                      'ระยะเวลาเช่า',
-                      '${_formatDate(item.startDate!)} - ${_formatDate(item.endDate!)}',
-                    ),
-                  ],
-                  if (item.pickupLocation != null &&
-                      item.pickupLocation!.isNotEmpty) ...[
-                    const Divider(height: 16),
-                    _buildInfoRow('สถานที่นัดรับ', item.pickupLocation!),
-                  ],
-                  if (item.totalPrice != null) ...[
-                    const Divider(height: 16),
-                    _buildInfoRow(
-                      'ยอดรวมทั้งหมด',
-                      '฿${item.totalPrice}',
-                      valueColor: AppColors.primaryColor,
-                      isBold: true,
-
               const SizedBox(height: 16),
-
-              // วิดเจ็ตนับเวลาถอยหลัง (ถ้า Active)
-              if (item.isActive) ...[
+              if (item.isActive && effectiveEnd != null) ...[
                 RentalCountdownTimerWidget(
-                  endDateTime: _computeEffectiveRentalEnd(item),
+                  endDateTime: effectiveEnd,
                   startDateTime: item.startDate,
                   isCompact: false,
                 ),
                 const SizedBox(height: 16),
               ],
-
-              // Actions
               if (item.isActive) ...[
                 SizedBox(
                   width: double.infinity,
@@ -1637,7 +1619,6 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                           ? const Color(0xFF10B981)
                           : AppColors.primaryColor,
                       foregroundColor: Colors.white,
-                      elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(24),
                       ),
@@ -1654,24 +1635,18 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                       item.isOwner
                           ? Icons.qr_code_2_rounded
                           : Icons.assignment_turned_in_outlined,
-                      size: 18,
                     ),
                     label: Text(
                       item.isOwner
                           ? 'ตรวจรับของคืน & สแกน QR'
                           : 'ดำเนินการส่งคืนอุปกรณ์',
-                      style: const TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13.5,
-                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 10),
               ],
-
-              if (item.pickupLocation != null && item.pickupLocation!.isNotEmpty) ...[
+              if (item.pickupLocation != null &&
+                  item.pickupLocation!.isNotEmpty) ...[
                 SizedBox(
                   width: double.infinity,
                   height: 46,
@@ -1679,125 +1654,50 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
-                      elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(24),
                       ),
                     ),
                     onPressed: () {
                       Navigator.pop(context);
-                      final isOwner = item.partnerRole == 'ผู้เช่า';
                       AppRoutes.openRentalTrackingMap(
                         context,
-                        isOwner: isOwner,
+                        isOwner: item.isOwner,
                         trackingArgs: {
                           'itemTitle': item.title,
                           'itemImageUrl': item.imageUrl,
                           'pickupLocation': item.pickupLocation,
+                          'destinationLat': item.latitude,
+                          'destinationLng': item.longitude,
+                          'pickupNote': item.pickupNote,
                           'ownerName': item.ownerName,
                           'ownerPhone': item.ownerPhone,
                           'periodText': item.duration,
                           'totalPrice': item.totalPrice?.toDouble(),
                           'statusCode': item.statusCode,
                           'bookingId': item.bookingId,
-                          'isOwner': isOwner,
+                          'isOwner': item.isOwner,
                         },
                       );
                     },
                     icon: const Icon(Icons.near_me_rounded, size: 18),
-                    label: const Text(
-                      'ดูเส้นทางนัดรับ & แผนที่',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13.5,
-                      ),
-                    ),
+                    label: const Text('ดูเส้นทางนัดรับ & แผนที่'),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            if (item.pickupLocation != null &&
-                item.pickupLocation!.isNotEmpty) ...[
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    final isOwner = item.partnerRole == 'ผู้เช่า';
-                    AppRoutes.openRentalTrackingMap(
-                      context,
-                      isOwner: isOwner,
-                      trackingArgs: {
-                        'itemTitle': item.title,
-                        'itemImageUrl': item.imageUrl,
-                        'pickupLocation': item.pickupLocation,
-                        'destinationLat': item.latitude,
-                        'destinationLng': item.longitude,
-                        'pickupNote': item.pickupNote,
-                        'ownerName': item.ownerName,
-                        'periodText': item.duration,
-                        'totalPrice': item.totalPrice?.toDouble(),
-                        'statusCode': item.statusCode,
-                        'bookingId': item.bookingId,
-                        'isOwner': isOwner,
-                      },
-                    );
-                  },
-                  icon: Icon(
-                    item.statusCode.toLowerCase() == 'active'
-                        ? Icons.inventory_2_outlined
-                        : Icons.near_me_rounded,
-                    size: 18,
-                  ),
-                  label: Text(
-                    item.statusCode.toLowerCase() == 'active'
-                        ? 'ดูรายละเอียดการเช่า'
-                        : 'ดูเส้นทางนัดรับ & ตรวจรับของ',
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
                 const SizedBox(height: 10),
               ],
-
-              if (item.itemId != null) ...[
+              if (item.itemId != null)
                 SizedBox(
                   width: double.infinity,
                   height: 46,
                   child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primaryColor,
-                      side: const BorderSide(color: Color(0xFFD8B4FE)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
                     onPressed: () {
                       Navigator.pop(context);
                       AppRoutes.openItemDetail(context, itemId: item.itemId!);
                     },
-                    child: const Text(
-                      'ดูรายละเอียดอุปกรณ์ต้นทาง',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13.5,
-                      ),
-                    ),
+                    child: const Text('ดูรายละเอียดอุปกรณ์ต้นทาง'),
                   ),
                 ),
-              ],
             ],
           ),
         ),
@@ -1853,8 +1753,8 @@ class _RentalStatusDetailSheet extends StatelessWidget {
           decoration: BoxDecoration(
             color: isCompletedOrCurrent
                 ? (isCurrent && stepIndex == 0
-                    ? const Color(0xFFF59E0B)
-                    : AppColors.primaryColor)
+                      ? const Color(0xFFF59E0B)
+                      : AppColors.primaryColor)
                 : const Color(0xFFE2E8F0),
             shape: BoxShape.circle,
           ),

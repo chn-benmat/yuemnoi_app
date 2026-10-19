@@ -131,10 +131,15 @@ void main() {
     expect(find.text('กีฬา/ฟิตเนส'), findsOneWidget);
   });
 
-  testWidgets('excludes appliances / เครื่องใช้ไฟฟ้า from chips', (tester) async {
+  testWidgets('excludes appliances / เครื่องใช้ไฟฟ้า from chips', (
+    tester,
+  ) async {
     const categoriesWithAppliances = [
       ...testCategories,
-      FeedCategory(id: 'appliances', name: 'เครื่องใช้ไฟฟ้าและอุปกรณ์ภายในบ้าน'),
+      FeedCategory(
+        id: 'appliances',
+        name: 'เครื่องใช้ไฟฟ้าและอุปกรณ์ภายในบ้าน',
+      ),
     ];
 
     await tester.pumpWidget(
@@ -195,7 +200,6 @@ void main() {
       ),
     );
     await tester.pump();
-
   });
 
   testWidgets('excludes all / ทั้งหมด from chips', (tester) async {
@@ -221,7 +225,9 @@ void main() {
     expect(find.byKey(const ValueKey('category-chip-all')), findsNothing);
   });
 
-  testWidgets('categories use configured asset icons and fallback icons', (tester) async {
+  testWidgets('categories use configured asset icons and fallback icons', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(

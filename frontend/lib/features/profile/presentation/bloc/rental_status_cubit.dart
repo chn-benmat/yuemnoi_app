@@ -13,11 +13,13 @@ class RentalStatusCubit extends Cubit<RentalStatusState> {
   RentalStatusCubit({
     GetRentalBookingsUseCase? getRentalBookings,
     UpdateBookingStatusUseCase? updateBookingStatus,
-  })  : getRentalBookings = getRentalBookings ??
-            GetRentalBookingsUseCase(RentalManagementRepositoryImpl()),
-        updateBookingStatus = updateBookingStatus ??
-            UpdateBookingStatusUseCase(RentalManagementRepositoryImpl()),
-        super(const RentalStatusInitial());
+  }) : getRentalBookings =
+           getRentalBookings ??
+           GetRentalBookingsUseCase(RentalManagementRepositoryImpl()),
+       updateBookingStatus =
+           updateBookingStatus ??
+           UpdateBookingStatusUseCase(RentalManagementRepositoryImpl()),
+       super(const RentalStatusInitial());
 
   Future<void> loadBookings(String userId) async {
     emit(const RentalStatusLoading());
@@ -30,10 +32,12 @@ class RentalStatusCubit extends Cubit<RentalStatusState> {
         return s != 'rejected' && s != 'reject';
       }
 
-      emit(RentalStatusLoaded(
-        rentingList: renting.where(isAllowedStatus).toList(),
-        lendingList: lending.where(isAllowedStatus).toList(),
-      ));
+      emit(
+        RentalStatusLoaded(
+          rentingList: renting.where(isAllowedStatus).toList(),
+          lendingList: lending.where(isAllowedStatus).toList(),
+        ),
+      );
     } catch (e) {
       emit(RentalStatusError(e.toString()));
     }

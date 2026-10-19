@@ -7,10 +7,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/booking_request_model.dart';
 
 class BookingProductCard extends StatefulWidget {
-  const BookingProductCard({
-    super.key,
-    required this.item,
-  });
+  const BookingProductCard({super.key, required this.item});
 
   final BookingItemInfo item;
 
@@ -155,8 +152,9 @@ class _BookingProductCardState extends State<BookingProductCard> {
                         color: hasReviews
                             ? const Color(0xFF757778)
                             : const Color(0xFF9E9E9E),
-                        fontWeight:
-                            hasReviews ? FontWeight.w500 : FontWeight.w400,
+                        fontWeight: hasReviews
+                            ? FontWeight.w500
+                            : FontWeight.w400,
                       ),
                     ),
                   ],

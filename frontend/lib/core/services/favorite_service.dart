@@ -8,8 +8,7 @@ class FavoriteService {
   FavoriteService._();
   static final FavoriteService instance = FavoriteService._();
 
-  final ValueNotifier<Set<int>> favoritesNotifier =
-      ValueNotifier<Set<int>>({});
+  final ValueNotifier<Set<int>> favoritesNotifier = ValueNotifier<Set<int>>({});
 
   bool _initialized = false;
 
@@ -26,8 +25,10 @@ class FavoriteService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final list = prefs.getStringList(_getKey()) ?? [];
-      favoritesNotifier.value =
-          list.map((e) => int.tryParse(e)).whereType<int>().toSet();
+      favoritesNotifier.value = list
+          .map((e) => int.tryParse(e))
+          .whereType<int>()
+          .toSet();
       _initialized = true;
     } catch (_) {}
   }

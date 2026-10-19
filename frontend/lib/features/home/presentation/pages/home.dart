@@ -89,8 +89,11 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
           : null;
       if (userId == null || userId.isEmpty) return;
 
-      final bookings = await RentalManagementRepositoryImpl().getRentingBookings(userId);
-      final hasActive = bookings.any((b) => b.statusCode.toLowerCase().trim() == 'active');
+      final bookings = await RentalManagementRepositoryImpl()
+          .getRentingBookings(userId);
+      final hasActive = bookings.any(
+        (b) => b.statusCode.toLowerCase().trim() == 'active',
+      );
       if (mounted) {
         setState(() {
           _hasActiveRentals = hasActive;
@@ -110,11 +113,11 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
   }
 
   List<Widget> get _pages => [
-        const HomeFeedView(),
-        const ChatScreen(),
-        const NotificationPage(),
-        const ProfileScreen(),
-      ];
+    const HomeFeedView(),
+    const ChatScreen(),
+    const NotificationPage(),
+    const ProfileScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -150,8 +153,9 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
             : null,
         bottomNavigationBar: BlocBuilder<ChatListBloc, ChatListState>(
           builder: (context, chatState) {
-            final hasUnread =
-                chatState.conversations.any((c) => c.hasUnreadMessage);
+            final hasUnread = chatState.conversations.any(
+              (c) => c.hasUnreadMessage,
+            );
 
             return CustomBottomNavbar(
               selectedIndex: _selectedIndex,

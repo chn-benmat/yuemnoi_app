@@ -138,9 +138,7 @@ class _NotificationPageState extends State<NotificationPage> {
       // รอการยืนยัน, รอการชำระ, รอการรับอุปกรณ์, กำลังเช่า, ต้องส่งคืน
       final inProgress = allBookings.where((b) {
         final code = b.statusCode.toLowerCase().trim();
-        return code != 'completed' &&
-            code != 'finished' &&
-            code != 'cancelled';
+        return code != 'completed' && code != 'finished' && code != 'cancelled';
       }).toList();
 
       if (mounted) {
@@ -290,8 +288,9 @@ class _NotificationPageState extends State<NotificationPage> {
         if (_isLoading)
           const RentalNotificationLoadingSkeleton()
         else if (displayedRentals.isNotEmpty)
-          ...displayedRentals
-              .map((item) => _buildEcommerceRentalCard(item, now))
+          ...displayedRentals.map(
+            (item) => _buildEcommerceRentalCard(item, now),
+          )
         else
           _buildCompactEmptyState(
             title: 'ไม่มีรายการอุปกรณ์ที่กำลังดำเนินการ',
@@ -404,10 +403,7 @@ class _NotificationPageState extends State<NotificationPage> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: const Color(0xFFE2E8F0),
-                width: 1,
-              ),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
             ),
             child: Text(
               actionLabel,
@@ -487,13 +483,17 @@ class _NotificationPageState extends State<NotificationPage> {
               onTap: onAction,
               borderRadius: BorderRadius.circular(6),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF5F3FF),
                   borderRadius: BorderRadius.circular(6),
-                  border:
-                      Border.all(color: const Color(0xFFDDD6FE), width: 0.8),
+                  border: Border.all(
+                    color: const Color(0xFFDDD6FE),
+                    width: 0.8,
+                  ),
                 ),
                 child: Text(
                   actionText,
@@ -622,8 +622,8 @@ class _NotificationPageState extends State<NotificationPage> {
                         width: 58,
                         height: 58,
                         color: const Color(0xFFF1F5F9),
-                        child: item.imageUrl != null &&
-                                item.imageUrl!.isNotEmpty
+                        child:
+                            item.imageUrl != null && item.imageUrl!.isNotEmpty
                             ? CachedNetworkImage(
                                 imageUrl: item.imageUrl!,
                                 fit: BoxFit.cover,
@@ -689,8 +689,10 @@ class _NotificationPageState extends State<NotificationPage> {
 
                 // ── แถบวัดเวลาหรือความคืบหน้าสถานะ (พร้อมลูกศรนำทาง) ──
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: isOverdue
                         ? const Color(0xFFFEE2E2).withValues(alpha: 0.6)
@@ -796,8 +798,6 @@ class _NotificationPageState extends State<NotificationPage> {
     // 4. สถานะอื่นๆ (เช่น รอการยืนยัน หรือกำลังเช่า) -> ไปหน้ารายละเอียดสถานะการเช่า
     AppRoutes.openRentalStatus(context);
   }
-
-
 
   (String, Color, Color, Color) _resolveStatusStyle(
     RentalBooking item,

@@ -7,16 +7,56 @@ class HomeMockDataSource {
 
   static const List<FeedCategoryModel> defaultCategories = [
     FeedCategoryModel(id: 'all', name: 'ทั้งหมด', iconName: 'apps'),
-    FeedCategoryModel(id: 'camera', name: 'กล้องและอุปกรณ์ถ่ายภาพ', iconName: 'photo_camera'),
-    FeedCategoryModel(id: 'audio', name: 'เครื่องเสียงและอุปกรณ์จัดงาน', iconName: 'headphones'),
-    FeedCategoryModel(id: 'computer', name: 'คอมพิวเตอร์และอุปกรณ์ไอที', iconName: 'laptop'),
-    FeedCategoryModel(id: 'phone', name: 'โทรศัพท์และอุปกรณ์สื่อสาร', iconName: 'smartphone'),
-    FeedCategoryModel(id: 'tools', name: 'เครื่องมือช่างและงานก่อสร้าง', iconName: 'construction'),
-    FeedCategoryModel(id: 'appliances', name: 'เครื่องใช้ไฟฟ้าและอุปกรณ์ภายในบ้าน', iconName: 'kitchen'),
-    FeedCategoryModel(id: 'camping', name: 'แคมป์ปิงและกิจกรรมกลางแจ้ง', iconName: 'forest'),
-    FeedCategoryModel(id: 'sports', name: 'กีฬาและออกกำลังกาย', iconName: 'fitness_center'),
-    FeedCategoryModel(id: 'gaming', name: 'เกมและความบันเทิง', iconName: 'sports_esports'),
-    FeedCategoryModel(id: 'music', name: 'ดนตรีและเครื่องดนตรี', iconName: 'music_note'),
+    FeedCategoryModel(
+      id: 'camera',
+      name: 'กล้องและอุปกรณ์ถ่ายภาพ',
+      iconName: 'photo_camera',
+    ),
+    FeedCategoryModel(
+      id: 'audio',
+      name: 'เครื่องเสียงและอุปกรณ์จัดงาน',
+      iconName: 'headphones',
+    ),
+    FeedCategoryModel(
+      id: 'computer',
+      name: 'คอมพิวเตอร์และอุปกรณ์ไอที',
+      iconName: 'laptop',
+    ),
+    FeedCategoryModel(
+      id: 'phone',
+      name: 'โทรศัพท์และอุปกรณ์สื่อสาร',
+      iconName: 'smartphone',
+    ),
+    FeedCategoryModel(
+      id: 'tools',
+      name: 'เครื่องมือช่างและงานก่อสร้าง',
+      iconName: 'construction',
+    ),
+    FeedCategoryModel(
+      id: 'appliances',
+      name: 'เครื่องใช้ไฟฟ้าและอุปกรณ์ภายในบ้าน',
+      iconName: 'kitchen',
+    ),
+    FeedCategoryModel(
+      id: 'camping',
+      name: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+      iconName: 'forest',
+    ),
+    FeedCategoryModel(
+      id: 'sports',
+      name: 'กีฬาและออกกำลังกาย',
+      iconName: 'fitness_center',
+    ),
+    FeedCategoryModel(
+      id: 'gaming',
+      name: 'เกมและความบันเทิง',
+      iconName: 'sports_esports',
+    ),
+    FeedCategoryModel(
+      id: 'music',
+      name: 'ดนตรีและเครื่องดนตรี',
+      iconName: 'music_note',
+    ),
     FeedCategoryModel(id: 'other', name: 'อื่น ๆ', iconName: 'category'),
   ];
 
@@ -338,11 +378,17 @@ class HomeMockDataSource {
       final matchedCategoryIds = _matchedCategoryIdsForQuery(query);
       items = items.where((item) {
         final matchesTitle = item.title.toLowerCase().contains(query);
-        final matchesCategory = item.categoryId.toLowerCase().contains(query) ||
+        final matchesCategory =
+            item.categoryId.toLowerCase().contains(query) ||
             matchedCategoryIds.contains(item.categoryId.toLowerCase());
-        final matchesTags = item.tags.any((t) => t.toLowerCase().contains(query));
+        final matchesTags = item.tags.any(
+          (t) => t.toLowerCase().contains(query),
+        );
         final matchesLocation = item.locationName.toLowerCase().contains(query);
-        return matchesTitle || matchesCategory || matchesTags || matchesLocation;
+        return matchesTitle ||
+            matchesCategory ||
+            matchesTags ||
+            matchesLocation;
       }).toList();
     }
 
@@ -375,14 +421,64 @@ class HomeMockDataSource {
 
   static const Map<String, List<String>> _categoryKeywords = {
     'camera': ['camera', 'กล้อง', 'กล้องถ่ายภาพ', 'เลนส์', 'photo'],
-    'camping': ['camping', 'แคมป์', 'แคมป์ปิ้ง', 'เต็นท์', 'กลางแจ้ง', 'เต้นท์'],
-    'computer': ['computer', 'คอม', 'คอมพิวเตอร์', 'โน้ตบุ๊ก', 'โน้ตบุ๊ค', 'laptop', 'macbook', 'ไอที'],
+    'camping': [
+      'camping',
+      'แคมป์',
+      'แคมป์ปิ้ง',
+      'เต็นท์',
+      'กลางแจ้ง',
+      'เต้นท์',
+    ],
+    'computer': [
+      'computer',
+      'คอม',
+      'คอมพิวเตอร์',
+      'โน้ตบุ๊ก',
+      'โน้ตบุ๊ค',
+      'laptop',
+      'macbook',
+      'ไอที',
+    ],
     'music': ['music', 'ดนตรี', 'เครื่องดนตรี', 'กีตาร์', 'กีต้าร์', 'เปียโน'],
-    'gaming': ['gaming', 'เกม', 'เกมส์', 'บันเทิง', 'เกม/บันเทิง', 'playstation', 'ps5', 'nintendo'],
+    'gaming': [
+      'gaming',
+      'เกม',
+      'เกมส์',
+      'บันเทิง',
+      'เกม/บันเทิง',
+      'playstation',
+      'ps5',
+      'nintendo',
+    ],
     'tools': ['tools', 'ช่าง', 'อุปกรณ์ช่าง', 'เครื่องมือช่าง', 'สว่าน'],
-    'audio': ['audio', 'เสียง', 'เครื่องเสียง', 'หูฟัง', 'ลำโพง', 'speaker', 'headphone'],
-    'phone': ['phone', 'โทรศัพท์', 'โทรศัพท์/สื่อสาร', 'มือถือ', 'smartphone', 'iphone', 'ipad', 'แท็บเล็ต'],
-    'sports': ['sports', 'กีฬา', 'กีฬา/ฟิตเนส', 'ฟิตเนส', 'ออกกำลังกาย', 'จักรยาน', 'แบดมินตัน'],
+    'audio': [
+      'audio',
+      'เสียง',
+      'เครื่องเสียง',
+      'หูฟัง',
+      'ลำโพง',
+      'speaker',
+      'headphone',
+    ],
+    'phone': [
+      'phone',
+      'โทรศัพท์',
+      'โทรศัพท์/สื่อสาร',
+      'มือถือ',
+      'smartphone',
+      'iphone',
+      'ipad',
+      'แท็บเล็ต',
+    ],
+    'sports': [
+      'sports',
+      'กีฬา',
+      'กีฬา/ฟิตเนส',
+      'ฟิตเนส',
+      'ออกกำลังกาย',
+      'จักรยาน',
+      'แบดมินตัน',
+    ],
   };
 
   static Set<String> _matchedCategoryIdsForQuery(String query) {

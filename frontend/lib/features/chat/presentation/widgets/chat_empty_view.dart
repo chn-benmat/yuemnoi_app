@@ -35,10 +35,7 @@ class ChatEmptyView extends StatelessWidget {
                   ? 'เริ่มพูดคุยเกี่ยวกับ "${conversation.itemName}"'
                   : 'ยังไม่มีประวัติการสนทนา เริ่มพิมพ์ข้อความได้เลย',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF7A8090),
-              ),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF7A8090)),
             ),
           ],
         ),

@@ -7,7 +7,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
   final ProfileRemoteDataSource remoteDataSource;
 
   ProfileRepositoryImpl({ProfileRemoteDataSource? remoteDataSource})
-      : remoteDataSource = remoteDataSource ?? ProfileRemoteDataSource();
+    : remoteDataSource = remoteDataSource ?? ProfileRemoteDataSource();
 
   @override
   Future<UserProfile> getProfile({

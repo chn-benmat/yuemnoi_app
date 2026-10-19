@@ -16,13 +16,11 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
   RentalReturnCubit({
     required RentalReturnRepository repository,
     AudioPlayer? audioPlayer,
-  })  : _repository = repository,
-        _audioPlayer = audioPlayer,
-        super(
-          RentalReturnState(
-            session: RentalReturnSession.createMockSession(),
-          ),
-        );
+  }) : _repository = repository,
+       _audioPlayer = audioPlayer,
+       super(
+         RentalReturnState(session: RentalReturnSession.createMockSession()),
+       );
 
   /// โหลดข้อมูลการเช่า และแยกบทบาทอัตโนมัติ (ผู้เช่า vs ผู้ให้เช่า)
   Future<void> loadSession({int? rentalId, bool? isLender}) async {
@@ -35,7 +33,8 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
       if (isLender != null) {
         resolvedRole = isLender ? RentalUserRole.lender : RentalUserRole.renter;
       } else {
-        final currentUserId = SupabaseConfig.isConfigured && SupabaseConfig.isInitialized
+        final currentUserId =
+            SupabaseConfig.isConfigured && SupabaseConfig.isInitialized
             ? SupabaseConfig.client.auth.currentUser?.id
             : null;
         if (currentUserId != null &&
@@ -104,16 +103,15 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
     emit(
       state.copyWith(
         isAlarmActive: false,
-        session: state.session.copyWith(step: RentalReturnStep.liveVerification),
+        session: state.session.copyWith(
+          step: RentalReturnStep.liveVerification,
+        ),
       ),
     );
   }
 
   /// อัปเดตรูปถ่ายของมุมที่ระบุ (Camera Only)
-  void updatePhoto({
-    required String angleKey,
-    required String photoPath,
-  }) {
+  void updatePhoto({required String angleKey, required String photoPath}) {
     final updatedPhotos = state.session.photos.map((p) {
       if (p.angleKey == angleKey) {
         return p.copyWith(
@@ -126,9 +124,7 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
     }).toList();
 
     emit(
-      state.copyWith(
-        session: state.session.copyWith(photos: updatedPhotos),
-      ),
+      state.copyWith(session: state.session.copyWith(photos: updatedPhotos)),
     );
   }
 
@@ -138,9 +134,7 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
     newChecklist[key] = value;
 
     emit(
-      state.copyWith(
-        session: state.session.copyWith(checklist: newChecklist),
-      ),
+      state.copyWith(session: state.session.copyWith(checklist: newChecklist)),
     );
   }
 
@@ -152,7 +146,11 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
     }
 
     if (!state.session.isChecklistComplete) {
-      emit(state.copyWith(errorMessage: 'กรุณายืนยันรายการตรวจสอบสภาพเครื่องให้ครบทุกข้อ'));
+      emit(
+        state.copyWith(
+          errorMessage: 'กรุณายืนยันรายการตรวจสอบสภาพเครื่องให้ครบทุกข้อ',
+        ),
+      );
       return;
     }
 
@@ -168,8 +166,11 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
       emit(
         state.copyWith(
           isSubmitting: false,
-          session: state.session.copyWith(step: RentalReturnStep.awaitingHandover),
-          successMessage: 'ส่งภาพถ่ายสภาพเครื่องเรียบร้อย! โปรดนำเครื่องไปส่งคืนที่จุดนัดพบ',
+          session: state.session.copyWith(
+            step: RentalReturnStep.awaitingHandover,
+          ),
+          successMessage:
+              'ส่งภาพถ่ายสภาพเครื่องเรียบร้อย! โปรดนำเครื่องไปส่งคืนที่จุดนัดพบ',
         ),
       );
     } catch (e) {
@@ -189,7 +190,8 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
     try {
       final now = DateTime.now();
       final otp = (100000 + Random().nextInt(900000)).toString();
-      final token = 'YUEMNOI_RETURN_${state.session.rentalId}_${otp}_${now.millisecondsSinceEpoch}';
+      final token =
+          'YUEMNOI_RETURN_${state.session.rentalId}_${otp}_${now.millisecondsSinceEpoch}';
       final expiry = now.add(const Duration(minutes: 5));
 
       emit(
@@ -233,7 +235,8 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
               step: RentalReturnStep.completed,
               completedAt: DateTime.now(),
             ),
-            successMessage: 'คืนอุปกรณ์สำเร็จเรียบร้อย! คืนเงินมัดจำเข้าบัญชีของคุณแล้ว',
+            successMessage:
+                'คืนอุปกรณ์สำเร็จเรียบร้อย! คืนเงินมัดจำเข้าบัญชีของคุณแล้ว',
           ),
         );
         return true;
@@ -241,7 +244,8 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
         emit(
           state.copyWith(
             isSubmitting: false,
-            errorMessage: 'รหัส QR หรือรหัส OTP ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง',
+            errorMessage:
+                'รหัส QR หรือรหัส OTP ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง',
           ),
         );
         return false;

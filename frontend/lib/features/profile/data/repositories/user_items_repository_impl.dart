@@ -8,7 +8,7 @@ class UserItemsRepositoryImpl implements UserItemsRepository {
   final UserItemsRemoteDataSource remoteDataSource;
 
   UserItemsRepositoryImpl({UserItemsRemoteDataSource? remoteDataSource})
-      : remoteDataSource = remoteDataSource ?? UserItemsRemoteDataSource();
+    : remoteDataSource = remoteDataSource ?? UserItemsRemoteDataSource();
 
   @override
   Future<List<UserItem>> getMyItems(String userId) async {

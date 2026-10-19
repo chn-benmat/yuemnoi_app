@@ -62,7 +62,9 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
         schema: 'public',
         table: 'booking_tb',
         callback: (payload) {
-          debugPrint('Realtime PostgresChange on booking_tb: ${payload.eventType}');
+          debugPrint(
+            'Realtime PostgresChange on booking_tb: ${payload.eventType}',
+          );
           if (mounted) {
             _loadData();
           }
@@ -184,7 +186,8 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                   ? state.lendingList.map(_toItemData).toList()
                   : <RentalStatusItemData>[];
 
-              final isLoading = state is RentalStatusLoading ||
+              final isLoading =
+                  state is RentalStatusLoading ||
                   (state is RentalStatusInitial && !_isGuest);
 
               return Column(
@@ -201,36 +204,36 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                     child: _isGuest
                         ? _buildGuestView()
                         : isLoading
-                            ? const RentalStatusLoadingSkeleton()
-                            : state is RentalStatusError
-                                ? _buildErrorView(state.message)
-                                : TabBarView(
-                                    controller: _tabController,
-                                    children: [
-                                      RentalStatusList(
-                                        items: rentingItems,
-                                        onRefresh: _loadData,
-                                        emptyTitle: 'ยังไม่มีรายการเช่าอุปกรณ์',
-                                        emptyMessage:
-                                            'เมื่อคุณทำการยืนยันเช่าอุปกรณ์ รายการจะแสดงและติดตามสถานะได้ที่นี่',
-                                        emptyActionLabel: 'ค้นหาอุปกรณ์เพื่อเช่า',
-                                        onEmptyAction: () =>
-                                            AppRoutes.openHome(context),
-                                        isLender: false,
-                                      ),
-                                      RentalStatusList(
-                                        items: lendingItems,
-                                        onRefresh: _loadData,
-                                        emptyTitle: 'ยังไม่มีรายการปล่อยเช่า',
-                                        emptyMessage:
-                                            'เมื่อมีผู้ใช้งานขอเช่าอุปกรณ์ของคุณ รายการจะแสดงและแจ้งเตือนที่นี่',
-                                        emptyActionLabel: 'ลงประกาศปล่อยเช่าอุปกรณ์',
-                                        onEmptyAction: () =>
-                                            AppRoutes.openAddRentalItem(context),
-                                        isLender: true,
-                                      ),
-                                    ],
-                                  ),
+                        ? const RentalStatusLoadingSkeleton()
+                        : state is RentalStatusError
+                        ? _buildErrorView(state.message)
+                        : TabBarView(
+                            controller: _tabController,
+                            children: [
+                              RentalStatusList(
+                                items: rentingItems,
+                                onRefresh: _loadData,
+                                emptyTitle: 'ยังไม่มีรายการเช่าอุปกรณ์',
+                                emptyMessage:
+                                    'เมื่อคุณทำการยืนยันเช่าอุปกรณ์ รายการจะแสดงและติดตามสถานะได้ที่นี่',
+                                emptyActionLabel: 'ค้นหาอุปกรณ์เพื่อเช่า',
+                                onEmptyAction: () =>
+                                    AppRoutes.openHome(context),
+                                isLender: false,
+                              ),
+                              RentalStatusList(
+                                items: lendingItems,
+                                onRefresh: _loadData,
+                                emptyTitle: 'ยังไม่มีรายการปล่อยเช่า',
+                                emptyMessage:
+                                    'เมื่อมีผู้ใช้งานขอเช่าอุปกรณ์ของคุณ รายการจะแสดงและแจ้งเตือนที่นี่',
+                                emptyActionLabel: 'ลงประกาศปล่อยเช่าอุปกรณ์',
+                                onEmptyAction: () =>
+                                    AppRoutes.openAddRentalItem(context),
+                                isLender: true,
+                              ),
+                            ],
+                          ),
                   ),
                 ],
               );
@@ -273,8 +276,11 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white, size: 20),
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                     tooltip: 'ย้อนกลับ',
                     onPressed: () => Navigator.maybePop(context),
                   ),
@@ -292,8 +298,11 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.refresh_rounded,
-                        color: Colors.white, size: 22),
+                    icon: const Icon(
+                      Icons.refresh_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                     tooltip: 'รีเฟรชข้อมูล',
                     onPressed: isLoading ? null : _loadData,
                   ),
@@ -396,8 +405,10 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
             if (count > 0) ...[
               const SizedBox(width: 6),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6.5, vertical: 1.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6.5,
+                  vertical: 1.5,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? AppColors.primaryColor.withValues(alpha: 0.12)
@@ -468,8 +479,10 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryColor,
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(22),
                 ),

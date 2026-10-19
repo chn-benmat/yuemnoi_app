@@ -255,12 +255,19 @@ class RentalNotificationBottomSheet extends StatelessWidget {
         try {
           endFormatted = DateFormat('d MMM yyyy • HH:mm น.', 'th').format(end);
         } catch (_) {
-          endFormatted = '${end.day}/${end.month}/${end.year} ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')} น.';
+          endFormatted =
+              '${end.day}/${end.month}/${end.year} ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')} น.';
         }
 
-        final cardBg = isOverdue ? const Color(0xFFFFF8F8) : const Color(0xFFFBFBFE);
-        final borderColor = isOverdue ? const Color(0xFFFECACA) : const Color(0xFFE2E8F0);
-        final accentColor = isOverdue ? const Color(0xFFDC2626) : AppColors.primaryColor;
+        final cardBg = isOverdue
+            ? const Color(0xFFFFF8F8)
+            : const Color(0xFFFBFBFE);
+        final borderColor = isOverdue
+            ? const Color(0xFFFECACA)
+            : const Color(0xFFE2E8F0);
+        final accentColor = isOverdue
+            ? const Color(0xFFDC2626)
+            : AppColors.primaryColor;
 
         return InkWell(
           onTap: () => _navigateToRentalStatus(context),
@@ -285,7 +292,8 @@ class RentalNotificationBottomSheet extends StatelessWidget {
                         width: 46,
                         height: 46,
                         color: const Color(0xFFF1F5F9),
-                        child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                        child:
+                            item.imageUrl != null && item.imageUrl!.isNotEmpty
                             ? CachedNetworkImage(
                                 imageUrl: item.imageUrl!,
                                 fit: BoxFit.cover,

@@ -7,13 +7,7 @@ class GetUserProfileUseCase {
 
   const GetUserProfileUseCase(this.repository);
 
-  Future<UserProfile> execute({
-    required String userId,
-    String? accessToken,
-  }) {
-    return repository.getProfile(
-      userId: userId,
-      accessToken: accessToken,
-    );
+  Future<UserProfile> execute({required String userId, String? accessToken}) {
+    return repository.getProfile(userId: userId, accessToken: accessToken);
   }
 }

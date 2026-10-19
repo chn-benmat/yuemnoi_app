@@ -22,10 +22,8 @@ class StackedImagesGridScreen extends StatelessWidget {
   }) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => StackedImagesGridScreen(
-          imageUrls: imageUrls,
-          initialTitle: title,
-        ),
+        builder: (context) =>
+            StackedImagesGridScreen(imageUrls: imageUrls, initialTitle: title),
       ),
     );
   }
@@ -117,11 +115,7 @@ class StackedImagesGridScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF8B12BA),
-              Color(0xFF6E0099),
-              Color(0xFF4C006E),
-            ],
+            colors: [Color(0xFF8B12BA), Color(0xFF6E0099), Color(0xFF4C006E)],
           ),
         ),
         child: GridView.builder(
@@ -156,33 +150,33 @@ class StackedImagesGridScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                  clipBehavior: Clip.antiAlias,
-                  child: CachedNetworkImage(
-                    imageUrl: url,
-                    fit: BoxFit.cover,
-                    placeholder: (context, _) => Container(
-                      color: Colors.black12,
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+                clipBehavior: Clip.antiAlias,
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.cover,
+                  placeholder: (context, _) => Container(
+                    color: Colors.black12,
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
                       ),
                     ),
-                    errorWidget: (context, url, error) => Container(
-                      color: Colors.black12,
-                      child: const Center(
-                        child: Icon(
-                          Icons.broken_image_rounded,
-                          color: Colors.white60,
-                          size: 40,
-                        ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.black12,
+                    child: const Center(
+                      child: Icon(
+                        Icons.broken_image_rounded,
+                        color: Colors.white60,
+                        size: 40,
                       ),
                     ),
                   ),
                 ),
-              );
-            },
+              ),
+            );
+          },
         ),
       ),
     );

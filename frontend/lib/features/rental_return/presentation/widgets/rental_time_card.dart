@@ -175,7 +175,9 @@ class RentalTimeCard extends StatelessWidget {
                     Icon(
                       isNear ? Icons.alarm_rounded : Icons.schedule_rounded,
                       size: 16,
-                      color: isNear ? const Color(0xFFD97706) : const Color(0xFF64748B),
+                      color: isNear
+                          ? const Color(0xFFD97706)
+                          : const Color(0xFF64748B),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -200,13 +202,16 @@ class RentalTimeCard extends StatelessWidget {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: isNear
                             ? const Color(0xFFFEF3C7)
                             : isOverdue
-                                ? const Color(0xFFFEE2E2)
-                                : const Color(0xFFF1F5F9),
+                            ? const Color(0xFFFEE2E2)
+                            : const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -218,8 +223,8 @@ class RentalTimeCard extends StatelessWidget {
                           color: isNear
                               ? const Color(0xFFB45309)
                               : isOverdue
-                                  ? const Color(0xFFDC2626)
-                                  : const Color(0xFF475569),
+                              ? const Color(0xFFDC2626)
+                              : const Color(0xFF475569),
                         ),
                       ),
                     ),

@@ -14,10 +14,7 @@ import '../cubit/rental_return_state.dart';
 class LiveCameraCaptureSheet extends StatelessWidget {
   const LiveCameraCaptureSheet({super.key});
 
-  Future<void> _capturePhoto(
-    BuildContext context,
-    String angleKey,
-  ) async {
+  Future<void> _capturePhoto(BuildContext context, String angleKey) async {
     final picker = ImagePicker();
 
     try {
@@ -31,9 +28,9 @@ class LiveCameraCaptureSheet extends StatelessWidget {
 
       if (photo != null && context.mounted) {
         context.read<RentalReturnCubit>().updatePhoto(
-              angleKey: angleKey,
-              photoPath: photo.path,
-            );
+          angleKey: angleKey,
+          photoPath: photo.path,
+        );
       }
     } catch (e) {
       if (context.mounted) {
@@ -161,7 +158,10 @@ class LiveCameraCaptureSheet extends StatelessWidget {
                   ),
                   // รหัส Challenge Code ขนาดกะทัดรัด
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(8),
@@ -236,7 +236,8 @@ class LiveCameraCaptureSheet extends StatelessWidget {
               _ChecklistTile(
                 title: 'อุปกรณ์เสริม สายชาร์จ และกล่องครบถ้วน',
                 value: session.checklist['accessories_complete'] ?? false,
-                onChanged: (val) => cubit.toggleChecklist('accessories_complete', val),
+                onChanged: (val) =>
+                    cubit.toggleChecklist('accessories_complete', val),
               ),
 
               const SizedBox(height: 14),
@@ -253,11 +254,20 @@ class LiveCameraCaptureSheet extends StatelessWidget {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
-                      : const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
+                      : const Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
                   label: Text(
-                    state.isSubmitting ? 'กำลังส่งข้อมูล...' : 'ส่งภาพยืนยันให้ร้านค้า',
+                    state.isSubmitting
+                        ? 'กำลังส่งข้อมูล...'
+                        : 'ส่งภาพยืนยันให้ร้านค้า',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13.5,
@@ -286,10 +296,7 @@ class _CompactPhotoSlot extends StatelessWidget {
   final ReturnInspectionPhoto photo;
   final VoidCallback onTap;
 
-  const _CompactPhotoSlot({
-    required this.photo,
-    required this.onTap,
-  });
+  const _CompactPhotoSlot({required this.photo, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -306,7 +313,9 @@ class _CompactPhotoSlot extends StatelessWidget {
               color: hasImage ? Colors.black : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: hasImage ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
+                color: hasImage
+                    ? const Color(0xFF86EFAC)
+                    : const Color(0xFFE2E8F0),
                 width: hasImage ? 1.5 : 1,
               ),
             ),
@@ -321,12 +330,12 @@ class _CompactPhotoSlot extends StatelessWidget {
                             photo.localPath!,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) =>
-                                const Icon(Icons.image_not_supported_outlined, color: Colors.grey),
+                                const Icon(
+                                  Icons.image_not_supported_outlined,
+                                  color: Colors.grey,
+                                ),
                           )
-                        : Image.file(
-                            File(photo.localPath!),
-                            fit: BoxFit.cover,
-                          ))
+                        : Image.file(File(photo.localPath!), fit: BoxFit.cover))
                   else
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -397,7 +406,9 @@ class _CompactPhotoSlot extends StatelessWidget {
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 11,
               fontWeight: hasImage ? FontWeight.bold : FontWeight.w500,
-              color: hasImage ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+              color: hasImage
+                  ? const Color(0xFF0F172A)
+                  : const Color(0xFF64748B),
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -449,7 +460,9 @@ class _ChecklistTile extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontSize: 12,
-                  color: value ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                  color: value
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFF64748B),
                   fontWeight: value ? FontWeight.w500 : FontWeight.normal,
                 ),
               ),

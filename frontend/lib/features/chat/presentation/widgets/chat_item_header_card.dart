@@ -23,7 +23,8 @@ class ChatItemHeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final unitLabel = (itemRentalType == 'รายชั่วโมง' ||
+    final unitLabel =
+        (itemRentalType == 'รายชั่วโมง' ||
             itemRentalType == 'hourly' ||
             itemRentalType == 'hour')
         ? 'ชั่วโมง'

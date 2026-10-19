@@ -300,7 +300,9 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: AppColors.primaryColor.withValues(alpha: 0.2),
+                              color: AppColors.primaryColor.withValues(
+                                alpha: 0.2,
+                              ),
                               width: 1.5,
                             ),
                           ),
@@ -323,7 +325,10 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFF9D44ED),
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 1.5),
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
                             ),
                           ),
                         ),
@@ -564,7 +569,8 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
               height: 1.45,
             ),
             decoration: const InputDecoration(
-              hintText: 'บอกเล่าประสบการณ์การใช้งาน ข้อดี หรือสิ่งที่ประทับใจ...',
+              hintText:
+                  'บอกเล่าประสบการณ์การใช้งาน ข้อดี หรือสิ่งที่ประทับใจ...',
               hintStyle: TextStyle(
                 fontFamily: AppTextStyles.fontFamily,
                 fontSize: 14,
@@ -589,10 +595,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF7400C9),
-            Color(0xFF8F19E8),
-          ],
+          colors: [Color(0xFF7400C9), Color(0xFF8F19E8)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),

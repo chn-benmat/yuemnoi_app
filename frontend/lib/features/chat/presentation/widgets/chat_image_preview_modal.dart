@@ -71,7 +71,8 @@ class _ChatImagePreviewModalState extends State<ChatImagePreviewModal> {
     final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Container(
-      height: MediaQuery.of(context).size.height * (isKeyboardOpen ? 0.85 : 0.75),
+      height:
+          MediaQuery.of(context).size.height * (isKeyboardOpen ? 0.85 : 0.75),
       decoration: const BoxDecoration(
         color: Color(0xFF1E1B2E),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -113,7 +114,10 @@ class _ChatImagePreviewModalState extends State<ChatImagePreviewModal> {
             child: _selectedImages.isEmpty
                 ? const SizedBox.shrink()
                 : Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Container(
@@ -161,8 +165,11 @@ class _ChatImagePreviewModalState extends State<ChatImagePreviewModal> {
                       child: const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add_photo_alternate_rounded,
-                              color: Color(0xFFD8B4FE), size: 22),
+                          Icon(
+                            Icons.add_photo_alternate_rounded,
+                            color: Color(0xFFD8B4FE),
+                            size: 22,
+                          ),
                           SizedBox(height: 2),
                           Text(
                             'เพิ่มรูป',
@@ -247,11 +254,16 @@ class _ChatImagePreviewModalState extends State<ChatImagePreviewModal> {
                       ),
                       child: TextField(
                         controller: _captionController,
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
                         decoration: const InputDecoration(
                           hintText: 'เพิ่มข้อความประกอบรูปภาพ (ไม่บังคับ)...',
-                          hintStyle:
-                              TextStyle(color: Colors.white38, fontSize: 13),
+                          hintStyle: TextStyle(
+                            color: Colors.white38,
+                            fontSize: 13,
+                          ),
                           border: InputBorder.none,
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(vertical: 10),

@@ -69,8 +69,8 @@ class ChatMessageActionSheet extends StatelessWidget {
     final effectiveImages = imageUrls.isNotEmpty
         ? imageUrls
         : (message.imageUrl != null && message.imageUrl!.isNotEmpty
-            ? [message.imageUrl!]
-            : <String>[]);
+              ? [message.imageUrl!]
+              : <String>[]);
 
     return showModalBottomSheet<void>(
       context: context,
@@ -141,7 +141,10 @@ class ChatMessageActionSheet extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('ยกเลิก', style: TextStyle(color: Color(0xFF6B7280))),
+            child: const Text(
+              'ยกเลิก',
+              style: TextStyle(color: Color(0xFF6B7280)),
+            ),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
@@ -163,16 +166,18 @@ class ChatMessageActionSheet extends StatelessWidget {
     final effectiveImages = imageUrls.isNotEmpty
         ? imageUrls
         : (message.imageUrl != null && message.imageUrl!.isNotEmpty
-            ? [message.imageUrl!]
-            : <String>[]);
+              ? [message.imageUrl!]
+              : <String>[]);
     final hasImages = effectiveImages.isNotEmpty;
 
     final actualText = _extractActualTextMessage(message.message);
-    final isTextMessage = actualText.isNotEmpty &&
+    final isTextMessage =
+        actualText.isNotEmpty &&
         actualText != '📷 ส่งรูปภาพ' &&
         actualText != '[รูปภาพ]';
 
-    final isSpecialCard = ItemInquiryData.isInquiry(message.message) ||
+    final isSpecialCard =
+        ItemInquiryData.isInquiry(message.message) ||
         BookingRequestData.isBookingRequest(message.message);
     final canEdit =
         message.isMine && isTextMessage && !isSpecialCard && onEdit != null;

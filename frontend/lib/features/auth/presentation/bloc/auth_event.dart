@@ -47,14 +47,14 @@ class AuthRegisterRequested extends AuthEvent {
 
   @override
   List<Object?> get props => [
-        displayName,
-        email,
-        phone,
-        password,
-        confirmPassword,
-        imageBytes,
-        imageFileName,
-      ];
+    displayName,
+    email,
+    phone,
+    password,
+    confirmPassword,
+    imageBytes,
+    imageFileName,
+  ];
 }
 
 /// Event เมื่อผู้ใช้ขอรหัส OTP (สำหรับรีเซ็ตรหัสผ่าน)

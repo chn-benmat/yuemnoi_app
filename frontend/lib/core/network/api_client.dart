@@ -401,7 +401,8 @@ class DioApiClient implements ApiClient {
       configuredUrl = 'http://127.0.0.1:8080';
     }
 
-    final isDesktopOrWeb = kIsWeb ||
+    final isDesktopOrWeb =
+        kIsWeb ||
         defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.linux ||

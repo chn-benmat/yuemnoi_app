@@ -61,7 +61,10 @@ class ConversationActionSheet extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('ยกเลิก', style: TextStyle(color: Color(0xFF6B7280))),
+            child: const Text(
+              'ยกเลิก',
+              style: TextStyle(color: Color(0xFF6B7280)),
+            ),
           ),
           FilledButton(
             style: FilledButton.styleFrom(

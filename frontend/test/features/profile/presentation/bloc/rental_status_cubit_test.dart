@@ -30,15 +30,9 @@ void main() {
       act: (cubit) => cubit.loadBookings('user1'),
       expect: () => [
         isA<RentalStatusLoading>(),
-        isA<RentalStatusLoaded>().having(
-          (s) => s.rentingList.length,
-          'rentingList length',
-          1,
-        ).having(
-          (s) => s.lendingList.length,
-          'lendingList length',
-          1,
-        ),
+        isA<RentalStatusLoaded>()
+            .having((s) => s.rentingList.length, 'rentingList length', 1)
+            .having((s) => s.lendingList.length, 'lendingList length', 1),
       ],
     );
 
@@ -94,15 +88,13 @@ void main() {
       act: (cubit) => cubit.loadBookings('user1'),
       expect: () => [
         isA<RentalStatusLoading>(),
-        isA<RentalStatusLoaded>().having(
-          (s) => s.rentingList.length,
-          'rentingList length',
-          1,
-        ).having(
-          (s) => s.rentingList.first.bookingId,
-          'first bookingId',
-          103,
-        ),
+        isA<RentalStatusLoaded>()
+            .having((s) => s.rentingList.length, 'rentingList length', 1)
+            .having(
+              (s) => s.rentingList.first.bookingId,
+              'first bookingId',
+              103,
+            ),
       ],
     );
   });

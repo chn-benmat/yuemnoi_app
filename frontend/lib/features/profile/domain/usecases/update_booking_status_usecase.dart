@@ -6,13 +6,7 @@ class UpdateBookingStatusUseCase {
 
   const UpdateBookingStatusUseCase(this.repository);
 
-  Future<void> execute({
-    required int bookingId,
-    required String status,
-  }) {
-    return repository.updateBookingStatus(
-      bookingId: bookingId,
-      status: status,
-    );
+  Future<void> execute({required int bookingId, required String status}) {
+    return repository.updateBookingStatus(bookingId: bookingId, status: status);
   }
 }

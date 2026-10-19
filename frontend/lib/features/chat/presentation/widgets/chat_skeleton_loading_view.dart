@@ -44,8 +44,9 @@ class _ChatSkeletonLoadingViewState extends State<ChatSkeletonLoadingView>
                 Color(0xFFE2E4E8),
               ],
               stops: const [0.1, 0.5, 0.9],
-              transform:
-                  SlidingGradientTransform(slidePercent: _controller.value),
+              transform: SlidingGradientTransform(
+                slidePercent: _controller.value,
+              ),
             ).createShader(bounds);
           },
           child: Padding(

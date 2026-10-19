@@ -6,7 +6,7 @@ import '../datasources/home_supabase_data_source.dart';
 /// การนำสัญญา HomeRepository ไปใช้งานจริง ดึงข้อมูลจริงจาก Supabase
 class HomeRepositoryImpl implements HomeRepository {
   HomeRepositoryImpl({HomeSupabaseDataSource? dataSource})
-      : _dataSource = dataSource ?? HomeSupabaseDataSource();
+    : _dataSource = dataSource ?? HomeSupabaseDataSource();
 
   final HomeSupabaseDataSource _dataSource;
 
@@ -50,4 +50,3 @@ class HomeRepositoryImpl implements HomeRepository {
     _dataSource.clearMemoryCache();
   }
 }
-

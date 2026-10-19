@@ -7,10 +7,7 @@ import '../../../../core/theme/app_text_styles.dart';
 class RenterQrScannerSheet extends StatefulWidget {
   final ValueChanged<String> onCodeScanned;
 
-  const RenterQrScannerSheet({
-    super.key,
-    required this.onCodeScanned,
-  });
+  const RenterQrScannerSheet({super.key, required this.onCodeScanned});
 
   static Future<void> show({
     required BuildContext context,
@@ -87,7 +84,11 @@ class _RenterQrScannerSheetState extends State<RenterQrScannerSheet> {
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.qr_code_scanner_rounded, color: AppColors.primaryColor, size: 24),
+                    Icon(
+                      Icons.qr_code_scanner_rounded,
+                      color: AppColors.primaryColor,
+                      size: 24,
+                    ),
                     SizedBox(width: 8),
                     Text(
                       'สแกน QR Code ร้านค้า',
@@ -188,9 +189,7 @@ class _RenterQrScannerSheetState extends State<RenterQrScannerSheet> {
           right: 16,
           child: IconButton(
             icon: const Icon(Icons.flash_on_rounded, color: Colors.white),
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.black54,
-            ),
+            style: IconButton.styleFrom(backgroundColor: Colors.black54),
             onPressed: () => _scannerController.toggleTorch(),
           ),
         ),
@@ -259,7 +258,10 @@ class _RenterQrScannerSheetState extends State<RenterQrScannerSheet> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.primaryColor, width: 2),
+                borderSide: const BorderSide(
+                  color: AppColors.primaryColor,
+                  width: 2,
+                ),
               ),
             ),
           ),

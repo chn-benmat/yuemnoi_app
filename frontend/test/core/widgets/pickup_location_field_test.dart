@@ -41,7 +41,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-    expect(find.text('กรุณาเลือกจุดนัดรับสินค้า'), findsNothing);
+      expect(find.text('กรุณาเลือกจุดนัดรับสินค้า'), findsNothing);
       expect(form.currentState!.validate(), isTrue);
       expect(selected!.name, 'Library');
       expect(selected!.note, 'Gate 1');

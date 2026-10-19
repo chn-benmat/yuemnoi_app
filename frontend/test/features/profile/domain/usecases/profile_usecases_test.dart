@@ -18,7 +18,10 @@ class FakeProfileRepository implements ProfileRepository {
   bool passwordChanged = false;
 
   @override
-  Future<UserProfile> getProfile({required String userId, String? accessToken}) async {
+  Future<UserProfile> getProfile({
+    required String userId,
+    String? accessToken,
+  }) async {
     return profile;
   }
 
@@ -94,7 +97,10 @@ void main() {
 
   test('ChangeProfilePasswordUseCase changes password', () async {
     final useCase = ChangeProfilePasswordUseCase(repository);
-    await useCase.execute(accessToken: 'token123', newPassword: 'newPassword123');
+    await useCase.execute(
+      accessToken: 'token123',
+      newPassword: 'newPassword123',
+    );
 
     expect(repository.passwordChanged, isTrue);
   });

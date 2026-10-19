@@ -6,11 +6,7 @@ class SyncGoogleProfileImageUseCase {
 
   SyncGoogleProfileImageUseCase(this.repository);
 
-  Future<String> execute({
-    required String accessToken,
-  }) {
-    return repository.syncGoogleProfileImage(
-      accessToken: accessToken,
-    );
+  Future<String> execute({required String accessToken}) {
+    return repository.syncGoogleProfileImage(accessToken: accessToken);
   }
 }

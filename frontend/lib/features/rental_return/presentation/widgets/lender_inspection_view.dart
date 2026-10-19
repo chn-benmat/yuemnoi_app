@@ -45,7 +45,11 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -54,14 +58,11 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
             InteractiveViewer(
               child: photo.localPath != null
                   ? (kIsWeb
-                      ? Image.network(
-                          photo.localPath!,
-                          fit: BoxFit.contain,
-                        )
-                      : Image.file(
-                          File(photo.localPath!),
-                          fit: BoxFit.contain,
-                        ))
+                        ? Image.network(photo.localPath!, fit: BoxFit.contain)
+                        : Image.file(
+                            File(photo.localPath!),
+                            fit: BoxFit.contain,
+                          ))
                   : CachedNetworkImage(
                       imageUrl: photo.imageUrl ?? '',
                       fit: BoxFit.contain,
@@ -162,7 +163,10 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                   ),
                   // Order Number Badge
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF0FDF4),
                       borderRadius: BorderRadius.circular(8),
@@ -196,7 +200,10 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
 
               if (!hasPhotos) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(14),
@@ -204,7 +211,11 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.hourglass_empty_rounded, color: Color(0xFF94A3B8), size: 20),
+                      const Icon(
+                        Icons.hourglass_empty_rounded,
+                        color: Color(0xFF94A3B8),
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       const Expanded(
                         child: Text(
@@ -217,10 +228,16 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                         ),
                       ),
                       InkWell(
-                        onTap: () => cubit.loadSession(rentalId: session.rentalId, isLender: true),
+                        onTap: () => cubit.loadSession(
+                          rentalId: session.rentalId,
+                          isLender: true,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(8),
@@ -229,7 +246,11 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF0284C7)),
+                              Icon(
+                                Icons.refresh_rounded,
+                                size: 14,
+                                color: Color(0xFF0284C7),
+                              ),
                               SizedBox(width: 4),
                               Text(
                                 'รีเฟรช',
@@ -261,10 +282,17 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                       ),
                     ),
                     InkWell(
-                      onTap: () => cubit.loadSession(rentalId: session.rentalId, isLender: true),
+                      onTap: () => cubit.loadSession(
+                        rentalId: session.rentalId,
+                        isLender: true,
+                      ),
                       child: const Row(
                         children: [
-                          Icon(Icons.refresh_rounded, size: 13, color: Color(0xFF64748B)),
+                          Icon(
+                            Icons.refresh_rounded,
+                            size: 13,
+                            color: Color(0xFF64748B),
+                          ),
                           SizedBox(width: 3),
                           Text(
                             'รีเฟรชภาพ',
@@ -288,7 +316,9 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: GestureDetector(
-                          onTap: hasPic ? () => _showImageDialog(context, photo) : null,
+                          onTap: hasPic
+                              ? () => _showImageDialog(context, photo)
+                              : null,
                           behavior: HitTestBehavior.opaque,
                           child: Column(
                             children: [
@@ -298,7 +328,9 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                                   color: const Color(0xFFF8FAFC),
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
-                                    color: hasPic ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
+                                    color: hasPic
+                                        ? const Color(0xFF86EFAC)
+                                        : const Color(0xFFE2E8F0),
                                   ),
                                 ),
                                 child: ClipRRect(
@@ -309,26 +341,33 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                                           children: [
                                             photo.localPath != null
                                                 ? (kIsWeb
-                                                    ? Image.network(
-                                                        photo.localPath!,
-                                                        fit: BoxFit.cover,
-                                                      )
-                                                    : Image.file(
-                                                        File(photo.localPath!),
-                                                        fit: BoxFit.cover,
-                                                      ))
+                                                      ? Image.network(
+                                                          photo.localPath!,
+                                                          fit: BoxFit.cover,
+                                                        )
+                                                      : Image.file(
+                                                          File(
+                                                            photo.localPath!,
+                                                          ),
+                                                          fit: BoxFit.cover,
+                                                        ))
                                                 : CachedNetworkImage(
-                                                    imageUrl: photo.imageUrl ?? '',
+                                                    imageUrl:
+                                                        photo.imageUrl ?? '',
                                                     fit: BoxFit.cover,
                                                   ),
                                             Positioned(
                                               right: 4,
                                               bottom: 4,
                                               child: Container(
-                                                padding: const EdgeInsets.all(3),
+                                                padding: const EdgeInsets.all(
+                                                  3,
+                                                ),
                                                 decoration: BoxDecoration(
-                                                  color: Colors.black.withValues(alpha: 0.6),
-                                                  borderRadius: BorderRadius.circular(5),
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.6),
+                                                  borderRadius:
+                                                      BorderRadius.circular(5),
                                                 ),
                                                 child: const Icon(
                                                   Icons.zoom_in_rounded,
@@ -382,7 +421,10 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                 },
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: _isPhysicallyChecked
                         ? const Color(0xFFECFDF5)
@@ -439,7 +481,11 @@ class _LenderInspectionViewState extends State<LenderInspectionView> {
                   onPressed: !_isPhysicallyChecked || state.isSubmitting
                       ? null
                       : () => cubit.confirmLenderInspection(),
-                  icon: const Icon(Icons.qr_code_2_rounded, size: 18, color: Colors.white),
+                  icon: const Icon(
+                    Icons.qr_code_2_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
                   label: const Text(
                     'ยืนยันรับเครื่อง & แสดง QR Code',
                     style: TextStyle(

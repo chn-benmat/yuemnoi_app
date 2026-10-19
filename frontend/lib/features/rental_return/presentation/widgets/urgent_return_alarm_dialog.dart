@@ -171,7 +171,11 @@ class _UrgentReturnAlarmDialogState extends State<UrgentReturnAlarmDialog>
                 height: 52,
                 child: ElevatedButton.icon(
                   onPressed: widget.onProceedToVerification,
-                  icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 20),
+                  icon: const Icon(
+                    Icons.camera_alt_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                   label: const Text(
                     'ถ่ายรูปยืนยันสภาพเครื่องตอนนี้',
                     style: TextStyle(
