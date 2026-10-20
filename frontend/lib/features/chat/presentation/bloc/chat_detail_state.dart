@@ -13,6 +13,8 @@ class ChatDetailState extends Equatable {
     this.isUploadingImage = false,
     this.isOtherUserTyping = false,
     this.failedMessageIds = const {},
+    this.sendingMessageIds = const {},
+    this.ownedItemIds = const {},
     this.errorMessage,
   });
 
@@ -24,6 +26,9 @@ class ChatDetailState extends Equatable {
   final bool isUploadingImage;
   final bool isOtherUserTyping;
   final Set<String> failedMessageIds;
+  // แยกสถานะรอเครือข่ายออกจากข้อความที่บันทึกสำเร็จแล้ว
+  final Set<String> sendingMessageIds;
+  final Set<int> ownedItemIds;
   final String? errorMessage;
 
   ChatDetailState copyWith({
@@ -35,6 +40,8 @@ class ChatDetailState extends Equatable {
     bool? isUploadingImage,
     bool? isOtherUserTyping,
     Set<String>? failedMessageIds,
+    Set<String>? sendingMessageIds,
+    Set<int>? ownedItemIds,
     String? errorMessage,
   }) {
     return ChatDetailState(
@@ -46,6 +53,8 @@ class ChatDetailState extends Equatable {
       isUploadingImage: isUploadingImage ?? this.isUploadingImage,
       isOtherUserTyping: isOtherUserTyping ?? this.isOtherUserTyping,
       failedMessageIds: failedMessageIds ?? this.failedMessageIds,
+      sendingMessageIds: sendingMessageIds ?? this.sendingMessageIds,
+      ownedItemIds: ownedItemIds ?? this.ownedItemIds,
       errorMessage: errorMessage,
     );
   }
@@ -60,6 +69,8 @@ class ChatDetailState extends Equatable {
     isUploadingImage,
     isOtherUserTyping,
     failedMessageIds,
+    sendingMessageIds,
+    ownedItemIds,
     errorMessage,
   ];
 }

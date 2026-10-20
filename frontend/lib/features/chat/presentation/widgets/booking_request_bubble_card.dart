@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'chat_cached_image.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
@@ -11,7 +11,6 @@ import '../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
-import '../../../item_detail/presentation/widgets/full_screen_image_viewer.dart';
 import '../../domain/entities/chat_message.dart';
 
 class BookingRequestBubbleCard extends StatefulWidget {
@@ -443,7 +442,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             GestureDetector(
               onTap: () {
                 if (displayImageUrl.isNotEmpty) {
-                  FullScreenImageViewer.open(
+                  ChatCachedImage.openFullScreen(
                     context,
                     imageUrls: [displayImageUrl],
                     initialIndex: 0,
@@ -459,7 +458,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                       height: 210,
                       color: const Color(0xFFF1F5F9),
                       child: displayImageUrl.isNotEmpty
-                          ? CachedNetworkImage(
+                          ? ChatCachedImage(
                               imageUrl: displayImageUrl,
                               fit: BoxFit.cover,
                               alignment: Alignment.center,

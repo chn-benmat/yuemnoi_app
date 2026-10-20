@@ -13,6 +13,8 @@ abstract class ChatRepository {
 
   Future<String> getConversationContactPhone(String conversationId);
 
+  Future<Set<int>> getOwnedItemIds(Set<int> itemIds);
+
   Future<List<ChatMessage>> fetchMessages({
     required String conversationId,
     DateTime? before,

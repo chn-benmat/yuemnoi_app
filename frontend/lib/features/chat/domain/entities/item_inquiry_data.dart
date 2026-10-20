@@ -10,6 +10,7 @@ class ItemInquiryData {
     this.unitLabel,
     this.priceFormatted,
     this.imageUrl,
+    this.previousBookingId,
     this.rawMessage = '',
   });
 
@@ -19,6 +20,7 @@ class ItemInquiryData {
   final String? unitLabel;
   final String? priceFormatted;
   final String? imageUrl;
+  final int? previousBookingId;
   final String rawMessage;
 
   static const String inquiryPrefix =
@@ -66,6 +68,7 @@ class ItemInquiryData {
       if (unitLabel != null) 'unitLabel': unitLabel,
       if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
       if (priceFormatted != null) 'priceFormatted': priceFormatted,
+      if (previousBookingId != null) 'previousBookingId': previousBookingId,
     };
     final jsonString = jsonEncode(jsonMap);
 
@@ -112,6 +115,7 @@ $metaStartTag$jsonString$metaEndTag''';
             unitLabel: parsedUnitLabel,
             priceFormatted: parsedPriceFormatted,
             imageUrl: parsedImageUrl,
+            previousBookingId: (map['previousBookingId'] as num?)?.toInt(),
             rawMessage: text,
           );
         }
@@ -172,4 +176,15 @@ $metaStartTag$jsonString$metaEndTag''';
       return null;
     }
   }
+
+  ItemInquiryData withPreviousBookingId(int? bookingId) => ItemInquiryData(
+    itemId: itemId,
+    itemName: itemName,
+    price: price,
+    unitLabel: unitLabel,
+    priceFormatted: priceFormatted,
+    imageUrl: imageUrl,
+    previousBookingId: bookingId,
+    rawMessage: rawMessage,
+  );
 }

@@ -470,23 +470,20 @@ class LocationService {
     });
   }
 
-  static Future<void> openInExternalMaps(
+  static Future<bool> openInExternalMaps(
     double latitude,
     double longitude,
   ) async {
     final googleMapsUrl = buildGoogleMapsUri(latitude, longitude);
 
     try {
-      if (await canLaunchUrl(googleMapsUrl)) {
-        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-      } else {
-        await launchUrl(
-          Uri.parse('https://maps.google.com/?q=$latitude,$longitude'),
-          mode: LaunchMode.externalApplication,
-        );
-      }
+      return await launchUrl(
+        googleMapsUrl,
+        mode: LaunchMode.externalApplication,
+      );
     } catch (e) {
       debugPrint('Cannot launch map: $e');
+      return false;
     }
   }
 

@@ -73,8 +73,7 @@ class _NotificationView extends StatelessWidget {
                       if (!state.isAuthenticated)
                         const _Notice(
                           title: 'เข้าสู่ระบบเพื่อดูการแจ้งเตือน',
-                          subtitle:
-                              'ข้อความแชต สถานะการเช่า และข้อมูลบัญชีจะแสดงที่นี่',
+                          subtitle: 'สถานะการเช่าและข้อมูลบัญชีจะแสดงที่นี่',
                         )
                       else ...[
                         Align(
@@ -104,7 +103,6 @@ class _NotificationView extends StatelessWidget {
                         ),
                         for (final category in const [
                           AppNotificationCategory.rental,
-                          AppNotificationCategory.chat,
                           AppNotificationCategory.app,
                         ]) ...[
                           _NotificationSection(

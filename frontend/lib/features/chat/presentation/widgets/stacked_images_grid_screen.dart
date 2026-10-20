@@ -1,8 +1,7 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'chat_cached_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/services/media_download_service.dart';
-import '../../../item_detail/presentation/widgets/full_screen_image_viewer.dart';
 
 /// หน้าจอแสดงรูปภาพทั้งหมดในรูปแบบตาราง 2 คอลัมน์ (ตามรูปภาพ Messenger Gallery)
 class StackedImagesGridScreen extends StatelessWidget {
@@ -131,7 +130,7 @@ class StackedImagesGridScreen extends StatelessWidget {
             final url = imageUrls[index];
             return GestureDetector(
               onTap: () {
-                FullScreenImageViewer.open(
+                ChatCachedImage.openFullScreen(
                   context,
                   imageUrls: imageUrls,
                   initialIndex: index,
@@ -151,7 +150,7 @@ class StackedImagesGridScreen extends StatelessWidget {
                   ],
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: CachedNetworkImage(
+                child: ChatCachedImage(
                   imageUrl: url,
                   fit: BoxFit.cover,
                   placeholder: (context, _) => Container(
