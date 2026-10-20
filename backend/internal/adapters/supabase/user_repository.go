@@ -101,7 +101,7 @@ func (r *supabaseUserRepository) SyncGoogleProfileImage(ctx context.Context, use
 	}
 
 	var updated []map[string]interface{}
-	err = r.client.DB.From("profile_tb").
+	err = schemaDatabase(r.client, profilesSchema).From("profile_tb").
 		Update(map[string]interface{}{"user_image_url": imageURL}).
 		Eq("user_id", user.ID).
 		ExecuteWithContext(ctx, &updated)
@@ -209,7 +209,7 @@ func (r *supabaseUserRepository) completeRegistration(ctx context.Context, user 
 	publicURL := r.storage.publicURL(profileBucket, objectPath)
 
 	var updated []map[string]interface{}
-	err = r.client.DB.From("profile_tb").
+	err = schemaDatabase(r.client, profilesSchema).From("profile_tb").
 		Update(map[string]interface{}{"user_image_url": publicURL}).
 		Eq("user_id", userID).
 		ExecuteWithContext(ctx, &updated)
@@ -239,7 +239,7 @@ func (r *supabaseUserRepository) removeProfileImage(ctx context.Context, path st
 	defer cancel()
 	// การตัดการเชื่อมต่ออาจเกิดหลัง DB บันทึกสำเร็จ จึงตรวจการอ้างอิงก่อนลบไฟล์
 	var references []map[string]interface{}
-	err := r.client.DB.From("profile_tb").Select("user_id").
+	err := schemaDatabase(r.client, profilesSchema).From("profile_tb").Select("user_id").
 		Eq("user_image_url", r.storage.publicURL(profileBucket, path)).
 		ExecuteWithContext(cleanupCtx, &references)
 	if err != nil {
@@ -448,7 +448,7 @@ func (r *supabaseUserRepository) GetProfile(ctx context.Context, userID string) 
 		Phone        string `json:"phone"`
 	}
 
-	err := r.client.DB.From("profile_tb").
+	err := schemaDatabase(r.client, profilesSchema).From("profile_tb").
 		Select("user_id,email,user_image_url,display_name,bio,username,phone").
 		Eq("user_id", userID).
 		ExecuteWithContext(ctx, &profiles)
@@ -534,7 +534,7 @@ func (r *supabaseUserRepository) UpdateProfile(
 
 	if len(fields) > 0 {
 		var updated []map[string]interface{}
-		err := r.client.DB.From("profile_tb").
+		err := schemaDatabase(r.client, profilesSchema).From("profile_tb").
 			Update(fields).
 			Eq("user_id", userID).
 			ExecuteWithContext(ctx, &updated)
@@ -566,7 +566,7 @@ func (r *supabaseUserRepository) UpdateContact(ctx context.Context, userID strin
 	}
 
 	var updated []map[string]interface{}
-	err := r.client.DB.From("profile_tb").
+	err := schemaDatabase(r.client, profilesSchema).From("profile_tb").
 		Update(fields).
 		Eq("user_id", userID).
 		ExecuteWithContext(ctx, &updated)
@@ -594,7 +594,7 @@ func (r *supabaseUserRepository) GetFCMToken(ctx context.Context, userID string)
 		FCMToken string `json:"fcm_token"`
 	}
 
-	err := r.client.DB.From("profile_tb").
+	err := schemaDatabase(r.client, profilesSchema).From("profile_tb").
 		Select("fcm_token").
 		Eq("user_id", userID).
 		ExecuteWithContext(ctx, &rows)
@@ -615,7 +615,7 @@ func (r *supabaseUserRepository) DeleteFCMToken(ctx context.Context, userID stri
 	}
 
 	var updated []map[string]interface{}
-	err := r.client.DB.From("profile_tb").
+	err := schemaDatabase(r.client, profilesSchema).From("profile_tb").
 		Update(fields).
 		Eq("user_id", userID).
 		ExecuteWithContext(ctx, &updated)

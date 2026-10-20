@@ -1,6 +1,7 @@
-import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/widgets/pickup_location_field.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -13,7 +14,6 @@ import '../../../../core/network/auth_session.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/utils/auth_guard.dart';
 import '../../../../core/navigation/item_deep_link.dart';
-import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../../chat/data/datasources/chat_remote_data_source.dart';
 import '../../../chat/data/repositories/chat_repository_impl.dart';
@@ -23,6 +23,7 @@ import '../../../../core/services/favorite_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../profile/presentation/pages/profile/user_profile_view_screen.dart';
 import '../../domain/entities/item_detail.dart';
+import '../../domain/entities/related_item.dart';
 import '../bloc/item_detail_bloc.dart';
 import '../bloc/item_detail_event.dart';
 import '../bloc/item_detail_state.dart';
@@ -30,6 +31,25 @@ import '../widgets/full_screen_image_viewer.dart';
 import '../widgets/owner_item_controls.dart';
 import '../widgets/owner_item_detail_view.dart';
 import '../widgets/owner_item_detail_loading_view.dart';
+
+// ใช้ม่วงแบรนด์เป็นจุดนำสายตา และพื้นสีอ่อนช่วยแยกข้อมูลโดยไม่แย่งรูปสินค้า
+abstract final class _DetailStyle {
+  static const accent = AppColors.primaryColor;
+  static const surface = Colors.white;
+  static const softSurface = Color(0xFFF7F3FC);
+  static const accentSurface = Color(0xFFF0E5FC);
+  static const ink = Color(0xFF241B32);
+  static const secondary = Color(0xFF746B80);
+  static const rule = Color(0xFFEDE7F3);
+  static const available = Color(0xFF23764D);
+  static const availableSurface = Color(0xFFEDF8F1);
+  static const favorite = Color(0xFFE33B70);
+  static const shadow = Color(0x0A342047);
+
+  static double galleryHeight(BuildContext context) =>
+      (MediaQuery.sizeOf(context).width * .76).clamp(240.0, 340.0) +
+      MediaQuery.paddingOf(context).top;
+}
 
 class ItemDetailScreen extends StatefulWidget {
   const ItemDetailScreen({
@@ -476,40 +496,39 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             ),
           );
         }
-        return Scaffold(
-          backgroundColor: Colors.white,
-          bottomNavigationBar: item == null
-              ? null
-              : SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(28, 12, 28, 18),
-                    child: AppPrimaryButton(
-                      text: 'แชท',
-                      isLoading: _isChatLoading,
-                      onPressed: state.isBusy ? null : () => _openChat(item),
-                    ),
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle.dark.copyWith(
+            statusBarColor: Colors.transparent,
+            systemNavigationBarColor: _DetailStyle.surface,
+            systemNavigationBarIconBrightness: Brightness.dark,
+          ),
+          child: Scaffold(
+            backgroundColor: _DetailStyle.surface,
+            bottomNavigationBar: item == null
+                ? null
+                : _ChatActionBar(
+                    item: item,
+                    isLoading: _isChatLoading,
+                    onPressed: state.isBusy ? null : () => _openChat(item),
+                  ),
+            body: Stack(
+              children: [
+                _body(state),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _DetailFloatingTopBar(
+                    isFavorite: _isFavorite,
+                    onFavorite: item == null ? null : _handleFavoriteToggle,
+                    onShare: item == null ? null : () => _handleShare(item),
+                    onReport: item == null
+                        ? null
+                        : () => _openReportOptions(item),
                   ),
                 ),
-          body: Stack(
-            children: [
-              _body(state),
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _DetailFloatingTopBar(
-                  isFavorite: _isFavorite,
-                  onFavorite: _handleFavoriteToggle,
-                  onShare: () => _handleShare(item),
-                  onReport: () {
-                    if (item != null) {
-                      _openReportOptions(item);
-                    }
-                  },
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -566,14 +585,19 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       },
       child: CustomScrollView(
         key: const ValueKey('item-detail-scroll'),
+        physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(
             child: Column(
               children: [
                 _ImageGallery(imageUrls: item.imageUrls),
                 Transform.translate(
-                  offset: const Offset(0, -32),
-                  child: _DetailContent(item: item),
+                  offset: const Offset(0, -20),
+                  child: _DetailContent(
+                    item: item,
+                    relatedItems: state.relatedItems,
+                    relatedStatus: state.relatedStatus,
+                  ),
                 ),
               ],
             ),
@@ -589,7 +613,7 @@ class _ItemDetailLoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final galleryHeight = MediaQuery.sizeOf(context).width.clamp(360.0, 420.0);
+    final galleryHeight = _DetailStyle.galleryHeight(context);
 
     return SkeletonShimmer(
       key: const ValueKey('item-detail-skeleton'),
@@ -599,27 +623,22 @@ class _ItemDetailLoadingView extends StatelessWidget {
           children: [
             SkeletonBox(height: galleryHeight, borderRadius: 0),
             Transform.translate(
-              offset: const Offset(0, -32),
+              offset: const Offset(0, -20),
               child: Container(
                 width: double.infinity,
-                constraints: const BoxConstraints(minHeight: 600),
-                padding: const EdgeInsets.fromLTRB(24, 38, 24, 32),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                 decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
+                  color: _DetailStyle.surface,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
                 child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SkeletonBox(width: 240, height: 24, borderRadius: 12),
+                    SkeletonBox(width: 160, height: 24, borderRadius: 8),
                     SizedBox(height: 12),
-                    SkeletonBox(width: 150, height: 16, borderRadius: 8),
-                    SizedBox(height: 22),
-                    SkeletonBox(width: 130, height: 30, borderRadius: 15),
-                    SizedBox(height: 42),
-                    _OwnerCardSkeleton(),
-                    SizedBox(height: 40),
-                    SkeletonBox(width: 86, height: 15, borderRadius: 8),
+                    SkeletonBox(width: 250, height: 30, borderRadius: 8),
+                    SizedBox(height: 24),
+                    SkeletonBox(width: 130, height: 18, borderRadius: 8),
                     SizedBox(height: 16),
                     SkeletonBox(
                       width: double.infinity,
@@ -634,13 +653,15 @@ class _ItemDetailLoadingView extends StatelessWidget {
                     ),
                     SizedBox(height: 10),
                     SkeletonBox(width: 210, height: 14, borderRadius: 7),
-                    SizedBox(height: 40),
+                    SizedBox(height: 24),
+                    _OwnerCardSkeleton(),
+                    SizedBox(height: 28),
                     SkeletonBox(width: 92, height: 15, borderRadius: 8),
                     SizedBox(height: 18),
                     SkeletonBox(
                       width: double.infinity,
-                      height: 104,
-                      borderRadius: 28,
+                      height: 80,
+                      borderRadius: 16,
                     ),
                   ],
                 ),
@@ -659,27 +680,30 @@ class _OwnerCardSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 96,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
+      height: 80,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE3E5E8),
-        borderRadius: BorderRadius.circular(30),
+        color: _DetailStyle.surface,
+        border: Border.all(color: _DetailStyle.accentSurface),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: const Row(
         children: [
-          SkeletonBox(height: 64, width: 64, shape: BoxShape.circle),
-          SizedBox(width: 14),
+          SkeletonBox(height: 44, width: 44, shape: BoxShape.circle),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SkeletonBox(width: 150, height: 16, borderRadius: 8),
-                SizedBox(height: 9),
                 SkeletonBox(width: 82, height: 12, borderRadius: 6),
+                SizedBox(height: 6),
+                SkeletonBox(width: 100, height: 16, borderRadius: 8),
               ],
             ),
           ),
+          SizedBox(width: 12),
+          SkeletonBox(width: 72, height: 14, borderRadius: 6),
         ],
       ),
     );
@@ -695,9 +719,9 @@ class _DetailFloatingTopBar extends StatelessWidget {
   });
 
   final bool isFavorite;
-  final VoidCallback onFavorite;
-  final VoidCallback onShare;
-  final VoidCallback onReport;
+  final VoidCallback? onFavorite;
+  final VoidCallback? onShare;
+  final VoidCallback? onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -725,15 +749,36 @@ class _DetailFloatingTopBar extends StatelessWidget {
               icon: isFavorite
                   ? Icons.favorite_rounded
                   : Icons.favorite_border_rounded,
-              iconColor: isFavorite ? const Color(0xFFFF3B5F) : Colors.white,
+              iconColor: isFavorite ? _DetailStyle.favorite : _DetailStyle.ink,
               onPressed: onFavorite,
             ),
             const SizedBox(width: 8),
-            _CircleActionButton(
-              tooltip: 'รายงานปัญหา',
-              icon: Icons.flag_outlined,
-              iconSize: 20,
-              onPressed: onReport,
+            Container(
+              decoration: _CircleActionButton.decoration,
+              child: PopupMenuButton<String>(
+                tooltip: 'เพิ่มเติม',
+                enabled: onReport != null,
+                icon: const Icon(Icons.more_horiz_rounded),
+                iconColor: _DetailStyle.ink,
+                color: _DetailStyle.surface,
+                surfaceTintColor: _DetailStyle.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                onSelected: (_) => onReport?.call(),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'report',
+                    child: Row(
+                      children: [
+                        Icon(Icons.flag_outlined, size: 20),
+                        SizedBox(width: 10),
+                        Text('รายงานปัญหา'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -747,25 +792,35 @@ class _CircleActionButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
-    this.iconColor = Colors.white,
+    this.iconColor = _DetailStyle.ink,
     this.iconSize = 22,
   });
 
   final String tooltip;
   final IconData icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final Color iconColor;
   final double iconSize;
+
+  static final decoration = BoxDecoration(
+    color: _DetailStyle.surface,
+    shape: BoxShape.circle,
+    border: Border.all(color: _DetailStyle.rule),
+    boxShadow: const [
+      BoxShadow(
+        color: _DetailStyle.shadow,
+        blurRadius: 12,
+        offset: Offset(0, 3),
+      ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.38),
-        shape: BoxShape.circle,
-      ),
+      width: 48,
+      height: 48,
+      decoration: decoration,
       child: IconButton(
         padding: EdgeInsets.zero,
         iconSize: iconSize,
@@ -790,100 +845,97 @@ class _ImageGalleryState extends State<_ImageGallery> {
   int _page = 0;
 
   @override
+  void didUpdateWidget(covariant _ImageGallery oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.imageUrls, widget.imageUrls)) _page = 0;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final urls = widget.imageUrls;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final galleryHeight = screenWidth.clamp(360.0, 420.0);
+    final galleryHeight = _DetailStyle.galleryHeight(context);
 
     return Container(
       height: galleryHeight,
-      color: const Color(0xFFF3F4F6),
+      color: _DetailStyle.surface,
       child: Stack(
         fit: StackFit.expand,
         children: [
           if (urls.isEmpty)
             const ColoredBox(
-              color: Color(0xFFE9E9EC),
+              color: _DetailStyle.softSurface,
               child: Center(
                 child: Icon(
                   Icons.image_not_supported_outlined,
-                  color: Color(0xFF9A9A9F),
+                  color: _DetailStyle.secondary,
                   size: 58,
                 ),
               ),
             )
           else
             PageView.builder(
-              key: const ValueKey('item-image-gallery'),
+              key: ValueKey('item-image-gallery-${urls.join('|')}'),
               itemCount: urls.length,
               onPageChanged: (page) => setState(() => _page = page),
-              itemBuilder: (context, index) => ClipRect(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Blurred background of the same image to eliminate empty side bars
-                    Transform.scale(
-                      scale: 1.15,
-                      child: ImageFiltered(
-                        imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                        child: CachedNetworkImage(
-                          imageUrl: urls[index],
-                          fit: BoxFit.cover,
-                          errorWidget: (context, url, error) =>
-                              const ColoredBox(color: Color(0xFF232428)),
+              itemBuilder: (context, index) => Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  MediaQuery.paddingOf(context).top + 20,
+                  16,
+                  36,
+                ),
+                child: Semantics(
+                  button: true,
+                  label:
+                      'ดูรูปสินค้า ${index + 1} จาก ${urls.length} แบบเต็มจอ',
+                  child: GestureDetector(
+                    onTap: () => FullScreenImageViewer.open(
+                      context,
+                      imageUrls: urls,
+                      initialIndex: index,
+                    ),
+                    child: CachedNetworkImage(
+                      imageUrl: urls[index],
+                      fit: BoxFit.contain,
+                      placeholder: (context, url) => const SkeletonShimmer(
+                        child: SkeletonBox(
+                          height: double.infinity,
+                          borderRadius: 16,
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => const Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: _DetailStyle.secondary,
+                          size: 58,
                         ),
                       ),
                     ),
-                    // Subtle overlay for pleasant contrast
-                    Container(color: Colors.black.withValues(alpha: 0.16)),
-                    // Crisp foreground uncropped image
-                    GestureDetector(
-                      onTap: () => FullScreenImageViewer.open(
-                        context,
-                        imageUrls: urls,
-                        initialIndex: index,
-                      ),
-                      child: CachedNetworkImage(
-                        imageUrl: urls[index],
-                        fit: BoxFit.contain,
-                        placeholder: (context, url) => const SkeletonShimmer(
-                          child: ColoredBox(color: Color(0xFFE3E5E8)),
-                        ),
-                        errorWidget: (context, url, error) => const Center(
-                          child: Icon(
-                            Icons.broken_image_outlined,
-                            color: Colors.white70,
-                            size: 58,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
 
-          // Bottom right image counter badge (only when multiple images e.g. 2/3)
           if (urls.length > 1)
             Positioned(
-              right: 18,
-              bottom: 48,
+              right: 20,
+              bottom: 34,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 11,
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.42),
+                  color: _DetailStyle.surface,
                   borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _DetailStyle.rule),
                 ),
                 child: Text(
                   '${_page + 1}/${urls.length}',
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
+                    color: _DetailStyle.secondary,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
                   ),
                 ),
               ),
@@ -895,117 +947,522 @@ class _ImageGalleryState extends State<_ImageGallery> {
 }
 
 class _DetailContent extends StatelessWidget {
-  const _DetailContent({required this.item});
+  const _DetailContent({
+    required this.item,
+    required this.relatedItems,
+    required this.relatedStatus,
+  });
+
+  final ItemDetail item;
+  final List<RelatedItem> relatedItems;
+  final RelatedItemsStatus relatedStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final location = item.pickupLocation;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+      child: Material(
+        color: _DetailStyle.surface,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _DetailStyle.accentSurface,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        item.category,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _DetailStyle.accent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    _RentalStatus(item: item),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  item.name,
+                  style: const TextStyle(
+                    color: _DetailStyle.ink,
+                    fontSize: 26,
+                    height: 1.3,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (location != null) ...[
+                  const SizedBox(height: 12),
+                  Semantics(
+                    button: true,
+                    label: 'ดูจุดนัดรับ ${location.name} บนแผนที่',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => PickupLocationMap(location: location),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 18,
+                              color: _DetailStyle.accent,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                location.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: _DetailStyle.secondary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              size: 18,
+                              color: _DetailStyle.secondary,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                const _SectionTitle('รายละเอียดสินค้า'),
+                const SizedBox(height: 12),
+                _ExpandableDescription(
+                  key: ValueKey('item-description-${item.id}'),
+                  description: item.description,
+                ),
+                const SizedBox(height: 24),
+                _OwnerCard(item: item),
+                const SizedBox(height: 24),
+                const _SectionTitle('รีวิวล่าสุด'),
+                const SizedBox(height: 14),
+                if (item.reviews.isEmpty)
+                  const _EmptyReviews()
+                else
+                  for (final review in item.reviews) ...[
+                    _ReviewCard(review: review),
+                    const SizedBox(height: 12),
+                  ],
+                if (relatedStatus != RelatedItemsStatus.initial) ...[
+                  const SizedBox(height: 24),
+                  const Divider(color: _DetailStyle.rule, height: 1),
+                  const SizedBox(height: 24),
+                  _RelatedItemsSection(
+                    items: relatedItems,
+                    status: relatedStatus,
+                    onRetry: () => context.read<ItemDetailBloc>().add(
+                      ItemRelatedItemsRequested(item),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RentalPrice extends StatelessWidget {
+  const _RentalPrice({required this.item});
 
   final ItemDetail item;
 
   @override
+  Widget build(BuildContext context) => FittedBox(
+    fit: BoxFit.scaleDown,
+    alignment: Alignment.centerLeft,
+    child: Text(
+      '฿${NumberFormat.decimalPattern().format(item.price)}',
+      style: const TextStyle(
+        color: _DetailStyle.ink,
+        fontSize: 24,
+        height: 1.3,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+}
+
+class _RentalStatus extends StatelessWidget {
+  const _RentalStatus({required this.item});
+  final ItemDetail item;
+
+  @override
   Widget build(BuildContext context) {
+    final status = item.ownerHidden
+        ? ('ยังไม่พร้อมให้เช่า', Icons.pause_circle_outline_rounded, false)
+        : switch (item.status.trim().toLowerCase()) {
+            'available' || 'พร้อมใช้งาน' || 'พร้อมให้เช่า' => (
+              'พร้อมให้เช่า',
+              Icons.check_circle_outline_rounded,
+              true,
+            ),
+            'rented' ||
+            'renting' ||
+            'กำลังเช่า' ||
+            'ถูกเช่า' => ('กำลังถูกเช่า', Icons.schedule_rounded, false),
+            'maintenance' || 'ซ่อมบำรุง' => (
+              'อยู่ระหว่างดูแล',
+              Icons.build_circle_outlined,
+              false,
+            ),
+            'unavailable' || 'ไม่พร้อมใช้งาน' => (
+              'ยังไม่พร้อมให้เช่า',
+              Icons.pause_circle_outline_rounded,
+              false,
+            ),
+            _ => null,
+          };
+    if (status == null) return const SizedBox.shrink();
+    final (label, icon, available) = status;
+    final color = available ? _DetailStyle.available : _DetailStyle.secondary;
     return Container(
-      constraints: const BoxConstraints(minHeight: 600),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 16,
-            offset: Offset(0, -4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: available
+            ? _DetailStyle.availableSurface
+            : _DetailStyle.softSurface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(28, 32, 28, 18),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.category.toUpperCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.primaryColor,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 26),
-                        Text(
-                          item.name,
-                          style: const TextStyle(
-                            color: Color(0xFF2D2D30),
-                            fontSize: 27,
-                            height: 1.16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+    );
+  }
+}
+
+class _ChatActionBar extends StatelessWidget {
+  const _ChatActionBar({
+    required this.item,
+    required this.isLoading,
+    required this.onPressed,
+  });
+  final ItemDetail item;
+  final bool isLoading;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('item-chat-action-bar'),
+    decoration: const BoxDecoration(
+      color: _DetailStyle.surface,
+      border: Border(top: BorderSide(color: _DetailStyle.rule)),
+      boxShadow: [
+        BoxShadow(
+          color: _DetailStyle.shadow,
+          blurRadius: 20,
+          offset: Offset(0, -4),
+        ),
+      ],
+    ),
+    child: SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${NumberFormat.decimalPattern().format(item.price)} ฿',
+                        'ค่าเช่า / ${item.unitLabel}',
                         style: const TextStyle(
-                          color: Color(0xFF2D2D30),
-                          fontSize: 27,
-                          fontWeight: FontWeight.w700,
+                          color: _DetailStyle.secondary,
+                          fontSize: 11,
                         ),
                       ),
-                      Text(
-                        'ต่อ${item.unitLabel}',
-                        style: const TextStyle(
-                          color: Color(0xFF6F6F74),
-                          fontSize: 13,
-                          fontStyle: FontStyle.italic,
-                          fontWeight: FontWeight.w600,
+                      const SizedBox(height: 2),
+                      _RentalPrice(item: item),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 6,
+                  child: SizedBox(
+                    height: 54,
+                    child: FilledButton(
+                      onPressed: isLoading ? null : onPressed,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _DetailStyle.accent,
+                        foregroundColor: _DetailStyle.surface,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
+                      ),
+                      child: isLoading
+                          ? const SizedBox.square(
+                              dimension: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: _DetailStyle.surface,
+                              ),
+                            )
+                          : const FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.chat_bubble_outline_rounded,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'แชทสอบถาม',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _ExpandableDescription extends StatefulWidget {
+  const _ExpandableDescription({super.key, required this.description});
+  final String description;
+
+  @override
+  State<_ExpandableDescription> createState() => _ExpandableDescriptionState();
+}
+
+class _ExpandableDescriptionState extends State<_ExpandableDescription> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final description = widget.description.trim().isEmpty
+        ? 'ไม่มีคำอธิบายเพิ่มเติม'
+        : widget.description.trim();
+    const style = TextStyle(
+      color: _DetailStyle.secondary,
+      fontSize: 14,
+      height: 1.7,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(
+            text: description,
+            style: DefaultTextStyle.of(context).style.merge(style),
+          ),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          maxLines: 3,
+        )..layout(maxWidth: constraints.maxWidth);
+        final canExpand = painter.didExceedMaxLines;
+        painter.dispose();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              description,
+              maxLines: _expanded ? null : 3,
+              overflow: _expanded
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
+              style: style,
+            ),
+            if (canExpand)
+              TextButton(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                style: TextButton.styleFrom(
+                  foregroundColor: _DetailStyle.accent,
+                  padding: EdgeInsets.zero,
+                  alignment: Alignment.centerLeft,
+                  minimumSize: const Size(48, 48),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _expanded ? 'ย่อรายละเอียด' : 'อ่านเพิ่มเติม',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      _expanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _OwnerCard extends StatelessWidget {
+  const _OwnerCard({required this.item});
+  final ItemDetail item;
+
+  @override
+  Widget build(BuildContext context) {
+    final owner = item.owner;
+    return Material(
+      color: _DetailStyle.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: _DetailStyle.accentSurface),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => AppRoutes.openUserProfile(
+          context,
+          args: UserProfileViewArgs(
+            userId: owner.userId,
+            displayName: owner.displayName,
+            avatarUrl: owner.imageUrl,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              _Avatar(imageUrl: owner.imageUrl, size: 44),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ปล่อยเช่าโดย',
+                      style: TextStyle(
+                        color: _DetailStyle.secondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      owner.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _DetailStyle.ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (owner.isVerified) ...[
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          if (owner.isVerified) ...[
+                            const Icon(
+                              Icons.verified_rounded,
+                              size: 13,
+                              color: _DetailStyle.accent,
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          const Expanded(
+                            child: Text(
+                              'ยืนยันตัวตนแล้ว',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _DetailStyle.secondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'ดูโปรไฟล์',
+                    style: TextStyle(
+                      color: _DetailStyle.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(width: 2),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: _DetailStyle.accent,
+                    size: 18,
                   ),
                 ],
               ),
-              const SizedBox(height: 48),
-              _OwnerCard(item: item),
-              const SizedBox(height: 40),
-              const _SectionTitle('คำอธิบาย'),
-              const SizedBox(height: 14),
-              Text(
-                item.description.isEmpty
-                    ? 'ไม่มีคำอธิบายเพิ่มเติม'
-                    : item.description,
-                style: const TextStyle(
-                  color: Color(0xFF5D5D62),
-                  fontSize: 15,
-                  height: 1.75,
-                ),
-              ),
-              const SizedBox(height: 40),
-              if (item.pickupLocation != null) ...[
-                PickupLocationCard(location: item.pickupLocation!),
-                const SizedBox(height: 24),
-              ],
-              const _SectionTitle('รีวิวล่าสุด'),
-              const SizedBox(height: 18),
-              if (item.reviews.isEmpty)
-                const _EmptyReviews()
-              else
-                for (final review in item.reviews) ...[
-                  _ReviewCard(review: review),
-                  const SizedBox(height: 16),
-                ],
             ],
           ),
         ),
@@ -1014,93 +1471,236 @@ class _DetailContent extends StatelessWidget {
   }
 }
 
-class _OwnerCard extends StatelessWidget {
-  const _OwnerCard({required this.item});
-
-  final ItemDetail item;
+class _RelatedItemsSection extends StatelessWidget {
+  const _RelatedItemsSection({
+    required this.items,
+    required this.status,
+    required this.onRetry,
+  });
+  final List<RelatedItem> items;
+  final RelatedItemsStatus status;
+  final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
-    final owner = item.owner;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        AppRoutes.openUserProfile(
-          context,
-          args: UserProfileViewArgs(
-            userId: owner.userId,
-            displayName: owner.displayName,
-            avatarUrl: owner.imageUrl,
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const _SectionTitle('สินค้าใกล้เคียง'),
+      const SizedBox(height: 14),
+      if (status == RelatedItemsStatus.failure)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _DetailStyle.softSurface,
+            borderRadius: BorderRadius.circular(16),
           ),
-        );
-      },
-      child: Container(
-        height: 96,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0F1F2),
-          borderRadius: BorderRadius.circular(30),
-        ),
-        child: Row(
-          children: [
-            _Avatar(imageUrl: owner.imageUrl, size: 64),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    owner.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF2D2D30),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'โหลดสินค้าใกล้เคียงไม่สำเร็จ',
+                style: TextStyle(color: _DetailStyle.secondary, fontSize: 13),
+              ),
+              TextButton(onPressed: onRetry, child: const Text('ลองอีกครั้ง')),
+            ],
+          ),
+        )
+      else if (status == RelatedItemsStatus.loaded && items.isEmpty)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: _DetailStyle.softSurface,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Column(
+            children: [
+              Icon(
+                Icons.category_outlined,
+                color: _DetailStyle.secondary,
+                size: 24,
+              ),
+              SizedBox(height: 8),
+              Text(
+                'ยังไม่มีสินค้าอื่นในหมวดนี้',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _DetailStyle.secondary, fontSize: 13),
+              ),
+            ],
+          ),
+        )
+      else
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final width = (constraints.maxWidth * .54).clamp(144.0, 180.0);
+            final scaler = MediaQuery.textScalerOf(context);
+            final nameHeight = scaler.scale(13) * 1.4 * 2;
+            final priceHeight = scaler.scale(17) * 1.4;
+            final height = width + nameHeight + priceHeight + 36;
+            if (status == RelatedItemsStatus.loading) {
+              return SkeletonShimmer(
+                child: SizedBox(
+                  height: height,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: 2,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (_, _) => SizedBox(
+                      width: width,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SkeletonBox(height: width, borderRadius: 16),
+                          const SizedBox(height: 12),
+                          const SkeletonBox(
+                            width: 120,
+                            height: 14,
+                            borderRadius: 6,
+                          ),
+                          const SizedBox(height: 8),
+                          const SkeletonBox(
+                            width: 80,
+                            height: 18,
+                            borderRadius: 6,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const Text(
-                    'ผู้ปล่อยเช่า',
-                    style: TextStyle(
-                      color: Color(0xFF6B6B70),
-                      fontSize: 12,
+                ),
+              );
+            }
+            return SizedBox(
+              height: height,
+              child: ListView.separated(
+                key: const ValueKey('related-items-list'),
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return SizedBox(
+                    width: width,
+                    child: _RelatedItemCard(
+                      item: item,
+                      nameHeight: nameHeight,
+                      priceHeight: priceHeight,
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+    ],
+  );
+}
+
+class _RelatedItemCard extends StatelessWidget {
+  const _RelatedItemCard({
+    required this.item,
+    required this.nameHeight,
+    required this.priceHeight,
+  });
+  final RelatedItem item;
+  final double nameHeight;
+  final double priceHeight;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    key: ValueKey('related-item-${item.id}'),
+    color: _DetailStyle.surface,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: const BorderSide(color: _DetailStyle.rule),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: () => AppRoutes.openItemDetail(context, itemId: item.id),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 1,
+            child: item.imageUrl.isEmpty
+                ? const ColoredBox(
+                    color: _DetailStyle.softSurface,
+                    child: Icon(
+                      Icons.image_outlined,
+                      color: _DetailStyle.secondary,
+                      size: 32,
+                    ),
+                  )
+                : CachedNetworkImage(
+                    imageUrl: item.imageUrl,
+                    fit: BoxFit.contain,
+                    placeholder: (_, _) =>
+                        const ColoredBox(color: _DetailStyle.softSurface),
+                    errorWidget: (_, _, _) => const Icon(
+                      Icons.image_outlined,
+                      color: _DetailStyle.secondary,
+                      size: 32,
+                    ),
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: nameHeight,
+                  child: Text(
+                    item.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _DetailStyle.ink,
+                      fontSize: 13,
+                      height: 1.4,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: priceHeight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '฿${NumberFormat.decimalPattern().format(item.price)}',
+                          style: const TextStyle(
+                            color: _DetailStyle.accent,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '/ ${item.unitLabel}',
+                          style: const TextStyle(
+                            color: _DetailStyle.secondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            if (item.reviews.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 13,
-                  vertical: 8,
-                ),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.all(Radius.circular(18)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.star_rounded,
-                      color: AppColors.primaryColor,
-                      size: 19,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      item.averageRating.toStringAsFixed(1),
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _ReviewCard extends StatelessWidget {
@@ -1112,10 +1712,10 @@ class _ReviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 18, 22),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F6),
-        borderRadius: BorderRadius.circular(30),
+        color: _DetailStyle.softSurface,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1128,9 +1728,9 @@ class _ReviewCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF343439),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    color: _DetailStyle.ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -1142,7 +1742,7 @@ class _ReviewCard extends StatelessWidget {
             Text(
               '“${review.description}”',
               style: const TextStyle(
-                color: Color(0xFF68686D),
+                color: _DetailStyle.secondary,
                 fontSize: 14,
                 height: 1.45,
                 fontStyle: FontStyle.italic,
@@ -1170,8 +1770,8 @@ class _Stars extends StatelessWidget {
           index < rating.round()
               ? Icons.star_rounded
               : Icons.star_border_rounded,
-          color: AppColors.primaryColor,
-          size: 18,
+          color: _DetailStyle.accent,
+          size: 16,
         ),
       ),
     );
@@ -1189,10 +1789,10 @@ class _Avatar extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.all(1),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFDDB4FA), width: 2),
+        border: Border.all(color: _DetailStyle.accentSurface),
       ),
       child: ClipOval(
         child: imageUrl.isEmpty
@@ -1217,9 +1817,9 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     text,
     style: const TextStyle(
-      color: Color(0xFF5B5B60),
-      fontSize: 15,
-      fontWeight: FontWeight.w500,
+      color: _DetailStyle.ink,
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
     ),
   );
 }
@@ -1231,18 +1831,22 @@ class _EmptyReviews extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F6),
-        borderRadius: BorderRadius.circular(30),
+        color: _DetailStyle.softSurface,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: const Column(
         children: [
-          Icon(Icons.rate_review_outlined, color: Color(0xFF929297), size: 30),
+          Icon(
+            Icons.rate_review_outlined,
+            color: _DetailStyle.secondary,
+            size: 24,
+          ),
           SizedBox(height: 8),
           Text(
             'ยังไม่มีรีวิวสำหรับอุปกรณ์นี้',
-            style: TextStyle(color: Color(0xFF77777C), fontSize: 14),
+            style: TextStyle(color: _DetailStyle.secondary, fontSize: 13),
           ),
         ],
       ),

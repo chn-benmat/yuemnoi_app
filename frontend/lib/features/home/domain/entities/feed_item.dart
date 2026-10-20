@@ -15,6 +15,7 @@ class FeedItem extends Equatable {
     required this.distanceKm,
     required this.isVerified,
     required this.ownerName,
+    this.isOwner = false,
     this.ownerAvatarUrl,
     required this.imageUrl,
     this.isCurated = false,
@@ -59,6 +60,9 @@ class FeedItem extends Equatable {
   /// ชื่อเจ้าของอุปกรณ์
   final String ownerName;
 
+  /// ใช้เลือกรูปแบบระหว่างโหลด สิทธิ์จัดการยืนยันจากรายละเอียดอุปกรณ์อีกครั้ง
+  final bool isOwner;
+
   /// รูปโปรไฟล์เจ้าของอุปกรณ์
   final String? ownerAvatarUrl;
 
@@ -90,6 +94,7 @@ class FeedItem extends Equatable {
     double? distanceKm,
     bool? isVerified,
     String? ownerName,
+    bool? isOwner,
     String? ownerAvatarUrl,
     String? imageUrl,
     bool? isCurated,
@@ -110,6 +115,7 @@ class FeedItem extends Equatable {
       distanceKm: distanceKm ?? this.distanceKm,
       isVerified: isVerified ?? this.isVerified,
       ownerName: ownerName ?? this.ownerName,
+      isOwner: isOwner ?? this.isOwner,
       ownerAvatarUrl: ownerAvatarUrl ?? this.ownerAvatarUrl,
       imageUrl: imageUrl ?? this.imageUrl,
       isCurated: isCurated ?? this.isCurated,
@@ -133,6 +139,7 @@ class FeedItem extends Equatable {
     distanceKm,
     isVerified,
     ownerName,
+    isOwner,
     ownerAvatarUrl,
     imageUrl,
     isCurated,

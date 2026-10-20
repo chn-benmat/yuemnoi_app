@@ -274,6 +274,7 @@ class RentalManagementRemoteDataSource {
     final Map<String, String> userPhones = {};
     try {
       final profilesResp = await _supabaseClient
+          .schema('profiles')
           .from('public_profile_v')
           .select('user_id, display_name')
           .inFilter('user_id', userIds.toList());

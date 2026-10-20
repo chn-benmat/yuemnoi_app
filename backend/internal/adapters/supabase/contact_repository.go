@@ -30,7 +30,7 @@ func (r *supabaseConversationContactRepository) PhoneForConversation(
 	conversationID string,
 ) (string, error) {
 	var conversations []conversationParticipants
-	err := r.client.DB.From("conversation_tb").
+	err := schemaDatabase(r.client, messagingSchema).From("conversation_tb").
 		Select("renter_id,owner_id").
 		Eq("id", conversationID).
 		ExecuteWithContext(ctx, &conversations)

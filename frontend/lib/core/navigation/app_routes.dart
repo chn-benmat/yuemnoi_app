@@ -31,8 +31,11 @@ import '../../features/chat/presentation/pages/chat_detail.dart';
 
 import '../../features/item_detail/data/datasources/item_detail_remote_data_source.dart';
 import '../../features/item_detail/data/repositories/item_detail_repository_impl.dart';
+import '../../features/item_detail/data/datasources/related_items_remote_data_source.dart';
+import '../../features/item_detail/data/repositories/related_items_repository_impl.dart';
 import '../../features/item_detail/domain/entities/item_detail.dart';
 import '../../features/item_detail/domain/usecases/get_item_detail_usecase.dart';
+import '../../features/item_detail/domain/usecases/get_related_items_usecase.dart';
 import '../../features/item_detail/domain/usecases/update_item_usecase.dart';
 import '../../features/item_detail/domain/usecases/manage_owner_item_usecase.dart';
 import '../../features/item_detail/presentation/bloc/item_detail_bloc.dart';
@@ -378,6 +381,9 @@ abstract final class AppRoutes {
                   getItem: GetItemDetailUseCase(repository),
                   updateItem: UpdateItemUseCase(repository),
                   manageItem: ManageOwnerItemUseCase(repository),
+                  getRelatedItems: GetRelatedItemsUseCase(
+                    RelatedItemsRepositoryImpl(RelatedItemsRemoteDataSource()),
+                  ),
                 )..add(ItemDetailRequested(itemId)),
                 child: ItemDetailScreen(
                   itemId: itemId,

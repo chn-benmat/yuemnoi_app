@@ -69,6 +69,17 @@ func TestProfileImageStorageUsesOwnerFolder(t *testing.T) {
 			var uploadPath, savedURL, returnedURL string
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
+				if strings.HasPrefix(r.URL.Path, "/rest/v1/") {
+					wantSchema := "public"
+					if r.URL.Path == "/rest/v1/profile_tb" {
+						wantSchema = "profiles"
+					}
+					for _, header := range []string{"Accept-Profile", "Content-Profile"} {
+						if got := r.Header.Get(header); got != wantSchema {
+							t.Errorf("%s %s %s = %q, want %q", r.Method, r.URL.Path, header, got, wantSchema)
+						}
+					}
+				}
 				switch {
 				case r.URL.Path == "/rest/v1/rpc/check_email_exists":
 					_, _ = w.Write([]byte(`false`))

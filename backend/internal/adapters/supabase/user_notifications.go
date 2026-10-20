@@ -26,7 +26,7 @@ func (r *supabaseUserRepository) ValidateChatPush(ctx context.Context, senderID 
 		ConversationID string `json:"conversation_id"`
 		SenderID       string `json:"sender_id"`
 	}
-	if err := r.client.DB.From("chat_message_tb").Select("conversation_id,sender_id").Eq("id", n.MessageID).ExecuteWithContext(ctx, &messages); err != nil {
+	if err := schemaDatabase(r.client, messagingSchema).From("chat_message_tb").Select("conversation_id,sender_id").Eq("id", n.MessageID).ExecuteWithContext(ctx, &messages); err != nil {
 		return fmt.Errorf("load push message: %w", err)
 	}
 	if len(messages) != 1 || messages[0].SenderID != senderID || messages[0].ConversationID != n.ConversationID {
@@ -36,7 +36,7 @@ func (r *supabaseUserRepository) ValidateChatPush(ctx context.Context, senderID 
 		RenterID string `json:"renter_id"`
 		OwnerID  string `json:"owner_id"`
 	}
-	if err := r.client.DB.From("conversation_tb").Select("renter_id,owner_id").Eq("id", n.ConversationID).ExecuteWithContext(ctx, &conversations); err != nil {
+	if err := schemaDatabase(r.client, messagingSchema).From("conversation_tb").Select("renter_id,owner_id").Eq("id", n.ConversationID).ExecuteWithContext(ctx, &conversations); err != nil {
 		return fmt.Errorf("load push conversation: %w", err)
 	}
 	if len(conversations) != 1 {

@@ -110,6 +110,7 @@ class UserPresenceService with WidgetsBindingObserver {
 
     try {
       await client
+          .schema('profiles')
           .from('profile_tb')
           .update({
             'is_online': isOnline,

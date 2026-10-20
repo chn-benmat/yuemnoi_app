@@ -51,7 +51,11 @@ class _HomeFeedViewState extends State<HomeFeedView> {
       );
       return;
     }
-    AppRoutes.openItemDetail(context, itemId: itemId);
+    AppRoutes.openItemDetail(
+      context,
+      itemId: itemId,
+      ownerLoadingLayout: item.isOwner,
+    );
   }
 
   /// รวมและตัดรายการสินค้าซ้ำ
@@ -386,16 +390,8 @@ class _HomeLoadingView extends StatelessWidget {
     return SkeletonShimmer(
       child: Container(
         key: const ValueKey('home-feed-skeleton'),
-        decoration: const BoxDecoration(
-          color: Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(28),
-            topRight: Radius.circular(28),
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
           child: GridView.builder(
             padding: EdgeInsets.zero,
             physics: const NeverScrollableScrollPhysics(),
@@ -422,34 +418,47 @@ class _ProductCardSkeleton extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
       ),
       clipBehavior: Clip.antiAlias,
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 6,
-            child: SkeletonBox(height: double.infinity, borderRadius: 0),
+          AspectRatio(
+            aspectRatio: 1,
+            child: SkeletonBox(
+              width: double.infinity,
+              height: double.infinity,
+              borderRadius: 0,
+            ),
           ),
           Expanded(
-            flex: 4,
             child: Padding(
-              padding: EdgeInsets.all(12),
+              padding: EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  SkeletonBox(
-                    width: double.infinity,
-                    height: 14,
-                    borderRadius: 7,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SkeletonBox(
+                        width: double.infinity,
+                        height: 16,
+                        borderRadius: 4,
+                      ),
+                      SizedBox(height: 4),
+                      SkeletonBox(width: 116, height: 13, borderRadius: 4),
+                    ],
                   ),
-                  SizedBox(height: 8),
-                  SkeletonBox(width: 96, height: 14, borderRadius: 7),
-                  Spacer(),
-                  SkeletonBox(width: 76, height: 18, borderRadius: 9),
-                  SizedBox(height: 8),
-                  SkeletonBox(width: 116, height: 12, borderRadius: 6),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SkeletonBox(width: 76, height: 20, borderRadius: 4),
+                      SizedBox(height: 4),
+                      SkeletonBox(width: 96, height: 14, borderRadius: 4),
+                    ],
+                  ),
                 ],
               ),
             ),

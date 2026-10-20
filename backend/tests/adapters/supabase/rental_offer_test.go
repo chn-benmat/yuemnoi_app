@@ -24,6 +24,15 @@ func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
 [BOOKING_DATA:{"itemId":7,"rentalType":"daily","startDate":"2026-10-18T00:00:00.000","endDate":"2026-10-19T00:00:00.000","startHour":9,"startMinute":0,"endHour":17,"endMinute":0,"location":"Pickup"}]`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		wantSchema := "public"
+		if r.URL.Path == "/rest/v1/chat_message_tb" || r.URL.Path == "/rest/v1/conversation_tb" {
+			wantSchema = "messaging"
+		}
+		for _, header := range []string{"Accept-Profile", "Content-Profile"} {
+			if got := r.Header.Get(header); got != wantSchema {
+				t.Errorf("%s %s %s = %q, want %q", r.Method, r.URL.Path, header, got, wantSchema)
+			}
+		}
 		switch {
 		case r.URL.Path == "/rest/v1/rpc/create_rental_request":
 			createCalls++

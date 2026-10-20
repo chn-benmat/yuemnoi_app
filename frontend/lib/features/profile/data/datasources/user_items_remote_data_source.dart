@@ -68,6 +68,7 @@ class UserItemsRemoteDataSource {
       if (ownerIds.isNotEmpty) {
         try {
           final profiles = await client
+              .schema('profiles')
               .from('public_profile_v')
               .select('user_id, display_name, email')
               .inFilter('user_id', ownerIds.toList());

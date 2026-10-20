@@ -18,6 +18,14 @@ class ItemDetailRequested extends ItemDetailEvent {
   List<Object?> get props => [itemId];
 }
 
+class ItemRelatedItemsRequested extends ItemDetailEvent {
+  const ItemRelatedItemsRequested(this.item);
+  final ItemDetail item;
+
+  @override
+  List<Object?> get props => [item];
+}
+
 class ItemVisibilityChanged extends ItemDetailEvent {
   const ItemVisibilityChanged({required this.hidden});
   final bool hidden;

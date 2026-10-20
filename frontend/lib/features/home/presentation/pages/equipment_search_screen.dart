@@ -348,7 +348,11 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       );
       return;
     }
-    AppRoutes.openItemDetail(context, itemId: itemId);
+    AppRoutes.openItemDetail(
+      context,
+      itemId: itemId,
+      ownerLoadingLayout: item.isOwner,
+    );
   }
 
   void _handleBackAction() {

@@ -368,6 +368,7 @@ class HomeSupabaseDataSource {
     Map<String, Map<String, dynamic>>? profilesMap,
   }) {
     final List<FeedItemModel> items = [];
+    final currentUserId = _activeSupabaseClient?.auth.currentUser?.id;
     for (int i = 0; i < rawItems.length; i++) {
       final item = rawItems[i] is Map<String, dynamic>
           ? rawItems[i] as Map<String, dynamic>
@@ -456,6 +457,9 @@ class HomeSupabaseDataSource {
               item['is_verified'] == true ||
               profilesMap?[item['user_id']?.toString()]?['is_verified'] == true,
           ownerName: ownerName.isEmpty ? 'ผู้ใช้งาน' : ownerName,
+          isOwner:
+              currentUserId != null &&
+              item['user_id']?.toString() == currentUserId,
           ownerAvatarUrl: ownerAvatar,
           imageUrl: imageUrl,
           isCurated: i < 4,
@@ -524,6 +528,7 @@ class HomeSupabaseDataSource {
     if (userIds.isNotEmpty) {
       try {
         final List<dynamic> profiles = await client
+            .schema('profiles')
             .from('public_profile_v')
             .select('user_id, display_name, user_image_url, is_verified')
             .inFilter('user_id', userIds);

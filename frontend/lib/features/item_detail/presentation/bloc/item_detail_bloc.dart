@@ -4,6 +4,7 @@ import '../../../../core/services/item_catalog_service.dart';
 import '../../domain/entities/item_detail.dart';
 import '../../domain/repositories/item_detail_repository.dart';
 import '../../domain/usecases/get_item_detail_usecase.dart';
+import '../../domain/usecases/get_related_items_usecase.dart';
 import '../../domain/usecases/update_item_usecase.dart';
 import '../../domain/usecases/manage_owner_item_usecase.dart';
 import 'item_detail_event.dart';
@@ -14,10 +15,12 @@ class ItemDetailBloc extends Bloc<ItemDetailEvent, ItemDetailState> {
     required GetItemDetailUseCase getItem,
     required UpdateItemUseCase updateItem,
     ManageOwnerItemUseCase? manageItem,
+    GetRelatedItemsUseCase? getRelatedItems,
     ItemDetail? initialItem,
   }) : _getItem = getItem,
        _updateItem = updateItem,
        _manageItem = manageItem,
+       _getRelatedItems = getRelatedItems,
        super(
          ItemDetailState(
            status: initialItem == null
@@ -30,11 +33,62 @@ class ItemDetailBloc extends Bloc<ItemDetailEvent, ItemDetailState> {
     on<ItemDetailUpdateSubmitted>(_onUpdateSubmitted);
     on<ItemVisibilityChanged>(_onVisibilityChanged);
     on<ItemDeleteSubmitted>(_onDeleteSubmitted);
+    on<ItemRelatedItemsRequested>(_onRelatedItemsRequested);
+    if (initialItem != null) _requestRelatedItems(initialItem);
   }
 
   final GetItemDetailUseCase _getItem;
   final UpdateItemUseCase _updateItem;
   final ManageOwnerItemUseCase? _manageItem;
+  final GetRelatedItemsUseCase? _getRelatedItems;
+  int _relatedRequest = 0;
+
+  void _requestRelatedItems(ItemDetail item) {
+    if (_getRelatedItems != null && !item.isOwner) {
+      add(ItemRelatedItemsRequested(item));
+    }
+  }
+
+  Future<void> _onRelatedItemsRequested(
+    ItemRelatedItemsRequested event,
+    Emitter<ItemDetailState> emit,
+  ) async {
+    final useCase = _getRelatedItems;
+    final item = event.item;
+    if (useCase == null || item.isOwner || state.item?.id != item.id) return;
+    final request = ++_relatedRequest;
+    emit(
+      state.copyWith(
+        relatedStatus: RelatedItemsStatus.loading,
+        relatedItems: const [],
+      ),
+    );
+    try {
+      final items = await useCase.execute(item);
+      if (emit.isDone ||
+          request != _relatedRequest ||
+          state.item?.id != item.id)
+        return;
+      emit(
+        state.copyWith(
+          relatedStatus: RelatedItemsStatus.loaded,
+          relatedItems: items,
+        ),
+      );
+    } catch (_) {
+      // ข้อผิดพลาดของคำแนะนำไม่ควรปิดรายละเอียดสินค้าหรือปุ่มแชท
+      if (emit.isDone ||
+          request != _relatedRequest ||
+          state.item?.id != item.id)
+        return;
+      emit(
+        state.copyWith(
+          relatedStatus: RelatedItemsStatus.failure,
+          relatedItems: const [],
+        ),
+      );
+    }
+  }
 
   Future<void> _onRequested(
     ItemDetailRequested event,
@@ -51,6 +105,7 @@ class ItemDetailBloc extends Bloc<ItemDetailEvent, ItemDetailState> {
           clearError: true,
         ),
       );
+      _requestRelatedItems(item);
     } on ItemDetailException catch (error) {
       emit(
         state.copyWith(

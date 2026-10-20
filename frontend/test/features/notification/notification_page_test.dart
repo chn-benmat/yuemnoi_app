@@ -1,13 +1,54 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/services/app_notification_service.dart';
 import 'package:frontend/core/widgets/custom_bottom_navbar.dart';
+import 'package:frontend/core/widgets/skeleton_shimmer.dart';
 import 'package:frontend/features/notification/presentation/pages/page.dart';
 
 import 'support/fake_notification_repository.dart';
 
 void main() {
   group('NotificationPage UI Tests', () {
+    testWidgets(
+      'loading keeps all section headings at their empty inbox positions',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(400, 850));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final response = Completer<NotificationInboxPage>();
+        final repository = FakeNotificationRepository()
+          ..onGet = (_, _) => response.future;
+        final service = AppNotificationService(repository: repository);
+        addTearDown(service.dispose);
+        service.setSession('alice');
+        await tester.pumpWidget(
+          MaterialApp(home: NotificationPage(service: service)),
+        );
+        await tester.pump();
+
+        const headings = ['สถานะอุปกรณ์', 'ข้อความแชต', 'อัปเดตและข้อความระบบ'];
+        final loadingPositions = [
+          for (final heading in headings) tester.getTopLeft(find.text(heading)),
+        ];
+        expect(find.byType(SkeletonShimmer), findsNWidgets(3));
+
+        response.complete(inboxPage([]));
+        await tester.pumpAndSettle();
+        for (var index = 0; index < headings.length; index++) {
+          expect(
+            loadingPositions[index],
+            tester.getTopLeft(find.text(headings[index])),
+            reason: '${headings[index]} must not jump after loading',
+          );
+        }
+        expect(find.byType(SkeletonShimmer), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        service.dispose();
+      },
+    );
+
     testWidgets(
       'renders real rental, grouped chat and app history without mock announcements',
       (tester) async {

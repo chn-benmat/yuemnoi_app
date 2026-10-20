@@ -17,8 +17,13 @@ void main() {
         final query = request.uri.queryParameters;
         Object response;
         if (request.uri.path.endsWith('public_profile_v')) {
+          expect(request.headers.value('accept-profile'), 'profiles');
           response = {'display_name': 'Public Owner', 'is_verified': true};
         } else if (request.uri.path.endsWith('item_tb')) {
+          expect(
+            request.headers.value('accept-profile'),
+            anyOf(isNull, 'public'),
+          );
           expect(query['user_id'], 'eq.owner');
           expect(query['moderation_hidden'], 'eq.false');
           response = [
@@ -31,6 +36,10 @@ void main() {
             },
           ];
         } else {
+          expect(
+            request.headers.value('accept-profile'),
+            anyOf(isNull, 'public'),
+          );
           expect(query['moderation_hidden'], 'eq.false');
           expect(query['item_id'], 'in.(1)');
           expect(query['order'], startsWith('id.asc'));

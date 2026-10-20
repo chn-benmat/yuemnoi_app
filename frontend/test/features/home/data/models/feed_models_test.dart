@@ -39,6 +39,7 @@ void main() {
           'distance_km',
           'is_verified',
           'owner_name',
+          'is_owner',
           'owner_avatar_url',
           'image_url',
           'is_curated',

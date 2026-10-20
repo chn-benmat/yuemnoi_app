@@ -73,6 +73,7 @@ class ItemDetailRemoteDataSource {
       final profilesByUserId = <String, Map<String, dynamic>>{};
       if (userIds.isNotEmpty) {
         final rawProfiles = await _client
+            .schema('profiles')
             .from('public_profile_v')
             .select('user_id,user_image_url,display_name,is_verified')
             .inFilter('user_id', userIds.toList(growable: false));

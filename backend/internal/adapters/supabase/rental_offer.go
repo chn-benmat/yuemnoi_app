@@ -54,7 +54,7 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 		SenderID       string `json:"sender_id"`
 		Message        string `json:"message"`
 	}
-	if err := r.client.DB.From("chat_message_tb").Select("id,conversation_id,sender_id,message").Eq("id", request.OfferMessageID).ExecuteWithContext(ctx, &messages); err != nil {
+	if err := schemaDatabase(r.client, messagingSchema).From("chat_message_tb").Select("id,conversation_id,sender_id,message").Eq("id", request.OfferMessageID).ExecuteWithContext(ctx, &messages); err != nil {
 		return nil, fmt.Errorf("load rental offer: %w", err)
 	}
 	if len(messages) != 1 {
@@ -90,7 +90,7 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 		RenterID string `json:"renter_id"`
 		OwnerID  string `json:"owner_id"`
 	}
-	if err := r.client.DB.From("conversation_tb").Select("renter_id,owner_id").Eq("id", message.ConversationID).ExecuteWithContext(ctx, &conversations); err != nil {
+	if err := schemaDatabase(r.client, messagingSchema).From("conversation_tb").Select("renter_id,owner_id").Eq("id", message.ConversationID).ExecuteWithContext(ctx, &conversations); err != nil {
 		return nil, fmt.Errorf("load offer participants: %w", err)
 	}
 	var items []struct {
@@ -196,7 +196,7 @@ func (r *supabaseRentalRepository) saveOfferMetadata(ctx context.Context, messag
 	// SDK รุ่นนี้ถอด URL encoding ก่อนส่ง จึงต้องเข้ารหัส filter ข้อความไว้เองอีกชั้น
 	// eq ใช้ข้อความตรงตัว การครอบอัญประกาศจะทำให้ค้นข้อความเดิมไม่พบ
 	filter := url.QueryEscape(original)
-	if err := r.client.DB.From("chat_message_tb").Update(map[string]any{"message": text}).Eq("id", messageID).Filter("message", "eq", filter).ExecuteWithContext(ctx, &updated); err != nil {
+	if err := schemaDatabase(r.client, messagingSchema).From("chat_message_tb").Update(map[string]any{"message": text}).Eq("id", messageID).Filter("message", "eq", filter).ExecuteWithContext(ctx, &updated); err != nil {
 		return "", fmt.Errorf("publish accepted offer: %w", err)
 	}
 	if len(updated) != 1 {
