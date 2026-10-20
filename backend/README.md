@@ -101,13 +101,15 @@ FCM adapter ใช้ Firebase Admin SDK ส่ง HTTP v1 และใช้ Go
 
 | ประเภท         | สิ่งที่ Backend ใช้                                                                                   |
 | -------------- | ----------------------------------------------------------------------------------------------------- |
-| Tables         | `item_tb`, `profile_tb`, `booking_tb` และ `conversation_tb`                                           |
-| View           | `home_feed_ranked_v` พร้อมข้อมูล rank / rating / review / booking ที่ repository อ่าน                 |
+| Tables         | `public.item_tb`, `public.booking_tb`, `profiles.profile_tb`, `messaging.conversation_tb`, `messaging.chat_message_tb` |
+| View           | `public.home_feed_ranked_v` สำหรับฟีด และ `profiles.public_profile_v` สำหรับโปรไฟล์ที่เปิดอ่านได้ |
 | RPC            | `check_email_exists(search_email)` → boolean                                                          |
 | RPC            | `create_rental_request(p_user_id, p_item_id, p_start_at, p_end_at, p_rental_type, p_pickup_location)` |
 | Storage        | `item_bk` และ `profile_bk` รองรับรูปแบบ URL ที่ adapters ใช้                                          |
-| Auth → Profile | กลไกสร้างแถว `profile_tb` เมื่อสร้าง Auth user เพราะ registration flow ปัจจุบันอัปเดตแถวที่มีอยู่     |
+| Auth → Profile | Trigger สร้างแถว `profiles.profile_tb` เมื่อสร้าง Auth user เพราะ registration flow ปัจจุบันอัปเดตแถวที่มีอยู่ |
 | Permissions    | grants / RLS / Storage policies ให้ตรงกับทั้ง Backend และ Flutter ที่เข้าถึงโดยตรง                    |
+
+ใช้ [migration แยก schema ตามโมดูล](../supabase/README.md) พร้อม Backend และ Flutter รุ่นนี้ โดย notification tables อยู่ใน `notifications` และ RPC คงชื่อเดิมใน `public`
 
 Backend ใช้ตัวแปรชื่อ `SUPABASE_SERVICE_ROLE_KEY` และ SDK / adapters ตามเวอร์ชันในตาราง ให้ใช้ server credential ที่ตรงกับ integration นี้และเก็บไว้ฝั่งเซิร์ฟเวอร์ ดู [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys) ก่อนเลือกหรือเปลี่ยนชนิดคีย์; README นี้ไม่ได้เปลี่ยน implementation ให้รองรับการย้ายคีย์แบบใหม่
 

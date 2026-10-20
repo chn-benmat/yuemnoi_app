@@ -146,7 +146,7 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 			UserImageURL string `json:"user_image_url"`
 			IsVerified   bool   `json:"is_verified"`
 		}
-		_ = r.client.DB.From("public_profile_v").Select("user_id,display_name,user_image_url,is_verified").ExecuteWithContext(ctx, &profiles)
+		_ = schemaDatabase(r.client, profilesSchema).From("public_profile_v").Select("user_id,display_name,user_image_url,is_verified").ExecuteWithContext(ctx, &profiles)
 		for i := range items {
 			items[i].OwnerName = "ผู้ใช้งาน"
 			for _, p := range profiles {
@@ -182,7 +182,7 @@ func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domai
 		UserImageURL string `json:"user_image_url"`
 		IsVerified   bool   `json:"is_verified"`
 	}
-	_ = r.client.DB.From("public_profile_v").Select("display_name,user_image_url,is_verified").Eq("user_id", item.UserID).ExecuteWithContext(ctx, &profiles)
+	_ = schemaDatabase(r.client, profilesSchema).From("public_profile_v").Select("display_name,user_image_url,is_verified").Eq("user_id", item.UserID).ExecuteWithContext(ctx, &profiles)
 	item.OwnerName = "ผู้ใช้งาน"
 	if len(profiles) > 0 {
 		item.OwnerName = profiles[0].DisplayName

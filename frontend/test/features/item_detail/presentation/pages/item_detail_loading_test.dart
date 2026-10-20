@@ -63,7 +63,7 @@ void main() {
         expect(find.byIcon(Icons.share_outlined), findsNothing);
         expect(find.byIcon(Icons.favorite_border_rounded), findsNothing);
         expect(find.byIcon(Icons.flag_outlined), findsNothing);
-        expect(find.text('แชท'), findsNothing);
+        expect(find.text('แชทสอบถาม'), findsNothing);
         expect(find.byKey(const ValueKey('owner-delete-item')), findsNothing);
         final photo = tester.getSize(
           find.byKey(const ValueKey('owner-photo-skeleton')),
@@ -123,7 +123,7 @@ void main() {
       find.byKey(const ValueKey('owner-item-detail-skeleton')),
       findsNothing,
     );
-    expect(find.text('แชท'), findsOneWidget);
+    expect(find.text('แชทสอบถาม'), findsOneWidget);
     expect(find.text('การแสดงผล'), findsNothing);
     expect(find.byKey(const ValueKey('owner-delete-item')), findsNothing);
     expect(find.byIcon(Icons.share_outlined), findsOneWidget);

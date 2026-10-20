@@ -481,13 +481,16 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
         widget.conversationId!.isNotEmpty &&
         SupabaseConfig.isInitialized) {
       try {
-        await SupabaseConfig.client.from('chat_message_tb').insert({
-          'conversation_id': widget.conversationId,
-          'sender_id': SupabaseConfig.client.auth.currentUser?.id,
-          'message':
-              '✅ ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว เริ่มต้นช่วงเวลาเช่า',
-          'is_read': false,
-        });
+        await SupabaseConfig.client
+            .schema('messaging')
+            .from('chat_message_tb')
+            .insert({
+              'conversation_id': widget.conversationId,
+              'sender_id': SupabaseConfig.client.auth.currentUser?.id,
+              'message':
+                  '✅ ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว เริ่มต้นช่วงเวลาเช่า',
+              'is_read': false,
+            });
       } catch (_) {}
     }
 

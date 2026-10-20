@@ -44,6 +44,7 @@ class ProfileRemoteDataSource {
     if (SupabaseConfig.isInitialized) {
       try {
         final profileResp = await SupabaseConfig.client
+            .schema('profiles')
             .from('profile_tb')
             .select()
             .eq('user_id', userId)

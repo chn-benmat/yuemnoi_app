@@ -12,6 +12,12 @@ void main() {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       final bookingQueries = <Uri>[];
       server.listen((request) async {
+        expect(
+          request.headers.value('accept-profile'),
+          request.uri.path.endsWith('public_profile_v')
+              ? 'profiles'
+              : anyOf(isNull, 'public'),
+        );
         Object data;
         if (request.uri.path.endsWith('booking_tb')) {
           bookingQueries.add(request.uri);

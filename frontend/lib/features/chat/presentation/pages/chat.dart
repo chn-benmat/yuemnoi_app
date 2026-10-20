@@ -117,6 +117,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
     try {
       final currentUserId = SupabaseConfig.client.auth.currentUser?.id;
       final results = await SupabaseConfig.client
+          .schema('profiles')
           .from('public_profile_v')
           .select('user_id, display_name, user_image_url, email, is_online')
           .or('display_name.ilike.%$query%,email.ilike.%$query%')

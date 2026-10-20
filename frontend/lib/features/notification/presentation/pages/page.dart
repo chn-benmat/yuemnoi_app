@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/services/app_notification_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../bloc/notification_cubit.dart';
-import '../widgets/notification_loading_skeleton.dart';
 
 class NotificationPage extends StatelessWidget {
   const NotificationPage({super.key, this.service});
@@ -205,7 +205,10 @@ class _NotificationSection extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         if (isLoading)
-          const SystemNotificationLoadingSkeleton()
+          Semantics(
+            label: 'กำลังโหลดการแจ้งเตือน',
+            child: SkeletonShimmer(child: _Notice(title: empty)),
+          )
         else if (items.isEmpty)
           _Notice(title: empty)
         else

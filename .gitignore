@@ -54,6 +54,7 @@ id_ed25519
 # สถานะของเครื่องมือในเครื่อง; เก็บ migrations และ configuration ไว้ใน Git
 supabase/*
 
+
 # ไฟล์ของระบบปฏิบัติการและ IDE
 .DS_Store
 .DS_Store?

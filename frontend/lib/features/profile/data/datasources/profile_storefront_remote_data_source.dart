@@ -12,6 +12,7 @@ class ProfileStorefrontRemoteDataSource {
 
   Future<Map<String, dynamic>> getIdentity(String userId) async {
     final profile = await client
+        .schema('profiles')
         .from('public_profile_v')
         .select('display_name, user_image_url, is_verified')
         .eq('user_id', userId)
@@ -20,6 +21,7 @@ class ProfileStorefrontRemoteDataSource {
     // คำแนะนำตัวอยู่ในข้อมูลส่วนตัว จึงอ่านเพิ่มได้เฉพาะเจ้าของที่ล็อกอิน
     if (client.auth.currentUser?.id == userId) {
       final ownProfile = await client
+          .schema('profiles')
           .from('profile_tb')
           .select('bio')
           .eq('user_id', userId)

@@ -61,6 +61,7 @@ class ChatRemoteDataSource {
     try {
       // 1. ตรวจสอบว่าเคยมีห้องแชทระหว่าง 2 คนนี้หรือไม่ (ไม่ว่าจะทักมาจากอุปกรณ์/สินค้าใด หรือทิศทางใด)
       final existingConvs = await client
+          .schema('messaging')
           .from('conversation_tb')
           .select('*')
           .or(
@@ -76,6 +77,7 @@ class ChatRemoteDataSource {
         if (itemId != null && itemId > 0) {
           try {
             await client
+                .schema('messaging')
                 .from('conversation_tb')
                 .update({'item_id': itemId})
                 .eq('id', conversation['id']);
@@ -97,6 +99,7 @@ class ChatRemoteDataSource {
         }
 
         conversation = await client
+            .schema('messaging')
             .from('conversation_tb')
             .insert(insertData)
             .select('*')
@@ -105,6 +108,7 @@ class ChatRemoteDataSource {
 
       // 3. ดึงข้อมูลโปรไฟล์ของคู่สนทนา (เจ้าของอุปกรณ์ / ผู้ใช้ที่สนทนาด้วย) ผ่าน secure view
       final otherProfile = await client
+          .schema('profiles')
           .from('public_profile_v')
           .select('user_id,user_image_url,is_online,last_seen_at,display_name')
           .eq('user_id', ownerId)
@@ -154,6 +158,7 @@ class ChatRemoteDataSource {
       final currentUserId = _currentUserId;
 
       final conv = await client
+          .schema('messaging')
           .from('conversation_tb')
           .select('*')
           .eq('id', conversationId)
@@ -168,6 +173,7 @@ class ChatRemoteDataSource {
       Map<String, dynamic>? otherProfile;
       if (otherId.isNotEmpty) {
         otherProfile = await client
+            .schema('profiles')
             .from('public_profile_v')
             .select(
               'user_id,user_image_url,is_online,last_seen_at,display_name',
@@ -212,6 +218,7 @@ class ChatRemoteDataSource {
 
     try {
       final rawConversations = await client
+          .schema('messaging')
           .from('conversation_tb')
           .select('*')
           .or('renter_id.eq.$currentUserId,owner_id.eq.$currentUserId')
@@ -258,6 +265,7 @@ class ChatRemoteDataSource {
       if (otherUserIds.isNotEmpty) {
         try {
           final profiles = await client
+              .schema('profiles')
               .from('public_profile_v')
               .select(
                 'user_id,user_image_url,is_online,last_seen_at,display_name',
@@ -295,6 +303,7 @@ class ChatRemoteDataSource {
       Set<String> unreadConvIds = {};
       try {
         final unreadRows = await client
+            .schema('messaging')
             .from('chat_message_tb')
             .select('conversation_id')
             .neq('sender_id', currentUserId)
@@ -389,6 +398,7 @@ class ChatRemoteDataSource {
 
     final client = _supabaseClient;
     return client
+        .schema('messaging')
         .from('conversation_tb')
         .stream(primaryKey: ['id'])
         .asyncMap((_) async {
@@ -411,6 +421,7 @@ class ChatRemoteDataSource {
 
     try {
       await client
+          .schema('messaging')
           .from('chat_message_tb')
           .update({'is_read': true})
           .eq('conversation_id', conversationId)
@@ -433,6 +444,7 @@ class ChatRemoteDataSource {
 
     try {
       var query = client
+          .schema('messaging')
           .from('chat_message_tb')
           .select('*')
           .eq('conversation_id', conversationId);
@@ -471,6 +483,7 @@ class ChatRemoteDataSource {
     final currentUserId = _currentUserId;
 
     return client
+        .schema('messaging')
         .from('chat_message_tb')
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
@@ -604,6 +617,7 @@ class ChatRemoteDataSource {
 
     try {
       await client
+          .schema('messaging')
           .from('chat_message_tb')
           .insert({
             'conversation_id': conversationId,
@@ -661,6 +675,7 @@ class ChatRemoteDataSource {
       if (targetImageUrl == null || targetImageUrl.isEmpty) {
         try {
           final res = await client
+              .schema('messaging')
               .from('chat_message_tb')
               .select('image_url')
               .eq('id', parsedId)
@@ -682,11 +697,16 @@ class ChatRemoteDataSource {
       }
 
       // ลบข้อความออกจากฐานข้อมูล Supabase
-      await client.from('chat_message_tb').delete().eq('id', parsedId);
+      await client
+          .schema('messaging')
+          .from('chat_message_tb')
+          .delete()
+          .eq('id', parsedId);
 
       // อัปเดตข้อความล่าสุด (last_message) ใน conversation_tb ให้เป็นข้อความล่าสุดที่เหลืออยู่
       try {
         final latestMsg = await client
+            .schema('messaging')
             .from('chat_message_tb')
             .select('message, image_url, created_at')
             .eq('conversation_id', conversationId)
@@ -708,6 +728,7 @@ class ChatRemoteDataSource {
               DateTime.now().toUtc().toIso8601String();
 
           await client
+              .schema('messaging')
               .from('conversation_tb')
               .update({
                 'last_message': displayLastMsg,
@@ -717,6 +738,7 @@ class ChatRemoteDataSource {
               .eq('id', conversationId);
         } else {
           await client
+              .schema('messaging')
               .from('conversation_tb')
               .update({
                 'last_message': '',
@@ -748,6 +770,7 @@ class ChatRemoteDataSource {
     try {
       final dynamic parsedId = int.tryParse(messageId) ?? messageId;
       await client
+          .schema('messaging')
           .from('chat_message_tb')
           .update({'message': newMessage})
           .eq('id', parsedId);
@@ -756,6 +779,7 @@ class ChatRemoteDataSource {
         final nowIso = DateTime.now().toUtc().toIso8601String();
         try {
           await client
+              .schema('messaging')
               .from('conversation_tb')
               .update({
                 'last_message': newMessage.trim(),
@@ -778,6 +802,7 @@ class ChatRemoteDataSource {
       // 1. ค้นหาและลบรูปภาพทั้งหมดที่แนบในการสนทนานี้ออกจาก Supabase Storage
       try {
         final records = await client
+            .schema('messaging')
             .from('chat_message_tb')
             .select('image_url')
             .eq('conversation_id', conversationId)
@@ -809,12 +834,17 @@ class ChatRemoteDataSource {
 
       // 2. ลบข้อความทั้งหมดของการสนทนานี้ในตาราง chat_message_tb
       await client
+          .schema('messaging')
           .from('chat_message_tb')
           .delete()
           .eq('conversation_id', conversationId);
 
       // 3. ลบห้องสนทนาในตาราง conversation_tb
-      await client.from('conversation_tb').delete().eq('id', conversationId);
+      await client
+          .schema('messaging')
+          .from('conversation_tb')
+          .delete()
+          .eq('id', conversationId);
     } on PostgrestException catch (e) {
       throw ChatRemoteException('ลบการสนทนาไม่สำเร็จ: ${e.message}');
     } catch (_) {
@@ -835,6 +865,7 @@ class ChatRemoteDataSource {
       final currentUserId = _currentUserId;
 
       final convRes = await client
+          .schema('messaging')
           .from('conversation_tb')
           .select('renter_id, owner_id')
           .eq('id', conversationId)
@@ -874,6 +905,7 @@ class ChatRemoteDataSource {
     final currentUserId = _currentUserId;
 
     return client
+        .schema('messaging')
         .from('conversation_tb')
         .stream(primaryKey: ['id'])
         .asyncMap((records) async {
@@ -907,6 +939,7 @@ class ChatRemoteDataSource {
             // ดึงข้อความล่าสุดในห้องนี้
             try {
               final latestMsgRow = await client
+                  .schema('messaging')
                   .from('chat_message_tb')
                   .select('*')
                   .eq('conversation_id', convId)
@@ -923,6 +956,7 @@ class ChatRemoteDataSource {
               final otherId = currentUserId == renterId ? ownerId : renterId;
 
               final profile = await client
+                  .schema('profiles')
                   .from('public_profile_v')
                   .select(
                     'user_id,user_image_url,is_online,last_seen_at,display_name',

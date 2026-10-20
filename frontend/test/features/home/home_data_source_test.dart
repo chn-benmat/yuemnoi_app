@@ -243,6 +243,45 @@ void main() {
     expect(searched.map((item) => item.id), ['8']);
   });
 
+  test(
+    'maps ownership for the current account and keeps it in cached items',
+    () async {
+      final client = _MockSupabase();
+      final auth = _MockAuth();
+      when(() => client.auth).thenReturn(auth);
+      when(() => auth.currentUser).thenReturn(_user('alice'));
+      final api = _FakeApiClient(
+        const ApiResponse(
+          statusCode: 200,
+          data: [
+            {'id': 7, 'item_name': 'My camera', 'user_id': 'alice'},
+            {'id': 8, 'item_name': 'Other camera', 'user_id': 'bob'},
+            {'id': 9, 'item_name': 'Unknown owner'},
+          ],
+        ),
+      );
+      final source = HomeSupabaseDataSource(
+        apiClient: api,
+        supabaseClient: client,
+      );
+      final items = await source.fetchNearbyItems();
+      expect(items.map((item) => item.toJson()['is_owner']), [
+        true,
+        false,
+        false,
+      ]);
+
+      api.failure = const ApiClientException(ApiClientErrorType.connection);
+      source.clearMemoryCache();
+      final cached = await source.fetchNearbyItems();
+      expect(cached.map((item) => item.toJson()['is_owner']), [
+        true,
+        false,
+        false,
+      ]);
+    },
+  );
+
   test('uses ranked local cache when backend is unavailable', () async {
     final api = _FakeApiClient(
       const ApiResponse(
