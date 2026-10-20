@@ -47,17 +47,14 @@ class BookingLocationCard extends StatelessWidget {
 
   void _openMapView(BuildContext context) {
     if (_resolvedLatLng == null) return;
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PickupLocationMap(
-          location: PickupLocation(
-            name: location,
-            address: locationAddress ?? '',
-            note: locationNote,
-            latitude: latitude!,
-            longitude: longitude!,
-          ),
-        ),
+    openPickupLocationInGoogleMaps(
+      context,
+      PickupLocation(
+        name: location,
+        address: locationAddress ?? '',
+        note: locationNote,
+        latitude: latitude!,
+        longitude: longitude!,
       ),
     );
   }

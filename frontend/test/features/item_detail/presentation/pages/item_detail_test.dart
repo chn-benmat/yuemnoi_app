@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/models/pickup_location.dart';
@@ -123,6 +124,55 @@ void main() {
     expect(find.text('การแสดงผล'), findsNothing);
     expect(find.text('ลบอุปกรณ์'), findsNothing);
   });
+
+  for (final isOwner in [false, true]) {
+    testWidgets(
+      '${isOwner ? 'owner' : 'renter'} opens the pickup pin in external Google Maps',
+      (tester) async {
+        final launches = <MethodCall>[];
+        const channel = MethodChannel('plugins.flutter.io/url_launcher');
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          (call) async {
+            launches.add(call);
+            return true;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            channel,
+            null,
+          ),
+        );
+        await pumpDetail(tester, isOwner: isOwner, longContent: true);
+
+        final location = find.text(
+          isOwner
+              ? 'หน้ามหาวิทยาลัยบริเวณประตูทางเข้าฝั่งสถานีรถไฟฟ้า\nกรุงเทพมหานคร'
+              : 'หน้ามหาวิทยาลัยบริเวณประตูทางเข้าฝั่งสถานีรถไฟฟ้า',
+        );
+        await tester.ensureVisible(location);
+        await tester.pumpAndSettle();
+        await tester.tap(location);
+        await tester.pumpAndSettle();
+
+        expect(launches, hasLength(1));
+        expect(launches.single.method, 'launch');
+        final arguments = launches.single.arguments as Map;
+        final uri = Uri.parse(arguments['url'] as String);
+        expect(uri.host, 'www.google.com');
+        expect(uri.path, '/maps/search/');
+        expect(uri.queryParameters['api'], '1');
+        expect(uri.queryParameters['query'], '13.75,100.5');
+        expect(arguments['useWebView'], isFalse);
+        expect(arguments['useSafariVC'], isFalse);
+        expect(
+          Navigator.of(tester.element(find.byType(ItemDetailScreen))).canPop(),
+          isFalse,
+        );
+      },
+    );
+  }
 
   testWidgets('asks for a contact phone before opening a rental chat', (
     tester,

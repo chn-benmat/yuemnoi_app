@@ -1,10 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'chat_cached_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../item_detail/presentation/widgets/full_screen_image_viewer.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/item_inquiry_data.dart';
 
@@ -91,7 +90,7 @@ class ItemInquiryBubbleCard extends StatelessWidget {
             if (displayImageUrl.isNotEmpty)
               GestureDetector(
                 onTap: () {
-                  FullScreenImageViewer.open(
+                  ChatCachedImage.openFullScreen(
                     context,
                     imageUrls: [displayImageUrl],
                     initialIndex: 0,
@@ -106,7 +105,7 @@ class ItemInquiryBubbleCard extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        CachedNetworkImage(
+                        ChatCachedImage(
                           imageUrl: displayImageUrl,
                           fit: BoxFit.cover,
                           alignment: Alignment.center,
@@ -276,10 +275,8 @@ class ItemInquiryBubbleCard extends StatelessWidget {
               ),
             ],
 
-            // 5. ปุ่มแอ็กชันบนการ์ดสินค้า
-            // - ถ้าเป็นผู้ปล่อยเช่า (isOwner == true): แสดง "สร้างข้อเสนอการเช่า / นัดรับ"
-            // - ถ้าเป็นผู้เช่า (isOwner != true): แสดง "ส่งคำขอเช่าอุปกรณ์นี้"
-            if (onSendBookingRequest != null) ...[
+            // ให้สร้างข้อเสนอได้เฉพาะเจ้าของอุปกรณ์ แม้ caller จะส่ง callback มา
+            if (isOwner == true && onSendBookingRequest != null) ...[
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -298,16 +295,9 @@ class ItemInquiryBubbleCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
                   onPressed: () => onSendBookingRequest!(inquiryData),
-                  icon: Icon(
-                    isOwner == true
-                        ? Icons.receipt_long_rounded
-                        : Icons.calendar_month_outlined,
-                    size: 15,
-                  ),
+                  icon: const Icon(Icons.receipt_long_rounded, size: 15),
                   label: Text(
-                    isOwner == true
-                        ? 'สร้างข้อเสนอการเช่า / นัดรับ'
-                        : 'ส่งคำขอเช่าอุปกรณ์นี้',
+                    'สร้างข้อเสนอการเช่า / นัดรับ',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 12,

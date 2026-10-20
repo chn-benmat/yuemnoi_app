@@ -1,43 +1,24 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'chat_cached_image.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
-import '../../../item_detail/presentation/widgets/full_screen_image_viewer.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/chat_reply_content.dart';
 import '../../domain/entities/item_inquiry_data.dart';
 import 'booking_request_bubble_card.dart';
 import 'chat_avatar.dart';
 import 'chat_message_action_sheet.dart';
+import 'chat_reply_preview.dart';
 import 'chat_stacked_image_card.dart';
 import 'item_inquiry_bubble_card.dart';
 import 'stacked_images_grid_screen.dart';
 import 'swipe_to_reply.dart';
 
-String _extractActualTextMessage(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.startsWith('↩ ตอบกลับ:') ||
-      trimmed.startsWith('💬 ตอบกลับ') ||
-      trimmed.startsWith('↪ ตอบกลับ')) {
-    final newlineIdx = trimmed.indexOf('\n');
-    if (newlineIdx != -1) {
-      return trimmed.substring(newlineIdx + 1).trim();
-    }
-    final parts = trimmed.split('|');
-    if (parts.length >= 2) {
-      return parts.last.trim();
-    }
-    final colonIdx = trimmed.indexOf(':');
-    if (colonIdx != -1) {
-      return trimmed.substring(colonIdx + 1).trim();
-    }
-  }
-  return trimmed;
-}
-
 class ChatMessageBubble extends StatelessWidget {
   const ChatMessageBubble({
     super.key,
     required this.message,
+    this.quotedMessage,
     this.imageUrls = const [],
     this.otherAvatarAsset,
     this.otherUserName,
@@ -59,6 +40,7 @@ class ChatMessageBubble extends StatelessWidget {
   });
 
   final ChatMessage message;
+  final ChatMessage? quotedMessage;
   final List<String> imageUrls;
   final String? otherAvatarAsset;
   final String? otherUserName;
@@ -77,124 +59,6 @@ class ChatMessageBubble extends StatelessWidget {
   final ValueChanged<ChatMessage>? onEdit;
   final ValueChanged<ChatMessage>? onDelete;
   final ValueChanged<String>? onQuotedTap;
-
-  static ({
-    String? replyHeader,
-    String? quotedText,
-    String? quotedImageUrl,
-    String? quotedMessageId,
-    String actualText,
-  })
-  _parseReplyContent(String raw) {
-    if (raw.startsWith('↩ ตอบกลับ:')) {
-      final newlineIdx = raw.indexOf('\n');
-      if (newlineIdx != -1) {
-        final headerPart = raw
-            .substring('↩ ตอบกลับ:'.length, newlineIdx)
-            .trim();
-        final actual = raw.substring(newlineIdx + 1);
-
-        String target = '';
-        String quote = '';
-        String? msgId;
-        String? imgUrl;
-
-        if (headerPart.contains('|')) {
-          final parts = headerPart.split('|');
-          target = parts.isNotEmpty ? parts[0].trim() : '';
-          quote = parts.length > 1 ? parts[1].trim() : '';
-          msgId = parts.length > 2 && parts[2].trim().isNotEmpty
-              ? parts[2].trim()
-              : null;
-          if (parts.length > 3 && parts[3].trim().isNotEmpty) {
-            imgUrl = parts.sublist(3).join('|').trim();
-          }
-        } else if (headerPart.contains(':')) {
-          final colonIdx = headerPart.indexOf(':');
-          target = headerPart.substring(0, colonIdx).trim();
-          quote = headerPart.substring(colonIdx + 1).replaceAll('"', '').trim();
-        } else {
-          target = headerPart;
-        }
-
-        // Clean up quote if it contains trailing URLs or Supabase URLs
-        if (quote.contains('http://') || quote.contains('https://')) {
-          final httpIdx = quote.indexOf('http');
-          final urlCandidate = quote.substring(httpIdx).trim();
-          imgUrl ??= urlCandidate;
-          quote = quote.substring(0, httpIdx).replaceAll('|', '').trim();
-        }
-
-        // If quote still contains pipes or legacy IDs (e.g. "ทำไร|136|", "นกยก|133|")
-        if (quote.contains('|')) {
-          final subParts = quote.split('|');
-          quote = subParts.first.trim();
-          if (msgId == null &&
-              subParts.length > 1 &&
-              subParts[1].trim().isNotEmpty) {
-            msgId = subParts[1].trim();
-          }
-          if (imgUrl == null &&
-              subParts.length > 2 &&
-              subParts[2].trim().startsWith('http')) {
-            imgUrl = subParts.sublist(2).join('|').trim();
-          }
-        }
-
-        if (quote.startsWith('↩ ตอบกลับ:')) {
-          quote = _extractActualTextMessage(quote);
-        }
-
-        if (quote == '📷 ส่งรูปภาพ' || quote == '[รูปภาพ]') {
-          quote = '📷 รูปภาพ';
-        }
-
-        if (quote.isEmpty && imgUrl != null && imgUrl.isNotEmpty) {
-          quote = '📷 รูปภาพ';
-        }
-
-        return (
-          replyHeader: 'คุณตอบกลับ$target',
-          quotedText: quote.isNotEmpty
-              ? quote
-              : (imgUrl != null ? '📷 รูปภาพ' : null),
-          quotedImageUrl:
-              (imgUrl != null &&
-                  (imgUrl.startsWith('http://') ||
-                      imgUrl.startsWith('https://')))
-              ? imgUrl
-              : null,
-          quotedMessageId: msgId,
-          actualText: actual,
-        );
-      }
-    } else if (raw.startsWith('💬 ตอบกลับ')) {
-      final newlineIdx = raw.indexOf('\n');
-      if (newlineIdx != -1) {
-        final headerPart = raw
-            .substring(0, newlineIdx)
-            .replaceFirst('💬 ตอบกลับ', '')
-            .replaceAll('"', '')
-            .replaceFirst(':', '')
-            .trim();
-        final actual = raw.substring(newlineIdx + 1);
-        return (
-          replyHeader: 'คุณตอบกลับ$headerPart',
-          quotedText: null,
-          quotedImageUrl: null,
-          quotedMessageId: null,
-          actualText: actual,
-        );
-      }
-    }
-    return (
-      replyHeader: null,
-      quotedText: null,
-      quotedImageUrl: null,
-      quotedMessageId: null,
-      actualText: raw,
-    );
-  }
 
   void _showActions(BuildContext context) {
     final effectiveImages = imageUrls.isNotEmpty
@@ -216,8 +80,11 @@ class ChatMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMine = message.isMine;
+    final replyData = ChatReplyContent.tryParse(message.message);
 
-    final isBooking = BookingRequestData.isBookingRequest(message.message);
+    final isBooking =
+        replyData == null &&
+        BookingRequestData.isBookingRequest(message.message);
     if (isBooking) {
       final bookingData = BookingRequestData.fromChatMessage(
         message.message,
@@ -228,13 +95,16 @@ class ChatMessageBubble extends StatelessWidget {
       if (bookingData != null) {
         final bookingCard = GestureDetector(
           onLongPress: () => _showActions(context),
-          child: BookingRequestBubbleCard(
-            message: message,
-            bookingData: bookingData,
-            senderName: otherUserName,
-            isOwner: isOwner,
-            isHandoverCompleted: isHandoverCompleted,
-            isReturnCompleted: isReturnCompleted,
+          child: IgnorePointer(
+            ignoring: message.id.startsWith('temp_'),
+            child: BookingRequestBubbleCard(
+              message: message,
+              bookingData: bookingData,
+              senderName: otherUserName,
+              isOwner: isOwner,
+              isHandoverCompleted: isHandoverCompleted,
+              isReturnCompleted: isReturnCompleted,
+            ),
           ),
         );
 
@@ -361,7 +231,8 @@ class ChatMessageBubble extends StatelessWidget {
       }
     }
 
-    final isInquiry = ItemInquiryData.isInquiry(message.message);
+    final isInquiry =
+        replyData == null && ItemInquiryData.isInquiry(message.message);
     if (isInquiry) {
       final inquiryData = ItemInquiryData.fromChatMessage(
         message.message,
@@ -508,10 +379,11 @@ class ChatMessageBubble extends StatelessWidget {
               ? [message.imageUrl!]
               : <String>[]);
     final hasImage = effectiveImages.isNotEmpty;
+    final actualText = replyData?.text ?? message.message;
     final hasText =
-        message.message.isNotEmpty &&
-        message.message != '📷 ส่งรูปภาพ' &&
-        message.message != '[รูปภาพ]';
+        actualText.isNotEmpty &&
+        actualText != '📷 ส่งรูปภาพ' &&
+        actualText != '[รูปภาพ]';
 
     final statusFailedWidget = isFailed
         ? GestureDetector(
@@ -569,7 +441,7 @@ class ChatMessageBubble extends StatelessWidget {
         : null;
 
     // ถ้ามีรูปภาพอย่างเดียว (หรือชุดรูปภาพหลายรูปที่ซ้อนกัน) -> แสดงเป็นการ์ดรูปภาพซ้อนกัน 3D Deck of Cards
-    if (hasImage && !hasText) {
+    if (hasImage && !hasText && replyData == null) {
       final imageCard = ChatStackedImageCard(
         imageUrls: effectiveImages,
         isMine: isMine,
@@ -578,7 +450,7 @@ class ChatMessageBubble extends StatelessWidget {
           if (effectiveImages.length > 1) {
             StackedImagesGridScreen.open(context, imageUrls: effectiveImages);
           } else {
-            FullScreenImageViewer.open(
+            ChatCachedImage.openFullScreen(
               context,
               imageUrls: effectiveImages,
               initialIndex: 0,
@@ -651,8 +523,6 @@ class ChatMessageBubble extends StatelessWidget {
       );
     }
 
-    final replyData = _parseReplyContent(message.message);
-
     final bubbleContent = Container(
       constraints: BoxConstraints(
         maxWidth: MediaQuery.sizeOf(context).width * 0.72,
@@ -682,7 +552,7 @@ class ChatMessageBubble extends StatelessWidget {
                     imageUrls: effectiveImages,
                   );
                 } else {
-                  FullScreenImageViewer.open(
+                  ChatCachedImage.openFullScreen(
                     context,
                     imageUrls: effectiveImages,
                     initialIndex: 0,
@@ -694,7 +564,7 @@ class ChatMessageBubble extends StatelessWidget {
                   maxWidth: MediaQuery.sizeOf(context).width * 0.72,
                   maxHeight: 300,
                 ),
-                child: CachedNetworkImage(
+                child: ChatCachedImage(
                   imageUrl: effectiveImages.first,
                   fit: BoxFit.contain,
                   placeholder: (context, url) => Container(
@@ -721,7 +591,7 @@ class ChatMessageBubble extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Text(
-                replyData.actualText,
+                replyData?.text ?? message.message,
                 style: TextStyle(
                   color: isMine ? Colors.white : const Color(0xFF1C1E21),
                   fontSize: 15,
@@ -736,151 +606,27 @@ class ChatMessageBubble extends StatelessWidget {
     final bubble = GestureDetector(
       onLongPress: () => _showActions(context),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: isMine
             ? CrossAxisAlignment.end
             : CrossAxisAlignment.start,
         children: [
-          // 1. Reply Header: ↩ คุณตอบกลับตัวเอง / chn.benmat
-          if (replyData.replyHeader != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4, left: 6, right: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.reply_rounded,
-                    size: 13,
-                    color: Color(0xFF8A8E92),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    replyData.replyHeader!,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF8A8E92),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+          if (replyData != null)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width * 0.62,
+              ),
+              child: ChatReplyPreview(
+                reply: replyData,
+                originalMessage: quotedMessage,
+                isMine: isMine,
+                otherUserName: otherUserName,
+                onTap: replyData.quotedMessageId == null || onQuotedTap == null
+                    ? null
+                    : () => onQuotedTap!(replyData.quotedMessageId!),
               ),
             ),
-
-          // 2. Messenger-style Quoted Media / Text
-          if (replyData.replyHeader != null &&
-              replyData.quotedImageUrl != null &&
-              replyData.quotedImageUrl!.isNotEmpty)
-            // Quoted Image Preview with overlapping reply bubble at bottom-right
-            GestureDetector(
-              onTap: () {
-                if (replyData.quotedMessageId != null) {
-                  onQuotedTap?.call(replyData.quotedMessageId!);
-                }
-              },
-              child: Stack(
-                clipBehavior: Clip.none,
-                alignment: isMine
-                    ? Alignment.bottomRight
-                    : Alignment.bottomLeft,
-                children: [
-                  Container(
-                    width: 220,
-                    height: 140,
-                    margin: const EdgeInsets.only(bottom: 14),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.25),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: CachedNetworkImage(
-                      imageUrl: replyData.quotedImageUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) => Container(
-                        color: Colors.black26,
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.primaryColor,
-                          ),
-                        ),
-                      ),
-                      errorWidget: (_, _, _) => Container(
-                        color: Colors.black26,
-                        child: const Icon(
-                          Icons.broken_image_rounded,
-                          size: 36,
-                          color: Colors.white54,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: isMine ? 0 : null,
-                    left: isMine ? null : 0,
-                    child: bubbleContent,
-                  ),
-                ],
-              ),
-            )
-          else if (replyData.replyHeader != null &&
-              replyData.quotedText != null &&
-              replyData.quotedText!.isNotEmpty)
-            // Quoted Text bubble with reply bubble directly below it
-            Column(
-              crossAxisAlignment: isMine
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    if (replyData.quotedMessageId != null) {
-                      onQuotedTap?.call(replyData.quotedMessageId!);
-                    }
-                  },
-                  child: Container(
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.sizeOf(context).width * 0.70,
-                    ),
-                    margin: const EdgeInsets.only(bottom: 3),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2C2D35).withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        width: 0.8,
-                      ),
-                    ),
-                    child: Text(
-                      replyData.quotedText!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                ),
-                bubbleContent,
-              ],
-            )
-          else
-            bubbleContent,
+          bubbleContent,
         ],
       ),
     );

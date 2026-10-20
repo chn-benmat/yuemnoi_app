@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 
 import '../constants/colors.dart';
 import '../models/pickup_location.dart';
 import '../navigation/app_routes.dart';
+import '../services/location_service.dart';
 import '../theme/app_form_field_styles.dart';
 
 class PickupLocationField extends StatelessWidget {
@@ -136,70 +135,21 @@ class PickupLocationCard extends StatelessWidget {
       ].where((s) => s.isNotEmpty).join('\n'),
     ),
     trailing: const Icon(Icons.map_outlined),
-    onTap: () => Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PickupLocationMap(location: location),
-      ),
-    ),
+    onTap: () => openPickupLocationInGoogleMaps(context, location),
   );
 }
 
-class PickupLocationMap extends StatelessWidget {
-  const PickupLocationMap({super.key, required this.location});
-  final PickupLocation location;
-
-  @override
-  Widget build(BuildContext context) {
-    final point = LatLng(location.latitude, location.longitude);
-    return Scaffold(
-      appBar: AppBar(title: const Text('จุดนัดรับสินค้า')),
-      body: Column(
-        children: [
-          Expanded(
-            child: FlutterMap(
-              options: MapOptions(initialCenter: point, initialZoom: 16),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.frontend',
-                ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: point,
-                      width: 48,
-                      height: 48,
-                      child: const Icon(
-                        Icons.location_pin,
-                        color: AppColors.primaryColor,
-                        size: 48,
-                      ),
-                    ),
-                  ],
-                ),
-                const RichAttributionWidget(
-                  attributions: [
-                    TextSourceAttribution('OpenStreetMap contributors'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                [
-                  location.name,
-                  location.address,
-                  location.note,
-                ].where((s) => s.isNotEmpty).join('\n'),
-              ),
-            ),
-          ),
-        ],
-      ),
+Future<void> openPickupLocationInGoogleMaps(
+  BuildContext context,
+  PickupLocation location,
+) async {
+  final opened = await LocationService.openInExternalMaps(
+    location.latitude,
+    location.longitude,
+  );
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('ไม่สามารถเปิด Google Maps ได้ในขณะนี้')),
     );
   }
 }

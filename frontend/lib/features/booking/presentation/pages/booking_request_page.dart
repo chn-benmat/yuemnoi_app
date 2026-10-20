@@ -17,11 +17,13 @@ class BookingRequestPage extends StatefulWidget {
     this.initialData,
     this.itemId,
     this.isEditMode = false,
+    this.onSendRequest,
   });
 
   final BookingRequestData? initialData;
   final int? itemId;
   final bool isEditMode;
+  final ValueChanged<BookingRequestData>? onSendRequest;
 
   @override
   State<BookingRequestPage> createState() => _BookingRequestPageState();
@@ -131,6 +133,11 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     }
 
     try {
+      if (!widget.isEditMode && widget.onSendRequest != null) {
+        widget.onSendRequest!(_bookingData);
+        if (mounted) Navigator.maybePop(context, _bookingData);
+        return;
+      }
       final payload = _bookingData.toChatMessagePayload();
       final chatDataSource = ChatRemoteDataSource();
 
@@ -148,7 +155,10 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
         }
       }
 
-      if (convId != null && convId.isNotEmpty) {
+      if (convId == null || convId.isEmpty) {
+        throw const ChatRemoteException('ไม่พบห้องแชตสำหรับส่งคำขอ');
+      }
+      if (convId.isNotEmpty) {
         final oldMsgId = _bookingData.originalMessageId;
         if (widget.isEditMode && oldMsgId != null && oldMsgId.isNotEmpty) {
           // อัปเดตข้อมูลบนการ์ดคำขอเช่าเดิมในแชททันทีโดยไม่ต้องส่งการ์ดใหม่
@@ -196,11 +206,10 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('ส่งคำขอสำเร็จ: ${e.toString()}'),
+            content: Text('ส่งคำขอไม่สำเร็จ: ${e.toString()}'),
             backgroundColor: AppColors.primaryColor,
           ),
         );
-        Navigator.maybePop(context, _bookingData);
       }
     } finally {
       if (mounted) {

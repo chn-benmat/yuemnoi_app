@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/chatbot/presentation/widgets/chatbot_composer.dart';
 
 void main() {
-  group('keyboard submission', () {
+  group('multiline keyboard input', () {
     late TextEditingController controller;
     late FocusNode focus;
     late List<String> submitted;
@@ -47,41 +47,52 @@ void main() {
       LogicalKeyboardKey.enter,
       LogicalKeyboardKey.numpadEnter,
     ]) {
-      testWidgets('${key.keyLabel} sends from a physical keyboard', (
+      testWidgets('${key.keyLabel} does not submit from a physical keyboard', (
         tester,
       ) async {
         await pumpComposer(tester);
         await tester.enterText(find.byType(TextField), 'สวัสดี');
         await tester.pump();
 
-        expect(await tester.sendKeyEvent(key), isTrue);
+        await tester.sendKeyEvent(key);
 
-        expect(submitted, ['สวัสดี']);
-        expect(controller.text, 'สวัสดี');
+        expect(submitted, isEmpty);
       });
     }
 
-    testWidgets('soft keyboard sends the latest text before rebuilding', (
-      tester,
-    ) async {
-      await pumpComposer(tester);
-      await tester.enterText(find.byType(TextField), 'สวัสดี');
+    testWidgets(
+      'soft keyboard keeps newlines until the send button is tapped',
+      (tester) async {
+        await pumpComposer(tester);
+        await tester.enterText(find.byType(TextField), 'สวัสดี');
+        await tester.pump();
+        final initialHeight = tester.getSize(find.byType(TextField)).height;
 
-      await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.testTextInput.receiveAction(TextInputAction.newline);
+        expect(submitted, isEmpty);
+        const message = 'สวัสดี\nอยากเช่ากล้อง\nและเลนส์';
+        await tester.enterText(find.byType(TextField), message);
+        await tester.pump();
+        expect(
+          tester.getSize(find.byType(TextField)).height,
+          greaterThan(initialHeight),
+        );
+        await tester.tap(find.byKey(const Key('chatbot-send-button')));
 
-      expect(submitted, ['สวัสดี']);
-    });
+        expect(submitted, [message]);
+      },
+    );
 
-    testWidgets('holding Enter sends only once', (tester) async {
+    testWidgets('holding Enter never submits a draft', (tester) async {
       await pumpComposer(tester);
       await tester.enterText(find.byType(TextField), 'สวัสดี');
       await tester.pump();
 
       await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
-      expect(await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter), isTrue);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
 
-      expect(submitted, ['สวัสดี']);
+      expect(submitted, isEmpty);
     });
 
     testWidgets('Shift+Enter stays available for multiline input', (
@@ -92,7 +103,7 @@ void main() {
       await tester.pump();
 
       await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
-      expect(await tester.sendKeyEvent(LogicalKeyboardKey.enter), isFalse);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
       const multilineText = 'บรรทัดแรก\nบรรทัดที่สอง';
       tester.testTextInput.updateEditingValue(
@@ -120,7 +131,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(await tester.sendKeyEvent(LogicalKeyboardKey.enter), isFalse);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
 
       expect(submitted, isEmpty);
       tester.testTextInput.updateEditingValue(
@@ -132,7 +143,7 @@ void main() {
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
 
-      expect(submitted, ['สวัสดี']);
+      expect(submitted, isEmpty);
     });
 
     testWidgets('Enter does not send whitespace or send while busy', (
@@ -142,7 +153,7 @@ void main() {
       await tester.enterText(find.byType(TextField), '  \n  ');
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.testTextInput.receiveAction(TextInputAction.newline);
       expect(submitted, isEmpty);
 
       controller.text = 'สวัสดี';

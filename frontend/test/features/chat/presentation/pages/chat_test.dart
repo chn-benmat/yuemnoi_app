@@ -9,8 +9,10 @@ import 'package:frontend/core/widgets/custom_bottom_navbar.dart';
 import 'package:frontend/features/chat/data/models/chat_conversation_model.dart';
 import 'package:frontend/features/chat/domain/entities/chat_conversation.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
+import 'package:frontend/features/chat/domain/entities/chat_reply_content.dart';
 import 'package:frontend/features/chat/domain/repositories/chat_repository.dart';
 import 'package:frontend/features/chat/domain/usecases/get_conversation_contact_phone_usecase.dart';
+import 'package:frontend/features/chat/domain/usecases/get_owned_chat_item_ids_usecase.dart';
 import 'package:frontend/features/chat/domain/usecases/get_conversations_usecase.dart';
 import 'package:frontend/features/chat/domain/usecases/send_chat_message_usecase.dart';
 import 'package:frontend/features/chat/domain/usecases/stream_messages_usecase.dart';
@@ -52,6 +54,9 @@ class _MockStreamMessagesUseCase extends Mock
 
 class _MockSendChatMessageUseCase extends Mock
     implements SendChatMessageUseCase {}
+
+class _MockGetOwnedChatItemIdsUseCase extends Mock
+    implements GetOwnedChatItemIdsUseCase {}
 
 class _MockUploadChatImageUseCase extends Mock
     implements UploadChatImageUseCase {}
@@ -557,24 +562,30 @@ void main() {
       );
       expect(find.text('ส่งแล้ว'), findsNothing);
 
-      // Now simulate a newly sending optimistic message
-      final msg3Sending = ChatMessage(
-        id: 'temp_12345678',
-        conversationId: 'conv-1',
-        senderId: 'me',
-        message: 'กำลังพิมพ์ส่งข้อความที่สาม',
-        createdAt: DateTime.now(),
-        isMine: true,
-        isRead: false,
+      final pending = Completer<void>();
+      when(
+        () => mockSendMessage(
+          conversationId: any(named: 'conversationId'),
+          message: any(named: 'message'),
+          imageUrl: any(named: 'imageUrl'),
+        ),
+      ).thenAnswer((_) => pending.future);
+      chatDetailBloc.add(
+        const ChatMessageSent(
+          conversationId: 'conv-1',
+          message: 'กำลังพิมพ์ส่งข้อความที่สาม',
+        ),
       );
-
-      streamController.add([msg1, msg2Read, msg3Sending]);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       // The new latest sending message should show "กำลังส่ง"
       expect(find.text('กำลังส่ง'), findsOneWidget);
       expect(find.text('ส่งแล้ว'), findsNothing);
+      pending.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('กำลังส่ง'), findsNothing);
+      expect(find.text('ส่งแล้ว'), findsOneWidget);
     });
   });
 
@@ -1425,6 +1436,69 @@ void main() {
       },
     );
 
+    testWidgets(
+      'sending a reply to multiline text preserves the answer and quote ID',
+      (tester) async {
+        when(
+          () => mockSendMessage(
+            conversationId: any(named: 'conversationId'),
+            message: any(named: 'message'),
+            imageUrl: any(named: 'imageUrl'),
+          ),
+        ).thenAnswer((_) async {});
+        final bloc = ChatDetailBloc(
+          streamMessages: mockStreamMessages,
+          sendMessage: mockSendMessage,
+          conversationId: sampleConversation1.id,
+        );
+        addTearDown(bloc.close);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatDetailScreen(
+              conversation: sampleConversation1,
+              chatDetailBloc: bloc,
+            ),
+          ),
+        );
+        await tester.pump();
+        final original = ChatMessage(
+          id: 'multiline-origin',
+          conversationId: sampleConversation1.id,
+          senderId: sampleConversation1.otherUserId,
+          message: 'รายละเอียด\nหลายบรรทัด | พร้อมให้เช่า',
+          createdAt: DateTime(2026, 10, 20),
+          isMine: false,
+        );
+        bloc.add(ChatMessagesUpdated([original]));
+        await tester.pumpAndSettle();
+        await tester.longPress(find.text(original.message));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('ตอบกลับ'));
+        await tester.pumpAndSettle();
+        expect(find.text('รายละเอียด หลายบรรทัด พร้อมให้เช่า'), findsOneWidget);
+        await tester.enterText(
+          find.byKey(const ValueKey('chat-message-field')),
+          'ตกลงครับ\nขอรับช่วงเช้า',
+        );
+        await tester.tap(find.byKey(const ValueKey('send-message-button')));
+        await tester.pumpAndSettle();
+        final payload =
+            verify(
+                  () => mockSendMessage(
+                    conversationId: sampleConversation1.id,
+                    message: captureAny(named: 'message'),
+                    imageUrl: any(named: 'imageUrl'),
+                  ),
+                ).captured.single
+                as String;
+        final reply = ChatReplyContent.tryParse(payload)!;
+        expect(reply.text, 'ตกลงครับ\nขอรับช่วงเช้า');
+        expect(reply.quotedMessageId, original.id);
+        expect(reply.quotedText, 'รายละเอียด หลายบรรทัด พร้อมให้เช่า');
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('Failed message shows error status and allows retry', (
       tester,
     ) async {
@@ -1490,10 +1564,13 @@ void main() {
     testWidgets(
       'ChatDetailScreen displays rental request button on item inquiry card for owner',
       (tester) async {
+        final getOwnedItemIds = _MockGetOwnedChatItemIdsUseCase();
+        when(() => getOwnedItemIds({2})).thenAnswer((_) async => {2});
         final bloc = ChatDetailBloc(
           streamMessages: mockStreamMessages,
           sendMessage: mockSendMessage,
           conversationId: sampleConversation2.id,
+          getOwnedItemIds: getOwnedItemIds,
         );
 
         const inquiry = ItemInquiryData(
@@ -1606,10 +1683,14 @@ void main() {
     testWidgets(
       'Rental request button re-appears when renter sends a new item inquiry after previous booking request',
       (tester) async {
+        final getOwnedItemIds = _MockGetOwnedChatItemIdsUseCase();
+        when(() => getOwnedItemIds({10})).thenAnswer((_) async => {10});
+        when(() => getOwnedItemIds({25})).thenAnswer((_) async => {25});
         final bloc = ChatDetailBloc(
           streamMessages: mockStreamMessages,
           sendMessage: mockSendMessage,
           conversationId: sampleConversation2.id,
+          getOwnedItemIds: getOwnedItemIds,
         );
 
         await tester.pumpWidget(
@@ -1849,7 +1930,7 @@ void main() {
     );
 
     testWidgets(
-      'Owner sees "ตรวจสอบและยอมรับคำขอเช่า" when receiver of booking request, and sender sees "แก้ไขรายละเอียด"',
+      'Offer receiver can confirm and sender can edit regardless of conversation roles',
       (tester) async {
         final bloc = ChatDetailBloc(
           streamMessages: mockStreamMessages,
@@ -1877,7 +1958,7 @@ void main() {
           conversationId: sampleConversation2.id,
         );
 
-        // ข้อความคำขอเช่าที่ผู้เช่าส่งมาให้ Owner (isMine: false)
+        // ผู้รับข้อเสนอเป็นลูกค้าของสินค้านี้ แม้บทบาทเดิมของห้องแชตจะสลับกัน
         final receivedBookingMsg = ChatMessage(
           id: 'msg-book-received',
           conversationId: sampleConversation2.id,
@@ -1899,8 +1980,8 @@ void main() {
         bloc.add(ChatMessagesUpdated([receivedBookingMsg]));
         await tester.pumpAndSettle();
 
-        // ฝั่ง Owner ที่ได้รับคำขอ ต้องเห็นปุ่มตรวจสอบและยอมรับคำขอเช่า
-        expect(find.text('ตรวจสอบและยอมรับคำขอเช่า'), findsOneWidget);
+        expect(find.text('ตรวจสอบคำขอเช่า'), findsOneWidget);
+        expect(find.text('ตรวจสอบและยอมรับคำขอเช่า'), findsNothing);
 
         // ทดสอบเมื่อ Owner เป็นคนส่งข้อเสนอเอง (isMine: true) -> ต้องเห็นปุ่มแก้ไขรายละเอียด
         final sentBookingMsg = ChatMessage(

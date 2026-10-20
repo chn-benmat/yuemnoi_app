@@ -194,12 +194,12 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         imageUrl: firstImageUrl,
       );
 
-      // ส่งข้อความแสดงความสนใจเช่าอุปกรณ์เข้าแชทโดยอัตโนมัติเมื่อกดแชทจากหน้ารายละเอียดอุปกรณ์
+      // เปิดแชตซ้ำโดยไม่ส่งความสนใจเพิ่ม จนกว่ารายการเช่ารอบเดิมจะปิด
       final chatDataSource = ChatRemoteDataSource();
       try {
-        await chatDataSource.sendMessage(
+        await chatDataSource.sendItemInquiryIfNeeded(
           conversationId: conversation.id,
-          message: inquiryData.toChatMessagePayload(),
+          inquiry: inquiryData,
           imageUrl: firstImageUrl.isNotEmpty ? firstImageUrl : null,
         );
       } catch (_) {}
@@ -1012,14 +1012,11 @@ class _DetailContent extends StatelessWidget {
                   const SizedBox(height: 12),
                   Semantics(
                     button: true,
-                    label: 'ดูจุดนัดรับ ${location.name} บนแผนที่',
+                    label: 'เปิดจุดนัดรับ ${location.name} ใน Google Maps',
                     child: InkWell(
                       borderRadius: BorderRadius.circular(8),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => PickupLocationMap(location: location),
-                        ),
-                      ),
+                      onTap: () =>
+                          openPickupLocationInGoogleMaps(context, location),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         child: Row(
@@ -1059,7 +1056,7 @@ class _DetailContent extends StatelessWidget {
                   key: ValueKey('item-description-${item.id}'),
                   description: item.description,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 18),
                 _OwnerCard(item: item),
                 const SizedBox(height: 24),
                 const _SectionTitle('รีวิวล่าสุด'),

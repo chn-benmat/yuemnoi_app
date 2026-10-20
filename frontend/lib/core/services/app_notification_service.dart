@@ -35,7 +35,8 @@ class NotificationInboxState {
 class AppNotificationService {
   AppNotificationService({
     NotificationRepository? repository,
-    this.pollInterval = const Duration(seconds: 5),
+    // FCM สั่ง refresh เมื่อมีเหตุการณ์ รอบนี้สำรองเมื่อ push ตกหล่นหรืออ่านจากเครื่องอื่น
+    this.pollInterval = const Duration(minutes: 1),
     this.pageSize = 50,
   }) : _repository = repository ?? NotificationRepositoryImpl();
 
