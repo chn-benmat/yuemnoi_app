@@ -255,11 +255,20 @@ class FavoriteService {
     required String eventType,
   }) async {
     try {
-      await SupabaseConfig.client.from('user_item_events').insert({
-        'user_id': userId,
-        'item_id': itemId,
-        'event_type': eventType,
-      });
+      if (eventType == 'view') {
+        // The database function serializes concurrent opens for this user/item
+        // and only inserts when the previous view is older than 30 minutes.
+        await SupabaseConfig.client.rpc(
+          'record_item_view_event',
+          params: {'p_item_id': itemId},
+        );
+      } else {
+        await SupabaseConfig.client.from('user_item_events').insert({
+          'user_id': userId,
+          'item_id': itemId,
+          'event_type': eventType,
+        });
+      }
     } catch (error) {
       // Event ใช้ประกอบคำแนะนำ; ไม่ให้การบันทึก event ที่ล้มเหลวขัดขวาง UI
       debugPrint('Failed to record $eventType event for item $itemId: $error');
