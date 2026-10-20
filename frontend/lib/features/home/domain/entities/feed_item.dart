@@ -12,7 +12,7 @@ class FeedItem extends Equatable {
     required this.priceUnit,
     required this.rating,
     required this.reviewCount,
-    required this.distanceKm,
+    this.distanceKm,
     required this.isVerified,
     required this.ownerName,
     this.isOwner = false,
@@ -52,7 +52,7 @@ class FeedItem extends Equatable {
   final int reviewCount;
 
   /// ระยะทางจากผู้ใช้ (กิโลเมตร)
-  final double distanceKm;
+  final double? distanceKm;
 
   /// สถานะการยืนยันตัวตนของผู้ให้เช่า
   final bool isVerified;

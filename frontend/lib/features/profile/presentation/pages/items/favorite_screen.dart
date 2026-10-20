@@ -93,7 +93,14 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                   return FavoriteItemCard(
                     item: cardData,
                     onRemoveFavorite: () async {
-                      await FavoriteService.instance.toggleFavorite(item.id);
+                      try {
+                        await FavoriteService.instance.toggleFavorite(item.id);
+                      } on FavoriteServiceException catch (error) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(error.message)));
+                      }
                     },
                   );
                 },

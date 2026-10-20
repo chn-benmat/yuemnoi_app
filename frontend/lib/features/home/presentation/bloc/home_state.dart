@@ -33,6 +33,7 @@ class HomeLoaded extends HomeState {
     this.maxPrice,
     this.minRating,
     this.isRefreshing = false,
+    this.favoriteErrorMessage,
   });
 
   /// รายการหมวดหมู่ทั้งหมด
@@ -62,6 +63,9 @@ class HomeLoaded extends HomeState {
   /// กำลังรีเฟรชข้อมูลในเบื้องหลังหรือไม่
   final bool isRefreshing;
 
+  /// Error จากการบันทึก favorite ให้หน้า Home แสดงแก่ผู้ใช้
+  final String? favoriteErrorMessage;
+
   /// มีการใช้ตัวกรองอยู่หรือไม่
   bool get hasActiveFilters =>
       selectedCategoryId != 'all' ||
@@ -79,6 +83,7 @@ class HomeLoaded extends HomeState {
     int? Function()? maxPrice,
     double? Function()? minRating,
     bool? isRefreshing,
+    String? favoriteErrorMessage,
   }) {
     return HomeLoaded(
       categories: categories ?? this.categories,
@@ -90,6 +95,7 @@ class HomeLoaded extends HomeState {
       maxPrice: maxPrice != null ? maxPrice() : this.maxPrice,
       minRating: minRating != null ? minRating() : this.minRating,
       isRefreshing: isRefreshing ?? this.isRefreshing,
+      favoriteErrorMessage: favoriteErrorMessage,
     );
   }
 
@@ -104,6 +110,7 @@ class HomeLoaded extends HomeState {
     maxPrice,
     minRating,
     isRefreshing,
+    favoriteErrorMessage,
   ];
 }
 

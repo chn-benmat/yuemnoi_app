@@ -20,7 +20,7 @@ FeedItemModel _$FeedItemModelFromJson(Map<String, dynamic> json) =>
       priceUnit: json['price_unit'] as String? ?? '/ วัน',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
-      distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 1.0,
+      distanceKm: (json['distance_km'] as num?)?.toDouble(),
       isVerified: FeedItemModel._isTrue(json['is_verified']),
       ownerName: json['owner_name'] as String? ?? 'ผู้ใช้งาน',
       isOwner: json['is_owner'] as bool? ?? false,
@@ -29,7 +29,7 @@ FeedItemModel _$FeedItemModelFromJson(Map<String, dynamic> json) =>
       isCurated: json['is_curated'] as bool? ?? false,
       isFavorite: json['is_favorite'] as bool? ?? false,
       tags: json['tags'] == null ? const [] : FeedItemModel._tags(json['tags']),
-      locationName: json['location_name'] as String? ?? 'กรุงเทพฯ',
+      locationName: json['location_name'] as String? ?? 'ไม่ระบุตำแหน่ง',
     );
 
 Map<String, dynamic> _$FeedItemModelToJson(FeedItemModel instance) =>

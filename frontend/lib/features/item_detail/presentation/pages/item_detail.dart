@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
@@ -73,10 +75,37 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   void initState() {
     super.initState();
     _isFavorite = FavoriteService.instance.isItemFavorite(widget.itemId);
+    FavoriteService.instance.favoritesNotifier.addListener(_syncFavoriteState);
+    unawaited(FavoriteService.instance.init());
+    unawaited(FavoriteService.instance.recordItemView(widget.itemId));
+  }
+
+  @override
+  void dispose() {
+    FavoriteService.instance.favoritesNotifier.removeListener(
+      _syncFavoriteState,
+    );
+    super.dispose();
+  }
+
+  void _syncFavoriteState() {
+    final isFavorite = FavoriteService.instance.isItemFavorite(widget.itemId);
+    if (mounted && isFavorite != _isFavorite) {
+      setState(() => _isFavorite = isFavorite);
+    }
   }
 
   Future<void> _handleFavoriteToggle() async {
-    final isFav = await FavoriteService.instance.toggleFavorite(widget.itemId);
+    late final bool isFav;
+    try {
+      isFav = await FavoriteService.instance.toggleFavorite(widget.itemId);
+    } on FavoriteServiceException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(error.message)));
+      return;
+    }
     if (!mounted) return;
     setState(() => _isFavorite = isFav);
     ScaffoldMessenger.of(context)

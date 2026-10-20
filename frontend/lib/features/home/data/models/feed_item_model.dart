@@ -18,7 +18,7 @@ class FeedItemModel extends FeedItem {
     @JsonKey(defaultValue: '/ วัน') required super.priceUnit,
     @JsonKey(defaultValue: 0.0) required super.rating,
     @JsonKey(defaultValue: 0) required super.reviewCount,
-    @JsonKey(defaultValue: 1.0) required super.distanceKm,
+    super.distanceKm,
     required super.isVerified,
     @JsonKey(defaultValue: 'ผู้ใช้งาน') required super.ownerName,
     super.isOwner = false,
@@ -28,7 +28,7 @@ class FeedItemModel extends FeedItem {
     super.isCurated = false,
     super.isFavorite = false,
     super.tags = const [],
-    super.locationName = 'กรุงเทพฯ',
+    super.locationName = 'ไม่ระบุตำแหน่ง',
   });
 
   // ตัวสร้างโค้ดอ่าน converter จาก getter แต่ไม่อ่านจาก super parameter

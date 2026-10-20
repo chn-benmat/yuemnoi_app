@@ -47,7 +47,6 @@ Future<void> main() async {
 
   await SupabaseConfig.initialize();
   unawaited(ChatPinService.instance.init());
-  unawaited(FavoriteService.instance.init());
 
   if (!kIsWeb) {
     try {
@@ -60,6 +59,7 @@ Future<void> main() async {
   }
 
   final isAuthenticated = await AuthSession.restore();
+  unawaited(FavoriteService.instance.init(forceRefresh: true));
   if (isAuthenticated) {
     UserPresenceService.instance.initialize();
     unawaited(ChatNotificationService.instance.initialize());

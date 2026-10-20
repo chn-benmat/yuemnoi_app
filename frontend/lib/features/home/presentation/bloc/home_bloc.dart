@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/services/favorite_service.dart';
 import '../../../../core/services/item_catalog_service.dart';
+import '../../domain/entities/feed_item.dart';
 import '../../domain/repositories/home_repository.dart';
 import '../../domain/usecases/get_home_feed_usecase.dart';
 import 'home_event.dart';
@@ -18,7 +20,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<ClearFilterRequested>(_onClearFilterRequested);
     on<SearchQueryChanged>(_onSearchQueryChanged);
     on<ToggleFavoriteRequested>(_onToggleFavoriteRequested);
+    on<FavoriteSetChanged>(_onFavoriteSetChanged);
     on<RefreshHomeFeedRequested>(_onRefreshHomeFeedRequested);
+    _favoriteListener = () => add(const FavoriteSetChanged());
+    FavoriteService.instance.favoritesNotifier.addListener(_favoriteListener);
     _catalogSubscription = ItemCatalogService.instance.changes.listen((_) {
       add(const RefreshHomeFeedRequested());
     });
@@ -26,11 +31,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   final GetHomeFeedUseCase getHomeFeed;
   final HomeRepository homeRepository;
+  late final void Function() _favoriteListener;
   late final StreamSubscription<void> _catalogSubscription;
 
   @override
   Future<void> close() async {
     await _catalogSubscription.cancel();
+    FavoriteService.instance.favoritesNotifier.removeListener(
+      _favoriteListener,
+    );
     return super.close();
   }
 
@@ -176,7 +185,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final currentState = state;
     if (currentState is! HomeLoaded) return;
 
-    final isFav = await homeRepository.toggleFavorite(event.itemId);
+    late final bool isFav;
+    try {
+      isFav = await homeRepository.toggleFavorite(event.itemId);
+    } catch (error) {
+      emit(currentState.copyWith(favoriteErrorMessage: error.toString()));
+      return;
+    }
 
     final updatedCurated = currentState.curatedItems.map((item) {
       if (item.id == event.itemId) {
@@ -196,6 +211,30 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       currentState.copyWith(
         curatedItems: updatedCurated,
         nearbyItems: updatedNearby,
+      ),
+    );
+  }
+
+  void _onFavoriteSetChanged(
+    FavoriteSetChanged event,
+    Emitter<HomeState> emit,
+  ) {
+    final currentState = state;
+    if (currentState is! HomeLoaded) return;
+    final favorites = FavoriteService.instance.favoritesNotifier.value;
+
+    List<FeedItem> update(List<FeedItem> items) => items
+        .map(
+          (item) => item.copyWith(
+            isFavorite: favorites.contains(int.tryParse(item.id)),
+          ),
+        )
+        .toList();
+
+    emit(
+      currentState.copyWith(
+        curatedItems: update(currentState.curatedItems),
+        nearbyItems: update(currentState.nearbyItems),
       ),
     );
   }
