@@ -99,6 +99,20 @@ class SettingAccountScreen extends StatelessWidget {
                   color: Colors.grey.shade100,
                 ),
                 AccountSettingItem(
+                  icon: Icons.badge_outlined,
+                  iconBgColor: const Color(0xFFF3E8FF),
+                  iconColor: AppColors.primaryColor,
+                  title: 'ข้อมูลบัตรประชาชน',
+                  subtitle: 'รูปยืนยันตัวตน, ข้อมูลบัตรและที่อยู่',
+                  onTap: () => AppRoutes.openIdentityAccount(context),
+                ),
+                Divider(
+                  height: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: Colors.grey.shade100,
+                ),
+                AccountSettingItem(
                   icon: Icons.security_outlined,
                   iconBgColor: const Color(0xFFE8F5E9),
                   iconColor: const Color(0xFF388E3C),

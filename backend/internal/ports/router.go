@@ -161,6 +161,8 @@ func SetupRouterWithOperations(
 	identityLimit := RateLimitMiddleware(NewRateLimiter(5.0/60.0, 5), "ส่งคำขอถี่เกินไป กรุณารอสักครู่")
 	router.Post("/api/admin/login", RateLimitMiddleware(authRateLimiter, "กรุณารอสักครู่แล้วลองใหม่"), dashboardLogin(authGateway, operations.Store))
 	router.Get("/api/identity/status", operationsHandler.Status)
+	router.Get("/api/identity/account", operationsHandler.AccountDetails)
+	router.Get("/api/identity/account/evidence/:id", operationsHandler.AccountEvidence)
 	router.Post("/api/identity/sessions", identityLimit, operationsHandler.Begin)
 	router.Post("/api/identity/sessions/:id/submit", identityLimit, operationsHandler.Submit)
 	router.Post("/api/complaints", identityLimit, operationsHandler.Complaint)

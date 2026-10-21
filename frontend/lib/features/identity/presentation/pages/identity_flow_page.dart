@@ -23,9 +23,11 @@ class IdentityPage extends StatefulWidget {
     super.key,
     this.capture = captureIdentityPhoto,
     this.addressRepository,
+    this.selfieWithCard = false,
   });
   final IdentityCapture capture;
   final ThaiAddressRepository? addressRepository;
+  final bool selfieWithCard;
   @override
   State<IdentityPage> createState() => _IdentityPageState();
 }
@@ -205,7 +207,8 @@ class _IdentityPageState extends State<IdentityPage> {
           _card = bytes;
           // ถ่ายใหม่ยังเก็บข้อมูลที่กรอกไว้ แต่ต้องตรวจและยืนยันอีกครั้ง
           _confirmed = false;
-        } else if (kind == IdentityCaptureKind.selfie) {
+        } else if (kind == IdentityCaptureKind.selfie ||
+            kind == IdentityCaptureKind.selfieWithCard) {
           _selfie = bytes;
           _confirmed = false;
         }
@@ -223,7 +226,13 @@ class _IdentityPageState extends State<IdentityPage> {
     if (_capturing || _cubit.state.busy) return;
     if (_card == null && !await _capture(IdentityCaptureKind.card)) return;
     if (!mounted) return;
-    if (_selfie == null && !await _capture(IdentityCaptureKind.selfie)) return;
+    if (_selfie == null &&
+        !await _capture(
+          widget.selfieWithCard
+              ? IdentityCaptureKind.selfieWithCard
+              : IdentityCaptureKind.selfie,
+        ))
+      return;
   }
 
   String? _required(String? value) =>
@@ -390,6 +399,7 @@ class _IdentityPageState extends State<IdentityPage> {
     final sent = await _cubit.submit(
       {
         'name_prefix': _namePrefix!,
+        if (widget.selfieWithCard) 'selfie_with_card': 'true',
         'legal_name': _legalName,
         for (final field in _cardFields.entries)
           field.key: field.value.text.trim(),
@@ -620,14 +630,18 @@ class _IdentityPageState extends State<IdentityPage> {
       Expanded(
         child: IdentityPhotoTile(
           key: const ValueKey('selfie_photo'),
-          title: 'ใบหน้าของคุณ',
+          title: widget.selfieWithCard ? 'รูปคู่บัตรประชาชน' : 'ใบหน้าของคุณ',
           icon: Icons.face_outlined,
           bytes: _selfie,
           onRetake: _capturing || _cubit.state.busy
               ? null
               : _selfie == null || _card == null
               ? _capturePhotos
-              : () => _capture(IdentityCaptureKind.selfie),
+              : () => _capture(
+                  widget.selfieWithCard
+                      ? IdentityCaptureKind.selfieWithCard
+                      : IdentityCaptureKind.selfie,
+                ),
         ),
       ),
     ],

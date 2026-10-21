@@ -398,3 +398,13 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 ---
 
 นโยบายทุกวัยใช้ migration `supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql` ยกเลิกการใช้ `is_minor` จำกัดลงประกาศ/จอง/อนุมัติตัวตนทั้ง Go guard และ database triggers รวมถึงถอด API `/api/identity/guardians`, คิวและคำสั่งผู้ปกครองจากระบบเจ้าหน้าที่ ข้อมูลประวัติผู้ปกครองและหลักฐานเก่ายังเก็บตามรอบลบเดิม การตรวจตัวตนโดยเจ้าหน้าที่และการระงับบัญชียังทำงานทุกวัย
+
+### ข้อมูลบัตรประชาชนในตั้งค่าบัญชี
+
+ติดตั้ง `supabase/migrations/20261021065036_identity_account_details.sql` ก่อนเปิด Backend รุ่นนี้ `GET /api/identity/account` อ่านเฉพาะข้อมูลของเจ้าของ Bearer token ส่ง `fields`, `status`, `has_identity`, `selfie_with_card` และรายการ `evidence` (ID/kind) โดยไม่ส่ง ciphertext, HMAC หรือ object path; `GET /api/identity/account/evidence/:id` ตรวจเจ้าของและกำหนดลบก่อนส่งภาพ base64 ใน `data` ทั้งสอง route ใช้ `Cache-Control: private, no-store` และไม่บันทึกข้อมูลตัวตนใน response log
+
+การแก้ไขใช้ session/submit เดิม ส่งข้อมูลส่วนบุคคลและที่อยู่ครบ พร้อม `selfie_with_card: true` และแนบเฉพาะภาพที่เปลี่ยน ระบบคัดลอกภาพเดิมที่ยังไม่หมดอายุเข้าสู่คำขอใหม่ได้ รูปเดิมที่ยังอ่านได้สามารถใช้ต่อได้แม้ไม่มีธง selfie_with_card ของรุ่นใหม่ โดยคง metadata เดิม ไม่ใช้ธงดังกล่าวแทนผลตรวจของเจ้าหน้าที่ การส่งซ้ำถูกป้องกันระหว่าง pending เลขบัตรเทียบกับ HMAC เดิมทั้ง Go และ database trigger หากต่างจะได้ `409 citizen_id_locked` และต้องติดต่อเจ้าหน้าที่ กรณีข้อมูลเก่าถูก purge แล้วจะแสดงเลขที่ปกปิดไว้และให้กรอกช่องอื่นใหม่ โดยคง HMAC เลขบัตรเดิม
+
+ข้อมูลที่อนุมัติล่าสุดเก็บเป็น ciphertext ใน `identity_profiles.raw_encrypted` จนกว่าข้อมูลบัญชีนั้นถูกแทนที่หรือลบบัญชี ใช้คีย์และการเข้ารหัสเดิม แยกจากข้อมูลคำขอและรูปหลักฐานที่ยังลบตาม retention เดิม ข้อมูล pending/corrections/rejected ไม่ทับ snapshot หรือสิทธิ์เดิม เมื่อเจ้าหน้าที่อนุมัติผ่าน workflow เดิมจึงแทนที่ snapshot โดยอัตโนมัติ หากอัปโหลดล้มเหลวจะยกเลิกรอบ capture ก่อน rollback รูป และจะไม่ลบรูปของคำขอที่เปลี่ยนเป็น pending แล้ว
+
+ตรวจด้วย `go test ./...`, `go vet ./...`, `go build ./...` และ `supabase/tests/identity_account_details.sql` ซึ่งสร้าง fixture แล้ว rollback ครอบคลุม ownership, สิทธิ์ RPC, เลขบัตรคงเดิม, pending/corrections/approval และการหมดอายุหลักฐาน

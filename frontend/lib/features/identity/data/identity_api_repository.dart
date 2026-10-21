@@ -1,9 +1,12 @@
 import 'dart:typed_data';
+import 'dart:convert';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/auth_session.dart';
 import '../domain/identity_repository.dart';
+import '../domain/identity_account_repository.dart';
 
-class IdentityApiRepository implements IdentityRepository {
+class IdentityApiRepository
+    implements IdentityRepository, IdentityAccountRepository {
   IdentityApiRepository({ApiClient? client})
     : _client =
           client ?? DioApiClient(requestTimeout: const Duration(seconds: 120));
@@ -72,4 +75,67 @@ class IdentityApiRepository implements IdentityRepository {
   });
   @override
   void close() => _client.close();
+
+  @override
+  Future<IdentityAccountDetails> accountDetails() => _call(
+    () async => IdentityAccountDetails(
+      _result(await _client.get('/api/identity/account', headers: _headers)),
+    ),
+  );
+
+  @override
+  Future<Uint8List> accountEvidence(String id) => _call(
+    () async => base64Decode(
+      _result(
+            await _client.get(
+              '/api/identity/account/evidence/$id',
+              headers: _headers,
+            ),
+          )['data']
+          as String,
+    ),
+  );
+
+  @override
+  Future<void> updateAccount(
+    Map<String, String> fields, {
+    Uint8List? card,
+    Uint8List? selfie,
+  }) => _call(() async {
+    final current = await status();
+    if (current.request['status'] == 'pending' &&
+        (DateTime.tryParse(
+              current.request['deadline']?.toString() ?? '',
+            )?.isAfter(DateTime.now()) ??
+            true)) {
+      throw const IdentityFailure(
+        'มีคำขอที่กำลังรอตรวจสอบ กรุณารอผลก่อนแก้ไขอีกครั้ง',
+      );
+    }
+    final request = current.request;
+    final resumable =
+        request['status'] == 'capture' &&
+        (DateTime.tryParse(
+              request['capture_until']?.toString() ?? '',
+            )?.isAfter(DateTime.now()) ??
+            false);
+    final session = resumable ? request : await begin(fields['birth_date']!);
+    _result(
+      await _client.postMultipart(
+        '/api/identity/sessions/${session['id']}/submit',
+        headers: _headers,
+        fields: {...fields, 'selfie_with_card': 'true'},
+        files: [
+          if (card != null)
+            ApiUpload(fieldName: 'card', bytes: card, fileName: 'card.jpg'),
+          if (selfie != null)
+            ApiUpload(
+              fieldName: 'selfie',
+              bytes: selfie,
+              fileName: 'selfie.jpg',
+            ),
+        ],
+      ),
+    );
+  });
 }

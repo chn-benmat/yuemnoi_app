@@ -46,7 +46,7 @@ func (r *operationsRepository) request(ctx context.Context, method, path string,
 		if strings.Contains(string(data), "invalid_settings") {
 			return nil, "", errors.New("invalid_settings")
 		}
-		for _, code := range []string{"staff_required", "pilot_invite_required", "account_suspended", "active_request_exists", "capture_expired", "request_not_pending", "manual_review_required", "self_review_forbidden", "identity_duplicate", "card_expired", "card_validity_required", "last_staff_required", "self_suspend_forbidden", "reason_required", "evidence_unavailable", "invalid_date_range", "unknown_module", "unknown_action"} {
+		for _, code := range []string{"citizen_id_locked", "staff_required", "pilot_invite_required", "account_suspended", "active_request_exists", "capture_expired", "request_not_pending", "manual_review_required", "self_review_forbidden", "identity_duplicate", "card_expired", "card_validity_required", "last_staff_required", "self_suspend_forbidden", "reason_required", "evidence_unavailable", "invalid_date_range", "unknown_module", "unknown_action"} {
 			if strings.Contains(string(data), code) {
 				return nil, "", errors.New(code)
 			}

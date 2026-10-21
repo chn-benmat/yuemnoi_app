@@ -376,3 +376,5 @@ flutter build web
 ```
 
 Tests ของ cache ใช้ SQLite ในเครื่องและ HTTP fixtures จึงตรวจ persistence, account isolation, empty snapshots และ late responses ได้โดยไม่เรียกบริการจริง ส่วน live Supabase/AI tests ต้องเลือกแยกจากการตรวจ offline
+
+หน้าตั้งค่าบัญชีเพิ่ม “ข้อมูลบัตรประชาชน” ที่ `/setting/identity` ผ่าน Go API ของเจ้าของ session แสดงรูปคู่บัตร รูปบัตร ข้อมูลส่วนบุคคล และที่อยู่ วันเกิดหน้าแก้ไขใช้ปี ค.ศ. เลขบัตรอ่านได้อย่างเดียว การแก้ไขต้องยืนยันก่อนส่งให้เจ้าหน้าที่ ข้อมูลและสิทธิ์เดิมยังมีผลระหว่าง pending และถามก่อนออกเฉพาะเมื่อมีการแก้ไขที่ยังไม่ได้ส่ง รูปเก่าที่หมดอายุต้องเพิ่มใหม่ ใช้ migration `../supabase/migrations/20261021065036_identity_account_details.sql` กับ Backend รุ่นเดียวกัน ทดสอบหน้าใหม่และ flow เดิมด้วย `flutter test test/features/identity test/features/profile/presentation/pages/account_screens_test.dart`

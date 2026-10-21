@@ -7,6 +7,8 @@ import '../../features/identity/data/identity_api_repository.dart';
 import '../../features/identity/domain/identity_repository.dart';
 import '../../features/identity/presentation/identity_cubit.dart';
 import '../../features/identity/presentation/identity_page.dart';
+import '../../features/identity/presentation/identity_account_cubit.dart';
+import '../../features/identity/presentation/pages/identity_account_page.dart';
 
 import '../../features/auth/presentation/pages/change_password.dart';
 import '../../features/auth/presentation/pages/forget_password.dart';
@@ -108,6 +110,7 @@ abstract final class AppRoutes {
   static const settingAccount = '/setting/account';
   static const editProfile = '/setting/edit-profile';
   static const editContact = '/setting/edit-contact';
+  static const identityAccount = '/setting/identity';
   static const changeAccount = '/setting/change-account';
   static const profileChangePassword = '/setting/change-password';
   static const itemDetail = '/items/:itemId';
@@ -503,6 +506,17 @@ abstract final class AppRoutes {
           ),
         ),
         GoRoute(
+          path: identityAccount,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: BlocProvider(
+              create: (_) =>
+                  IdentityAccountCubit(IdentityApiRepository())..load(),
+              child: const IdentityAccountPage(),
+            ),
+          ),
+        ),
+        GoRoute(
           path: changeAccount,
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
@@ -823,7 +837,10 @@ abstract final class AppRoutes {
     return context.push<void>(addRentalItem);
   }
 
-  static Future<void> openIdentity(BuildContext context) async {
+  static Future<void> openIdentity(
+    BuildContext context, {
+    bool selfieWithCard = false,
+  }) async {
     if (!await AuthGuard.requireAuth(
           context,
           title: 'เข้าสู่ระบบเพื่อยืนยันตัวตน',
@@ -836,10 +853,21 @@ abstract final class AppRoutes {
       MaterialPageRoute(
         builder: (_) => BlocProvider(
           create: (_) => IdentityCubit(IdentityApiRepository())..load(),
-          child: const IdentityPage(),
+          child: IdentityPage(selfieWithCard: selfieWithCard),
         ),
       ),
     );
+  }
+
+  static Future<void> openIdentityAccount(BuildContext context) async {
+    if (!await AuthGuard.requireAuth(
+          context,
+          title: 'เข้าสู่ระบบเพื่อดูข้อมูลบัตรประชาชน',
+          message: 'กรุณาเข้าสู่ระบบเพื่อจัดการข้อมูลส่วนตัวของคุณ',
+        ) ||
+        !context.mounted)
+      return;
+    return context.push<void>(identityAccount);
   }
 
   static Future<void> openMyItems(BuildContext context) {
