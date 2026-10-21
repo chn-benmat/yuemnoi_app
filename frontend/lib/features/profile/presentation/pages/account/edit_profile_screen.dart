@@ -1,3 +1,4 @@
+import '../../widgets/account/account_page_intro.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -181,10 +182,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           final isSaving = state is ProfileActionInProgress;
 
           return Scaffold(
-            backgroundColor: const Color(0xFFF7F7F9),
+            backgroundColor: const Color(0xFFFAF9FD),
             appBar: AppBar(
-              backgroundColor: AppColors.primaryColor,
-              foregroundColor: Colors.white,
+              backgroundColor: const Color(0xFFFAF9FD),
+              foregroundColor: const Color(0xFF292235),
+              surfaceTintColor: Colors.transparent,
               leading: const BackButton(),
               title: const Text(
                 'แก้ไขโปรไฟล์',
@@ -194,7 +196,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   fontSize: 18,
                 ),
               ),
-              centerTitle: true,
+              centerTitle: false,
               elevation: 0,
             ),
             body: SingleChildScrollView(
@@ -204,64 +206,81 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const AccountPageIntro(
+                      title: 'ให้คนอื่นรู้จักคุณ',
+                      description:
+                          'เพิ่มรูปและแนะนำตัว เพื่อให้คุยเรื่องเช่าได้เป็นกันเองขึ้น',
+                    ),
                     // ── Avatar ─────────────────────────────────────────
                     Center(
-                      child: Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppColors.gradient2,
-                                  AppColors.primaryColor,
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                      child: Semantics(
+                        button: true,
+                        label: 'เปลี่ยนรูปโปรไฟล์',
+                        child: InkWell(
+                          key: const ValueKey('edit-profile-avatar-picker'),
+                          onTap: isSaving ? null : _pickImage,
+                          customBorder: const CircleBorder(),
+                          child: Stack(
+                            alignment: Alignment.bottomRight,
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 100,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppColors.gradient2,
+                                      AppColors.primaryColor,
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                                padding: const EdgeInsets.all(3),
+                                child: ClipOval(
+                                  child: _pickedImageBytes != null
+                                      ? Image.memory(
+                                          _pickedImageBytes!,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : _avatarUrl != null
+                                      ? Image.network(
+                                          _avatarUrl!,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : Container(
+                                          color: const Color(0xFFF3E8FF),
+                                          child: const Icon(
+                                            Icons.person_rounded,
+                                            size: 48,
+                                            color: AppColors.primaryColor,
+                                          ),
+                                        ),
+                                ),
                               ),
-                            ),
-                            padding: const EdgeInsets.all(3),
-                            child: ClipOval(
-                              child: _pickedImageBytes != null
-                                  ? Image.memory(
-                                      _pickedImageBytes!,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : _avatarUrl != null
-                                  ? Image.network(
-                                      _avatarUrl!,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Container(
-                                      color: const Color(0xFFF3E8FF),
-                                      child: const Icon(
-                                        Icons.person_rounded,
-                                        size: 48,
-                                        color: AppColors.primaryColor,
-                                      ),
-                                    ),
-                            ),
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 16,
+                                  top: 16,
+                                ),
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primaryColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.edit_rounded,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          GestureDetector(
-                            onTap: _pickImage,
-                            child: Container(
-                              width: 30,
-                              height: 30,
-                              decoration: const BoxDecoration(
-                                color: AppColors.primaryColor,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.edit_rounded,
-                                size: 16,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 28),
@@ -305,7 +324,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             .withValues(alpha: 0.6),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         minimumSize: const Size(double.infinity, 52),
                       ),

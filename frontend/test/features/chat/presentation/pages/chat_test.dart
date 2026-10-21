@@ -88,6 +88,38 @@ void main() {
     expect(normalizePhoneNumberForDialer('+660812345678'), '0812345678');
   });
 
+  test('conversation model preserves message time and creation fallback', () {
+    ChatConversation fromRecord(Map<String, dynamic> record) =>
+        ChatConversationModel.fromRecords(
+          conversation: {
+            'id': 'conv-time',
+            'renter_id': 'me',
+            'owner_id': 'other',
+            ...record,
+          },
+          otherProfile: null,
+          item: null,
+          currentUserId: 'me',
+        );
+    final latest = DateTime.utc(2026, 10, 21, 10);
+    final created = DateTime.utc(2026, 10, 20, 8);
+    final conversation = fromRecord({
+      'last_message_at': latest.toIso8601String(),
+      'created_at': created.toIso8601String(),
+    });
+    expect(conversation.lastMessageAt!.isAtSameMomentAs(latest), isTrue);
+    expect(
+      conversation.copyWith(hasUnreadMessage: true).lastMessageAt,
+      conversation.lastMessageAt,
+    );
+    expect(
+      fromRecord({
+        'created_at': created.toIso8601String(),
+      }).lastMessageAt!.isAtSameMomentAs(created),
+      isTrue,
+    );
+  });
+
   const sampleConversation1 = ChatConversation(
     id: 'conv-1',
     otherUserId: 'user-owner-1',
@@ -136,7 +168,7 @@ void main() {
       chatListBloc.close();
     });
 
-    testWidgets('renders conversation list and filters by role', (
+    testWidgets('renders all conversations without role filters', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -153,19 +185,56 @@ void main() {
         findsOneWidget,
       );
 
-      // Filter by 'ผู้ปล่อยเช่า'
-      await tester.tap(find.text('ผู้ปล่อยเช่า'));
+      final firstTime = tester.getRect(
+        find.text(sampleConversation1.timeLabel),
+      );
+      final secondTime = tester.getRect(
+        find.text(sampleConversation2.timeLabel),
+      );
+      final card = tester.getRect(
+        find.byKey(const ValueKey('conversation-conv-1')),
+      );
+      expect(firstTime.right, closeTo(card.right - 16, 0.1));
+      expect(secondTime.right, closeTo(firstTime.right, 0.1));
+      expect(find.text('ทั้งหมด'), findsNothing);
+      expect(find.text('ผู้ปล่อยเช่า'), findsNothing);
+      expect(find.text('ผู้เช่า'), findsNothing);
+    });
+
+    testWidgets('chat list supports narrow screens with large text', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(1.8)),
+            child: child!,
+          ),
+          home: Scaffold(body: ChatScreen(chatListBloc: chatListBloc)),
+        ),
+      );
       await tester.pumpAndSettle();
 
-      expect(find.text('สมชาย เจ้าของกล้อง'), findsOneWidget);
-      expect(find.text('วิภาวี ผู้เช่าเต็นท์'), findsNothing);
-
-      // Filter by 'ผู้เช่า'
-      await tester.tap(find.text('ผู้เช่า'));
+      expect(find.byKey(const ValueKey('chat-search-field')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('chat-filter-button')));
       await tester.pumpAndSettle();
-
-      expect(find.text('วิภาวี ผู้เช่าเต็นท์'), findsOneWidget);
-      expect(find.text('สมชาย เจ้าของกล้อง'), findsNothing);
+      expect(find.text('ยังไม่ได้อ่าน'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('เสร็จสิ้น'));
+      await tester.tap(find.text('เสร็จสิ้น'));
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel(RegExp('มีข้อความที่ยังไม่ได้อ่าน')),
+        findsOneWidget,
+      );
+      semantics.dispose();
     });
 
     testWidgets('filters conversation list by search query', (tester) async {
@@ -184,6 +253,73 @@ void main() {
 
       expect(find.text('วิภาวี ผู้เช่าเต็นท์'), findsOneWidget);
       expect(find.text('สมชาย เจ้าของกล้อง'), findsNothing);
+    });
+
+    testWidgets('sorts chats by message time and combines unread with search', (
+      tester,
+    ) async {
+      chatListBloc.add(
+        ChatConversationsUpdated([
+          sampleConversation1.copyWith(lastMessageAt: DateTime(2026, 10, 20)),
+          sampleConversation2.copyWith(lastMessageAt: DateTime(2026, 10, 21)),
+        ]),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ChatScreen(chatListBloc: chatListBloc)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      double top(String id) =>
+          tester.getTopLeft(find.byKey(ValueKey('conversation-$id'))).dy;
+      expect(top('conv-2'), lessThan(top('conv-1')));
+      await tester.tap(find.byKey(const ValueKey('chat-filter-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('เก่าสุด'));
+      await tester.tap(find.text('เสร็จสิ้น'));
+      await tester.pumpAndSettle();
+      expect(top('conv-1'), lessThan(top('conv-2')));
+      await tester.tap(find.byKey(const ValueKey('chat-filter-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ใหม่ล่าสุด'));
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(find.text('เสร็จสิ้น'));
+      await tester.pumpAndSettle();
+      expect(find.text(sampleConversation1.name), findsOneWidget);
+      expect(find.text(sampleConversation2.name), findsNothing);
+      await tester.enterText(
+        find.byKey(const ValueKey('chat-search-field')),
+        'เต็นท์',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(sampleConversation1.name), findsNothing);
+      expect(find.text(sampleConversation2.name), findsNothing);
+      await tester.tap(find.byTooltip('ล้างการค้นหา'));
+      tester.testTextInput.hide();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('chat-search-field')))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      chatListBloc.add(const ChatConversationMarkedAsRead('conv-1'));
+      await tester.runAsync(() => pumpEventQueue());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+      expect(
+        chatListBloc.state.conversations.every((c) => !c.hasUnreadMessage),
+        isTrue,
+      );
+      expect(find.text('ไม่มีแชทที่ยังไม่ได้อ่าน'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('chat-filter-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(find.text('เสร็จสิ้น'));
+      await tester.pumpAndSettle();
+      expect(top('conv-2'), lessThan(top('conv-1')));
     });
 
     test(
