@@ -16,6 +16,7 @@ import '../../features/auth/presentation/pages/register.dart';
 import '../utils/auth_guard.dart';
 import '../../features/booking/presentation/pages/booking.dart';
 import '../../features/booking/presentation/pages/location_picker_map_page.dart';
+import '../../features/profile/presentation/pages/profile/recommendation_location_settings_page.dart';
 import '../../features/booking/data/datasources/rental_request_remote_data_source.dart';
 import '../../features/booking/data/repositories/rental_request_repository_impl.dart';
 import '../../features/booking/domain/usecases/submit_rental_request_usecase.dart';
@@ -46,6 +47,7 @@ import '../../features/item_detail/presentation/pages/item_auto_reply_settings.d
 import '../../features/home/domain/entities/feed_category.dart';
 import '../../features/home/domain/entities/feed_item.dart';
 import '../../features/home/presentation/pages/equipment_search_screen.dart';
+import '../../features/home/presentation/pages/recommendation_location_onboarding_page.dart';
 import '../../features/home/presentation/pages/home.dart';
 import '../../features/rental_item/data/datasources/rental_item_remote_data_source.dart';
 import '../../features/rental_item/data/repositories/rental_item_repository_impl.dart';
@@ -83,6 +85,8 @@ abstract final class AppRoutes {
   static const login = '/login';
   static const identity = '/profile/identity';
   static const home = '/home';
+  static const recommendationLocationOnboarding =
+      '/recommendation-location-onboarding';
   static const search = '/search';
   static const chatbot = '/chatbot';
   static const chatDetail = '/chat/detail';
@@ -135,6 +139,13 @@ abstract final class AppRoutes {
       initialLocation: initialLocation,
       initialExtra: initialExtra,
       routes: [
+        GoRoute(
+          path: recommendationLocationOnboarding,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: const RecommendationLocationOnboardingPage(),
+          ),
+        ),
         GoRoute(
           path: login,
           pageBuilder: (context, state) => CustomTransitionPage<void>(
@@ -777,6 +788,9 @@ abstract final class AppRoutes {
     String? initialNote,
     double? initialLatitude,
     double? initialLongitude,
+    String title = 'เลือกจุดนัดรับอุปกรณ์',
+    String placeNameHint = 'ชื่อสถานที่นัดพบ...',
+    String confirmLabel = 'ยืนยันสถานที่นัดพบนี้',
   }) {
     return Navigator.of(context).push<LocationPickerResult>(
       MaterialPageRoute(
@@ -785,7 +799,18 @@ abstract final class AppRoutes {
           initialNote: initialNote,
           initialLatitude: initialLatitude,
           initialLongitude: initialLongitude,
+          title: title,
+          placeNameHint: placeNameHint,
+          confirmLabel: confirmLabel,
         ),
+      ),
+    );
+  }
+
+  static Future<void> openRecommendationLocationSettings(BuildContext context) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const RecommendationLocationSettingsPage(),
       ),
     );
   }

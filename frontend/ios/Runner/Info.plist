@@ -44,7 +44,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>ใช้ถ่ายภาพบัตรประชาชน ใบหน้า และหลักฐานผู้ปกครองเพื่อยืนยันตัวตน รวมถึงรูปสำหรับแชทและประกาศสินค้า</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>ใช้สำหรับระบุและปักหมุดจุดนัดพบในการรับอุปกรณ์เช่า</string>
+	<string>ใช้ระบุตำแหน่งเพื่อแนะนำอุปกรณ์ใกล้คุณ หรือปักหมุดจุดนัดพบในการรับอุปกรณ์เช่า</string>
 
 	<key>UIApplicationSceneManifest</key>
 	<dict>

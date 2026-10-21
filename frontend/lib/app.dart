@@ -12,6 +12,7 @@ import 'core/services/app_orientation_service.dart';
 import 'core/services/chat_notification_service.dart';
 import 'core/services/app_notification_service.dart';
 import 'core/services/fcm_service.dart';
+import 'core/services/recommendation_location_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
@@ -32,6 +33,7 @@ class YuemnoiApp extends StatefulWidget {
 class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   late final GoRouter _router;
   StreamSubscription<Uri>? _deepLinkSubscription;
+  StreamSubscription<dynamic>? _authStateSubscription;
 
   @override
   void initState() {
@@ -44,6 +46,18 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
         debugPrint('Deep link warning: $error');
       },
     );
+    if (SupabaseConfig.isInitialized) {
+      _authStateSubscription = SupabaseConfig.client.auth.onAuthStateChange
+          .listen((data) {
+            if (data.event.name == 'signedIn' ||
+                data.event.name == 'tokenRefreshed') {
+              unawaited(
+                RecommendationLocationService.instance
+                    .syncPendingForSignedInUser(),
+              );
+            }
+          });
+    }
     unawaited(_handleInitialDeepLink());
 
     ChatNotificationService.instance.onNotificationTapped = (conversationId) =>
@@ -157,6 +171,7 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_deepLinkSubscription?.cancel());
+    unawaited(_authStateSubscription?.cancel());
     FcmService.instance.onNotificationOpened = null;
     AppNotificationService.instance.onOpen = null;
     _router.dispose();

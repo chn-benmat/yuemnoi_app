@@ -31,12 +31,18 @@ class LocationPickerMapPage extends StatefulWidget {
     this.initialNote,
     this.initialLatitude,
     this.initialLongitude,
+    this.title = 'เลือกจุดนัดรับอุปกรณ์',
+    this.placeNameHint = 'ชื่อสถานที่นัดพบ...',
+    this.confirmLabel = 'ยืนยันสถานที่นัดพบนี้',
   });
 
   final String? initialLocationName;
   final String? initialNote;
   final double? initialLatitude;
   final double? initialLongitude;
+  final String title;
+  final String placeNameHint;
+  final String confirmLabel;
 
   @override
   State<LocationPickerMapPage> createState() => _LocationPickerMapPageState();
@@ -288,8 +294,8 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'เลือกจุดนัดรับอุปกรณ์',
+        title: Text(
+          widget.title,
           style: TextStyle(
             fontFamily: AppTextStyles.fontFamily,
             fontSize: 18,
@@ -812,9 +818,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF1E2022),
                             ),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               isDense: true,
-                              hintText: 'ชื่อสถานที่นัดพบ...',
+                              hintText: widget.placeNameHint,
                               border: InputBorder.none,
                               contentPadding: EdgeInsets.zero,
                             ),
@@ -890,8 +896,8 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                             ? null
                             : _onConfirmLocation,
                         icon: const Icon(Icons.check_circle_rounded, size: 20),
-                        label: const Text(
-                          'ยืนยันสถานที่นัดพบนี้',
+                        label: Text(
+                          widget.confirmLabel,
                           style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 15.5,

@@ -507,7 +507,7 @@ class HomeSupabaseDataSource {
     List<dynamic>? rawItems;
     try {
       rawItems = await client
-          .from('home_feed_ranked_v')
+          .from('home_feed_ranked_with_user_location_v')
           .select('*')
           .order('rank_position', ascending: true);
     } catch (e) {
