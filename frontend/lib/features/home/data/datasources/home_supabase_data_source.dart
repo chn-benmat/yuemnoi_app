@@ -3,6 +3,7 @@ import '../../../../core/cache/cache_database.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/network/api_client.dart';
@@ -198,10 +199,64 @@ class HomeSupabaseDataSource {
   List<FeedItemModel>? _cachedFeedItems;
   DateTime? _lastFetchTime;
   String? _memoryOwner;
+  Set<String> _deferPreviouslyShownIds = {};
+
+  String _recentItemsKey(String ownerId) =>
+      'home_recent_recommendations_$ownerId';
 
   void clearMemoryCache() {
+    final cachedItems = _cachedFeedItems;
+    if (cachedItems != null) {
+      _deferPreviouslyShownIds = cachedItems
+          .take(4)
+          .map((item) => item.id)
+          .toSet();
+    }
     _cachedFeedItems = null;
     _lastFetchTime = null;
+  }
+
+  Future<List<FeedItemModel>> _rotateRecentlyShownItems(
+    List<FeedItemModel> items,
+    String ownerId,
+  ) async {
+    SharedPreferences? prefs;
+    try {
+      prefs = await SharedPreferences.getInstance();
+    } catch (_) {
+      // Keep the feed available even if local preference storage is unavailable.
+    }
+    final persistedIds = prefs?.getStringList(_recentItemsKey(ownerId));
+    final deferredIds = _deferPreviouslyShownIds.isNotEmpty
+        ? _deferPreviouslyShownIds
+        : (persistedIds ?? const <String>[]).toSet();
+
+    final unseenItems = items
+        .where((item) => !deferredIds.contains(item.id))
+        .toList();
+    final previouslyShownItems = items
+        .where((item) => deferredIds.contains(item.id))
+        .toList();
+    final rotationPoint = unseenItems.length < 4 ? unseenItems.length : 4;
+    final rotated = <FeedItemModel>[
+      ...unseenItems.take(rotationPoint),
+      ...previouslyShownItems,
+      ...unseenItems.skip(rotationPoint),
+    ];
+    _deferPreviouslyShownIds = {};
+    final diversified = [
+      for (var index = 0; index < rotated.length; index++)
+        rotated[index].copyWith(isCurated: index < 4),
+    ];
+    try {
+      await prefs?.setStringList(
+        _recentItemsKey(ownerId),
+        diversified.take(4).map((item) => item.id).toList(),
+      );
+    } catch (_) {
+      // Rotation still works for this app session without persistent storage.
+    }
+    return diversified;
   }
 
   Future<void> _saveCachedItems(
@@ -571,7 +626,9 @@ class HomeSupabaseDataSource {
   }) async {
     final ownerId = _cacheOwner;
     if (_memoryOwner != ownerId) {
-      clearMemoryCache();
+      _cachedFeedItems = null;
+      _lastFetchTime = null;
+      _deferPreviouslyShownIds = {};
       _memoryOwner = ownerId;
     }
     await FavoriteService.instance.init();
@@ -605,6 +662,7 @@ class HomeSupabaseDataSource {
     if (ownerId != _cacheOwner)
       return _fetchAllSupabaseItems(forceRefresh: true);
     if (freshItems != null) {
+      freshItems = await _rotateRecentlyShownItems(freshItems, ownerId);
       _cachedFeedItems = freshItems;
       _lastFetchTime = DateTime.now();
       await _saveCachedItems(freshItems, ownerId);
@@ -616,8 +674,9 @@ class HomeSupabaseDataSource {
     if (ownerId != _cacheOwner)
       return _fetchAllSupabaseItems(forceRefresh: true);
     if (cached != null) {
-      _cachedFeedItems = cached;
-      return _withCurrentFavoriteState(cached);
+      final rotated = await _rotateRecentlyShownItems(cached, ownerId);
+      _cachedFeedItems = rotated;
+      return _withCurrentFavoriteState(rotated);
     }
     final fallbackItems = await _fallbackDataSource.fetchNearbyItems();
     if (fallbackItems.isNotEmpty) {

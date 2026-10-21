@@ -244,6 +244,48 @@ void main() {
   });
 
   test(
+    'refresh rotates previously featured items out of the first four',
+    () async {
+      final api = _FakeApiClient(
+        const ApiResponse(
+          statusCode: 200,
+          data: [
+            {'id': 1, 'item_name': 'Item 1'},
+            {'id': 2, 'item_name': 'Item 2'},
+            {'id': 3, 'item_name': 'Item 3'},
+            {'id': 4, 'item_name': 'Item 4'},
+            {'id': 5, 'item_name': 'Item 5'},
+            {'id': 6, 'item_name': 'Item 6'},
+          ],
+        ),
+      );
+      final dataSource = HomeSupabaseDataSource(apiClient: api);
+
+      final firstLoad = await dataSource.fetchNearbyItems();
+      expect(firstLoad.take(4).map((item) => item.id), ['1', '2', '3', '4']);
+
+      dataSource.clearMemoryCache();
+      final refreshed = await dataSource.fetchNearbyItems();
+      expect(refreshed.take(4).map((item) => item.id), ['5', '6', '1', '2']);
+      expect(
+        refreshed
+            .take(2)
+            .map((item) => item.id)
+            .toSet()
+            .intersection(firstLoad.take(4).map((item) => item.id).toSet()),
+        isEmpty,
+      );
+      expect(refreshed.take(4).every((item) => item.isCurated), isTrue);
+      expect(refreshed.skip(4).every((item) => !item.isCurated), isTrue);
+
+      final nextSession = await HomeSupabaseDataSource(
+        apiClient: api,
+      ).fetchNearbyItems();
+      expect(nextSession.take(2).map((item) => item.id), ['3', '4']);
+    },
+  );
+
+  test(
     'maps ownership for the current account and keeps it in cached items',
     () async {
       final client = _MockSupabase();
