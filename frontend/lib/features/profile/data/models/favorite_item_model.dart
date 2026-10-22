@@ -22,19 +22,26 @@ class FavoriteItemModel {
     this.category = '',
   });
 
-  factory FavoriteItemModel.fromJson(Map<String, dynamic> json, {String? ownerName}) {
+  factory FavoriteItemModel.fromJson(
+    Map<String, dynamic> json, {
+    String? ownerName,
+  }) {
     final id = (json['id'] as num?)?.toInt() ?? 0;
     final title = json['item_name']?.toString() ?? 'อุปกรณ์';
     final ownerId = json['user_id']?.toString() ?? '';
     final price = (json['price'] as num?)?.toDouble() ?? 0.0;
     final imageUrl = _extractFirstImageUrl(json['item_image_url']);
     final category = json['category']?.toString() ?? '';
+    final resolvedOwnerName =
+        (ownerName ?? json['owner_name']?.toString() ?? '').trim();
 
     return FavoriteItemModel(
       id: id,
       title: title,
       ownerId: ownerId,
-      ownerName: ownerName ?? 'เจ้าของอุปกรณ์',
+      ownerName: resolvedOwnerName.isNotEmpty
+          ? resolvedOwnerName
+          : 'ไม่พบชื่อเจ้าของ',
       imageUrl: imageUrl,
       price: price,
       category: category,

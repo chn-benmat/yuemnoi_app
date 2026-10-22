@@ -1,10 +1,22 @@
+import '../../../../core/network/api_client.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/favorite_service.dart';
 import '../models/favorite_item_model.dart';
 import '../models/user_item_model.dart';
 
-// คำอธิบาย: Data Source สำหรับดึงข้อมูลอุปกรณ์ของผู้ใช้และรายการที่กดถูกใจจาก Supabase
+// คำอธิบาย: ดึงอุปกรณ์ของผู้ใช้และรายการโปรด โดยรับชื่อเจ้าของผ่าน API
 class UserItemsRemoteDataSource {
+  UserItemsRemoteDataSource({
+    ApiClient? apiClient,
+    Future<List<int>> Function()? getFavoriteIds,
+  }) : _apiClient = apiClient,
+       _getFavoriteIds =
+           getFavoriteIds ?? FavoriteService.instance.getFavoriteIds;
+
+  ApiClient? _apiClient;
+  final Future<List<int>> Function() _getFavoriteIds;
+  ApiClient get _backendClient => _apiClient ??= DioApiClient();
+
   Future<List<UserItemModel>> getMyItems(String userId) async {
     if (!SupabaseConfig.isInitialized || userId.isEmpty) {
       return [];
@@ -32,65 +44,24 @@ class UserItemsRemoteDataSource {
   }
 
   Future<List<FavoriteItemModel>> getFavorites() async {
-    final favIds = await FavoriteService.instance.getFavoriteIds();
-    if (favIds.isEmpty || !SupabaseConfig.isInitialized) {
-      return [];
-    }
-
-    try {
-      final client = SupabaseConfig.client;
-      final response = await client
-          .from('item_tb')
-          .select(
-            'id, user_id, item_name, item_image_url, description, category, price, status',
-          )
-          .inFilter('id', favIds);
-
-      final Set<String> ownerIds = {};
-      final List<Map<String, dynamic>> rawList = [];
-
-      for (final raw in (response as List)) {
-        if (raw is Map) {
-          final map = Map<String, dynamic>.from(raw);
-          rawList.add(map);
-          final ownerId = map['user_id']?.toString() ?? '';
-          if (ownerId.isNotEmpty) ownerIds.add(ownerId);
-        }
-      }
-
-      final Map<String, String> ownerNames = {};
-      if (ownerIds.isNotEmpty) {
-        try {
-          final profiles = await client
-              .from('public_profile_v')
-              .select('user_id, display_name, email')
-              .inFilter('user_id', ownerIds.toList());
-
-          for (final p in (profiles as List)) {
-            if (p is Map) {
-              final uid = p['user_id']?.toString();
-              final displayName = p['display_name']?.toString().trim() ?? '';
-              final email = p['email']?.toString() ?? '';
-              if (uid != null) {
-                ownerNames[uid] = displayName.isNotEmpty
-                    ? displayName
-                    : (email.isNotEmpty ? email.split('@').first : 'เจ้าของอุปกรณ์');
-              }
-            }
+    final favIds = await _getFavoriteIds();
+    final items = <FavoriteItemModel>[];
+    for (var offset = 0; offset < favIds.length; offset += 6) {
+      final batch = favIds.skip(offset).take(6);
+      final results = await Future.wait(
+        batch.map((id) async {
+          final response = await _backendClient.get('/api/items/$id');
+          if (response.statusCode == 404) return null;
+          if (response.statusCode != 200 || response.data is! Map) {
+            throw const ApiClientException(ApiClientErrorType.invalidResponse);
           }
-        } catch (_) {}
-      }
-
-      final List<FavoriteItemModel> items = [];
-      for (final map in rawList) {
-        final ownerId = map['user_id']?.toString() ?? '';
-        final ownerName = ownerNames[ownerId] ?? 'เจ้าของอุปกรณ์';
-        items.add(FavoriteItemModel.fromJson(map, ownerName: ownerName));
-      }
-
-      return items;
-    } catch (_) {
-      return [];
+          return FavoriteItemModel.fromJson(
+            Map<String, dynamic>.from(response.data as Map),
+          );
+        }),
+      );
+      items.addAll(results.whereType<FavoriteItemModel>());
     }
+    return items;
   }
 }

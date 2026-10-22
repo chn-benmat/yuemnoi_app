@@ -196,14 +196,19 @@ func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domai
 	var profiles []struct {
 		UserID       string `json:"user_id"`
 		Email        string `json:"email"`
+		DisplayName  string `json:"display_name"`
+		Username     string `json:"username"`
 		UserImageURL string `json:"user_image_url"`
 	}
-	_ = r.client.DB.From("profile_tb").Select("user_id,email,user_image_url").Eq("user_id", item.UserID).ExecuteWithContext(ctx, &profiles)
+	_ = r.client.DB.From("profile_tb").Select("user_id,email,user_image_url,display_name,username").Eq("user_id", item.UserID).ExecuteWithContext(ctx, &profiles)
 	if len(profiles) > 0 {
 		p := profiles[0]
-		ownerName := p.Email
-		if idx := strings.Index(ownerName, "@"); idx != -1 {
-			ownerName = ownerName[:idx]
+		ownerName := strings.TrimSpace(p.DisplayName)
+		if ownerName == "" {
+			ownerName = strings.TrimSpace(p.Username)
+		}
+		if ownerName == "" {
+			ownerName = strings.TrimSpace(strings.SplitN(p.Email, "@", 2)[0])
 		}
 		if ownerName == "" {
 			ownerName = "Yuemnoi Verified"

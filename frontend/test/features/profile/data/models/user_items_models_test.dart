@@ -45,6 +45,21 @@ void main() {
   });
 
   group('FavoriteItemModel', () {
+    test('uses the account name supplied by the item API', () {
+      final model = FavoriteItemModel.fromJson({
+        'id': 20,
+        'owner_name': '  Alice Camera  ',
+      });
+      expect(model.toEntity().ownerName, 'Alice Camera');
+    });
+
+    test('handles an unavailable account name', () {
+      expect(
+        FavoriteItemModel.fromJson({'owner_name': '  '}).ownerName,
+        'ไม่พบชื่อเจ้าของ',
+      );
+    });
+
     test('fromJson parses correctly and converts toEntity', () {
       final json = {
         'id': 20,

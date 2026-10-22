@@ -113,7 +113,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
         const HomeFeedView(),
         const ChatScreen(),
         const NotificationPage(),
-        const ProfileScreen(),
+        ProfileScreen(isActive: _selectedIndex == 3),
       ];
 
   @override

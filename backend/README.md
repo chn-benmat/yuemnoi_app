@@ -251,6 +251,7 @@ Base path คือ `/api` เส้นทางทั้งหมดอยู�
 ทุก route ในตารางยกเว้น `/health` ต้องเติม `/api` ด้านหน้า เช่น `/items` → `/api/items` เส้นทาง AI ยังผ่าน app-key middleware และ rate limiter แม้ handler จะไม่ตรวจ user Bearer
 
 - รายการสินค้าใช้ query `search` และ `category`; ยังไม่มี pagination แบบ `limit` / `offset` ใน handler ปัจจุบัน
+- รายละเอียด `GET /api/items/:id` ส่ง `owner_name` โดยใช้ `display_name` ของเจ้าของก่อน ตามด้วย `username` และชื่อหน้าอีเมลเมื่อยังไม่ได้ตั้งชื่อ หน้าอุปกรณ์ที่ถูกใจใช้ข้อมูลนี้แสดงชื่อบัญชีเจ้าของแต่ละชิ้น
 - สร้าง item รองรับ JSON หรือ multipart; field รูปชื่อ `images` ไม่เกิน **5 รูป**, รูปละ **5 MiB**, JPEG / PNG / WebP
 - รูปโปรไฟล์ใช้ multipart field `image` ไม่เกิน **5 MiB**
 - Rate limiter เป็น token bucket **ต่อ client IP ใน memory**: Auth เติม 5/minute, burst 5; AI เติม 15/minute, burst 15 และตอบ 429 เมื่อเกิน

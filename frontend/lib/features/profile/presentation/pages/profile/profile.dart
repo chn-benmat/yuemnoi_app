@@ -15,13 +15,60 @@ import 'user_profile_view_screen.dart';
 import '../../widgets/profile/profile_widgets.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.isActive = true});
+
+  final bool isActive;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  bool _guestPromptOpen = false;
+  bool _guestPromptScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleGuestPrompt();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) _scheduleGuestPrompt();
+  }
+
+  void _scheduleGuestPrompt() {
+    if (!widget.isActive || _guestPromptScheduled || _guestPromptOpen) return;
+    _guestPromptScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _guestPromptScheduled = false;
+      if (mounted &&
+          widget.isActive &&
+          _currentUser == null &&
+          ModalRoute.of(context)?.isCurrent != false) {
+        _showGuestLogin();
+      }
+    });
+  }
+
+  Future<void> _showGuestLogin() async {
+    if (!mounted ||
+        !widget.isActive ||
+        _currentUser != null ||
+        _guestPromptOpen) {
+      return;
+    }
+    _guestPromptOpen = true;
+    try {
+      await AuthGuard.requireAuth(context);
+      if (mounted) setState(() {});
+    } finally {
+      _guestPromptOpen = false;
+    }
+  }
+
   User? get _currentUser {
     if (SupabaseConfig.isInitialized) {
       return SupabaseConfig.client.auth.currentUser;
@@ -106,12 +153,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _openUserProfile() async {
     final user = _currentUser;
     if (user == null) {
-      final authed = await AuthGuard.requireAuth(
-        context,
-        title: 'เข้าสู่ระบบโปรไฟล์',
-        message: 'กรุณาเข้าสู่ระบบเพื่อดูและจัดการข้อมูลส่วนตัวของคุณ',
-      );
-      if (authed && mounted) setState(() {});
+      await _showGuestLogin();
       return;
     }
     final meta = user.userMetadata ?? {};
@@ -187,6 +229,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     context.read<AuthBloc>().add(const AuthResetState());
     setState(() {});
+    _scheduleGuestPrompt();
   }
 
   @override
@@ -196,7 +239,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (mounted) setState(() {});
       },
       child: Container(
-        color: const Color(0xFFF7F7F9),
+        color: const Color(0xFFF7F6FA),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -204,6 +247,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               displayName: _displayName,
               avatarUrl: _avatarUrl,
               onProfileTap: _openUserProfile,
+              isGuest: _currentUser == null,
             ),
             Expanded(
               child: SingleChildScrollView(
@@ -214,6 +258,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 20),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+                      child: Text(
+                        'การใช้งานของคุณ',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF30263E),
+                        ),
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: ProfileQuickActionsRow(
@@ -241,85 +297,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ],
                       ),
                     ),
-                    if (_currentUser == null) ...[
-                      const SizedBox(height: 14),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryColor.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: const Icon(
-                                  Icons.add_business_rounded,
-                                  color: AppColors.primaryColor,
-                                  size: 26,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: const [
-                                    Text(
-                                      'มีอุปกรณ์ไม่ได้ใช้?',
-                                      style: TextStyle(
-                                        fontFamily: AppTextStyles.fontFamily,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      'นำมาปล่อยเช่าเพื่อสร้างรายได้ง่ายๆ',
-                                      style: TextStyle(
-                                        fontFamily: AppTextStyles.fontFamily,
-                                        fontSize: 12,
-                                        color: Color(0xFF6B7280),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              FilledButton(
-                                onPressed: () => AppRoutes.openAddRentalItem(context),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.primaryColor,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                ),
-                                child: const Text(
-                                  'ปล่อยเช่า',
-                                  style: TextStyle(
-                                    fontFamily: AppTextStyles.fontFamily,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: 20),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -386,35 +363,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 28),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 54,
-                            child: ElevatedButton(
-                              onPressed: _currentUser != null
-                                  ? _logout
-                                  : () async {
-                                      final authed = await AppRoutes.pushLogin(context);
-                                      if (authed == true && mounted) setState(() {});
-                                    },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryColor,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(30),
+                          if (_currentUser != null) ...[
+                            const SizedBox(height: 24),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _logout,
+                                icon: const Icon(
+                                  Icons.logout_rounded,
+                                  size: 18,
                                 ),
-                              ),
-                              child: Text(
-                                _currentUser != null ? 'ออกจากระบบ' : 'เข้าสู่ระบบ / สมัครสมาชิก',
-                                style: const TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                                label: const Text('ออกจากระบบ'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFB42342),
+                                  minimumSize: const Size(0, 52),
+                                  side: const BorderSide(
+                                    color: Color(0xFFF2D4DC),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                           const SizedBox(height: 110),
                         ],
                       ),
