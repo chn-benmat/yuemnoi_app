@@ -100,7 +100,10 @@ class LocationService {
   Future<Position?> getLastKnownPosition() async {
     if (_lastPosition != null) return _lastPosition;
     try {
-      return await Geolocator.getLastKnownPosition();
+      // ป้องกันการรอไม่จบเมื่อบริการตำแหน่งของเครื่องค้าง
+      return await Geolocator.getLastKnownPosition().timeout(
+        const Duration(seconds: 3),
+      );
     } catch (_) {
       return null;
     }
@@ -379,11 +382,7 @@ class LocationService {
       return position;
     } catch (e) {
       debugPrint('Error getting current position: $e');
-      try {
-        return await Geolocator.getLastKnownPosition();
-      } catch (_) {
-        return null;
-      }
+      return getLastKnownPosition();
     }
   }
 
