@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../../core/constants/colors.dart';
+import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/services/app_permission_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
@@ -116,6 +117,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       imageBytes: _pickedImageBytes,
       imageName: _pickedImageName,
     );
+  }
+
+  Future<void> _editRecommendationLocation() async {
+    await AppRoutes.openRecommendationLocationSettings(context);
   }
 
   @override
@@ -284,6 +289,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       hint: 'เขียนอะไรสักอย่างเกี่ยวกับตัวคุณ...',
                       icon: Icons.info_outline_rounded,
                       maxLines: 3,
+                    ),
+                    const SizedBox(height: 22),
+                    const EditProfileSectionTitle(title: 'ตำแหน่งแนะนำสินค้า'),
+                    const SizedBox(height: 10),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      color: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        side: BorderSide(color: Colors.grey.shade200),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: ListTile(
+                        onTap: _editRecommendationLocation,
+                        leading: const Icon(
+                          Icons.location_on_outlined,
+                          color: AppColors.primaryColor,
+                        ),
+                        title: const Text(
+                          'เปลี่ยนตำแหน่งของฉัน',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'จัดการตำแหน่งที่ใช้คำนวณระยะและแนะนำอุปกรณ์ใกล้คุณ',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 12,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                      ),
                     ),
                     const SizedBox(height: 28),
 

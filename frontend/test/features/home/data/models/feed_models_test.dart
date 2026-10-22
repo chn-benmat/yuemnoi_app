@@ -23,7 +23,7 @@ void main() {
       expect(item.price, 120);
       expect(item.isVerified, false);
       expect(item.tags, ['tag', '1', 'null']);
-      expect(item.distanceKm, 1.0);
+      expect(item.distanceKm, isNull);
       expect(
         item.toJson().keys,
         unorderedEquals([

@@ -34,6 +34,9 @@ class LocationPickerMapPage extends StatefulWidget {
     this.initialNote,
     this.initialLatitude,
     this.initialLongitude,
+    this.title = 'เลือกจุดนัดรับอุปกรณ์',
+    this.placeNameHint = 'ชื่อสถานที่นัดพบ...',
+    this.confirmLabel = 'ยืนยันสถานที่นัดพบนี้',
   });
 
   final LocationService? locationService;
@@ -41,6 +44,9 @@ class LocationPickerMapPage extends StatefulWidget {
   final String? initialNote;
   final double? initialLatitude;
   final double? initialLongitude;
+  final String title;
+  final String placeNameHint;
+  final String confirmLabel;
 
   @override
   State<LocationPickerMapPage> createState() => _LocationPickerMapPageState();
@@ -337,8 +343,8 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'เลือกจุดนัดรับอุปกรณ์',
+        title: Text(
+          widget.title,
           style: TextStyle(
             fontFamily: AppTextStyles.fontFamily,
             fontSize: 18,
@@ -881,6 +887,11 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                               ),
                               shape: BoxShape.circle,
                             ),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              hintText: widget.placeNameHint,
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
                             child: const Icon(
                               Icons.location_on_rounded,
                               color: AppColors.primaryColor,
@@ -980,6 +991,17 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                             Icons.check_circle_rounded,
                             size: 20,
                           ),
+                        ),
+                        onPressed: _isReverseGeocoding
+                            ? null
+                            : _onConfirmLocation,
+                        icon: const Icon(Icons.check_circle_rounded, size: 20),
+                        label: Text(
+                          widget.confirmLabel,
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.bold,
                           label: const Text(
                             'ยืนยันสถานที่นัดพบนี้',
                             style: TextStyle(

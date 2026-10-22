@@ -3,10 +3,12 @@ import '../../../../core/cache/cache_database.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../../core/services/favorite_service.dart';
 import '../models/feed_category_model.dart';
 import '../models/feed_item_model.dart';
 import 'home_mock_data_source.dart';
@@ -31,7 +33,6 @@ class HomeSupabaseDataSource {
   final SupabaseClient? _supabaseClient;
   final ApiClient _apiClient;
   final HomeMockDataSource _fallbackDataSource;
-  final Set<String> _favoriteItemIds = {};
 
   /// ชื่อหมวดหมู่ภาษาไทยที่เป็นทางการ
   static const Map<String, String> categoryThaiNames = {
@@ -198,10 +199,64 @@ class HomeSupabaseDataSource {
   List<FeedItemModel>? _cachedFeedItems;
   DateTime? _lastFetchTime;
   String? _memoryOwner;
+  Set<String> _deferPreviouslyShownIds = {};
+
+  String _recentItemsKey(String ownerId) =>
+      'home_recent_recommendations_$ownerId';
 
   void clearMemoryCache() {
+    final cachedItems = _cachedFeedItems;
+    if (cachedItems != null) {
+      _deferPreviouslyShownIds = cachedItems
+          .take(4)
+          .map((item) => item.id)
+          .toSet();
+    }
     _cachedFeedItems = null;
     _lastFetchTime = null;
+  }
+
+  Future<List<FeedItemModel>> _rotateRecentlyShownItems(
+    List<FeedItemModel> items,
+    String ownerId,
+  ) async {
+    SharedPreferences? prefs;
+    try {
+      prefs = await SharedPreferences.getInstance();
+    } catch (_) {
+      // Keep the feed available even if local preference storage is unavailable.
+    }
+    final persistedIds = prefs?.getStringList(_recentItemsKey(ownerId));
+    final deferredIds = _deferPreviouslyShownIds.isNotEmpty
+        ? _deferPreviouslyShownIds
+        : (persistedIds ?? const <String>[]).toSet();
+
+    final unseenItems = items
+        .where((item) => !deferredIds.contains(item.id))
+        .toList();
+    final previouslyShownItems = items
+        .where((item) => deferredIds.contains(item.id))
+        .toList();
+    final rotationPoint = unseenItems.length < 4 ? unseenItems.length : 4;
+    final rotated = <FeedItemModel>[
+      ...unseenItems.take(rotationPoint),
+      ...previouslyShownItems,
+      ...unseenItems.skip(rotationPoint),
+    ];
+    _deferPreviouslyShownIds = {};
+    final diversified = [
+      for (var index = 0; index < rotated.length; index++)
+        rotated[index].copyWith(isCurated: index < 4),
+    ];
+    try {
+      await prefs?.setStringList(
+        _recentItemsKey(ownerId),
+        diversified.take(4).map((item) => item.id).toList(),
+      );
+    } catch (_) {
+      // Rotation still works for this app session without persistent storage.
+    }
+    return diversified;
   }
 
   Future<void> _saveCachedItems(
@@ -418,7 +473,10 @@ class HomeSupabaseDataSource {
         ownerAvatar ??= profile?['user_image_url']?.toString();
       }
 
-      const locationName = 'กรุงเทพฯ';
+      final rawLocationName = item['pickup_location']?.toString().trim();
+      final locationName = rawLocationName == null || rawLocationName.isEmpty
+          ? 'ไม่ระบุตำแหน่ง'
+          : rawLocationName;
 
       List<String> tags = [];
       if (rawCategory != null && rawCategory.isNotEmpty) {
@@ -439,7 +497,9 @@ class HomeSupabaseDataSource {
       final reviewCount = item['review_count'] is num
           ? (item['review_count'] as num).toInt()
           : int.tryParse(item['review_count']?.toString() ?? '') ?? 0;
-      final distanceKm = 0.8 + ((i % 6) * 0.6);
+      final distanceKm = item['distance_km'] is num
+          ? (item['distance_km'] as num).toDouble()
+          : double.tryParse(item['distance_km']?.toString() ?? '');
 
       items.add(
         FeedItemModel(
@@ -452,7 +512,7 @@ class HomeSupabaseDataSource {
           priceUnit: priceUnit,
           rating: double.parse(rating.toStringAsFixed(1)),
           reviewCount: reviewCount,
-          distanceKm: double.parse(distanceKm.toStringAsFixed(1)),
+          distanceKm: distanceKm,
           isVerified:
               item['is_verified'] == true ||
               profilesMap?[item['user_id']?.toString()]?['is_verified'] == true,
@@ -463,7 +523,9 @@ class HomeSupabaseDataSource {
           ownerAvatarUrl: ownerAvatar,
           imageUrl: imageUrl,
           isCurated: i < 4,
-          isFavorite: _favoriteItemIds.contains(id),
+          isFavorite: FavoriteService.instance.isItemFavorite(
+            int.tryParse(id) ?? -1,
+          ),
           tags: tags,
           locationName: locationName,
         ),
@@ -471,6 +533,18 @@ class HomeSupabaseDataSource {
     }
     return items;
   }
+
+  List<FeedItemModel> _withCurrentFavoriteState(
+    Iterable<FeedItemModel> items,
+  ) => items
+      .map(
+        (item) => item.copyWith(
+          isFavorite: FavoriteService.instance.isItemFavorite(
+            int.tryParse(item.id) ?? -1,
+          ),
+        ),
+      )
+      .toList(growable: false);
 
   SupabaseClient? get _activeSupabaseClient {
     if (_supabaseClient != null) return _supabaseClient;
@@ -488,7 +562,7 @@ class HomeSupabaseDataSource {
     List<dynamic>? rawItems;
     try {
       rawItems = await client
-          .from('home_feed_ranked_v')
+          .from('home_feed_ranked_with_user_location_v')
           .select('*')
           .order('rank_position', ascending: true);
     } catch (e) {
@@ -552,15 +626,17 @@ class HomeSupabaseDataSource {
   }) async {
     final ownerId = _cacheOwner;
     if (_memoryOwner != ownerId) {
-      clearMemoryCache();
-      _favoriteItemIds.clear();
+      _cachedFeedItems = null;
+      _lastFetchTime = null;
+      _deferPreviouslyShownIds = {};
       _memoryOwner = ownerId;
     }
+    await FavoriteService.instance.init();
     if (!forceRefresh &&
         _cachedFeedItems != null &&
         _lastFetchTime != null &&
         DateTime.now().difference(_lastFetchTime!).inSeconds < 15) {
-      return _cachedFeedItems!;
+      return _withCurrentFavoriteState(_cachedFeedItems!);
     }
 
     List<FeedItemModel>? freshItems;
@@ -586,22 +662,26 @@ class HomeSupabaseDataSource {
     if (ownerId != _cacheOwner)
       return _fetchAllSupabaseItems(forceRefresh: true);
     if (freshItems != null) {
+      freshItems = await _rotateRecentlyShownItems(freshItems, ownerId);
       _cachedFeedItems = freshItems;
       _lastFetchTime = DateTime.now();
       await _saveCachedItems(freshItems, ownerId);
       if (ownerId != _cacheOwner)
         return _fetchAllSupabaseItems(forceRefresh: true);
-      return freshItems;
+      return _withCurrentFavoriteState(freshItems);
     }
     final cached = await _loadCachedItems(ownerId);
     if (ownerId != _cacheOwner)
       return _fetchAllSupabaseItems(forceRefresh: true);
     if (cached != null) {
-      _cachedFeedItems = cached;
-      return cached;
+      final rotated = await _rotateRecentlyShownItems(cached, ownerId);
+      _cachedFeedItems = rotated;
+      return _withCurrentFavoriteState(rotated);
     }
     final fallbackItems = await _fallbackDataSource.fetchNearbyItems();
-    if (fallbackItems.isNotEmpty) return fallbackItems;
+    if (fallbackItems.isNotEmpty) {
+      return _withCurrentFavoriteState(fallbackItems);
+    }
     throw const FormatException(
       'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่',
     );
@@ -701,12 +781,10 @@ class HomeSupabaseDataSource {
 
   /// สลับสถานะรายการโปรด
   Future<bool> toggleFavorite(String itemId) async {
-    if (_favoriteItemIds.contains(itemId)) {
-      _favoriteItemIds.remove(itemId);
-      return false;
-    } else {
-      _favoriteItemIds.add(itemId);
-      return true;
+    final parsedId = int.tryParse(itemId);
+    if (parsedId == null) {
+      throw ArgumentError.value(itemId, 'itemId', 'ต้องเป็นรหัสตัวเลข');
     }
+    return FavoriteService.instance.toggleFavorite(parsedId);
   }
 }

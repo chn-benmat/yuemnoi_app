@@ -98,6 +98,12 @@ class _HomeFeedViewState extends State<HomeFeedView> {
         body: BlocConsumer<HomeBloc, HomeState>(
           listener: (context, state) {
             if (state is HomeLoaded) {
+              final favoriteError = state.favoriteErrorMessage;
+              if (favoriteError != null) {
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(content: Text(favoriteError)));
+              }
               if (_searchController.text != state.searchQuery) {
                 _searchController.text = state.searchQuery;
               }

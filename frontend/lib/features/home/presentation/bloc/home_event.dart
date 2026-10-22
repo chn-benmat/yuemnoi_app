@@ -66,6 +66,11 @@ class ToggleFavoriteRequested extends HomeEvent {
   List<Object?> get props => [itemId];
 }
 
+/// อัปเดตสถานะหัวใจเมื่อ favorite เปลี่ยนจากหน้าหรือบัญชีอื่นในแอป
+class FavoriteSetChanged extends HomeEvent {
+  const FavoriteSetChanged();
+}
+
 /// อีเวนต์ดึงข้อมูลใหม่ (Pull-to-Refresh)
 class RefreshHomeFeedRequested extends HomeEvent {
   const RefreshHomeFeedRequested();

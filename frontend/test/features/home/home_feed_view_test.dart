@@ -55,7 +55,7 @@ class _FakeHomeRepository implements HomeRepository {
 }
 
 void main() {
-  testWidgets('search bar stays fixed while category chips scroll', (
+  testWidgets('search bar and category chips stay fixed while products scroll', (
     tester,
   ) async {
     final repository = _FakeHomeRepository();
@@ -107,11 +107,11 @@ void main() {
       equals(initialSearchBarPosition.dy),
     );
 
-    // 2. Category chips scrolled up (เลื่อนตามการไถหน้าจอ)
+    // 2. Category chips stay pinned with the search bar.
     final afterScrollChipPosition = tester.getTopLeft(
       find.byType(CategoryFilterChips),
     );
-    expect(afterScrollChipPosition.dy, lessThan(initialChipPosition.dy));
+    expect(afterScrollChipPosition.dy, equals(initialChipPosition.dy));
   });
 
   testWidgets(

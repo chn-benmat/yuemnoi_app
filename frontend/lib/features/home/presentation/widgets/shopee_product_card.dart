@@ -116,7 +116,9 @@ class ShopeeProductCard extends StatelessWidget {
                               const SizedBox(width: 2),
                               Expanded(
                                 child: Text(
-                                  '${item.locationName} • ${item.distanceKm.toStringAsFixed(1)} กม.',
+                                  item.distanceKm == null
+                                      ? item.locationName
+                                      : '${item.locationName} • ${item.distanceKm!.toStringAsFixed(1)} กม.',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(

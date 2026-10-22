@@ -21,6 +21,7 @@ import 'core/services/favorite_service.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/app_notification_service.dart';
 import 'core/services/user_presence_service.dart';
+import 'core/services/recommendation_location_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +48,6 @@ Future<void> main() async {
 
   await SupabaseConfig.initialize();
   unawaited(ChatPinService.instance.init());
-  unawaited(FavoriteService.instance.init());
 
   if (!kIsWeb) {
     try {
@@ -60,6 +60,10 @@ Future<void> main() async {
   }
 
   final isAuthenticated = await AuthSession.restore();
+  unawaited(
+    RecommendationLocationService.instance.syncPendingForSignedInUser(),
+  );
+  unawaited(FavoriteService.instance.init(forceRefresh: true));
   if (isAuthenticated) {
     UserPresenceService.instance.initialize();
     unawaited(ChatNotificationService.instance.initialize());
@@ -71,5 +75,13 @@ Future<void> main() async {
     }
   }
 
-  runApp(const YuemnoiApp(initialRoute: AppRoutes.home));
+  final locationPrompted = await RecommendationLocationService.instance
+      .hasCompletedFirstRunPrompt;
+  runApp(
+    YuemnoiApp(
+      initialRoute: locationPrompted
+          ? AppRoutes.home
+          : AppRoutes.recommendationLocationOnboarding,
+    ),
+  );
 }

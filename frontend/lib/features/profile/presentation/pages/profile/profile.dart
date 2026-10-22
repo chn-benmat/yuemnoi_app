@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
@@ -10,6 +12,7 @@ import '../../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../../auth/presentation/bloc/auth_state.dart';
 import '../../../../../core/network/auth_session.dart';
 import '../../../../../core/services/fcm_service.dart';
+import '../../../../../core/services/favorite_service.dart';
 import '../../../../../core/utils/auth_guard.dart';
 import '../../../../auth/presentation/bloc/auth_event.dart';
 import 'user_profile_view_screen.dart';
@@ -194,6 +197,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (_) {}
     AuthSession.clear(purgeCache: true);
+    unawaited(FavoriteService.instance.init(forceRefresh: true));
     if (!mounted) return;
     context.read<AuthBloc>().add(const AuthResetState());
     setState(() {});
