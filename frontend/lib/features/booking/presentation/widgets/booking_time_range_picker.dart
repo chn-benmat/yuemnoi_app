@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -353,12 +354,9 @@ class BookingTimeRangePicker extends StatelessWidget {
 
       if (pickedMins <= startMins) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('เวลาคืนอุปกรณ์ต้องอยู่หลังเวลาเริ่มเช่า'),
-              backgroundColor: Color(0xFFEF4444),
-              duration: Duration(seconds: 2),
-            ),
+          showAppPopup(
+            context,
+            content: Text('เวลาคืนอุปกรณ์ต้องอยู่หลังเวลาเริ่มเช่า'),
           );
         }
         return;

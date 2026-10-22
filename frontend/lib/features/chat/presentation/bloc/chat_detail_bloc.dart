@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:collection/collection.dart';
 import '../../../../core/cache/app_cache.dart';
 import 'dart:async';
 
@@ -377,6 +379,48 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     }
   }
 
+  bool _sameOutgoingMessage(ChatMessage a, ChatMessage b) {
+    if (a.conversationId != b.conversationId || a.imageUrl != b.imageUrl)
+      return false;
+    if (a.message.trim() == b.message.trim()) return true;
+    Map<String, dynamic>? metadata(String text) {
+      const tag = '[BOOKING_DATA:';
+      final start = text.indexOf(tag);
+      final end = text.lastIndexOf(']');
+      if (start < 0 || end <= start) return null;
+      try {
+        final data =
+            jsonDecode(text.substring(start + tag.length, end))
+                as Map<String, dynamic>;
+        // Trigger เติมสถานะและข้อมูลจุดนัดรับจาก snapshot หลังบันทึก
+        for (final key in [
+          'status',
+          'bookingId',
+          'originalMessageId',
+          'latitude',
+          'longitude',
+          'location',
+          'defaultLocation',
+          'locationAddress',
+          'locationNote',
+          'ownerId',
+          'conversationId',
+        ]) {
+          data.remove(key);
+        }
+        return data;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final left = metadata(a.message);
+    final right = metadata(b.message);
+    return left != null &&
+        right != null &&
+        const DeepCollectionEquality().equals(left, right);
+  }
+
   void _onMessagesUpdated(
     ChatMessagesUpdated event,
     Emitter<ChatDetailState> emit,
@@ -394,21 +438,13 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
       }
     }
 
-    // ข้อความของฉันที่ Server บันทึกและยืนยันแล้ว
-    final serverMineTexts = event.messages
-        .where((m) => m.isMine)
-        .map((m) => '${m.message.trim()}_${m.imageUrl ?? ''}')
-        .toSet();
-
-    // รักษาเฉพาะข้อความ Optimistic ชั่วคราวที่เป็นของฉัน (isMine) และยังไม่ได้รับการบันทึกจาก Server
-    // ข้อความจากฝั่งอื่น (isMine == false) ที่เคยรับผ่าน temporary broadcast จะถูกแทนที่ด้วยข้อมูลจริงจาก Server ทันที
     final pendingOptimistic = state.messages
         .where(
           (m) =>
               m.isMine &&
               m.id.startsWith('temp_') &&
-              !serverMineTexts.contains(
-                '${m.message.trim()}_${m.imageUrl ?? ''}',
+              !event.messages.any(
+                (saved) => saved.isMine && _sameOutgoingMessage(m, saved),
               ),
         )
         .toList();
@@ -547,6 +583,15 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
   ) async {
     final trimmed = event.message.trim();
     if (trimmed.isEmpty) return;
+    if (trimmed.contains('[BOOKING_DATA:')) {
+      if (state.messages.any(
+        (m) =>
+            m.isMine &&
+            m.message.trim() == trimmed &&
+            !state.failedMessageIds.contains(m.id),
+      ))
+        return;
+    }
 
     // ⚡ Optimistic UI Update: แสดงข้อความบนหน้าจอทันทีแบบ 0ms ไม่ต้องรอ Server
     final currentUserId = SupabaseConfig.isInitialized

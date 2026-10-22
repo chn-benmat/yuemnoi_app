@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -147,8 +148,7 @@ class _IdentityPageState extends State<IdentityPage> {
     });
   }
 
-  void _message(String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  void _message(String text) => showAppPopup(context, content: Text(text));
 
   Future<void> _showConsent() async {
     if (_consentDialogOpen || !mounted) return;

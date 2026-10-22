@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/utils/auth_guard.dart';
+import '../../../item_detail/domain/entities/item_detail.dart';
 import '../../domain/entities/rental_item.dart';
 import '../bloc/rental_item_bloc.dart';
 import '../bloc/rental_item_event.dart';
@@ -52,15 +53,35 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
           if (state.status == RentalItemSubmissionStatus.success) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('ลงประกาศให้เช่าเรียบร้อยแล้ว')),
-              );
+
               AppRoutes.pop(context, state.createdItem);
             });
           }
         },
         builder: (context, state) => RentalItemEditor(
           initialValue: _initialValue,
+          onPreview: (value) => AppRoutes.openItemPreview(
+            context,
+            item: ItemDetail(
+              id: 0,
+              owner: const ItemOwner(
+                userId: '',
+                displayName: 'คุณ',
+                imageUrl: '',
+              ),
+              name: value.name,
+              imageUrls: const [],
+              description: value.description,
+              category: value.category ?? '',
+              price: int.tryParse(value.price) ?? 0,
+              status: 'available',
+              rentalType: value.rentalType ?? '',
+              reviews: const [],
+              isOwner: true,
+              pickupLocation: value.pickupLocation,
+            ),
+            photos: value.photos,
+          ),
           isSaving: state.status == RentalItemSubmissionStatus.submitting,
           didSave: state.status == RentalItemSubmissionStatus.success,
           errorMessage: state.status == RentalItemSubmissionStatus.failure

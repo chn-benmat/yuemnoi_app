@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/services/location_service.dart';
+import 'package:frontend/core/services/phone_call_service.dart';
+import 'package:frontend/features/profile/data/datasources/rental_contact_remote_data_source.dart';
 import 'package:frontend/features/profile/presentation/pages/rentals/rental_tracking_map_page.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -57,8 +59,79 @@ class FakeLocationService extends LocationService {
   }
 }
 
+class ContactSource extends RentalContactRemoteDataSource {
+  int? requestedBooking;
+  @override
+  Future<String> getPhone({int? bookingId, String? conversationId}) async {
+    requestedBooking = bookingId;
+    return '+66987654321';
+  }
+}
+
+class RecordingPhoneCall implements PhoneCallService {
+  final numbers = <String>[];
+  @override
+  Future<bool> call(String phoneNumber) async {
+    numbers.add(phoneNumber);
+    return true;
+  }
+}
+
 void main() {
+  for (final isOwner in [false, true]) {
+    testWidgets('calls actual partner phone when isOwner=$isOwner', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      final location = FakeLocationService();
+      addTearDown(location.updates.close);
+      final contact = ContactSource();
+      final phone = RecordingPhoneCall();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RentalTrackingMapPage(
+            locationService: location,
+            contactDataSource: contact,
+            phoneCallService: phone,
+            bookingId: 25,
+            isOwner: isOwner,
+            ownerPhone: '0812345678',
+            destinationLat: 13.71,
+            destinationLng: 100.43,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text(isOwner ? 'โทรหาผู้เช่า' : 'โทรหาเจ้าของ'));
+      await tester.pump();
+      expect(contact.requestedBooking, 25);
+      expect(phone.numbers, ['+66987654321']);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  testWidgets('missing contact never uses a sample phone number', (
+    tester,
+  ) async {
+    final service = FakeLocationService();
+    addTearDown(service.updates.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RentalTrackingMapPage(
+          locationService: service,
+          isOwner: false,
+          destinationLat: 13.71,
+          destinationLng: 100.43,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('โทรหาเจ้าของ'));
+    await tester.pump();
+    expect(find.text('ไม่พบข้อมูลติดต่อของรายการเช่านี้'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   Future<void> open(WidgetTester tester, FakeLocationService service) async {
     await tester.pumpWidget(
       MaterialApp(

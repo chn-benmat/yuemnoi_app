@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -62,14 +63,11 @@ class _GalleryContentState extends State<_GalleryContent> {
     if (!mounted) return;
     setState(() => _saving = false);
     final count = urls.length;
-    final message = saved == count
-        ? 'บันทึกครบ $count รูปแล้ว'
-        : saved > 0
+    if (saved == count) return;
+    final message = saved > 0
         ? 'บันทึกได้ $saved จาก $count รูป กรุณาลองใหม่อีกครั้ง'
         : 'บันทึกไม่สำเร็จ โปรดตรวจสอบสิทธิ์รูปภาพแล้วลองใหม่';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-    );
+    showAppPopup(context, content: Text(message));
   }
 
   @override

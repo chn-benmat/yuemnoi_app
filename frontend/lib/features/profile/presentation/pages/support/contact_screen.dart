@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -34,21 +35,11 @@ class _ContactScreenState extends State<ContactScreen> {
         await Clipboard.setData(
           const ClipboardData(text: ContactScreen.supportEmail),
         );
-        if (mounted) {
-          _showSnackBar(
-            'คัดลอกอีเมล ${ContactScreen.supportEmail} ไปยังคลิปบอร์ดแล้ว',
-          );
-        }
       }
     } catch (_) {
       await Clipboard.setData(
         const ClipboardData(text: ContactScreen.supportEmail),
       );
-      if (mounted) {
-        _showSnackBar(
-          'คัดลอกอีเมล ${ContactScreen.supportEmail} ไปยังคลิปบอร์ดแล้ว',
-        );
-      }
     }
   }
 
@@ -64,21 +55,11 @@ class _ContactScreenState extends State<ContactScreen> {
         await Clipboard.setData(
           const ClipboardData(text: ContactScreen.supportPhoneDisplay),
         );
-        if (mounted) {
-          _showSnackBar(
-            'คัดลอกเบอร์โทร ${ContactScreen.supportPhoneDisplay} ไปยังคลิปบอร์ดแล้ว',
-          );
-        }
       }
     } catch (_) {
       await Clipboard.setData(
         const ClipboardData(text: ContactScreen.supportPhoneDisplay),
       );
-      if (mounted) {
-        _showSnackBar(
-          'คัดลอกเบอร์โทร ${ContactScreen.supportPhoneDisplay} ไปยังคลิปบอร์ดแล้ว',
-        );
-      }
     }
   }
 
@@ -90,34 +71,24 @@ class _ContactScreenState extends State<ContactScreen> {
         mode: LaunchMode.externalApplication,
       );
       if (!launched && mounted) {
-        _showSnackBar('ไม่สามารถเปิด Messenger ได้', isError: true);
+        _showError('ไม่สามารถเปิด Messenger ได้');
       }
     } catch (_) {
       if (mounted) {
-        _showSnackBar('ไม่สามารถเปิด Messenger ได้', isError: true);
+        _showError('ไม่สามารถเปิด Messenger ได้');
       }
     }
   }
 
-  void _showSnackBar(String message, {bool isError = false}) {
+  void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            message,
-            style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-          ),
-          backgroundColor: isError
-              ? Colors.red.shade700
-              : AppColors.primaryColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+    showAppPopup(
+      context,
+      content: Text(
+        message,
+        style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
+      ),
+    );
   }
 
   @override

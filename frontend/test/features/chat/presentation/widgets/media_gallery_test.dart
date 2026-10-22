@@ -137,6 +137,13 @@ void main() {
           isNotNull,
         );
         expect(find.textContaining('บันทึกไม่สำเร็จ'), findsOneWidget);
+        expect(find.byType(SnackBar), findsNothing);
+        expect(find.byType(AlertDialog), findsOneWidget);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.text('ตกลง'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.byType(AlertDialog), findsNothing);
         await tester.pumpWidget(const SizedBox.shrink());
       },
     );

@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -102,38 +103,11 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
           prev.successMessage != current.successMessage,
       listener: (context, state) {
         if (state.errorMessage != null && state.errorMessage!.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                state.errorMessage!,
-                style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-              ),
-              backgroundColor: const Color(0xFFEF4444),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-        }
-
-        final returnCompleted =
-            state.session.step == RentalReturnStep.completed &&
-            state.successMessage != null;
-        if (!returnCompleted &&
-            state.successMessage != null &&
-            state.successMessage!.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                state.successMessage!,
-                style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-              ),
-              backgroundColor: const Color(0xFF10B981),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+          showAppPopup(
+            context,
+            content: Text(
+              state.errorMessage!,
+              style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
             ),
           );
         }
@@ -325,6 +299,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
         itemName: state.session.itemName,
         itemId: state.session.itemId,
         ownerName: state.session.lenderName,
+        ownerId: state.session.lenderId,
         itemImageUrl: state.session.itemImageUrl,
       );
     }

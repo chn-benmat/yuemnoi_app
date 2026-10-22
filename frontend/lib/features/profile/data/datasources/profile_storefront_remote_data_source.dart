@@ -58,7 +58,7 @@ class ProfileStorefrontRemoteDataSource {
       for (var offset = 0; ; offset += pageSize) {
         final rows = await client
             .from('review_tb')
-            .select('id, item_id, rating')
+            .select('id, item_id, rating, user_id, description, created_at')
             .inFilter('item_id', batch)
             .eq('moderation_hidden', false)
             .order('id', ascending: true)
@@ -66,6 +66,26 @@ class ProfileStorefrontRemoteDataSource {
         result.addAll(rows);
         if (rows.length < pageSize) break;
       }
+    }
+    final userIds = result
+        .map((row) => row['user_id'])
+        .whereType<String>()
+        .toSet()
+        .toList();
+    final profiles = <String, Map<String, dynamic>>{};
+    for (var start = 0; start < userIds.length; start += 100) {
+      final end = (start + 100).clamp(0, userIds.length);
+      final rows = await client
+          .schema('profiles')
+          .from('public_profile_v')
+          .select('user_id, display_name, user_image_url')
+          .inFilter('user_id', userIds.sublist(start, end));
+      for (final row in rows) {
+        profiles[row['user_id'].toString()] = row;
+      }
+    }
+    for (final row in result) {
+      row['reviewer'] = profiles[row['user_id']];
     }
     return result;
   }

@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import '../../../../core/cache/network_image_cache_key.dart';
@@ -67,15 +68,12 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
     }
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'บันทึกรูปภาพแล้ว'
-              : 'บันทึกไม่สำเร็จ โปรดตรวจสอบสิทธิ์รูปภาพแล้วลองใหม่',
-        ),
-        behavior: SnackBarBehavior.floating,
-      ),
+    if (success) {
+      return;
+    }
+    showAppPopup(
+      context,
+      content: Text('บันทึกไม่สำเร็จ โปรดตรวจสอบสิทธิ์รูปภาพแล้วลองใหม่'),
     );
   }
 

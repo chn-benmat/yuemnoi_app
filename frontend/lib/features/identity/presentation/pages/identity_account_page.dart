@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -54,6 +55,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   Uint8List? _card, _selfie;
   bool _allowExit = false, _capturing = false, _dialogOpen = false;
   bool _removedCard = false, _removedSelfie = false;
+  bool _consent = false;
   Uint8List? _photoBytes(IdentityAccountState state, bool selfie) => selfie
       ? (_removedSelfie ? null : _selfie ?? state.photos['selfie'])
       : (_removedCard ? null : _card ?? state.photos['card']);
@@ -110,8 +112,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     _fields['subdistrict']!.text,
   );
 
-  void _message(String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  void _message(String text) => showAppPopup(context, content: Text(text));
 
   Future<bool> _confirm(
     String title,
@@ -171,6 +172,15 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
 
   Future<void> _photo(bool selfie) async {
     if (_capturing || _cubit.state.busy) return;
+    if (_loaded?.hasIdentity != true && !_consent) {
+      final agreed = await showDialog<bool>(
+        context: context,
+        builder: (_) => const IdentityConsentDialog(previouslyAccepted: false),
+      );
+      if (!mounted || agreed != true) return;
+      _consent = true;
+    }
+    if (!mounted) return;
     FocusScope.of(context).unfocus();
     setState(() => _capturing = true);
     try {
@@ -278,6 +288,13 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     if (_photoBytes(state, false) == null || _photoBytes(state, true) == null) {
       _message('กรุณาเพิ่มรูปบัตรและรูปคู่บัตรประชาชนให้ครบ');
       return;
+    }
+    if (!state.details!.hasIdentity && !_consent) {
+      final agreed = await showDialog<bool>(
+        context: context,
+        builder: (_) => const IdentityConsentDialog(previouslyAccepted: false),
+      );
+      if (!mounted || agreed != true) return;
     }
     if (!await _confirm(
       'ส่งข้อมูลให้เจ้าหน้าที่ตรวจสอบ?',
@@ -399,33 +416,48 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text('เลขบัตรประชาชน', style: AppFormFieldStyles.labelTextStyle),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            style: TextButton.styleFrom(
-              padding: EdgeInsets.zero,
-              alignment: Alignment.centerLeft,
-            ),
-            onPressed: () => AppRoutes.openContact(context),
-            icon: const Icon(Icons.support_agent_rounded, size: 16),
-            label: const Text(
-              'เปลี่ยนเลขบัตร กรุณาติดต่อเจ้าหน้าที่',
-              style: TextStyle(fontSize: 12),
+        if (_loaded?.hasIdentity == true)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                alignment: Alignment.centerLeft,
+              ),
+              onPressed: () => AppRoutes.openContact(context),
+              icon: const Icon(Icons.support_agent_rounded, size: 16),
+              label: const Text(
+                'เปลี่ยนเลขบัตร กรุณาติดต่อเจ้าหน้าที่',
+                style: TextStyle(fontSize: 12),
+              ),
             ),
           ),
-        ),
         const SizedBox(height: 4),
         TextFormField(
           key: const ValueKey('citizen_id'),
           controller: _fields['citizen_id'],
-          readOnly: true,
+          readOnly: _readOnly || _loaded?.hasIdentity == true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(13),
+          ],
+          onChanged: (_) => setState(() {}),
+          validator: (value) {
+            if (_loaded?.hasIdentity == true) return null;
+            if (value == null || !RegExp(r'^\d{13}$').hasMatch(value))
+              return 'กรุณากรอกเลขบัตรประชาชน 13 หลัก';
+            return null;
+          },
           style: AppFormFieldStyles.textStyle,
           decoration:
               AppFormFieldStyles.decoration(
                 context,
                 variant: AppFormFieldVariant.outlined,
               ).copyWith(
-                suffixIcon: const Icon(Icons.lock_outline_rounded, size: 18),
+                suffixIcon: _loaded?.hasIdentity == true
+                    ? const Icon(Icons.lock_outline_rounded, size: 18)
+                    : null,
               ),
         ),
       ],
@@ -681,30 +713,6 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     final editable = !pending && !details.status.restricted;
     final requestStatus = details.status.request['status'];
     final reason = details.status.request['reason']?.toString();
-    if (!details.hasIdentity && !pending)
-      return Column(
-        children: [
-          const SizedBox(height: 24),
-          const Icon(
-            Icons.verified_user_outlined,
-            size: 72,
-            color: IdentityColors.primary,
-          ),
-          const SizedBox(height: 24),
-          const IdentityHeading(
-            'รู้จักกันให้มั่นใจขึ้น',
-            'ยืนยันตัวตนเพื่อดูและจัดการข้อมูลบัตรประชาชนของคุณ',
-          ),
-          const SizedBox(height: 24),
-          AppPrimaryButton(
-            text: 'เริ่มยืนยันตัวตน',
-            onPressed: () async {
-              await AppRoutes.openIdentity(context, selfieWithCard: true);
-              if (mounted) _cubit.load();
-            },
-          ),
-        ],
-      );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -734,7 +742,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                           ? 'รอตรวจสอบ'
                           : details.status.verified
                           ? 'ยืนยันตัวตนแล้ว'
-                          : 'ข้อมูลบัญชี',
+                          : 'ยืนยันตัวตนด้วยบัตรประชาชน',
                       style: const TextStyle(
                         color: IdentityColors.primary,
                         fontWeight: FontWeight.w600,
@@ -935,8 +943,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                     ),
                   ),
                 ),
-          bottomNavigationBar:
-              state.details?.hasIdentity != true && !state.loading
+          bottomNavigationBar: state.details == null && !state.loading
               ? null
               : Container(
                   decoration: const BoxDecoration(

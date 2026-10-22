@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
@@ -13,6 +14,38 @@ class _Send extends Mock implements SendChatMessageUseCase {}
 class _Stream extends Mock implements StreamMessagesUseCase {}
 
 void main() {
+  test('server-normalized booking replaces optimistic card', () async {
+    final send = _Send();
+    when(
+      () => send(
+        conversationId: 'room',
+        message: any(named: 'message'),
+        imageUrl: null,
+      ),
+    ).thenAnswer((_) async {});
+    final bloc = ChatDetailBloc(streamMessages: _Stream(), sendMessage: send);
+    const payload = 'offer [BOOKING_DATA:{"itemId":1,"location":"Bangkok"}]';
+    bloc.add(const ChatMessageSent(conversationId: 'room', message: payload));
+    await pumpEventQueue();
+    bloc.add(
+      ChatMessagesUpdated([
+        ChatMessage(
+          id: 'saved',
+          conversationId: 'room',
+          senderId: 'me',
+          message:
+              'offer [BOOKING_DATA:${jsonEncode({"location": "Bangkok", "status": "pending", "itemId": 1, "originalMessageId": "saved", "latitude": 13.7, "longitude": 100.4, "locationNote": "snapshot"})}]',
+          createdAt: DateTime(2026),
+          isMine: true,
+        ),
+      ]),
+    );
+    await pumpEventQueue();
+    final ids = bloc.state.messages.map((m) => m.id).toList();
+    await bloc.close();
+    expect(ids, ['saved']);
+  });
+
   test(
     'rental card appears before saving, keeps its image, and retries without duplication',
     () async {
@@ -30,8 +63,16 @@ void main() {
       addTearDown(() {
         if (!gate.isCompleted) gate.complete();
       });
-      const payload = '📋 คำขอเช่าอุปกรณ์\nอุปกรณ์: Canon EOS R50';
+      const payload =
+          '📋 คำขอเช่าอุปกรณ์\nอุปกรณ์: Canon EOS R50\n[BOOKING_DATA:{"itemId":1}]';
       const image = 'https://example.test/camera.jpg';
+      bloc.add(
+        const ChatMessageSent(
+          conversationId: 'room',
+          message: payload,
+          imageUrl: image,
+        ),
+      );
       bloc.add(
         const ChatMessageSent(
           conversationId: 'room',

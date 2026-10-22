@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -22,8 +23,9 @@ Future<Uint8List?> captureIdentityPhoto(
         TargetPlatform.android,
         TargetPlatform.iOS,
       ].contains(defaultTargetPlatform)) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('กรุณาใช้กล้องผ่านแอป Android หรือ iOS')),
+    showAppPopup(
+      context,
+      content: Text('กรุณาใช้กล้องผ่านแอป Android หรือ iOS'),
     );
     return null;
   }

@@ -51,6 +51,7 @@ class _NotificationView extends StatelessWidget {
             child: BlocBuilder<NotificationCubit, NotificationInboxState>(
               builder: (context, state) {
                 final cubit = context.read<NotificationCubit>();
+                final visibleItems = state.visibleItems;
                 return RefreshIndicator(
                   color: AppColors.primaryColor,
                   backgroundColor: Colors.white,
@@ -85,15 +86,6 @@ class _NotificationView extends StatelessWidget {
                                     try {
                                       await cubit.markAllRead();
                                       if (!context.mounted) return;
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'ทำเครื่องหมายอ่านแล้วทั้งหมด',
-                                          ),
-                                        ),
-                                      );
                                     } catch (_) {
                                       // สถานะผิดพลาดแสดงจาก Cubit โดยไม่แสร้งว่าอ่านสำเร็จ
                                     }
@@ -107,7 +99,7 @@ class _NotificationView extends StatelessWidget {
                         ]) ...[
                           _NotificationSection(
                             category: category,
-                            items: state.items
+                            items: visibleItems
                                 .where((item) => item.category == category)
                                 .toList(),
                             isLoading: state.isLoading,

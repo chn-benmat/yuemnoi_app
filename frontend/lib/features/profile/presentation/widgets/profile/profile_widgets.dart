@@ -21,69 +21,80 @@ class ProfileHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
 
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.primaryColor,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF6B00B8),
-            AppColors.primaryColor,
-            Color(0xFF8618E2),
-          ],
-        ),
-      ),
-      padding: EdgeInsets.fromLTRB(20, topPadding + 12, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onProfileTap,
-            child: Row(
-              children: [
-                ProfileAvatar(avatarUrl: avatarUrl, displayName: displayName),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        displayName,
-                        style: const TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'ดูโปรไฟล์',
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 13,
-                          color: Colors.white70,
-                          decoration: TextDecoration.underline,
-                          decorationColor: Colors.white70,
-                        ),
-                      ),
-                    ],
+    return Material(
+      color: AppColors.primaryColor,
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onProfileTap,
+        splashColor: Colors.white.withValues(alpha: 0.16),
+        highlightColor: Colors.white.withValues(alpha: 0.08),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, topPadding + 20, 20, 28),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.24),
                   ),
                 ),
-                const Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  color: Colors.white70,
-                  size: 16,
+                child: ProfileAvatar(
+                  avatarUrl: avatarUrl,
+                  displayName: displayName,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                        color: Colors.white,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'ดูโปรไฟล์',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white70,
+                          size: 16,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

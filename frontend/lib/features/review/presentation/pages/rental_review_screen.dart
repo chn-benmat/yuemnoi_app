@@ -1,9 +1,11 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../profile/data/datasources/profile_storefront_remote_data_source.dart';
 
 /// หน้าจอ UI สำหรับรีวิวประสบการณ์การเช่าสินค้า (Rental Review Screen)
 /// แบบฟอร์มรีวิวพร้อมบันทึกผลลง Supabase หลังยืนยันการส่ง
@@ -14,6 +16,8 @@ class RentalReviewScreen extends StatefulWidget {
   final String ownerName;
   final String? itemImageUrl;
   final String? ownerAvatarUrl;
+  final String? ownerId;
+  final ProfileStorefrontRemoteDataSource? profileSource;
 
   const RentalReviewScreen({
     super.key,
@@ -23,6 +27,8 @@ class RentalReviewScreen extends StatefulWidget {
     this.ownerName = 'ผู้ปล่อยเช่า',
     this.itemImageUrl,
     this.ownerAvatarUrl,
+    this.ownerId,
+    this.profileSource,
   });
 
   @override
@@ -30,6 +36,7 @@ class RentalReviewScreen extends StatefulWidget {
 }
 
 class _RentalReviewScreenState extends State<RentalReviewScreen> {
+  String? _ownerAvatarUrl;
   int _selectedRating = 0;
   bool _isSubmitting = false;
   late final TextEditingController _reviewController;
@@ -47,6 +54,26 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
   void initState() {
     super.initState();
     _reviewController = TextEditingController();
+    _ownerAvatarUrl = widget.ownerAvatarUrl;
+    _loadOwnerAvatar();
+  }
+
+  Future<void> _loadOwnerAvatar() async {
+    final ownerId = widget.ownerId;
+    if (_ownerAvatarUrl?.isNotEmpty == true ||
+        ownerId == null ||
+        ownerId.isEmpty) {
+      return;
+    }
+    try {
+      final profile =
+          await (widget.profileSource ?? ProfileStorefrontRemoteDataSource())
+              .getIdentity(ownerId);
+      if (!mounted) return;
+      setState(() => _ownerAvatarUrl = profile['user_image_url'] as String?);
+    } catch (_) {
+      // อ่านรูปไม่สำเร็จยังต้องรีวิวต่อได้โดยใช้รูปสำรอง
+    }
   }
 
   @override
@@ -93,12 +120,10 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
         itemId <= 0 ||
         userId == null ||
         userId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'ไม่พบข้อมูลการเช่าหรือบัญชีผู้ใช้ กรุณาเปิดรีวิวจากรายการเช่า',
-          ),
-          behavior: SnackBarBehavior.floating,
+      showAppPopup(
+        context,
+        content: Text(
+          'ไม่พบข้อมูลการเช่าหรือบัญชีผู้ใช้ กรุณาเปิดรีวิวจากรายการเช่า',
         ),
       );
       return;
@@ -130,12 +155,9 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
     } catch (error) {
       debugPrint('Failed to submit rental review: $error');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('ส่งรีวิวไม่สำเร็จ กรุณาลองอีกครั้ง'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Color(0xFFB42318),
-        ),
+      showAppPopup(
+        context,
+        content: Text('ส่งรีวิวไม่สำเร็จ กรุณาลองอีกครั้ง'),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -285,11 +307,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
   }
 
   Widget _buildItemImageFallback() => const Center(
-    child: Icon(
-      Icons.camera_alt_rounded,
-      color: Color(0xFF8C9098),
-      size: 36,
-    ),
+    child: Icon(Icons.camera_alt_rounded, color: Color(0xFF8C9098), size: 36),
   );
 
   /// การ์ดข้อมูลสินค้าและผู้ปล่อยเช่า สไตล์โมเดิร์น
@@ -387,9 +405,9 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
                             ),
                           ),
                           clipBehavior: Clip.antiAlias,
-                          child: widget.ownerAvatarUrl?.isNotEmpty == true
+                          child: _ownerAvatarUrl?.isNotEmpty == true
                               ? Image.network(
-                                  widget.ownerAvatarUrl!,
+                                  _ownerAvatarUrl!,
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, _, _) => Image.asset(
                                     'assets/images/user.png',

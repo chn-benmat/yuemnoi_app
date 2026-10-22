@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import '../../widgets/account/account_page_intro.dart';
 import 'dart:typed_data';
 
@@ -103,16 +104,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         : null;
     final accessToken = session?.accessToken;
     if (accessToken == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('กรุณาเข้าสู่ระบบก่อน'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      showAppPopup(context, content: Text('กรุณาเข้าสู่ระบบก่อน'));
       return;
     }
 
@@ -148,32 +140,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               setState(() => _avatarUrl = state.profile.avatarUrl);
             }
           } else if (state is ProfileActionSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  state.message,
-                  style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-                ),
-                backgroundColor: AppColors.primaryColor,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            );
             Navigator.of(context).pop(true);
           } else if (state is ProfileActionFailure) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  state.message.replaceAll('Exception: ', ''),
-                  style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-                ),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+            showAppPopup(
+              context,
+              content: Text(
+                state.message.replaceAll('Exception: ', ''),
+                style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
               ),
             );
           }

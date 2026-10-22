@@ -1,3 +1,5 @@
+import 'package:go_router/go_router.dart';
+import 'package:frontend/core/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/services/booking_confirmation_tracker.dart';
@@ -19,7 +21,13 @@ void main() {
 
   tearDown(BookingConfirmationTracker.clearMemoryCache);
 
-  Future<void> pumpCard(WidgetTester tester, {String? initialStatus}) async {
+  Future<void> pumpCard(
+    WidgetTester tester, {
+    String? initialStatus,
+    bool isOwner = false,
+    bool isHandoverCompleted = false,
+    void Function(String)? onRoute,
+  }) async {
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     final bookingData = BookingRequestData(
       item: const BookingItemInfo(
@@ -48,25 +56,101 @@ void main() {
       isRead: true,
     );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: SizedBox(
-              width: 320,
-              child: BookingRequestBubbleCard(
-                message: message,
-                bookingData: bookingData,
-                isOwner: false,
-                initialStatus: initialStatus,
-              ),
-            ),
+    final home = Scaffold(
+      body: SingleChildScrollView(
+        child: SizedBox(
+          width: 320,
+          child: BookingRequestBubbleCard(
+            message: message,
+            bookingData: bookingData,
+            isOwner: isOwner,
+            initialStatus: initialStatus,
+            isHandoverCompleted: isHandoverCompleted,
           ),
         ),
       ),
     );
+    if (onRoute == null) {
+      await tester.pumpWidget(MaterialApp(home: home));
+    } else {
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, _) => home),
+          GoRoute(
+            path: AppRoutes.rentalStatus,
+            builder: (_, state) {
+              onRoute(state.uri.toString());
+              return const Scaffold(body: Text('rental-status-destination'));
+            },
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        MaterialApp.router(
+          routerConfig: router,
+          builder: (context, child) => child!,
+        ),
+      );
+    }
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
+  }
+
+  for (final owner in [true, false]) {
+    testWidgets(
+      'completed rental stays completed after handover for owner=$owner',
+      (tester) async {
+        await pumpCard(
+          tester,
+          initialStatus: 'completed',
+          isOwner: owner,
+          isHandoverCompleted: true,
+        );
+        expect(find.text('การเช่าเสร็จสิ้น'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('chat-booking-return-button')),
+          findsNothing,
+        );
+        final completedButton = find.byKey(
+          const ValueKey('chat-booking-rental-status-button'),
+        );
+        await tester.ensureVisible(completedButton);
+        await tester.tap(completedButton);
+        await tester.pumpAndSettle();
+        expect(find.text('รายละเอียดสถานะการเช่า'), findsOneWidget);
+        expect(find.text('เสร็จสิ้น'), findsWidgets);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+
+    testWidgets('status action follows owner=$owner', (tester) async {
+      String? destination;
+      await pumpCard(
+        tester,
+        initialStatus: 'confirmed',
+        isOwner: owner,
+        onRoute: (uri) => destination = uri,
+      );
+      expect(
+        find.text(owner ? 'ดูสถานะปล่อยเช่า' : 'ดูสถานะการเช่า'),
+        findsOneWidget,
+      );
+      final button = find.byKey(
+        const ValueKey('chat-booking-rental-status-button'),
+      );
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(
+        destination,
+        owner
+            ? '${AppRoutes.rentalStatus}?role=lender'
+            : AppRoutes.rentalStatus,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   }
 
   testWidgets('pending booking renders one rental details table', (

@@ -11,6 +11,15 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/recover"
 )
 
+func RegisterLocationRoutes(router *fiber.App, geocoder domain.Geocoder, suggesters ...domain.PlaceSuggester) {
+	handler := NewLocationHandler(geocoder, suggesters...)
+	router.Get("/api/locations/search", handler.Search)
+	router.Get("/api/locations/reverse", handler.Reverse)
+	if len(suggesters) > 0 {
+		router.Get("/api/locations/suggest", NewLocationSuggestionHandler(suggesters[0]))
+	}
+}
+
 func SetupRouterWithOperations(
 	operations domain.OperationsOptions,
 	itemRepo domain.ItemRepository,

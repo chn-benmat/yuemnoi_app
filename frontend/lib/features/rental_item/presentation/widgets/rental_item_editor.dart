@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +22,7 @@ class RentalItemEditor extends StatefulWidget {
   const RentalItemEditor({
     super.key,
     required this.onSubmit,
+    this.onPreview,
     this.initialValue = const RentalItemFormValue(),
     this.isEditing = false,
     this.isSaving = false,
@@ -30,6 +32,7 @@ class RentalItemEditor extends StatefulWidget {
 
   final RentalItemFormValue initialValue;
   final ValueChanged<RentalItemFormValue> onSubmit;
+  final ValueChanged<RentalItemFormValue>? onPreview;
   final bool isEditing;
   final bool isSaving;
   final bool didSave;
@@ -185,13 +188,10 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
       if (mounted) setState(() => _photos.addAll(additions));
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(
-              content: Text('ไม่สามารถเตรียมรูปภาพได้ กรุณาลองใหม่'),
-            ),
-          );
+        showAppPopup(
+          context,
+          content: Text('ไม่สามารถเตรียมรูปภาพได้ กรุณาลองใหม่'),
+        );
       }
     } finally {
       if (mounted) setState(() => _picking = false);
@@ -724,18 +724,56 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
                               ),
                             ),
                           ),
-                        AppPrimaryButton(
-                          key: ValueKey(
-                            widget.isEditing
-                                ? 'edit-item-submit'
-                                : 'add-rental-submit',
-                          ),
-                          text: widget.isEditing
-                              ? 'บันทึกการแก้ไข'
-                              : 'เพิ่มอุปกรณ์',
-                          borderRadius: 16,
-                          isLoading: widget.isSaving || _confirming,
-                          onPressed: _busy ? null : _submit,
+                        Row(
+                          children: [
+                            if (widget.onPreview != null) ...[
+                              Expanded(
+                                child: SizedBox(
+                                  height: 56,
+                                  child: OutlinedButton(
+                                    key: ValueKey(
+                                      widget.isEditing
+                                          ? 'edit-item-preview'
+                                          : 'add-rental-preview',
+                                    ),
+                                    onPressed: _busy
+                                        ? null
+                                        : () {
+                                            FocusScope.of(context).unfocus();
+                                            widget.onPreview!(_value);
+                                          },
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.primaryColor,
+                                      side: const BorderSide(
+                                        color: AppColors.primaryColor,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    child: const Text('ตัวอย่าง'),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                            Expanded(
+                              flex: 2,
+                              child: AppPrimaryButton(
+                                key: ValueKey(
+                                  widget.isEditing
+                                      ? 'edit-item-submit'
+                                      : 'add-rental-submit',
+                                ),
+                                text: widget.isEditing
+                                    ? 'บันทึกการแก้ไข'
+                                    : 'เพิ่มอุปกรณ์',
+                                borderRadius: 16,
+                                isLoading: widget.isSaving || _confirming,
+                                onPressed: _busy ? null : _submit,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

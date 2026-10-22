@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import '../../widgets/account/account_page_intro.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -50,15 +51,9 @@ class _ProfileChangePasswordScreenState
         : null;
     final accessToken = session?.accessToken;
     if (accessToken == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      showAppPopup(
+        context,
+        content: Text('กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน'),
       );
       return;
     }
@@ -76,32 +71,13 @@ class _ProfileChangePasswordScreenState
       child: BlocConsumer<ProfileCubit, ProfileState>(
         listener: (context, state) {
           if (state is ProfileActionSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  state.message,
-                  style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-                ),
-                backgroundColor: AppColors.primaryColor,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            );
             Navigator.of(context).pop();
           } else if (state is ProfileActionFailure) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  state.message.replaceAll('Exception: ', ''),
-                  style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-                ),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+            showAppPopup(
+              context,
+              content: Text(
+                state.message.replaceAll('Exception: ', ''),
+                style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
               ),
             );
           }

@@ -58,7 +58,7 @@ class _BookingProductCardState extends State<BookingProductCard> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -71,8 +71,8 @@ class _BookingProductCardState extends State<BookingProductCard> {
         children: [
           // รูปภาพอุปกรณ์
           Container(
-            width: 78,
-            height: 78,
+            width: 88,
+            height: 88,
             decoration: BoxDecoration(
               color: const Color(0xFFF2F4F7),
               borderRadius: BorderRadius.circular(20),
@@ -117,6 +117,16 @@ class _BookingProductCardState extends State<BookingProductCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                const Text(
+                  'สินค้าที่คุณเลือก',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 11,
+                    color: AppColors.primaryColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 5),
                 Text(
                   widget.item.title,
                   style: const TextStyle(
@@ -142,19 +152,21 @@ class _BookingProductCardState extends State<BookingProductCard> {
                           : const Color(0xFF9E9E9E),
                     ),
                     const SizedBox(width: 4),
-                    Text(
-                      hasReviews
-                          ? '${_rating.toStringAsFixed(1)} ($_reviewCount reviews)'
-                          : 'ยังไม่มีรีวิว',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 13,
-                        color: hasReviews
-                            ? const Color(0xFF757778)
-                            : const Color(0xFF9E9E9E),
-                        fontWeight: hasReviews
-                            ? FontWeight.w500
-                            : FontWeight.w400,
+                    Flexible(
+                      child: Text(
+                        hasReviews
+                            ? '${_rating.toStringAsFixed(1)} ($_reviewCount รีวิว)'
+                            : 'ยังไม่มีรีวิว',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 13,
+                          color: hasReviews
+                              ? const Color(0xFF757778)
+                              : const Color(0xFF9E9E9E),
+                          fontWeight: hasReviews
+                              ? FontWeight.w500
+                              : FontWeight.w400,
+                        ),
                       ),
                     ),
                   ],

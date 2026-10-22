@@ -18,6 +18,7 @@ class ActiveRentalHeaderBanner extends StatefulWidget {
     this.isOwner = false,
     this.bookingId,
     this.onTap,
+    this.isCompleted = false,
   });
 
   final BookingRequestData bookingData;
@@ -25,6 +26,7 @@ class ActiveRentalHeaderBanner extends StatefulWidget {
   final bool isOwner;
   final int? bookingId;
   final VoidCallback? onTap;
+  final bool isCompleted;
 
   @override
   State<ActiveRentalHeaderBanner> createState() =>
@@ -46,8 +48,15 @@ class _ActiveRentalHeaderBannerState extends State<ActiveRentalHeaderBanner> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant ActiveRentalHeaderBanner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isCompleted != widget.isCompleted) _startTicker();
+  }
+
   void _startTicker() {
     _ticker?.cancel();
+    if (widget.isCompleted) return;
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
         setState(() {});
@@ -85,6 +94,42 @@ class _ActiveRentalHeaderBannerState extends State<ActiveRentalHeaderBanner> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isCompleted) {
+      return Container(
+        key: const ValueKey('chat-completed-rental-banner'),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFBBF7D0)),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          child: ListTile(
+            dense: true,
+            leading: const Icon(Icons.check_circle, color: Color(0xFF16A34A)),
+            title: const Text(
+              'การเช่าเสร็จสิ้น',
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            subtitle: Text(
+              widget.bookingData.item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: TextButton(
+              onPressed: widget.onTap,
+              child: const Text('ดูรายละเอียด'),
+            ),
+            onTap: widget.onTap,
+          ),
+        ),
+      );
+    }
     final isExpired = _isExpired;
     final remainingText = _formatRemainingTime();
     final itemTitle = widget.bookingData.item.title;

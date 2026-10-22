@@ -30,6 +30,31 @@ class NotificationInboxState {
   final String? error;
   final DateTime? serverTime;
   final bool isAuthenticated;
+
+  List<AppNotification> get visibleItems {
+    final latest = <String, AppNotification>{};
+    for (final item in items) {
+      final itemId = item.itemId;
+      final bookingId = item.bookingId;
+      final key = item.category == AppNotificationCategory.rental
+          ? itemId != null && itemId.isNotEmpty
+                ? 'item:$itemId'
+                : bookingId != null && bookingId.isNotEmpty
+                ? 'booking:$bookingId'
+                : 'notification:${item.id}'
+          : 'notification:${item.id}';
+      final previous = latest[key];
+      if (previous == null || item.updatedAt.isAfter(previous.updatedAt)) {
+        latest[key] = item;
+      }
+    }
+    return latest.values.toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
+  bool get hasUnreadNotification => visibleItems.any(
+    (item) => item.category != AppNotificationCategory.chat && !item.isRead,
+  );
 }
 
 class AppNotificationService {

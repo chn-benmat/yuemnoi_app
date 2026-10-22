@@ -22,6 +22,7 @@ class UserProfileHeaderSection extends StatelessWidget {
     required this.isVerified,
     required this.isCurrentUser,
     required this.onEditProfile,
+    this.onReviewsTap,
   });
 
   final String displayName;
@@ -31,6 +32,7 @@ class UserProfileHeaderSection extends StatelessWidget {
   final bool isVerified;
   final bool isCurrentUser;
   final VoidCallback onEditProfile;
+  final VoidCallback? onReviewsTap;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -62,7 +64,32 @@ class UserProfileHeaderSection extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  _ReviewLabel(reviews: reviews),
+                  Semantics(
+                    button: true,
+                    label: 'ดูรีวิวทั้งหมด',
+                    child: InkWell(
+                      key: const ValueKey('profile-reviews'),
+                      onTap: onReviewsTap,
+                      borderRadius: BorderRadius.circular(8),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(child: _ReviewLabel(reviews: reviews)),
+                            if (onReviewsTap != null) ...[
+                              const SizedBox(width: 4),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                size: 16,
+                                color: _muted,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                   if (isVerified) ...[
                     const SizedBox(height: 8),
                     const _VerifiedLabel(),

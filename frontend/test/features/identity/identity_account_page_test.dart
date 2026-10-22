@@ -14,7 +14,7 @@ import 'package:frontend/features/identity/presentation/identity_account_cubit.d
 import 'package:frontend/features/identity/presentation/pages/identity_account_page.dart';
 
 class AccountRepository implements IdentityAccountRepository {
-  bool pending = false, fail = false, selfieWithCard = true;
+  bool pending = false, fail = false, selfieWithCard = true, hasIdentity = true;
   int sends = 0;
   Completer<void>? loadGate;
   final fields = <String, String>{
@@ -34,7 +34,7 @@ class AccountRepository implements IdentityAccountRepository {
     await loadGate?.future;
     return IdentityAccountDetails({
       'fields': fields,
-      'has_identity': true,
+      'has_identity': hasIdentity,
       'selfie_with_card': selfieWithCard,
       'evidence': [
         {'kind': 'card', 'id': 'card'},
@@ -125,6 +125,28 @@ Future<IdentityAccountCubit> open(
 }
 
 void main() {
+  testWidgets('new users verify from account form', (tester) async {
+    final repo = AccountRepository()..hasIdentity = false;
+    repo.fields.clear();
+    await open(tester, repo);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('citizen_id')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final field = tester.widget<TextFormField>(
+      find.byKey(const ValueKey('citizen_id')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('citizen_id')),
+      '1101700207030',
+    );
+    expect(field.controller!.text, '1101700207030');
+    expect(field.validator!('123'), isNotNull);
+    expect(field.validator!('1234567890123'), isNull);
+    expect(field.validator!('1101700207030'), isNull);
+  });
+
   testWidgets('โหลดด้วย skeleton เฉพาะเนื้อหา ปุ่มกับ navbar คงเดิม', (
     tester,
   ) async {

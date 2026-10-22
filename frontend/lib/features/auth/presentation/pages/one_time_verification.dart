@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -76,16 +77,7 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
 
     final otp = _otpController.text;
     if (otp.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('กรุณากรอกรหัส OTP ให้ครบ 6 หลัก'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
+      showAppPopup(context, content: Text('กรุณากรอกรหัส OTP ให้ครบ 6 หลัก'));
       return;
     }
 
@@ -101,15 +93,7 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    showAppPopup(context, content: Text(message));
   }
 
   @override
@@ -151,14 +135,6 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
           _otpController.clear();
           _otpFocusNode.requestFocus();
           _startTimer();
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              const SnackBar(
-                content: Text('ส่งรหัส OTP อีกครั้งแล้ว กรุณาตรวจสอบอีเมล'),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
         } else if (state is SendOtpFailure) {
           setState(() {
             _isResending = false;
