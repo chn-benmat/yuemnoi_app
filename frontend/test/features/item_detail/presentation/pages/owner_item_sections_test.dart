@@ -27,8 +27,47 @@ const _item = ItemDetail(
 );
 
 void main() {
+  testWidgets('preview uses unsaved edits and returns without saving', (
+    tester,
+  ) async {
+    final repo = _Repository();
+    final bloc = ItemDetailBloc(
+      getItem: GetItemDetailUseCase(repo),
+      updateItem: UpdateItemUseCase(repo),
+      initialItem: _item,
+    );
+    addTearDown(bloc.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BlocProvider.value(
+          value: bloc,
+          child: EditItemScreen(item: _item),
+        ),
+      ),
+    );
+    final name = find.descendant(
+      of: find.byKey(const Key('edit-item-name')),
+      matching: find.byType(TextFormField),
+    );
+    await tester.ensureVisible(name);
+    await tester.enterText(name, 'ชื่อใหม่ที่ยังไม่บันทึก');
+    await tester.tap(find.byKey(const Key('edit-item-preview')));
+    await tester.pumpAndSettle();
+    expect(find.text('ชื่อใหม่ที่ยังไม่บันทึก'), findsOneWidget);
+    expect(find.text('รายละเอียดสินค้า'), findsOneWidget);
+    expect(bloc.state.item, _item);
+    await tester.tap(find.byIcon(Icons.arrow_back_rounded).last);
+    await tester.pumpAndSettle();
+    expect(find.text('แก้ไขอุปกรณ์'), findsOneWidget);
+    expect(
+      tester.widget<TextFormField>(name).controller!.text,
+      'ชื่อใหม่ที่ยังไม่บันทึก',
+    );
+    expect(find.text('ออกโดยไม่บันทึก?'), findsNothing);
+  });
+
   testWidgets(
-    'hidden owner detail replaces rental availability with one hidden badge',
+    'hidden owner detail keeps visibility controls without a status badge',
     (tester) async {
       final item = _item.withVisibility(hidden: true);
       await tester.pumpWidget(
@@ -47,7 +86,8 @@ void main() {
           ),
         ),
       );
-      expect(find.text('กำลังซ่อน'), findsOneWidget);
+      expect(find.text('กำลังซ่อน'), findsNothing);
+      expect(find.text('แสดงในหน้าร้าน'), findsOneWidget);
       expect(find.text('เปิดให้เช่า'), findsNothing);
       expect(item.status, 'available');
     },

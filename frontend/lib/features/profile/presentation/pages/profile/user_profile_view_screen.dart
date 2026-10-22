@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -12,6 +13,7 @@ import '../../../data/repositories/profile_storefront_repository_impl.dart';
 import '../../../domain/usecases/get_profile_storefront_usecase.dart';
 import '../../bloc/profile_storefront_cubit.dart';
 import '../../widgets/profile/user_profile_widgets.dart';
+import '../../widgets/profile/profile_reviews_sheet.dart';
 
 /// ข้อมูลสำหรับแสดงโปรไฟล์สาธารณะของผู้ใช้
 class UserProfileViewArgs {
@@ -177,9 +179,7 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isChatLoading = false);
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text(e.toString())));
+        showAppPopup(context, content: Text(e.toString()));
       }
     }
   }
@@ -238,6 +238,16 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                           avatarUrl: _avatarUrl,
                           bio: data?.identity?.bio,
                           reviews: data?.reviews,
+                          onReviewsTap: data?.reviews == null
+                              ? null
+                              : () => showModalBottomSheet<void>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  showDragHandle: true,
+                                  useSafeArea: true,
+                                  builder: (_) =>
+                                      ProfileReviewsSheet(storefront: data!),
+                                ),
                           isVerified: data?.identity?.isVerified ?? false,
                           isCurrentUser: isCurrentUser,
                           onEditProfile: () async {

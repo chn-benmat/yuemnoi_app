@@ -80,7 +80,14 @@ void main() {
     await tester.ensureVisible(confirm);
     await tester.tap(confirm);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('กรุณากรอกรหัส OTP ให้ครบ 6 หลัก'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('ตกลง'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     verifyNever(
       () => repository.verifyOtp(
         email: any(named: 'email'),

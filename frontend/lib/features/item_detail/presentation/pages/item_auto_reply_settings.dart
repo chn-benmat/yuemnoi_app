@@ -174,11 +174,6 @@ class _ItemAutoReplyScreenState extends State<ItemAutoReplyScreen> {
               ),
             );
           }
-          if (state.justSaved) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('บันทึกการตอบกลับอัตโนมัติแล้ว')),
-            );
-          }
         },
         builder: (context, state) => PopScope(
           canPop: !state.dirty && !state.saving,

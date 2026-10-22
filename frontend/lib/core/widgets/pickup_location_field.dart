@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/colors.dart';
@@ -62,14 +63,6 @@ class PickupLocationField extends StatelessWidget {
               color: AppColors.primaryColor,
             ),
             title: Text(value?.name ?? 'เลือกจุดนัดรับบนแผนที่'),
-            subtitle: value == null
-                ? null
-                : Text(
-                    [
-                      value!.address,
-                      value!.note,
-                    ].where((s) => s.isNotEmpty).join('\n'),
-                  ),
             trailing: variant == AppFormFieldVariant.outlined && value != null
                 ? const Text(
                     'เปลี่ยน',
@@ -127,13 +120,7 @@ class PickupLocationCard extends StatelessWidget {
       color: AppColors.primaryColor,
     ),
     title: const Text('จุดนัดรับสินค้า'),
-    subtitle: Text(
-      [
-        location.name,
-        location.address,
-        location.note,
-      ].where((s) => s.isNotEmpty).join('\n'),
-    ),
+    subtitle: Text(location.name),
     trailing: const Icon(Icons.map_outlined),
     onTap: () => openPickupLocationInGoogleMaps(context, location),
   );
@@ -148,8 +135,9 @@ Future<void> openPickupLocationInGoogleMaps(
     location.longitude,
   );
   if (!opened && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('ไม่สามารถเปิด Google Maps ได้ในขณะนี้')),
+    showAppPopup(
+      context,
+      content: Text('ไม่สามารถเปิด Google Maps ได้ในขณะนี้'),
     );
   }
 }

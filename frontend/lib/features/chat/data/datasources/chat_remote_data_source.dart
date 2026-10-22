@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/chat_reply_content.dart';
@@ -520,13 +521,67 @@ class ChatRemoteDataSource {
     return Stream<List<ChatMessage>>.multi((controller) {
       var active = true;
       var revision = 0;
+      var latestMessages = <ChatMessage>[];
+      var bookingIds = <int>{};
+      var bookingStatuses = <int, String>{};
+      StreamSubscription<List<Map<String, dynamic>>>? bookingsSubscription;
+
+      void emitMessages() {
+        if (!active) return;
+        controller.add(
+          latestMessages.map((message) {
+            final booking = BookingRequestData.fromChatMessage(message.message);
+            final status = bookingStatuses[booking?.bookingId];
+            if (booking == null || status == null) return message;
+            return ChatMessage(
+              id: message.id,
+              conversationId: message.conversationId,
+              senderId: message.senderId,
+              message: booking.copyWith(status: status).toChatMessagePayload(),
+              createdAt: message.createdAt,
+              isMine: message.isMine,
+              imageUrl: message.imageUrl,
+              isRead: message.isRead,
+            );
+          }).toList(),
+        );
+      }
+
       final subscription = recordsStream.listen(
         (records) {
           final currentRevision = ++revision;
           final immediate = records
               .map((record) => _messageWithCachedImages(record, currentUserId))
               .toList();
-          controller.add(immediate);
+          latestMessages = immediate;
+          emitMessages();
+          final ids = immediate
+              .map(
+                (m) => BookingRequestData.fromChatMessage(m.message)?.bookingId,
+              )
+              .whereType<int>()
+              .where((id) => id > 0)
+              .toSet();
+          if (!setEquals(ids, bookingIds)) {
+            bookingIds = ids;
+            unawaited(bookingsSubscription?.cancel());
+            if (ids.isNotEmpty) {
+              // ใช้สถานะของการจองจริง เพื่อให้การคืนเปลี่ยนแชทได้โดยไม่ต้องมีข้อความใหม่
+              final watchedIds = ids;
+              bookingsSubscription = client
+                  .from('booking_tb')
+                  .stream(primaryKey: ['id'])
+                  .inFilter('id', ids.toList())
+                  .listen((rows) {
+                    if (!active || !setEquals(watchedIds, bookingIds)) return;
+                    bookingStatuses = {
+                      for (final row in rows)
+                        (row['id'] as num).toInt(): row['status'].toString(),
+                    };
+                    emitMessages();
+                  }, onError: controller.addError);
+            }
+          }
           // ข้อความใหม่ต้องผ่านได้ แม้การรีเฟรชรูปของชุดก่อนยังไม่เสร็จ
           unawaited(
             Future.wait(
@@ -537,7 +592,8 @@ class ChatRemoteDataSource {
               if (active &&
                   currentRevision == revision &&
                   !listEquals(immediate, fresh)) {
-                controller.add(fresh);
+                latestMessages = fresh;
+                emitMessages();
               }
             }),
           );
@@ -545,14 +601,16 @@ class ChatRemoteDataSource {
         onError: controller.addError,
         onDone: () {
           active = false;
+          unawaited(bookingsSubscription?.cancel());
           controller.close();
         },
       );
       controller.onPause = subscription.pause;
       controller.onResume = subscription.resume;
-      controller.onCancel = () {
+      controller.onCancel = () async {
         active = false;
-        return subscription.cancel();
+        await bookingsSubscription?.cancel();
+        await subscription.cancel();
       };
     });
   }

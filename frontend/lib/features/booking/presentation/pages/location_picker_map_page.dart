@@ -1,7 +1,9 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/services/location_service.dart';
@@ -27,12 +29,14 @@ class LocationPickerResult {
 class LocationPickerMapPage extends StatefulWidget {
   const LocationPickerMapPage({
     super.key,
+    this.locationService,
     this.initialLocationName,
     this.initialNote,
     this.initialLatitude,
     this.initialLongitude,
   });
 
+  final LocationService? locationService;
   final String? initialLocationName;
   final String? initialNote;
   final double? initialLatitude;
@@ -49,7 +53,6 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
   double _currentZoom = 16.0;
 
   late final TextEditingController _nameController;
-  late final TextEditingController _noteController;
   late final TextEditingController _searchController;
   final FocusNode _searchFocusNode = FocusNode();
 
@@ -57,10 +60,17 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
   bool _isReverseGeocoding = false;
   bool _isLocatingUser = false;
   List<LocationSearchResult> _searchResults = [];
-  Timer? _debounceTimer;
+  int _searchVersion = 0;
+  String? _searchMessage;
+  String _lastSearchText = '';
+  LocationService get _locationService =>
+      widget.locationService ?? LocationService.instance;
   Timer? _geocodeTimer;
+  Timer? _searchDebounce;
 
   String _resolvedAddress = '';
+  bool _selectedApproximate = false;
+  String? _selectedOriginalName;
   int _geocodeVersion = 0;
   late AnimationController _pinAnimController;
   late Animation<double> _pinJumpAnimation;
@@ -83,7 +93,6 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
     _nameController = TextEditingController(
       text: widget.initialLocationName ?? 'ซีคอน บางแค',
     );
-    _noteController = TextEditingController(text: widget.initialNote ?? '');
     _searchController = TextEditingController();
 
     _pinAnimController = AnimationController(
@@ -106,10 +115,10 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
+    ++_searchVersion;
+    _searchDebounce?.cancel();
     _geocodeTimer?.cancel();
     _nameController.dispose();
-    _noteController.dispose();
     _searchController.dispose();
     _searchFocusNode.removeListener(_onSearchFocusChanged);
     _searchFocusNode.dispose();
@@ -119,60 +128,98 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
   }
 
   void _onSearchFocusChanged() {
-    if (_searchFocusNode.hasFocus) {
-      if (_searchController.text.trim().isEmpty) {
-        setState(() {
-          _searchResults = LocationService.popularLandmarks;
-        });
+    if (!mounted) return;
+    setState(() {
+      if (_searchFocusNode.hasFocus) {
+        _searchMessage = _searchController.text.trim().isEmpty
+            ? 'พิมพ์ชื่อสถานที่หรือที่อยู่อย่างน้อย 2 ตัวอักษร'
+            : _searchMessage;
+      } else {
+        _searchDebounce?.cancel();
+        ++_searchVersion;
+        _searchResults = [];
+        _searchMessage = null;
+        _isSearching = false;
       }
-    } else {
-      if (mounted && _searchResults.isNotEmpty) {
-        setState(() {
-          _searchResults = [];
-          _isSearching = false;
-        });
-      }
-    }
+    });
   }
 
   void _closeSearch() {
-    _debounceTimer?.cancel();
+    _searchDebounce?.cancel();
+    ++_searchVersion;
     _searchFocusNode.unfocus();
-    if (mounted && (_searchResults.isNotEmpty || _isSearching)) {
+    if (mounted) {
       setState(() {
         _searchResults = [];
+        _searchMessage = null;
         _isSearching = false;
       });
     }
   }
 
   void _onSearchQueryChanged() {
+    if (_searchController.text == _lastSearchText) return;
+    _lastSearchText = _searchController.text;
+    _searchDebounce?.cancel();
+    ++_searchVersion;
+    if (!mounted) return;
     final query = _searchController.text.trim();
-    if (query.isEmpty) {
-      _debounceTimer?.cancel();
-      if (mounted) {
-        setState(() {
-          _searchResults = _searchFocusNode.hasFocus
-              ? LocationService.popularLandmarks
-              : [];
-          _isSearching = false;
-        });
-      }
+    final canSuggest =
+        _searchFocusNode.hasFocus &&
+        query.runes.length >= 2 &&
+        query.runes.length <= 200;
+    setState(() {
+      _searchResults = [];
+      _isSearching = canSuggest;
+      _searchMessage = canSuggest
+          ? null
+          : 'พิมพ์ชื่อสถานที่หรือที่อยู่อย่างน้อย 2 ตัวอักษร';
+    });
+    if (canSuggest) {
+      _searchDebounce = Timer(
+        const Duration(milliseconds: 600),
+        () => _loadSearch(suggestions: true),
+      );
+    }
+  }
+
+  Future<void> _submitSearch([String? _]) => _loadSearch();
+
+  Future<void> _loadSearch({bool suggestions = false}) async {
+    _searchDebounce?.cancel();
+    final query = _searchController.text.trim();
+    final version = ++_searchVersion;
+    if (query.runes.length < 2 || query.runes.length > 200) {
+      setState(() => _searchMessage = 'กรุณาระบุคำค้นหา 2–200 ตัวอักษร');
       return;
     }
-
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 350), () async {
-      if (!mounted) return;
-      setState(() => _isSearching = true);
-      final results = await LocationService.instance.searchLocations(query);
-      if (mounted && _searchFocusNode.hasFocus) {
-        setState(() {
-          _searchResults = results;
-          _isSearching = false;
-        });
-      }
+    setState(() {
+      _isSearching = true;
+      _searchResults = [];
+      _searchMessage = null;
     });
+    try {
+      final results = suggestions
+          ? await _locationService.suggestLocations(query)
+          : await _locationService.searchLocations(query);
+      if (!mounted || version != _searchVersion || !_searchFocusNode.hasFocus)
+        return;
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+        _searchMessage = results.isEmpty
+            ? 'ไม่พบสถานที่ ลองเพิ่มถนน เขต หรือจังหวัด หรือเลือกจุดบนแผนที่'
+            : null;
+      });
+    } catch (_) {
+      if (!mounted || version != _searchVersion || !_searchFocusNode.hasFocus)
+        return;
+      setState(() {
+        _isSearching = false;
+        _searchMessage =
+            'ค้นหาสถานที่ไม่ได้ ลองแก้คำค้นหรือกดค้นหาบนคีย์บอร์ดอีกครั้ง';
+      });
+    }
   }
 
   void _triggerReverseGeocode(
@@ -184,9 +231,10 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
     setState(() {
       _isReverseGeocoding = true;
       _resolvedAddress = '';
+      _selectedApproximate = false;
     });
     _geocodeTimer = Timer(const Duration(milliseconds: 400), () async {
-      final result = await LocationService.instance.reverseGeocode(
+      final result = await _locationService.reverseGeocode(
         latLng.latitude,
         latLng.longitude,
       );
@@ -195,8 +243,13 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
         _resolvedAddress =
             result?.displayName ??
             '${latLng.latitude.toStringAsFixed(6)}, ${latLng.longitude.toStringAsFixed(6)}';
-        if (updateLocationName && result != null)
-          _nameController.text = result.name;
+        if (result != null) {
+          _selectedOriginalName = result.originalName;
+          if (updateLocationName ||
+              _nameController.text == result.originalName) {
+            _nameController.text = result.name;
+          }
+        }
         _isReverseGeocoding = false;
       });
     });
@@ -219,53 +272,49 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
 
   Future<void> _handleGoToCurrentLocation() async {
     setState(() => _isLocatingUser = true);
-    final pos = await LocationService.instance.getCurrentPosition();
+    final pos = await _locationService.getCurrentPosition();
     if (!mounted) return;
     setState(() => _isLocatingUser = false);
 
     if (pos != null) {
       final userLatLng = LatLng(pos.latitude, pos.longitude);
       _animateMapTo(userLatLng, zoom: 16.5);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('ระบุตำแหน่งปัจจุบันสำเร็จ'),
-          duration: Duration(seconds: 1),
-          backgroundColor: Color(0xFF10B981),
-        ),
-      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิด GPS และอนุญาตการเข้าถึง',
-          ),
-          backgroundColor: Color(0xFFEF4444),
+      showAppPopup(
+        context,
+        content: Text(
+          'ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิด GPS และอนุญาตการเข้าถึง',
         ),
       );
     }
   }
 
   void _selectSearchResult(LocationSearchResult item) {
-    _searchFocusNode.unfocus();
+    _closeSearch();
     _searchController.clear();
+    _geocodeTimer?.cancel();
+    ++_geocodeVersion;
+    _pinAnimController.forward().then((_) {
+      if (mounted) _pinAnimController.reverse();
+    });
+    _mapController.move(item.latLng, 16.5);
     setState(() {
-      _searchResults = [];
+      _currentCenter = item.latLng;
+      _currentZoom = 16.5;
+      _selectedApproximate = item.isApproximate;
+      _selectedOriginalName = item.originalName;
       _nameController.text = item.name;
       _resolvedAddress = item.displayName;
+      _isReverseGeocoding = false;
+      _searchMessage = null;
     });
-    _animateMapTo(item.latLng, zoom: 16.5, updateLocationName: false);
   }
 
   void _onConfirmLocation() {
     final name = _nameController.text.trim();
-    final initialNote = _noteController.text.trim();
+    final initialNote = widget.initialNote?.trim() ?? '';
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('กรุณาระบุชื่อสถานที่นัดพบ'),
-          backgroundColor: Color(0xFFEF4444),
-        ),
-      );
+      showAppPopup(context, content: Text('กรุณาระบุชื่อสถานที่นัดพบ'));
       return;
     }
 
@@ -298,15 +347,6 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
           ),
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: 'รีเซ็ตพิกัด',
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () {
-              _animateMapTo(LocationService.defaultBangkokLocation, zoom: 16.0);
-            },
-          ),
-        ],
       ),
       body: Stack(
         children: [
@@ -346,7 +386,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
             children: [
               TileLayer(
                 urlTemplate:
-                    'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                    'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=th&gl=th',
                 subdomains: const ['0', '1', '2', '3'],
                 userAgentPackageName: 'com.example.frontend',
                 maxZoom: 20,
@@ -490,6 +530,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                   child: TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: _submitSearch,
+                    onEditingComplete: () {},
                     showCursor: true,
                     cursorColor: AppColors.primaryColor,
                     cursorWidth: 2,
@@ -514,11 +557,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                       ),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
+                              tooltip: 'ล้างคำค้นหา',
                               icon: const Icon(Icons.clear_rounded, size: 18),
-                              onPressed: () {
-                                _searchController.clear();
-                                _closeSearch();
-                              },
+                              onPressed: _searchController.clear,
                             )
                           : null,
                       border: InputBorder.none,
@@ -531,10 +572,18 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                 ),
 
                 // รายการผลลัพธ์การค้นหาแบบ Dropdown List
-                if (_searchResults.isNotEmpty || _isSearching)
+                if (_searchFocusNode.hasFocus)
                   Container(
                     margin: const EdgeInsets.only(top: 8),
-                    constraints: const BoxConstraints(maxHeight: 220),
+                    constraints: BoxConstraints(
+                      maxHeight:
+                          (MediaQuery.sizeOf(context).height -
+                                  MediaQuery.viewInsetsOf(context).bottom -
+                                  MediaQuery.paddingOf(context).top -
+                                  kToolbarHeight -
+                                  120)
+                              .clamp(60.0, 300.0),
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
@@ -563,6 +612,11 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                                     ),
                                   ),
                                 ),
+                              )
+                            : _searchMessage != null
+                            ? Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(_searchMessage!),
                               )
                             : ListView.separated(
                                 shrinkWrap: true,
@@ -602,8 +656,10 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                                       ),
                                     ),
                                     subtitle: Text(
-                                      item.displayName,
-                                      maxLines: 1,
+                                      item.isApproximate
+                                          ? 'ถนน/พื้นที่ (ยังไม่พบเลขบ้าน)\n${item.displayName}'
+                                          : item.displayName,
+                                      maxLines: item.isApproximate ? 3 : 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontFamily: AppTextStyles.fontFamily,
@@ -619,8 +675,24 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                     ),
                   ),
 
+                Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: GestureDetector(
+                    onTap: () => launchUrl(
+                      Uri.parse('https://www.openstreetmap.org/copyright'),
+                    ),
+                    child: const Text(
+                      'ข้อมูลสถานที่ © OpenStreetMap contributors (ODbL)',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF334155),
+                        backgroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
                 // ชิปสถานที่ยอดนิยม (Quick Landmark Chips)
-                if (_searchResults.isEmpty && !_isSearching)
+                if (!_searchFocusNode.hasFocus)
                   Container(
                     height: 38,
                     margin: const EdgeInsets.only(top: 8),
@@ -677,234 +749,252 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
           ),
 
           // 4. ปุ่มควบคุมลอยตัวด้านขวา (GPS Location & Zoom Buttons)
-          Positioned(
-            right: 16,
-            bottom: 270,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ปุ่มตำแหน่งปัจจุบัน (GPS)
-                FloatingActionButton.small(
-                  heroTag: 'fab-gps-location',
-                  backgroundColor: Colors.white,
-                  foregroundColor: AppColors.primaryColor,
-                  elevation: 4,
-                  tooltip: 'ตำแหน่งปัจจุบันของคุณ',
-                  onPressed: _isLocatingUser
-                      ? null
-                      : _handleGoToCurrentLocation,
-                  child: _isLocatingUser
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.primaryColor,
-                          ),
-                        )
-                      : const Icon(Icons.my_location_rounded, size: 20),
-                ),
-                const SizedBox(height: 8),
-
-                // ปุ่ม Zoom In
-                FloatingActionButton.small(
-                  heroTag: 'fab-zoom-in',
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF334155),
-                  elevation: 4,
-                  tooltip: 'ซูมเข้า',
-                  onPressed: () {
-                    _animateMapTo(
-                      _currentCenter,
-                      zoom: _currentZoom + 1,
-                      updateLocationName: false,
-                    );
-                  },
-                  child: const Icon(Icons.add_rounded, size: 22),
-                ),
-                const SizedBox(height: 6),
-
-                // ปุ่ม Zoom Out
-                FloatingActionButton.small(
-                  heroTag: 'fab-zoom-out',
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF334155),
-                  elevation: 4,
-                  tooltip: 'ซูมออก',
-                  onPressed: () {
-                    _animateMapTo(
-                      _currentCenter,
-                      zoom: _currentZoom - 1,
-                      updateLocationName: false,
-                    );
-                  },
-                  child: const Icon(Icons.remove_rounded, size: 22),
-                ),
-              ],
-            ),
-          ),
-
-          // 5. แถบข้อมูลสรุปและปุ่มยืนยันด้านล่าง (Bottom Confirmation Card)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 20,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Handle Bar
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE2E8F0),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-
-                    // ช่องแก้ไขชื่อสถานที่
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryColor.withValues(
-                              alpha: 0.1,
-                            ),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.location_on_rounded,
-                            color: AppColors.primaryColor,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            controller: _nameController,
-                            style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E2022),
-                            ),
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              hintText: 'ชื่อสถานที่นัดพบ...',
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                        if (_isReverseGeocoding)
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
+          if (!_searchFocusNode.hasFocus)
+            Positioned(
+              right: 16,
+              bottom: 270,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ปุ่มตำแหน่งปัจจุบัน (GPS)
+                  FloatingActionButton.small(
+                    heroTag: 'fab-gps-location',
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.primaryColor,
+                    elevation: 4,
+                    tooltip: 'ตำแหน่งปัจจุบันของคุณ',
+                    onPressed: _isLocatingUser
+                        ? null
+                        : _handleGoToCurrentLocation,
+                    child: _isLocatingUser
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               color: AppColors.primaryColor,
                             ),
-                          ),
-                      ],
-                    ),
+                          )
+                        : const Icon(Icons.my_location_rounded, size: 20),
+                  ),
+                  const SizedBox(height: 8),
 
-                    const SizedBox(height: 6),
+                  // ปุ่ม Zoom In
+                  FloatingActionButton.small(
+                    heroTag: 'fab-zoom-in',
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF334155),
+                    elevation: 4,
+                    tooltip: 'ซูมเข้า',
+                    onPressed: () {
+                      _animateMapTo(
+                        _currentCenter,
+                        zoom: _currentZoom + 1,
+                        updateLocationName: false,
+                      );
+                    },
+                    child: const Icon(Icons.add_rounded, size: 22),
+                  ),
+                  const SizedBox(height: 6),
 
-                    // รายละเอียดที่อยู่
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        _resolvedAddress.isNotEmpty
-                            ? _resolvedAddress
-                            : 'กำลังโหลดที่อยู่ตามพิกัด...',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 11.5,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                    ),
+                  // ปุ่ม Zoom Out
+                  FloatingActionButton.small(
+                    heroTag: 'fab-zoom-out',
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF334155),
+                    elevation: 4,
+                    tooltip: 'ซูมออก',
+                    onPressed: () {
+                      _animateMapTo(
+                        _currentCenter,
+                        zoom: _currentZoom - 1,
+                        updateLocationName: false,
+                      );
+                    },
+                    child: const Icon(Icons.remove_rounded, size: 22),
+                  ),
+                ],
+              ),
+            ),
 
-                    const SizedBox(height: 14),
-
-                    TextField(
-                      controller: _noteController,
-                      key: const Key('pickup-location-note'),
-                      maxLength: 500,
-                      decoration: const InputDecoration(
-                        labelText: 'หมายเหตุ (ไม่บังคับ)',
-                        hintText: 'เช่น หน้าประตู 1',
-                      ),
-                    ),
-                    // ปุ่มยืนยันสถานที่นัดพบนี้
-                    SizedBox(
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        key: const ValueKey('confirm-location-picker-button'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryColor,
-                          foregroundColor: Colors.white,
-                          elevation: 2,
-                          shadowColor: AppColors.primaryColor.withValues(
-                            alpha: 0.35,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                        ),
-                        onPressed: _isReverseGeocoding
-                            ? null
-                            : _onConfirmLocation,
-                        icon: const Icon(Icons.check_circle_rounded, size: 20),
-                        label: const Text(
-                          'ยืนยันสถานที่นัดพบนี้',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
+          // 5. แถบข้อมูลสรุปและปุ่มยืนยันด้านล่าง (Bottom Confirmation Card)
+          if (!_searchFocusNode.hasFocus)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 20,
+                      offset: const Offset(0, -4),
                     ),
                   ],
                 ),
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Handle Bar
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE2E8F0),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+
+                      if (_selectedApproximate)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 10),
+                          child: Text(
+                            'ยังไม่พบเลขบ้าน กรุณาเลื่อนหมุดไปจุดนัดรับที่ต้องการ',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF92400E),
+                            ),
+                          ),
+                        ),
+                      // ช่องแก้ไขชื่อสถานที่
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryColor.withValues(
+                                alpha: 0.1,
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.location_on_rounded,
+                              color: AppColors.primaryColor,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _nameController,
+                              style: const TextStyle(
+                                fontFamily: AppTextStyles.fontFamily,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1E2022),
+                              ),
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                hintText: 'ชื่อสถานที่นัดพบ...',
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ),
+                          if (_isReverseGeocoding)
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.primaryColor,
+                              ),
+                            ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      if (_selectedOriginalName?.isNotEmpty ?? false)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            'ชื่อเดิม: $_selectedOriginalName',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      // รายละเอียดที่อยู่
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Text(
+                          _resolvedAddress.isNotEmpty
+                              ? _resolvedAddress
+                              : 'กำลังโหลดที่อยู่ตามพิกัด...',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 11.5,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // ปุ่มยืนยันสถานที่นัดพบนี้
+                      SizedBox(
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          key: const ValueKey('confirm-location-picker-button'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryColor,
+                            foregroundColor: Colors.white,
+                            elevation: 2,
+                            shadowColor: AppColors.primaryColor.withValues(
+                              alpha: 0.35,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                          onPressed: _isReverseGeocoding
+                              ? null
+                              : _onConfirmLocation,
+                          icon: const Icon(
+                            Icons.check_circle_rounded,
+                            size: 20,
+                          ),
+                          label: const Text(
+                            'ยืนยันสถานที่นัดพบนี้',
+                            style: TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

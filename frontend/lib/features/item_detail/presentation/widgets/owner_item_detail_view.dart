@@ -90,10 +90,6 @@ class OwnerItemDetailView extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            _AvailabilityBadge(
-                              status: item.status,
-                              hidden: item.ownerHidden,
-                            ),
                           ],
                         ),
                       ],
@@ -213,78 +209,6 @@ class _ManagementRow extends StatelessWidget {
       color: Color(0xFF9D96AD),
     ),
   );
-}
-
-class _AvailabilityBadge extends StatelessWidget {
-  const _AvailabilityBadge({required this.status, required this.hidden});
-  final String status;
-  final bool hidden;
-  @override
-  Widget build(BuildContext context) {
-    final (label, icon, foreground, background) = hidden
-        ? (
-            'กำลังซ่อน',
-            Icons.visibility_off_outlined,
-            const Color(0xFF626574),
-            const Color(0xFFF0F1F5),
-          )
-        : switch (status.trim().toLowerCase()) {
-            'available' || 'พร้อมใช้งาน' || 'พร้อมให้เช่า' => (
-              'เปิดให้เช่า',
-              Icons.check_circle_outline_rounded,
-              const Color(0xFF176B47),
-              const Color(0xFFECF7F0),
-            ),
-            'rented' || 'renting' || 'กำลังเช่า' || 'ถูกเช่า' => (
-              'กำลังถูกเช่า',
-              Icons.schedule_rounded,
-              const Color(0xFF315FA6),
-              const Color(0xFFEDF3FF),
-            ),
-            'maintenance' || 'ซ่อมบำรุง' => (
-              'อยู่ระหว่างดูแล',
-              Icons.build_circle_outlined,
-              const Color(0xFF8C5719),
-              const Color(0xFFFFF4E5),
-            ),
-            'unavailable' || 'ไม่พร้อมใช้งาน' => (
-              'ยังไม่พร้อม',
-              Icons.pause_circle_outline_rounded,
-              const Color(0xFF626574),
-              const Color(0xFFF0F1F5),
-            ),
-            _ => (
-              'ไม่ระบุสถานะ',
-              Icons.help_outline_rounded,
-              const Color(0xFF626574),
-              const Color(0xFFF0F1F5),
-            ),
-          };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: foreground, size: 16),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: foreground,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _OwnerItemPhotos extends StatefulWidget {

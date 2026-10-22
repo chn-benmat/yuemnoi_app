@@ -1,11 +1,14 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import '../../../../core/cache/network_image_cache_key.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 
 import '../../../../core/services/media_download_service.dart';
+import '../../../../core/theme/media_gallery_style.dart';
 
 class FullScreenImageViewer extends StatefulWidget {
   const FullScreenImageViewer({
@@ -52,6 +55,27 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
   final _resolvedUrls = <String, String>{};
   final _attempted = <String>{};
   List<String> _identities = [];
+  bool _saving = false;
+
+  Future<void> _saveCurrent(String url) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    var success = false;
+    try {
+      success = await MediaDownloadService.instance.saveImageFromUrl(url);
+    } catch (_) {
+      // แสดงผลล้มเหลวและคืนปุ่มให้ลองใหม่ได้
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (success) {
+      return;
+    }
+    showAppPopup(
+      context,
+      content: Text('บันทึกไม่สำเร็จ โปรดตรวจสอบสิทธิ์รูปภาพแล้วลองใหม่'),
+    );
+  }
 
   Future<void> _recover(
     int index,
@@ -112,50 +136,90 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
       for (var i = 0; i < widget.imageUrls.length; i++)
         _resolvedUrls[identities[i]] ?? widget.imageUrls[i],
     ];
-    final mediaQuery = MediaQuery.of(context);
-    final topPadding = mediaQuery.padding.top + 56.0;
-    final bottomPadding = mediaQuery.padding.bottom + 24.0;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF7A09A3),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF8B12BA), Color(0xFF6E0099), Color(0xFF4C006E)],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: MediaGalleryStyle.darkSystemUi,
+      child: Scaffold(
+        backgroundColor: MediaGalleryStyle.viewerBackground,
+        appBar: AppBar(
+          systemOverlayStyle: MediaGalleryStyle.darkSystemUi,
+          backgroundColor: MediaGalleryStyle.viewerBackground,
+          surfaceTintColor: MediaGalleryStyle.viewerBackground,
+          foregroundColor: MediaGalleryStyle.surface,
+          elevation: 0,
+          toolbarHeight: 72,
+          leadingWidth: 72,
+          leading: Padding(
+            padding: const EdgeInsets.all(12),
+            child: IconButton.filledTonal(
+              icon: const Icon(Icons.close_rounded, size: 24),
+              tooltip: 'ปิด',
+              style: IconButton.styleFrom(
+                backgroundColor: MediaGalleryStyle.viewerSurface,
+                foregroundColor: MediaGalleryStyle.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
           ),
+          centerTitle: true,
+          title: Column(
+            children: [
+              const Text(
+                'รูปภาพ',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              if (urls.isNotEmpty)
+                Text(
+                  '${_currentIndex + 1}/${urls.length}',
+                  style: const TextStyle(
+                    color: MediaGalleryStyle.viewerMuted,
+                    fontSize: 12,
+                  ),
+                ),
+            ],
+          ),
+          actions: const [SizedBox(width: 72)],
         ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (urls.isEmpty)
-              const Center(
-                child: Icon(
-                  Icons.image_not_supported_outlined,
-                  color: Colors.white54,
-                  size: 64,
+        body: urls.isEmpty
+            ? const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.image_not_supported_outlined,
+                      color: MediaGalleryStyle.viewerMuted,
+                      size: 48,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'ยังไม่มีรูปภาพ',
+                      style: TextStyle(color: MediaGalleryStyle.viewerMuted),
+                    ),
+                  ],
                 ),
               )
-            else
-              Padding(
-                padding: EdgeInsets.fromLTRB(16, topPadding, 16, bottomPadding),
+            : Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 12,
+                ),
                 child: PhotoViewGallery.builder(
                   key: ValueKey((identities.join('|'), urls.join('|'))),
                   pageController: _pageController,
                   itemCount: urls.length,
                   backgroundDecoration: const BoxDecoration(
-                    color: Colors.transparent,
+                    color: MediaGalleryStyle.viewerBackground,
                   ),
                   onPageChanged: (index) =>
                       setState(() => _currentIndex = index),
                   loadingBuilder: (context, progress) => const Center(
-                    child: SizedBox(
-                      width: 36,
-                      height: 36,
+                    child: SizedBox.square(
+                      dimension: 32,
                       child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 3,
+                        color: MediaGalleryStyle.viewerMuted,
+                        strokeWidth: 2,
                       ),
                     ),
                   ),
@@ -178,108 +242,79 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
                         );
                       }
                       return const Center(
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: Colors.white54,
-                          size: 64,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.broken_image_outlined,
+                              color: MediaGalleryStyle.viewerMuted,
+                              size: 48,
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'โหลดรูปไม่สำเร็จ',
+                              style: TextStyle(
+                                color: MediaGalleryStyle.viewerMuted,
+                              ),
+                            ),
+                          ],
                         ),
                       );
                     },
                   ),
                 ),
               ),
-
-            // Top action bar
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Close button
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.25),
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            color: Colors.white,
-                            size: 26,
-                          ),
-                          tooltip: 'ปิด',
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ),
-
-                      // Counter badge if multiple
-                      if (urls.length > 1)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '${_currentIndex + 1}/${urls.length}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-
-                      // Download button
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.25),
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.download_rounded,
-                            color: Colors.white,
-                            size: 26,
-                          ),
-                          tooltip: 'บันทึกรูปภาพ',
-                          onPressed: () async {
-                            if (urls.isEmpty) return;
-                            final currentUrl = urls[_currentIndex];
-                            final success = await MediaDownloadService.instance
-                                .saveImageFromUrl(currentUrl);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    success
-                                        ? 'บันทึกรูปภาพลงในแกลเลอรีเรียบร้อยแล้ว'
-                                        : 'ไม่สามารถบันทึกรูปภาพได้ กรุณาลองใหม่',
-                                  ),
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                    ],
+        bottomNavigationBar: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (urls.isNotEmpty) ...[
+                Text(
+                  urls.length > 1
+                      ? 'ปัดเพื่อเปลี่ยนรูป · ใช้สองนิ้วเพื่อซูม'
+                      : 'ใช้สองนิ้วเพื่อซูมดูรายละเอียด',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: MediaGalleryStyle.viewerMuted,
+                    fontSize: 12,
                   ),
                 ),
+                const SizedBox(height: 16),
+              ],
+              FilledButton.icon(
+                onPressed: _saving || urls.isEmpty
+                    ? null
+                    : () => _saveCurrent(urls[_currentIndex]),
+                style: MediaGalleryStyle.saveButtonStyle.copyWith(
+                  backgroundColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.disabled)
+                        ? MediaGalleryStyle.viewerSurface
+                        : MediaGalleryStyle.accent,
+                  ),
+                  foregroundColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.disabled)
+                        ? MediaGalleryStyle.viewerMuted
+                        : MediaGalleryStyle.surface,
+                  ),
+                ),
+                icon: _saving
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: MediaGalleryStyle.viewerMuted,
+                        ),
+                      )
+                    : const Icon(Icons.download_rounded, size: 22),
+                label: Text(
+                  _saving ? 'กำลังบันทึก…' : 'บันทึกรูปภาพ',
+                  maxLines: 1,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

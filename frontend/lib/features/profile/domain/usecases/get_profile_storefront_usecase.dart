@@ -25,7 +25,15 @@ class GetProfileStorefrontUseCase {
     List<StorefrontReview>? reviews;
     try {
       reviews = ids.isEmpty ? [] : await repository.getReviews(ids.toList());
-      reviews = reviews.where((review) => ids.contains(review.itemId)).toList();
+      reviews = reviews
+          .where(
+            (review) =>
+                ids.contains(review.itemId) &&
+                review.rating.isFinite &&
+                review.rating >= 1 &&
+                review.rating <= 5,
+          )
+          .toList();
     } catch (_) {
       reviews = null;
     }
@@ -35,6 +43,7 @@ class GetProfileStorefrontUseCase {
     }
     return ProfileStorefront(
       identity: identity,
+      reviewDetails: reviews ?? const [],
       identityUnavailable: identityUnavailable,
       items: items
           .map(

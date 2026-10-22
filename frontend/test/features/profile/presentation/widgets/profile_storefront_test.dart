@@ -8,6 +8,64 @@ import 'package:frontend/features/profile/presentation/widgets/profile/user_prof
 import '../../domain/usecases/get_profile_storefront_usecase_test.dart';
 
 void main() {
+  testWidgets('visitor opens public reviewer names and comments from rating', (
+    tester,
+  ) async {
+    final repository = FakeStorefrontRepository()
+      ..reviews = [
+        const StorefrontReview(
+          itemId: 1,
+          rating: 5,
+          reviewerName: 'ผู้รีวิวกล้อง',
+          description: 'เจ้าของใจดี อุปกรณ์สะอาด',
+        ),
+      ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UserProfileViewScreen(
+          args: const UserProfileViewArgs(
+            userId: 'owner',
+            displayName: 'เจ้าของ',
+          ),
+          getStorefront: GetProfileStorefrontUseCase(repository),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('profile-reviews')));
+    await tester.pumpAndSettle();
+    expect(find.text('ผู้รีวิวกล้อง'), findsOneWidget);
+    expect(find.text('เจ้าของใจดี อุปกรณ์สะอาด'), findsOneWidget);
+    expect(find.text('อุปกรณ์: กล้องตัวแรก'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final own in [true, false]) {
+    testWidgets('rating is tappable for owner=$own including no reviews', (
+      tester,
+    ) async {
+      var taps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: UserProfileHeaderSection(
+              displayName: 'เจ้าของ',
+              avatarUrl: null,
+              bio: null,
+              reviews: const ReviewSummary(),
+              isVerified: false,
+              isCurrentUser: own,
+              onEditProfile: () {},
+              onReviewsTap: () => taps++,
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('profile-reviews')));
+      expect(taps, 1);
+    });
+  }
+
   testWidgets('owner can edit next to identity; visitor does not see edit', (
     tester,
   ) async {

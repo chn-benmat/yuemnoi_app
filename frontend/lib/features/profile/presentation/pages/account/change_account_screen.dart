@@ -8,14 +8,15 @@ import '../../../../../core/theme/app_text_styles.dart';
 import '../../widgets/account/change_account_widgets.dart';
 
 class ChangeAccountScreen extends StatefulWidget {
-  const ChangeAccountScreen({super.key});
+  const ChangeAccountScreen({super.key, this.notificationsOnly = false});
+
+  final bool notificationsOnly;
 
   @override
   State<ChangeAccountScreen> createState() => _ChangeAccountScreenState();
 }
 
 class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
-  bool _biometricEnabled = false;
   bool _twoFactorEnabled = false;
   bool _muteNotifications = false;
   bool _securityAlerts = true;
@@ -35,7 +36,6 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
       final prefs = await SharedPreferences.getInstance();
       if (!mounted) return;
       setState(() {
-        _biometricEnabled = prefs.getBool('sec_biometric') ?? false;
         _twoFactorEnabled = prefs.getBool('sec_2fa') ?? false;
         _muteNotifications = prefs.getBool('sec_mute_notif') ?? false;
         _securityAlerts = prefs.getBool('sec_alerts') ?? true;
@@ -60,27 +60,6 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(key, list);
     } catch (_) {}
-  }
-
-  void _showSnackBar(String message, {bool isError = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            message,
-            style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-          ),
-          backgroundColor: isError
-              ? Colors.red.shade700
-              : AppColors.primaryColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
   }
 
   // ─── Modal Sheets ────────────────────────────────────────────────────────────
@@ -134,7 +113,6 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                           setState(() => _blockedUsers.add(username));
                           setSheetState(() {});
                           _saveStringList('sec_blocked_users', _blockedUsers);
-                          _showSnackBar('บล็อก $username เรียบร้อยแล้ว');
                         }
                       },
                     ),
@@ -201,7 +179,6 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                             setState(() => _blockedUsers.removeAt(i));
                             setSheetState(() {});
                             _saveStringList('sec_blocked_users', _blockedUsers);
-                            _showSnackBar('ปลดบล็อก $username เรียบร้อยแล้ว');
                           },
                           child: const Text(
                             'ปลดบล็อก',
@@ -272,7 +249,6 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                           setState(() => _hiddenUsers.add(username));
                           setSheetState(() {});
                           _saveStringList('sec_hidden_users', _hiddenUsers);
-                          _showSnackBar('ซ่อนโพสต์ของ $username เรียบร้อยแล้ว');
                         }
                       },
                     ),
@@ -339,9 +315,6 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                             setState(() => _hiddenUsers.removeAt(i));
                             setSheetState(() {});
                             _saveStringList('sec_hidden_users', _hiddenUsers);
-                            _showSnackBar(
-                              'ยกเลิกการซ่อน $username เรียบร้อยแล้ว',
-                            );
                           },
                           child: const Text(
                             'เลิกซ่อน',
@@ -440,7 +413,6 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
             OutlinedButton.icon(
               onPressed: () {
                 Navigator.pop(ctx);
-                _showSnackBar('ออกจากระบบจากอุปกรณ์อื่นทั้งหมดเรียบร้อยแล้ว');
               },
               icon: const Icon(
                 Icons.logout_rounded,
@@ -510,10 +482,6 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _showSnackBar(
-                'ส่งคำขอลบบัญชีแล้ว โปรดรอการยืนยันทางอีเมล',
-                isError: true,
-              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -602,9 +570,9 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
         leading: const BackButton(),
-        title: const Text(
-          'ความปลอดภัยและความเป็นส่วนตัว',
-          style: TextStyle(
+        title: Text(
+          widget.notificationsOnly ? 'การแจ้งเตือน' : 'ศูนย์ความเป็นส่วนตัว',
+          style: const TextStyle(
             fontFamily: AppTextStyles.fontFamily,
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -618,157 +586,134 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Section: บัญชีและความปลอดภัย ──
-            _buildSectionHeader('บัญชีและความปลอดภัย'),
-            _buildCardGroup([
-              AccountSecurityItem(
-                icon: Icons.lock_outline_rounded,
-                iconBgColor: const Color(0xFFF3E8FF),
-                iconColor: AppColors.primaryColor,
-                title: 'เปลี่ยนรหัสผ่าน',
-                subtitle: 'อัปเดตรหัสผ่านของคุณเพื่อความปลอดภัย',
-                onTap: () => AppRoutes.openProfileChangePassword(context),
-              ),
-              _buildDivider(),
-              AccountSecuritySwitchItem(
-                icon: Icons.fingerprint_rounded,
-                iconBgColor: const Color(0xFFE8F5E9),
-                iconColor: const Color(0xFF2E7D32),
-                title: 'เข้าสู่ระบบด้วยลายนิ้วมือ / Face ID',
-                subtitle: 'เข้าสู่ระบบอย่างรวดเร็วและปลอดภัย',
-                value: _biometricEnabled,
-                onChanged: (val) {
-                  setState(() => _biometricEnabled = val);
-                  _saveBool('sec_biometric', val);
-                  _showSnackBar(
-                    val
-                        ? 'เปิดใช้งานการสแกนลายนิ้วมือ/ใบหน้าแล้ว'
-                        : 'ปิดใช้งานการสแกนลายนิ้วมือ/ใบหน้าแล้ว',
-                  );
-                },
-              ),
-              _buildDivider(),
-              AccountSecuritySwitchItem(
-                icon: Icons.verified_user_outlined,
-                iconBgColor: const Color(0xFFE3F2FF),
-                iconColor: const Color(0xFF1565C0),
-                title: 'การยืนยันตัวตน 2 ขั้นตอน (2FA)',
-                subtitle: 'เพิ่มการตรวจสอบสิทธิ์ความปลอดภัยเมื่อเข้าใช้งาน',
-                value: _twoFactorEnabled,
-                onChanged: (val) {
-                  setState(() => _twoFactorEnabled = val);
-                  _saveBool('sec_2fa', val);
-                  _showSnackBar(
-                    val
-                        ? 'เปิดใช้งานการยืนยันตัวตน 2 ขั้นตอนแล้ว'
-                        : 'ปิดใช้งานการยืนยันตัวตน 2 ขั้นตอนแล้ว',
-                  );
-                },
-              ),
-            ]),
+            if (!widget.notificationsOnly) ...[
+              // ── Section: บัญชีและความปลอดภัย ──
+              _buildSectionHeader('บัญชีและความปลอดภัย'),
+              _buildCardGroup([
+                AccountSecurityItem(
+                  icon: Icons.lock_outline_rounded,
+                  iconBgColor: const Color(0xFFF3E8FF),
+                  iconColor: AppColors.primaryColor,
+                  title: 'เปลี่ยนรหัสผ่าน',
+                  subtitle: 'อัปเดตรหัสผ่านของคุณเพื่อความปลอดภัย',
+                  onTap: () => AppRoutes.openProfileChangePassword(context),
+                ),
+                _buildDivider(),
+                AccountSecuritySwitchItem(
+                  icon: Icons.verified_user_outlined,
+                  iconBgColor: const Color(0xFFE3F2FF),
+                  iconColor: const Color(0xFF1565C0),
+                  title: 'การยืนยันตัวตน 2 ขั้นตอน (2FA)',
+                  subtitle: 'เพิ่มการตรวจสอบสิทธิ์ความปลอดภัยเมื่อเข้าใช้งาน',
+                  value: _twoFactorEnabled,
+                  onChanged: (val) {
+                    setState(() => _twoFactorEnabled = val);
+                    _saveBool('sec_2fa', val);
+                  },
+                ),
+              ]),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            // ── Section: การจัดการการโต้ตอบและความเป็นส่วนตัว ──
-            _buildSectionHeader('ความเป็นส่วนตัวและการบล็อก'),
-            _buildCardGroup([
-              AccountSecurityItem(
-                icon: Icons.block_rounded,
-                iconBgColor: const Color(0xFFFEE2E2),
-                iconColor: Colors.red.shade700,
-                title: 'จัดการผู้ใช้ที่บล็อก',
-                subtitle: _blockedUsers.isEmpty
-                    ? 'ไม่มีผู้ใช้ที่ถูกบล็อก'
-                    : 'บล็อกอยู่ ${_blockedUsers.length} คน',
-                onTap: _showBlockedUsersSheet,
-              ),
-              _buildDivider(),
-              AccountSecurityItem(
-                icon: Icons.visibility_off_outlined,
-                iconBgColor: const Color(0xFFFEF3C7),
-                iconColor: const Color(0xFFD97706),
-                title: 'ซ่อนผู้ใช้ที่ไม่ต้องการเห็น',
-                subtitle: _hiddenUsers.isEmpty
-                    ? 'ไม่มีผู้ใช้ที่ซ่อนอยู่'
-                    : 'ซ่อนอยู่ ${_hiddenUsers.length} คน',
-                onTap: _showHiddenUsersSheet,
-              ),
-              _buildDivider(),
-              AccountSecuritySwitchItem(
-                icon: Icons.person_search_outlined,
-                iconBgColor: const Color(0xFFF3E8FF),
-                iconColor: AppColors.primaryColor,
-                title: 'อนุญาตให้ค้นหาโปรไฟล์ของคุณ',
-                subtitle: 'ผู้ใช้อื่นสามารถค้นหาคุณได้จากชื่อแสดงตัวตน',
-                value: _profileSearchable,
-                onChanged: (val) {
-                  setState(() => _profileSearchable = val);
-                  _saveBool('sec_profile_search', val);
-                },
-              ),
-            ]),
+              // ── Section: การจัดการการโต้ตอบและความเป็นส่วนตัว ──
+              _buildSectionHeader('ความเป็นส่วนตัวและการบล็อก'),
+              _buildCardGroup([
+                AccountSecurityItem(
+                  icon: Icons.block_rounded,
+                  iconBgColor: const Color(0xFFFEE2E2),
+                  iconColor: Colors.red.shade700,
+                  title: 'จัดการผู้ใช้ที่บล็อก',
+                  subtitle: _blockedUsers.isEmpty
+                      ? 'ไม่มีผู้ใช้ที่ถูกบล็อก'
+                      : 'บล็อกอยู่ ${_blockedUsers.length} คน',
+                  onTap: _showBlockedUsersSheet,
+                ),
+                _buildDivider(),
+                AccountSecurityItem(
+                  icon: Icons.visibility_off_outlined,
+                  iconBgColor: const Color(0xFFFEF3C7),
+                  iconColor: const Color(0xFFD97706),
+                  title: 'ซ่อนผู้ใช้ที่ไม่ต้องการเห็น',
+                  subtitle: _hiddenUsers.isEmpty
+                      ? 'ไม่มีผู้ใช้ที่ซ่อนอยู่'
+                      : 'ซ่อนอยู่ ${_hiddenUsers.length} คน',
+                  onTap: _showHiddenUsersSheet,
+                ),
+                _buildDivider(),
+                AccountSecuritySwitchItem(
+                  icon: Icons.person_search_outlined,
+                  iconBgColor: const Color(0xFFF3E8FF),
+                  iconColor: AppColors.primaryColor,
+                  title: 'อนุญาตให้ค้นหาโปรไฟล์ของคุณ',
+                  subtitle: 'ผู้ใช้อื่นสามารถค้นหาคุณได้จากชื่อแสดงตัวตน',
+                  value: _profileSearchable,
+                  onChanged: (val) {
+                    setState(() => _profileSearchable = val);
+                    _saveBool('sec_profile_search', val);
+                  },
+                ),
+              ]),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
+            ],
+            if (widget.notificationsOnly) ...[
+              // ── Section: การแจ้งเตือนความปลอดภัย ──
+              _buildSectionHeader('การแจ้งเตือน'),
+              _buildCardGroup([
+                AccountSecuritySwitchItem(
+                  icon: Icons.notifications_off_outlined,
+                  iconBgColor: const Color(0xFFEDE9FE),
+                  iconColor: const Color(0xFF7C3AED),
+                  title: 'ปิดการแจ้งเตือนทั้งหมดชั่วคราว',
+                  subtitle: 'ปิดเสียงและการสั่นเตือนจากกิจกรรมในแอป',
+                  value: _muteNotifications,
+                  onChanged: (val) {
+                    setState(() => _muteNotifications = val);
+                    _saveBool('sec_mute_notif', val);
+                  },
+                ),
+                _buildDivider(),
+                AccountSecuritySwitchItem(
+                  icon: Icons.security_rounded,
+                  iconBgColor: const Color(0xFFE0F2FE),
+                  iconColor: const Color(0xFF0284C7),
+                  title: 'แจ้งเตือนเมื่อเข้าสู่ระบบจากอุปกรณ์ใหม่',
+                  subtitle:
+                      'รับการแจ้งเตือนทันทีเมื่อตรวจพบอุปกรณ์ที่ไม่คุ้นเคย',
+                  value: _securityAlerts,
+                  onChanged: (val) {
+                    setState(() => _securityAlerts = val);
+                    _saveBool('sec_alerts', val);
+                  },
+                ),
+              ]),
 
-            // ── Section: การแจ้งเตือนความปลอดภัย ──
-            _buildSectionHeader('การแจ้งเตือน'),
-            _buildCardGroup([
-              AccountSecuritySwitchItem(
-                icon: Icons.notifications_off_outlined,
-                iconBgColor: const Color(0xFFEDE9FE),
-                iconColor: const Color(0xFF7C3AED),
-                title: 'ปิดการแจ้งเตือนทั้งหมดชั่วคราว',
-                subtitle: 'ปิดเสียงและการสั่นเตือนจากกิจกรรมในแอป',
-                value: _muteNotifications,
-                onChanged: (val) {
-                  setState(() => _muteNotifications = val);
-                  _saveBool('sec_mute_notif', val);
-                  _showSnackBar(
-                    val
-                        ? 'ปิดการแจ้งเตือนทั้งหมดแล้ว'
-                        : 'เปิดรับการแจ้งเตือนตามปกติแล้ว',
-                  );
-                },
-              ),
-              _buildDivider(),
-              AccountSecuritySwitchItem(
-                icon: Icons.security_rounded,
-                iconBgColor: const Color(0xFFE0F2FE),
-                iconColor: const Color(0xFF0284C7),
-                title: 'แจ้งเตือนเมื่อเข้าสู่ระบบจากอุปกรณ์ใหม่',
-                subtitle: 'รับการแจ้งเตือนทันทีเมื่อตรวจพบอุปกรณ์ที่ไม่คุ้นเคย',
-                value: _securityAlerts,
-                onChanged: (val) {
-                  setState(() => _securityAlerts = val);
-                  _saveBool('sec_alerts', val);
-                },
-              ),
-            ]),
-
-            const SizedBox(height: 20),
-
-            // ── Section: เซสชันและการจัดการบัญชี ──
-            _buildSectionHeader('อุปกรณ์และการจัดการบัญชี'),
-            _buildCardGroup([
-              AccountSecurityItem(
-                icon: Icons.devices_outlined,
-                iconBgColor: const Color(0xFFE2E8F0),
-                iconColor: const Color(0xFF475569),
-                title: 'อุปกรณ์ที่เข้าสู่ระบบอยู่',
-                subtitle: 'ตรวจสอบและออกจากระบบอุปกรณ์อื่น',
-                onTap: _showActiveSessionsSheet,
-              ),
-              _buildDivider(),
-              AccountSecurityItem(
-                icon: Icons.delete_outline_rounded,
-                iconBgColor: const Color(0xFFFEE2E2),
-                iconColor: Colors.red.shade700,
-                title: 'ลบบัญชีผู้ใช้',
-                subtitle: 'ปิดการใช้งานและลบข้อมูลบัญชีถาวร',
-                isDanger: true,
-                onTap: _showDeleteAccountDialog,
-              ),
-            ]),
+              const SizedBox(height: 20),
+            ],
+            if (!widget.notificationsOnly) ...[
+              // ── Section: เซสชันและการจัดการบัญชี ──
+              _buildSectionHeader('อุปกรณ์และการจัดการบัญชี'),
+              _buildCardGroup([
+                AccountSecurityItem(
+                  icon: Icons.devices_outlined,
+                  iconBgColor: const Color(0xFFE2E8F0),
+                  iconColor: const Color(0xFF475569),
+                  title: 'อุปกรณ์ที่เข้าสู่ระบบอยู่',
+                  subtitle: 'ตรวจสอบและออกจากระบบอุปกรณ์อื่น',
+                  onTap: _showActiveSessionsSheet,
+                ),
+                _buildDivider(),
+                AccountSecurityItem(
+                  icon: Icons.delete_outline_rounded,
+                  iconBgColor: const Color(0xFFFEE2E2),
+                  iconColor: Colors.red.shade700,
+                  title: 'ลบบัญชีผู้ใช้',
+                  subtitle: 'ปิดการใช้งานและลบข้อมูลบัญชีถาวร',
+                  isDanger: true,
+                  onTap: _showDeleteAccountDialog,
+                ),
+              ]),
+            ],
           ],
         ),
       ),

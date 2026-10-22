@@ -7,6 +7,29 @@ import 'package:frontend/core/services/app_notification_service.dart';
 import 'support/fake_notification_repository.dart';
 
 void main() {
+  test('notification badge excludes unread chats and read history', () {
+    final state = NotificationInboxState(
+      items: [
+        notification(category: AppNotificationCategory.chat),
+        notification(id: 'read', isRead: true),
+      ],
+      unreadCount: 1,
+    );
+    expect(state.hasUnreadNotification, isFalse);
+    expect(const NotificationInboxState().hasUnreadNotification, isFalse);
+    for (final category in [
+      AppNotificationCategory.rental,
+      AppNotificationCategory.app,
+    ]) {
+      expect(
+        NotificationInboxState(
+          items: [notification(category: category)],
+        ).hasUnreadNotification,
+        isTrue,
+      );
+    }
+  });
+
   late FakeNotificationRepository repository;
   late AppNotificationService service;
   late List<AppNotification> events;

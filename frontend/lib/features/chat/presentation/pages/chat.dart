@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -17,11 +16,9 @@ import '../widgets/chat_list_loading_skeleton.dart';
 import '../widgets/conversation_action_sheet.dart';
 import '../widgets/guest_chat_view.dart';
 import '../../../../core/network/auth_session.dart';
-import '../../../../core/network/supabase_client.dart';
+
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
-
-enum _ConversationFilter { all, owner, renter }
 
 class ChatScreen extends StatelessWidget {
   const ChatScreen({super.key, this.chatListBloc});
@@ -70,10 +67,71 @@ class _ChatScreenContent extends StatefulWidget {
 
 class _ChatScreenContentState extends State<_ChatScreenContent> {
   final _searchController = TextEditingController();
-  _ConversationFilter _filter = _ConversationFilter.all;
-  Timer? _searchDebounce;
-  List<Map<String, dynamic>> _searchedUsers = [];
-  bool _isSearchingUsers = false;
+  bool _oldestFirst = false;
+  bool _unreadOnly = false;
+
+  void _showFilters() {
+    FocusScope.of(context).unfocus();
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, updateSheet) => SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'ตัวกรองแชท',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'เรียงลำดับ',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                for (final oldest in [false, true])
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(oldest ? 'เก่าสุด' : 'ใหม่ล่าสุด'),
+                    leading: Icon(
+                      _oldestFirst == oldest
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      color: AppColors.primaryColor,
+                    ),
+                    selected: _oldestFirst == oldest,
+                    onTap: () {
+                      setState(() => _oldestFirst = oldest);
+                      updateSheet(() {});
+                    },
+                  ),
+                const Divider(),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('ยังไม่ได้อ่าน'),
+                  value: _unreadOnly,
+                  onChanged: (value) {
+                    setState(() => _unreadOnly = value);
+                    updateSheet(() {});
+                  },
+                ),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('เสร็จสิ้น'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -84,7 +142,7 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
   @override
   void dispose() {
     ChatPinService.instance.pinNotifier.removeListener(_onPinChanged);
-    _searchDebounce?.cancel();
+
     _searchController.dispose();
     super.dispose();
   }
@@ -95,75 +153,6 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
 
   void _onSearchChanged(String value) {
     setState(() {});
-    _searchDebounce?.cancel();
-    final query = value.trim();
-    if (query.isEmpty) {
-      if (mounted) {
-        setState(() {
-          _searchedUsers = [];
-          _isSearchingUsers = false;
-        });
-      }
-      return;
-    }
-    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
-      _searchUsersFromSupabase(query);
-    });
-  }
-
-  Future<void> _searchUsersFromSupabase(String query) async {
-    if (!SupabaseConfig.isInitialized) return;
-    if (mounted) setState(() => _isSearchingUsers = true);
-    try {
-      final currentUserId = SupabaseConfig.client.auth.currentUser?.id;
-      final results = await SupabaseConfig.client
-          .schema('profiles')
-          .from('public_profile_v')
-          .select('user_id, display_name, user_image_url, email, is_online')
-          .or('display_name.ilike.%$query%,email.ilike.%$query%')
-          .limit(8);
-
-      if (!mounted) return;
-      final list = (results as List)
-          .cast<Map<String, dynamic>>()
-          .where((u) => u['user_id'] != currentUserId)
-          .toList();
-
-      setState(() {
-        _searchedUsers = list;
-        _isSearchingUsers = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _isSearchingUsers = false);
-    }
-  }
-
-  Future<void> _startChatWithUser(Map<String, dynamic> user) async {
-    final otherUserId = user['user_id']?.toString() ?? '';
-    if (otherUserId.isEmpty) return;
-
-    try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('กำลังเปิดบทสนทนา...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-      final conversation = await ChatRemoteDataSource().getOrCreateConversation(
-        ownerId: otherUserId,
-      );
-      if (!mounted) return;
-      AppRoutes.openConversation(context, conversation: conversation).then((_) {
-        if (mounted) {
-          context.read<ChatListBloc>().add(const ChatListRefreshed());
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('ไม่สามารถเริ่มแชทได้: $e')));
-    }
   }
 
   List<ChatConversation> _filterConversations(
@@ -177,25 +166,27 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
           conversation.preview.toLowerCase().contains(query) ||
           (conversation.itemName?.toLowerCase().contains(query) ?? false);
 
-      final matchesFilter = switch (_filter) {
-        _ConversationFilter.all => true,
-        _ConversationFilter.owner =>
-          conversation.role == ChatParticipantRole.owner,
-        _ConversationFilter.renter =>
-          conversation.role == ChatParticipantRole.renter,
-      };
-      return matchesQuery && matchesFilter;
+      return matchesQuery && (!_unreadOnly || conversation.hasUnreadMessage);
     }).toList();
 
     // จัดเรียงให้แชทที่ถูกปักหมุดอยู่บนสุดเสมอ (จำกัดปักหมุดได้ 1 แชท)
     final pinnedId = ChatPinService.instance.pinnedConversationId;
-    if (pinnedId != null) {
-      filtered.sort((a, b) {
+    final originalOrder = {
+      for (var i = 0; i < conversations.length; i++) conversations[i].id: i,
+    };
+    filtered.sort((a, b) {
+      if (pinnedId != null) {
         if (a.id == pinnedId) return -1;
         if (b.id == pinnedId) return 1;
-        return 0;
-      });
-    }
+      }
+      final byTime = (b.lastMessageAt?.microsecondsSinceEpoch ?? 0).compareTo(
+        a.lastMessageAt?.microsecondsSinceEpoch ?? 0,
+      );
+      final order = byTime == 0
+          ? originalOrder[a.id]!.compareTo(originalOrder[b.id]!)
+          : byTime;
+      return _oldestFirst ? -order : order;
+    });
 
     return filtered;
   }
@@ -251,24 +242,44 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const Text(
+              'แชท',
+              style: TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF292235),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'คุยรายละเอียด แล้วนัดรับของกัน',
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.5,
+                color: Color(0xFF665D73),
+              ),
+            ),
+            const SizedBox(height: 22),
             TextField(
               key: const ValueKey('chat-search-field'),
               controller: _searchController,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'ค้นหาการสนทนา, บัญชี หรือชื่ออุปกรณ์',
+                hintText: 'ค้นหา',
                 hintStyle: const TextStyle(color: Color(0xFF777A7C)),
                 prefixIcon: const Icon(
                   Icons.search_rounded,
                   color: Color(0xFF6D7072),
                 ),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_searchController.text.isNotEmpty)
+                      IconButton(
                         tooltip: 'ล้างการค้นหา',
                         onPressed: () {
                           _searchController.clear();
@@ -276,38 +287,26 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                         },
                         icon: const Icon(Icons.close_rounded),
                       ),
+                    IconButton(
+                      key: const ValueKey('chat-filter-button'),
+                      tooltip: 'ตัวกรองแชท',
+                      onPressed: _showFilters,
+                      icon: Icon(
+                        Icons.tune_rounded,
+                        color: _oldestFirst || _unreadOnly
+                            ? AppColors.primaryColor
+                            : const Color(0xFF6D7072),
+                      ),
+                    ),
+                  ],
+                ),
                 filled: true,
                 fillColor: const Color(0xFFF0F1F2),
                 contentPadding: const EdgeInsets.symmetric(vertical: 17),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
+                  borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide.none,
                 ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _FilterChip(
-                    label: 'ทั้งหมด',
-                    selected: _filter == _ConversationFilter.all,
-                    onTap: () => _setFilter(_ConversationFilter.all),
-                  ),
-                  const SizedBox(width: 10),
-                  _FilterChip(
-                    label: 'ผู้ปล่อยเช่า',
-                    selected: _filter == _ConversationFilter.owner,
-                    onTap: () => _setFilter(_ConversationFilter.owner),
-                  ),
-                  const SizedBox(width: 10),
-                  _FilterChip(
-                    label: 'ผู้เช่า',
-                    selected: _filter == _ConversationFilter.renter,
-                    onTap: () => _setFilter(_ConversationFilter.renter),
-                  ),
-                ],
               ),
             ),
             const SizedBox(height: 18),
@@ -354,25 +353,8 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                   );
 
                   final isSearching = _searchController.text.trim().isNotEmpty;
-                  final activeUserIds = visibleConversations
-                      .map((c) => c.otherUserId)
-                      .toSet();
-                  final discoveredUsers = _searchedUsers
-                      .where(
-                        (u) =>
-                            !activeUserIds.contains(u['user_id']?.toString()),
-                      )
-                      .toList();
-
-                  if (visibleConversations.isEmpty && discoveredUsers.isEmpty) {
+                  if (visibleConversations.isEmpty) {
                     if (isSearching) {
-                      if (_isSearchingUsers) {
-                        return const Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.primaryColor,
-                          ),
-                        );
-                      }
                       return RefreshIndicator(
                         onRefresh: () async {
                           context.read<ChatListBloc>().add(
@@ -396,50 +378,14 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                       },
                       child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        children: const [
-                          SizedBox(height: 120),
-                          _EmptyConversations(),
-                        ],
-                      ),
-                    );
-                  }
-
-                  if (isSearching && discoveredUsers.isNotEmpty) {
-                    return RefreshIndicator(
-                      color: AppColors.primaryColor,
-                      onRefresh: () async {
-                        context.read<ChatListBloc>().add(
-                          const ChatListRefreshed(),
-                        );
-                      },
-                      child: ListView(
-                        padding: const EdgeInsets.only(bottom: 24),
                         children: [
-                          if (visibleConversations.isNotEmpty) ...[
-                            _buildSectionHeader(
-                              'การสนทนา (${visibleConversations.length})',
-                            ),
-                            ...visibleConversations.map(
-                              (c) => _ConversationCard(
-                                key: ValueKey('card-${c.id}'),
-                                conversation: c,
-                              ),
-                            ),
-                            const Divider(
-                              height: 24,
-                              thickness: 1,
-                              color: Color(0xFFF0F1F2),
-                            ),
-                          ],
-                          _buildSectionHeader(
-                            'บัญชีผู้ใช้ในระบบ (${discoveredUsers.length})',
-                          ),
-                          ...discoveredUsers.map(
-                            (u) => _DiscoveredUserCard(
-                              user: u,
-                              onTap: () => _startChatWithUser(u),
-                            ),
-                          ),
+                          const SizedBox(height: 120),
+                          if (_unreadOnly)
+                            const Center(
+                              child: Text('ไม่มีแชทที่ยังไม่ได้อ่าน'),
+                            )
+                          else
+                            const _EmptyConversations(),
                         ],
                       ),
                     );
@@ -474,66 +420,6 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
       ),
     );
   }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF858789),
-          letterSpacing: 0.2,
-        ),
-      ),
-    );
-  }
-
-  void _setFilter(_ConversationFilter filter) {
-    setState(() {
-      _filter = filter;
-    });
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      selected: selected,
-      button: true,
-      child: Material(
-        color: selected ? AppColors.primaryColor : const Color(0xFFF0F1F2),
-        borderRadius: BorderRadius.circular(22),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(22),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 11),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: selected ? Colors.white : const Color(0xFF4C4F51),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _ConversationCard extends StatelessWidget {
@@ -547,7 +433,9 @@ class _ConversationCard extends StatelessWidget {
     final isPinned = ChatPinService.instance.isPinned(conversation.id);
 
     return Material(
-      color: Colors.transparent,
+      color: hasUnread ? const Color(0xFFF5EFFD) : Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         key: ValueKey('conversation-${conversation.id}'),
         onLongPress: () {
@@ -627,16 +515,23 @@ class _ConversationCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          conversation.timeLabel,
-                          style: TextStyle(
-                            color: hasUnread
-                                ? AppColors.primaryColor
-                                : const Color(0xFF858789),
-                            fontSize: 11,
-                            fontWeight: hasUnread
-                                ? FontWeight.w600
-                                : FontWeight.w400,
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.sizeOf(context).width * 0.25,
+                          ),
+                          child: Text(
+                            conversation.timeLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: hasUnread
+                                  ? AppColors.primaryColor
+                                  : const Color(0xFF706779),
+                              fontSize: 12,
+                              fontWeight: hasUnread
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
                           ),
                         ),
                       ],
@@ -652,8 +547,8 @@ class _ConversationCard extends StatelessWidget {
                             style: TextStyle(
                               color: hasUnread
                                   ? const Color(0xFF1E2022)
-                                  : const Color(0xFF858789),
-                              fontSize: 13,
+                                  : const Color(0xFF706779),
+                              fontSize: 14,
                               fontWeight: hasUnread
                                   ? FontWeight.w600
                                   : FontWeight.w400,
@@ -662,13 +557,16 @@ class _ConversationCard extends StatelessWidget {
                         ),
                         if (hasUnread) ...[
                           const SizedBox(width: 8),
-                          Container(
-                            key: const ValueKey('unread-conversation-dot'),
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFEF4444),
-                              shape: BoxShape.circle,
+                          Semantics(
+                            label: 'มีข้อความที่ยังไม่ได้อ่าน',
+                            child: Container(
+                              key: const ValueKey('unread-conversation-dot'),
+                              width: 10,
+                              height: 10,
+                              decoration: const BoxDecoration(
+                                color: AppColors.primaryColor,
+                                shape: BoxShape.circle,
+                              ),
                             ),
                           ),
                         ],
@@ -710,7 +608,7 @@ class _EmptyConversations extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Color(0xFF8D9094),
-              fontSize: 13,
+              fontSize: 14,
               height: 1.4,
             ),
           ),
@@ -740,7 +638,7 @@ class _EmptySearch extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             const Text(
-              'ไม่พบบัญชีหรือการสนทนา',
+              'ไม่พบการสนทนา',
               style: TextStyle(
                 color: Color(0xFF5A5D60),
                 fontSize: 16,
@@ -753,97 +651,11 @@ class _EmptySearch extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Color(0xFF8D9094),
-                fontSize: 13,
+                fontSize: 14,
                 height: 1.4,
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DiscoveredUserCard extends StatelessWidget {
-  const _DiscoveredUserCard({required this.user, required this.onTap});
-
-  final Map<String, dynamic> user;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final displayName = user['display_name']?.toString().trim();
-    final email = user['email']?.toString().trim() ?? '';
-    final emailName = email.contains('@') ? email.split('@').first : email;
-    final name = (displayName != null && displayName.isNotEmpty)
-        ? displayName
-        : (emailName.isNotEmpty ? emailName : 'ผู้ใช้งาน Yuemnoi');
-    final avatar = user['user_image_url']?.toString().trim() ?? '';
-    final isOnline = user['is_online'] == true;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              ChatAvatar(
-                asset: avatar.isEmpty ? 'assets/images/user.png' : avatar,
-                size: 52,
-                isOnline: isOnline,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF222427),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (email.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        email,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF858789),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.tonalIcon(
-                onPressed: onTap,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryColor.withValues(
-                    alpha: 0.1,
-                  ),
-                  foregroundColor: AppColors.primaryColor,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  visualDensity: VisualDensity.compact,
-                ),
-                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
-                label: const Text('ทักแชท', style: TextStyle(fontSize: 12)),
-              ),
-            ],
-          ),
         ),
       ),
     );

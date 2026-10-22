@@ -112,6 +112,9 @@ void main() {
     );
 
     final button = find.byKey(const Key('add-rental-submit'));
+    final preview = find.byKey(const Key('add-rental-preview'));
+    expect(preview, findsOneWidget);
+    expect(tester.getCenter(preview).dx, lessThan(tester.getCenter(button).dx));
     final imagePicker = find.byKey(const Key('add-rental-images'));
     final buttonPositionBeforeScroll = tester.getCenter(button);
     final imagePickerPositionBeforeScroll = tester.getCenter(imagePicker);

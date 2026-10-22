@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -68,7 +69,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       if (compressed.bytes.length > 5 * 1024 * 1024) {
         if (!mounted) return;
-        _showMessage('รูปโปรไฟล์ต้องมีขนาดไม่เกิน 5 MB', isError: true);
+        _showError('รูปโปรไฟล์ต้องมีขนาดไม่เกิน 5 MB');
         return;
       }
 
@@ -79,7 +80,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
     } catch (_) {
       if (!mounted) return;
-      _showMessage('ไม่สามารถเลือกรูปโปรไฟล์ได้', isError: true);
+      _showError('ไม่สามารถเลือกรูปโปรไฟล์ได้');
     }
   }
 
@@ -102,18 +103,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  void _showMessage(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: isError
-              ? Colors.red.shade700
-              : Colors.green.shade600,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+  void _showError(String message) {
+    showAppPopup(context, content: Text(message));
   }
 
   @override
@@ -138,13 +129,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           setState(() {
             _isLoading = false;
           });
-          _showMessage('สร้างบัญชีสำเร็จ สามารถเข้าสู่ระบบได้เลย');
+
           AppRoutes.pop(context, true);
         } else if (state is RegisterFailure) {
           setState(() {
             _isLoading = false;
           });
-          _showMessage(state.message, isError: true);
+          _showError(state.message);
         }
       },
       child: Scaffold(

@@ -1,5 +1,7 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -126,6 +128,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
   }
 
   Future<void> _submitBookingRequestToChat(BuildContext sheetContext) async {
+    if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
 
     if (Navigator.canPop(sheetContext)) {
@@ -189,26 +192,13 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.isEditMode
-                  ? 'บันทึกการแก้ไขและอัปเดตข้อมูลในแชทเรียบร้อยแล้ว'
-                  : 'ส่งคำขอการเช่าไปยังแชทเรียบร้อยแล้ว',
-            ),
-            backgroundColor: const Color(0xFF10B981),
-            duration: const Duration(seconds: 2),
-          ),
-        );
         Navigator.maybePop(context, _bookingData);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ส่งคำขอไม่สำเร็จ: ${e.toString()}'),
-            backgroundColor: AppColors.primaryColor,
-          ),
+        showAppPopup(
+          context,
+          content: Text('ส่งคำขอไม่สำเร็จ: ${e.toString()}'),
         );
       }
     } finally {
@@ -535,115 +525,218 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: const Color(0xFFF8F7FC),
       appBar: AppBar(
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF8F7FC),
+        foregroundColor: const Color(0xFF242033),
+        surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, size: 24),
+          tooltip: 'กลับ',
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.maybePop(context),
         ),
         title: Text(
           widget.isEditMode ? 'แก้ไขรายละเอียดการเช่า' : 'คำขอการเช่า',
           style: const TextStyle(
             fontFamily: AppTextStyles.fontFamily,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
           ),
         ),
         centerTitle: true,
         elevation: 0,
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            // การ์ดสินค้าอยู่คงที่ด้านบน ไม่เลื่อนตามรายละเอียดคำขอ
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: BookingProductCard(item: _bookingData.item),
-            ),
-            const SizedBox(height: 18),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // 1. ตัวเลือกรูปแบบการเช่า (Dropdown: ต่อชั่วโมง / ต่อวัน)
-                    BookingTypeDropdown(
-                      selectedType: _selectedRentalType,
-                      onChanged: _onRentalTypeChanged,
-                      showError: _showRentalTypeError,
-                    ),
-                    const SizedBox(height: 18),
-
-                    // 2. ตัวเลือกช่วงเวลา / วันที่เช่า
-                    BookingTimeRangePicker(
-                      rentalType: _bookingData.rentalType,
-                      startDate: _bookingData.startDate,
-                      endDate: _bookingData.endDate,
-                      startTime: _bookingData.startTime,
-                      endTime: _bookingData.endTime,
-                      onDatesChanged: _onDatesChanged,
-                      onTimesChanged: _onTimesChanged,
-                      showDateError: _showRentalDatesError,
-                    ),
-                    const SizedBox(height: 18),
-
-                    // 3. สถานที่นัดพบ (Meeting Location)
-                    BookingLocationCard(
-                      location: _bookingData.location,
-                      locationNote: _bookingData.locationNote,
-                      locationAddress: _locationAddress,
-                      latitude: _bookingData.latitude,
-                      longitude: _bookingData.longitude,
-                      isEditable: false,
-                      showError: _showLocationError,
-                    ),
-                    const SizedBox(height: 18),
-
-                    // 4. สรุปราคา (Price Summary)
-                    BookingPriceSummaryCard(bookingData: _bookingData),
-                    const SizedBox(height: 24),
-                  ],
+        bottom: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'พร้อมเช่าแล้วใช่ไหม?',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF242033),
                 ),
               ),
-            ),
-
-            // 5. ปุ่มด้านล่าง: "แก้ไข" (ฝั่งผู้ปล่อยเช่า) หรือ "ส่งคำขอการเช่า"
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-              child: SizedBox(
-                width: double.infinity,
-                height: 54,
+              const SizedBox(height: 4),
+              const Text(
+                'เลือกวัน นัดรับ แล้วส่งคำขอได้เลย',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 13,
+                  color: Color(0xFF716A80),
+                ),
+              ),
+              const SizedBox(height: 20),
+              BookingProductCard(item: _bookingData.item),
+              const SizedBox(height: 24),
+              _sectionHeading('01', 'เลือกช่วงเวลาเช่า'),
+              const SizedBox(height: 12),
+              BookingTypeDropdown(
+                selectedType: _selectedRentalType,
+                onChanged: _onRentalTypeChanged,
+                showError: _showRentalTypeError,
+              ),
+              const SizedBox(height: 16),
+              BookingTimeRangePicker(
+                rentalType: _bookingData.rentalType,
+                startDate: _bookingData.startDate,
+                endDate: _bookingData.endDate,
+                startTime: _bookingData.startTime,
+                endTime: _bookingData.endTime,
+                onDatesChanged: _onDatesChanged,
+                onTimesChanged: _onTimesChanged,
+                showDateError: _showRentalDatesError,
+              ),
+              const SizedBox(height: 24),
+              _sectionHeading('02', 'นัดรับที่ไหนดี'),
+              const SizedBox(height: 12),
+              BookingLocationCard(
+                location: _bookingData.location,
+                locationNote: _bookingData.locationNote,
+                locationAddress: _locationAddress,
+                latitude: _bookingData.latitude,
+                longitude: _bookingData.longitude,
+                isEditable: false,
+                showError: _showLocationError,
+              ),
+              const SizedBox(height: 24),
+              BookingPriceSummaryCard(bookingData: _bookingData),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Color(0xFFECE8F2))),
+        ),
+        child: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'ยอดรวมการเช่า',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 13,
+                        color: Color(0xFF716A80),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${NumberFormat('#,##0.00').format(_bookingData.totalPrice)} ฿',
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 52,
                 child: ElevatedButton(
                   key: const ValueKey('submit-booking-request-button'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,
-                    elevation: 3,
-                    shadowColor: AppColors.primaryColor.withValues(alpha: 0.35),
+                    disabledBackgroundColor: AppColors.primaryColor.withValues(
+                      alpha: 0.5,
+                    ),
+                    elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  onPressed: _handleSendBookingRequest,
-                  child: Text(
-                    widget.isEditMode ? 'แก้ไข' : 'ส่งคำขอการเช่า',
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  onPressed: _isSubmitting ? null : _handleSendBookingRequest,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _isSubmitting
+                              ? 'กำลังส่งคำขอ…'
+                              : widget.isEditMode
+                              ? 'แก้ไข'
+                              : 'ส่งคำขอการเช่า',
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.arrow_forward_rounded, size: 20),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              const Text(
+                'ตรวจสอบรายละเอียดอีกครั้งก่อนส่งเข้าห้องแชท',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 11,
+                  color: Color(0xFF716A80),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _sectionHeading(String number, String title) {
+    return Row(
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primaryColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(
+            number,
+            style: const TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primaryColor,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF242033),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

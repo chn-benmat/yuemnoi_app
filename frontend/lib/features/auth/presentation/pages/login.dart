@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
@@ -69,20 +70,10 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _showMessage(String message, {bool isError = false}) {
+  void _showError(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: isError
-              ? Colors.red.shade700
-              : Colors.green.shade600,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    showAppPopup(context, content: Text(message));
   }
 
   void _login() {
@@ -138,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
             _isLoading = false;
             _isGoogleLoading = false;
           });
-          _showMessage(state.message, isError: true);
+          _showError(state.message);
         }
       },
       child: Scaffold(

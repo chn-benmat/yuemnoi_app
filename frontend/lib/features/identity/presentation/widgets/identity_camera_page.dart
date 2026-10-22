@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +9,7 @@ import '../../../../core/widgets/app_primary_button.dart';
 import '../../data/camera_file_cleanup.dart';
 import 'identity_widgets.dart';
 
-enum IdentityCaptureKind { card, selfie }
+enum IdentityCaptureKind { card, selfie, selfieWithCard }
 
 typedef IdentityCapture =
     Future<Uint8List?> Function(BuildContext context, IdentityCaptureKind kind);
@@ -22,8 +23,9 @@ Future<Uint8List?> captureIdentityPhoto(
         TargetPlatform.android,
         TargetPlatform.iOS,
       ].contains(defaultTargetPlatform)) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('กรุณาใช้กล้องผ่านแอป Android หรือ iOS')),
+    showAppPopup(
+      context,
+      content: Text('กรุณาใช้กล้องผ่านแอป Android หรือ iOS'),
     );
     return null;
   }
@@ -47,8 +49,13 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
   bool _starting = false, _taking = false, _permissionDenied = false;
   int _generation = 0;
   Future<void> _cameraOperation = Future<void>.value();
-  bool get _face => widget.kind == IdentityCaptureKind.selfie;
-  String get _title => _face ? 'ถ่ายใบหน้าของคุณ' : 'ถ่ายด้านหน้าบัตร';
+  bool get _face => widget.kind != IdentityCaptureKind.card;
+  bool get _withCard => widget.kind == IdentityCaptureKind.selfieWithCard;
+  String get _title => _withCard
+      ? 'ถ่ายรูปคู่บัตรประชาชน'
+      : _face
+      ? 'ถ่ายใบหน้าของคุณ'
+      : 'ถ่ายด้านหน้าบัตร';
   @override
   void initState() {
     super.initState();
@@ -208,7 +215,9 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               _face
-                  ? 'ใบหน้า · รูปที่ 2 จาก 2'
+                  ? _withCard
+                        ? 'รูปคู่บัตรประชาชน'
+                        : 'ใบหน้า · รูปที่ 2 จาก 2'
                   : 'บัตรประชาชน · รูปที่ 1 จาก 2',
               style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
@@ -218,10 +227,14 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
             child: Text(
               _preview != null
                   ? _face
-                        ? 'เห็นใบหน้าครบและชัดเจน ไม่มืดหรือย้อนแสง'
+                        ? _withCard
+                              ? 'เห็นใบหน้าและข้อมูลบนบัตรชัดเจน ไม่มีแสงสะท้อน'
+                              : 'เห็นใบหน้าครบและชัดเจน ไม่มืดหรือย้อนแสง'
                         : 'เห็นเอกสารครบ ข้อความชัด และไม่มีแสงสะท้อน'
                   : _face
-                  ? 'มองตรง ให้ใบหน้าอยู่ในกรอบ\nถอดหน้ากากและแว่นกันแดด'
+                  ? _withCard
+                        ? 'ถือบัตรข้างใบหน้า ให้เห็นครบทั้งใบหน้าและบัตร\nไม่บังข้อมูลบนบัตร ถอดหน้ากากและแว่นกันแดด'
+                        : 'มองตรง ให้ใบหน้าอยู่ในกรอบ\nถอดหน้ากากและแว่นกันแดด'
                   : 'วางแนวนอนให้ครบทุกมุม\nใช้แสงสว่างพอดี ไม่ปิดข้อมูลบนบัตร',
               textAlign: TextAlign.center,
               style: const TextStyle(
@@ -254,7 +267,11 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
                           IgnorePointer(
                             child: Center(
                               child: FractionallySizedBox(
-                                widthFactor: _face ? 0.72 : 0.92,
+                                widthFactor: _withCard
+                                    ? 0.95
+                                    : _face
+                                    ? 0.72
+                                    : 0.92,
                                 child: AspectRatio(
                                   aspectRatio: _face ? 0.75 : 1.586,
                                   child: Container(
@@ -264,7 +281,7 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
                                         width: 2.5,
                                       ),
                                       borderRadius: BorderRadius.circular(
-                                        _face ? 180 : 18,
+                                        _face && !_withCard ? 180 : 18,
                                       ),
                                     ),
                                   ),

@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -5,7 +6,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/services/location_service.dart';
@@ -14,6 +14,8 @@ import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../booking/domain/entities/booking_request_model.dart';
 import '../../widgets/rentals/rental_handover_modal.dart';
 import '../../bloc/rental_route_cubit.dart';
+import '../../../data/datasources/rental_contact_remote_data_source.dart';
+import '../../../../chat/data/datasources/chat_remote_data_source.dart';
 
 class RentalTrackingMapPage extends StatefulWidget {
   final BookingRequestData? bookingData;
@@ -32,6 +34,8 @@ class RentalTrackingMapPage extends StatefulWidget {
   final int? bookingId;
   final bool? isOwner;
   final LocationService? locationService;
+  final RentalContactRemoteDataSource? contactDataSource;
+  final PhoneCallService phoneCallService;
 
   const RentalTrackingMapPage({
     super.key,
@@ -51,6 +55,8 @@ class RentalTrackingMapPage extends StatefulWidget {
     this.bookingId,
     this.isOwner,
     this.locationService,
+    this.contactDataSource,
+    this.phoneCallService = const UrlPhoneCallService(),
   });
 
   @override
@@ -286,10 +292,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
 
     // Resolve Destination Coordinates
     // พิกัดจุดรับเป็นของประกาศอุปกรณ์ เลือกโดยเจ้าของตอนเพิ่มอุปกรณ์
-    final destLat =
-        b?.latitude ?? b?.item.latitude ?? widget.destinationLat;
-    final destLng =
-        b?.longitude ?? b?.item.longitude ?? widget.destinationLng;
+    final destLat = b?.latitude ?? b?.item.latitude ?? widget.destinationLat;
+    final destLng = b?.longitude ?? b?.item.longitude ?? widget.destinationLng;
 
     if (_hasDestinationCoordinates) {
       _destinationLocation = LatLng(destLat!, destLng!);
@@ -506,44 +510,49 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     );
   }
 
-  Future<void> _callOwner() async {
-    final rawPhone = widget.ownerPhone?.trim();
-    final phone = (rawPhone != null && rawPhone.isNotEmpty)
-        ? rawPhone
-        : '0812345678';
-    final cleanPhone = normalizePhoneNumberForDialer(phone);
-    final dialUri = Uri(scheme: 'tel', path: cleanPhone);
+  bool _calling = false;
 
+  Future<void> _callOwner() async {
+    if (_calling) return;
+    _calling = true;
     try {
-      final launched = await launchUrl(
-        dialUri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched) {
-        final fallbackUri = Uri.parse('tel:$cleanPhone');
-        await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
+      final phone =
+          await (widget.contactDataSource ?? RentalContactRemoteDataSource())
+              .getPhone(
+                bookingId: widget.bookingId,
+                conversationId:
+                    widget.conversationId ?? widget.bookingData?.conversationId,
+              );
+      if (!mounted) return;
+      if (phone.trim().isEmpty) {
+        throw const ChatRemoteException('ผู้ใช้นี้ยังไม่ได้เพิ่มเบอร์โทรศัพท์');
       }
-    } catch (_) {
-      try {
-        await launchUrl(
-          Uri.parse('tel:$cleanPhone'),
-          mode: LaunchMode.externalApplication,
+      if (!await widget.phoneCallService.call(phone)) {
+        throw const ChatRemoteException('ไม่สามารถเปิดแอปโทรได้');
+      }
+    } catch (error) {
+      if (mounted) {
+        showAppPopup(
+          context,
+          content: Text(
+            error is ChatRemoteException
+                ? error.message
+                : 'ไม่สามารถโหลดข้อมูลติดต่อได้ กรุณาลองใหม่',
+          ),
         );
-      } catch (_) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('ไม่สามารถเปิดแอปโทรได้ (เบอร์: $phone)')),
-          );
-        }
       }
+    } finally {
+      _calling = false;
     }
   }
 
   bool get _hasDestinationCoordinates {
-    final lat = widget.bookingData?.latitude ??
+    final lat =
+        widget.bookingData?.latitude ??
         widget.bookingData?.item.latitude ??
         widget.destinationLat;
-    final lng = widget.bookingData?.longitude ??
+    final lng =
+        widget.bookingData?.longitude ??
         widget.bookingData?.item.longitude ??
         widget.destinationLng;
     return lat != null &&
@@ -1431,16 +1440,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       onPressed: _currentStatusCode == 'active'
-                          ? () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'กำลังอยู่ระหว่างการเช่าอุปกรณ์',
-                                  ),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
+                          ? null
                           : (_currentStatusCode == 'cancelled'
                                 ? null
                                 : _openPaymentOrHandover),

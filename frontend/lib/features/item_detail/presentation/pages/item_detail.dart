@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:frontend/core/widgets/app_popup.dart';
+import '../../../rental_item/domain/entities/rental_item.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
@@ -28,6 +32,7 @@ import '../bloc/item_detail_bloc.dart';
 import '../bloc/item_detail_event.dart';
 import '../bloc/item_detail_state.dart';
 import '../widgets/full_screen_image_viewer.dart';
+import '../widgets/review_content.dart';
 import '../widgets/owner_item_controls.dart';
 import '../widgets/owner_item_detail_view.dart';
 import '../widgets/owner_item_detail_loading_view.dart';
@@ -41,8 +46,6 @@ abstract final class _DetailStyle {
   static const ink = Color(0xFF241B32);
   static const secondary = Color(0xFF746B80);
   static const rule = Color(0xFFEDE7F3);
-  static const available = Color(0xFF23764D);
-  static const availableSurface = Color(0xFFEDF8F1);
   static const favorite = Color(0xFFE33B70);
   static const shadow = Color(0x0A342047);
 
@@ -56,10 +59,16 @@ class ItemDetailScreen extends StatefulWidget {
     super.key,
     required this.itemId,
     this.ownerLoadingLayout = false,
+    this.preview = false,
+    this.previewItem,
+    this.previewPhotos,
   });
 
   final int itemId;
   final bool ownerLoadingLayout;
+  final bool preview;
+  final ItemDetail? previewItem;
+  final List<RentalItemPhoto>? previewPhotos;
 
   @override
   State<ItemDetailScreen> createState() => _ItemDetailScreenState();
@@ -79,21 +88,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     final isFav = await FavoriteService.instance.toggleFavorite(widget.itemId);
     if (!mounted) return;
     setState(() => _isFavorite = isFav);
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            isFav ? 'เพิ่มในรายการถูกใจแล้ว' : 'นำออกจากรายการถูกใจแล้ว',
-            style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-          ),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
   }
 
   Future<void> _openEdit(ItemDetail item) async {
@@ -211,9 +205,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isChatLoading = false);
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text(e.toString())));
+        showAppPopup(context, content: Text(e.toString()));
       }
     }
   }
@@ -436,9 +428,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       api.close();
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    if (message == 'ส่งรายงานปัญหาให้ทีมงานตรวจสอบเรียบร้อยแล้ว') {
+      return;
+    }
+    showAppPopup(context, content: Text(message));
   }
 
   @override
@@ -446,24 +439,19 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     return BlocConsumer<ItemDetailBloc, ItemDetailState>(
       listener: (context, state) {
         if (state.status == ItemDetailStatus.deleted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('ลบอุปกรณ์แล้ว')));
           AppRoutes.pop(context);
         } else if (state.status == ItemDetailStatus.failure &&
             state.item != null) {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              SnackBar(
-                content: Text(
-                  state.errorMessage ?? 'เกิดข้อผิดพลาด กรุณาลองใหม่',
-                ),
-              ),
-            );
+          showAppPopup(
+            context,
+            content: Text(state.errorMessage ?? 'เกิดข้อผิดพลาด กรุณาลองใหม่'),
+          );
         }
       },
-      builder: (context, state) {
+      builder: (context, loadedState) {
+        final state = widget.previewItem == null
+            ? loadedState
+            : loadedState.copyWith(item: widget.previewItem);
         final item = state.item;
         if (item == null && widget.ownerLoadingLayout) {
           return _ownerLayout(
@@ -479,7 +467,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   ),
           );
         }
-        if (item != null && item.isOwner) {
+        if (item != null && item.isOwner && !widget.preview) {
           return _ownerLayout(
             OwnerItemDetailView(
               item: item,
@@ -509,7 +497,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 : _ChatActionBar(
                     item: item,
                     isLoading: _isChatLoading,
-                    onPressed: state.isBusy ? null : () => _openChat(item),
+                    onPressed: state.isBusy || item.isOwner
+                        ? null
+                        : () => _openChat(item),
                   ),
             body: Stack(
               children: [
@@ -520,9 +510,13 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   right: 0,
                   child: _DetailFloatingTopBar(
                     isFavorite: _isFavorite,
-                    onFavorite: item == null ? null : _handleFavoriteToggle,
-                    onShare: item == null ? null : () => _handleShare(item),
-                    onReport: item == null
+                    onFavorite: widget.previewItem != null || item == null
+                        ? null
+                        : _handleFavoriteToggle,
+                    onShare: widget.previewItem != null || item == null
+                        ? null
+                        : () => _handleShare(item),
+                    onReport: widget.previewItem != null || item == null
                         ? null
                         : () => _openReportOptions(item),
                   ),
@@ -578,6 +572,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     return RefreshIndicator(
       color: AppColors.primaryColor,
       onRefresh: () async {
+        if (widget.previewItem != null) return;
         context.read<ItemDetailBloc>().add(ItemDetailRequested(widget.itemId));
         await context.read<ItemDetailBloc>().stream.firstWhere(
           (next) => next.status != ItemDetailStatus.loading,
@@ -590,7 +585,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           SliverToBoxAdapter(
             child: Column(
               children: [
-                _ImageGallery(imageUrls: item.imageUrls),
+                _ImageGallery(
+                  imageUrls: item.imageUrls,
+                  photos: widget.previewPhotos,
+                ),
                 Transform.translate(
                   offset: const Offset(0, -20),
                   child: _DetailContent(
@@ -833,7 +831,9 @@ class _CircleActionButton extends StatelessWidget {
 }
 
 class _ImageGallery extends StatefulWidget {
-  const _ImageGallery({required this.imageUrls});
+  const _ImageGallery({required this.imageUrls, this.photos});
+
+  final List<RentalItemPhoto>? photos;
 
   final List<String> imageUrls;
 
@@ -852,7 +852,9 @@ class _ImageGalleryState extends State<_ImageGallery> {
 
   @override
   Widget build(BuildContext context) {
-    final urls = widget.imageUrls;
+    final urls =
+        widget.photos?.map((photo) => photo.remoteUrl ?? '').toList() ??
+        widget.imageUrls;
     final galleryHeight = _DetailStyle.galleryHeight(context);
 
     return Container(
@@ -889,28 +891,36 @@ class _ImageGalleryState extends State<_ImageGallery> {
                   label:
                       'ดูรูปสินค้า ${index + 1} จาก ${urls.length} แบบเต็มจอ',
                   child: GestureDetector(
-                    onTap: () => FullScreenImageViewer.open(
-                      context,
-                      imageUrls: urls,
-                      initialIndex: index,
-                    ),
-                    child: CachedNetworkImage(
-                      imageUrl: urls[index],
-                      fit: BoxFit.contain,
-                      placeholder: (context, url) => const SkeletonShimmer(
-                        child: SkeletonBox(
-                          height: double.infinity,
-                          borderRadius: 16,
-                        ),
-                      ),
-                      errorWidget: (context, url, error) => const Center(
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: _DetailStyle.secondary,
-                          size: 58,
-                        ),
-                      ),
-                    ),
+                    onTap: widget.photos != null
+                        ? null
+                        : () => FullScreenImageViewer.open(
+                            context,
+                            imageUrls: urls,
+                            initialIndex: index,
+                          ),
+                    child: widget.photos?[index].localImage != null
+                        ? Image.memory(
+                            widget.photos![index].localImage!.bytes,
+                            fit: BoxFit.contain,
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: urls[index],
+                            fit: BoxFit.contain,
+                            placeholder: (context, url) =>
+                                const SkeletonShimmer(
+                                  child: SkeletonBox(
+                                    height: double.infinity,
+                                    borderRadius: 16,
+                                  ),
+                                ),
+                            errorWidget: (context, url, error) => const Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                color: _DetailStyle.secondary,
+                                size: 58,
+                              ),
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -995,7 +1005,6 @@ class _DetailContent extends StatelessWidget {
                         ),
                       ),
                     ),
-                    _RentalStatus(item: item),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1059,15 +1068,10 @@ class _DetailContent extends StatelessWidget {
                 const SizedBox(height: 18),
                 _OwnerCard(item: item),
                 const SizedBox(height: 24),
-                const _SectionTitle('รีวิวล่าสุด'),
-                const SizedBox(height: 14),
-                if (item.reviews.isEmpty)
-                  const _EmptyReviews()
-                else
-                  for (final review in item.reviews) ...[
-                    _ReviewCard(review: review),
-                    const SizedBox(height: 12),
-                  ],
+                _ReviewsSection(
+                  key: ValueKey('reviews-${item.id}'),
+                  reviews: item.reviews,
+                ),
                 if (relatedStatus != RelatedItemsStatus.initial) ...[
                   const SizedBox(height: 24),
                   const Divider(color: _DetailStyle.rule, height: 1),
@@ -1108,68 +1112,6 @@ class _RentalPrice extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _RentalStatus extends StatelessWidget {
-  const _RentalStatus({required this.item});
-  final ItemDetail item;
-
-  @override
-  Widget build(BuildContext context) {
-    final status = item.ownerHidden
-        ? ('ยังไม่พร้อมให้เช่า', Icons.pause_circle_outline_rounded, false)
-        : switch (item.status.trim().toLowerCase()) {
-            'available' || 'พร้อมใช้งาน' || 'พร้อมให้เช่า' => (
-              'พร้อมให้เช่า',
-              Icons.check_circle_outline_rounded,
-              true,
-            ),
-            'rented' ||
-            'renting' ||
-            'กำลังเช่า' ||
-            'ถูกเช่า' => ('กำลังถูกเช่า', Icons.schedule_rounded, false),
-            'maintenance' || 'ซ่อมบำรุง' => (
-              'อยู่ระหว่างดูแล',
-              Icons.build_circle_outlined,
-              false,
-            ),
-            'unavailable' || 'ไม่พร้อมใช้งาน' => (
-              'ยังไม่พร้อมให้เช่า',
-              Icons.pause_circle_outline_rounded,
-              false,
-            ),
-            _ => null,
-          };
-    if (status == null) return const SizedBox.shrink();
-    final (label, icon, available) = status;
-    final color = available ? _DetailStyle.available : _DetailStyle.secondary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: available
-            ? _DetailStyle.availableSurface
-            : _DetailStyle.softSurface,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _ChatActionBar extends StatelessWidget {
@@ -1700,6 +1642,206 @@ class _RelatedItemCard extends StatelessWidget {
   );
 }
 
+class _ReviewsSection extends StatefulWidget {
+  const _ReviewsSection({super.key, required this.reviews});
+  final List<ItemReview> reviews;
+
+  @override
+  State<_ReviewsSection> createState() => _ReviewsSectionState();
+}
+
+class _ReviewsSectionState extends State<_ReviewsSection> {
+  final _controller = PageController();
+  Timer? _timer;
+  int _page = 0;
+  bool _showingMore = false;
+
+  int get _count => widget.reviews.take(4).length;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _restartTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReviewsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.reviews, widget.reviews)) {
+      _page = 0;
+      if (_controller.hasClients) _controller.jumpToPage(0);
+      _restartTimer();
+    }
+  }
+
+  void _restartTimer() {
+    _timer?.cancel();
+    final media = MediaQuery.of(context);
+    if (_count < 2 || media.disableAnimations || media.accessibleNavigation)
+      return;
+    _timer = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!_controller.hasClients ||
+          _showingMore ||
+          !TickerMode.valuesOf(context).enabled ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+          _controller.position.isScrollingNotifier.value)
+        return;
+      _controller.animateToPage(
+        (_page + 1) % _count,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  Future<void> _showMore() async {
+    _showingMore = true;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _AllReviewsPage(reviews: widget.reviews),
+      ),
+    );
+    if (!mounted) return;
+    _showingMore = false;
+    _restartTimer();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          const Expanded(child: _SectionTitle('รีวิวจากคนที่เช่า')),
+          if (widget.reviews.isNotEmpty)
+            TextButton(onPressed: _showMore, child: const Text('ดูเพิ่มเติม')),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text(
+        widget.reviews.isEmpty
+            ? 'ประสบการณ์เป็นยังไง มาแชร์กันได้เลย'
+            : 'อ่านประสบการณ์ก่อนตัดสินใจ · ปัดดูรีวิวได้',
+        style: const TextStyle(
+          color: _DetailStyle.secondary,
+          fontSize: 13,
+          height: 1.5,
+        ),
+      ),
+      const SizedBox(height: 14),
+      if (widget.reviews.isEmpty)
+        const _EmptyReviews()
+      else ...[
+        SizedBox(
+          height: 300 * MediaQuery.textScalerOf(context).scale(1),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollStartNotification &&
+                  notification.dragDetails != null) {
+                _timer?.cancel();
+              } else if (notification is ScrollEndNotification) {
+                _restartTimer();
+              }
+              return false;
+            },
+            child: PageView.builder(
+              key: const ValueKey('review-carousel'),
+              controller: _controller,
+              itemCount: _count,
+              onPageChanged: (page) => setState(() => _page = page),
+              itemBuilder: (_, index) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: SingleChildScrollView(
+                  child: _ReviewCard(review: widget.reviews[index]),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: Text(
+            '${_page + 1} / $_count',
+            style: const TextStyle(color: _DetailStyle.secondary, fontSize: 12),
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
+class _AllReviewsPage extends StatefulWidget {
+  const _AllReviewsPage({required this.reviews});
+  final List<ItemReview> reviews;
+
+  @override
+  State<_AllReviewsPage> createState() => _AllReviewsPageState();
+}
+
+class _AllReviewsPageState extends State<_AllReviewsPage> {
+  int? _stars;
+
+  @override
+  Widget build(BuildContext context) {
+    final reviews = widget.reviews
+        .where((review) => _stars == null || review.rating.round() == _stars)
+        .toList();
+    return Scaffold(
+      backgroundColor: _DetailStyle.surface,
+      appBar: AppBar(title: const Text('รีวิวทั้งหมด')),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  for (final stars in <int?>[null, 5, 4, 3, 2, 1])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(stars == null ? 'ทั้งหมด' : '$stars ดาว'),
+                        selected: _stars == stars,
+                        onSelected: (_) => setState(() => _stars = stars),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Text(
+                '${reviews.length} รีวิว',
+                style: const TextStyle(color: _DetailStyle.secondary),
+              ),
+            ),
+            Expanded(
+              child: reviews.isEmpty
+                  ? const Center(child: Text('ยังไม่มีรีวิวในระดับดาวนี้'))
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                      itemCount: reviews.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (_, index) =>
+                          _ReviewCard(review: reviews[index]),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ReviewCard extends StatelessWidget {
   const _ReviewCard({required this.review});
 
@@ -1709,16 +1851,19 @@ class _ReviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _DetailStyle.softSurface,
-        borderRadius: BorderRadius.circular(16),
+        color: _DetailStyle.surface,
+        border: Border.all(color: _DetailStyle.rule),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              _Avatar(imageUrl: review.reviewer.imageUrl, size: 40),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   review.reviewer.displayName,
@@ -1731,20 +1876,32 @@ class _ReviewCard extends StatelessWidget {
                   ),
                 ),
               ),
-              _Stars(rating: review.rating),
             ],
           ),
-          if (review.description.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              '“${review.description}”',
-              style: const TextStyle(
-                color: _DetailStyle.secondary,
-                fontSize: 14,
-                height: 1.45,
-                fontStyle: FontStyle.italic,
-              ),
+          const SizedBox(height: 10),
+          Semantics(
+            label: 'ให้คะแนน ${review.rating.toStringAsFixed(1)} จาก 5 ดาว',
+            excludeSemantics: true,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _Stars(rating: review.rating),
+                Text(
+                  '${review.rating.toStringAsFixed(1)}/5',
+                  style: const TextStyle(
+                    color: _DetailStyle.secondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
+          ),
+          if (review.description.trim().isNotEmpty) ...[
+            const SizedBox(height: 14),
+            ReviewContent(description: review.description),
           ],
         ],
       ),
@@ -1842,7 +1999,7 @@ class _EmptyReviews extends StatelessWidget {
           ),
           SizedBox(height: 8),
           Text(
-            'ยังไม่มีรีวิวสำหรับอุปกรณ์นี้',
+            'ยังไม่มีรีวิว มารอรีวิวแรกกัน',
             style: TextStyle(color: _DetailStyle.secondary, fontSize: 13),
           ),
         ],

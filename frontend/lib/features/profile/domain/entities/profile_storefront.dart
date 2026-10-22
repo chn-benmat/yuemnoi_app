@@ -15,10 +15,21 @@ class StorefrontIdentity {
 }
 
 class StorefrontReview {
-  const StorefrontReview({required this.itemId, required this.rating});
+  const StorefrontReview({
+    required this.itemId,
+    required this.rating,
+    this.reviewerName = 'ผู้ใช้',
+    this.avatarUrl,
+    this.description = '',
+    this.createdAt,
+  });
 
   final int itemId;
   final double rating;
+  final String reviewerName;
+  final String? avatarUrl;
+  final String description;
+  final DateTime? createdAt;
 }
 
 class ReviewSummary {
@@ -69,6 +80,7 @@ class ProfileStorefront {
     required this.items,
     required this.reviews,
     this.identityUnavailable = false,
+    this.reviewDetails = const [],
   });
 
   final StorefrontIdentity? identity;
@@ -76,4 +88,5 @@ class ProfileStorefront {
   // ค่าว่างหมายถึงโหลดไม่สำเร็จ ส่วน count เท่ากับศูนย์หมายถึงยังไม่มีรีวิวจริง
   final ReviewSummary? reviews;
   final bool identityUnavailable;
+  final List<StorefrontReview> reviewDetails;
 }

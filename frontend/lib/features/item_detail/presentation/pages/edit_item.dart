@@ -47,9 +47,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
           if (_submitted && state.status == ItemDetailStatus.loaded) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('บันทึกการแก้ไขเรียบร้อยแล้ว')),
-              );
+
               AppRoutes.pop(context, true);
             });
           }
@@ -57,6 +55,28 @@ class _EditItemScreenState extends State<EditItemScreen> {
         builder: (context, state) => RentalItemEditor(
           initialValue: _initialValue,
           isEditing: true,
+          onPreview: (value) => AppRoutes.openItemPreview(
+            context,
+            item: ItemDetail(
+              id: widget.item.id,
+              owner: widget.item.owner,
+              name: value.name,
+              imageUrls: value.photos
+                  .where((photo) => photo.remoteUrl != null)
+                  .map((photo) => photo.remoteUrl!)
+                  .toList(),
+              description: value.description,
+              category: value.category ?? '',
+              price: int.tryParse(value.price) ?? 0,
+              status: widget.item.status,
+              rentalType: value.rentalType ?? '',
+              reviews: widget.item.reviews,
+              isOwner: true,
+              ownerHidden: widget.item.ownerHidden,
+              pickupLocation: value.pickupLocation,
+            ),
+            photos: value.photos,
+          ),
           isSaving: state.isBusy,
           didSave: _submitted && state.status == ItemDetailStatus.loaded,
           errorMessage: state.status == ItemDetailStatus.failure

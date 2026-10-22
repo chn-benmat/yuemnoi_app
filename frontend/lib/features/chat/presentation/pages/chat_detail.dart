@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import '../../../item_detail/data/datasources/item_detail_remote_data_source.dart';
 import '../../../item_detail/domain/entities/item_detail.dart';
 import '../../../../core/widgets/package_chat_list.dart';
@@ -216,9 +217,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   }
 
   void _showPhoneCallError(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showAppPopup(context, content: Text(message));
   }
 
   void _handleReply(ChatMessage message) {
@@ -444,9 +443,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('ไม่สามารถเปิดกล้องได้')));
+        showAppPopup(context, content: Text('ไม่สามารถเปิดกล้องได้'));
       }
     }
   }
@@ -468,9 +465,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ไม่สามารถเลือกรูปภาพได้')),
-        );
+        showAppPopup(context, content: Text('ไม่สามารถเลือกรูปภาพได้'));
       }
     }
   }
@@ -518,11 +513,31 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       _scrollToBottom(animate: true);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ')),
+        showAppPopup(
+          context,
+          content: Text('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ'),
         );
       }
     }
+  }
+
+  bool _hasOpenOffer(int itemId) {
+    for (final message
+        in context.read<ChatDetailBloc>().state.messages.reversed) {
+      final booking = BookingRequestData.fromChatMessage(message.message);
+      if (booking?.item.id == itemId &&
+          !context.read<ChatDetailBloc>().state.failedMessageIds.contains(
+            message.id,
+          )) {
+        return !{
+          'completed',
+          'cancelled',
+          'rejected',
+          'expired',
+        }.contains(booking!.status);
+      }
+    }
+    return false;
   }
 
   Future<void> _openBookingRequest([ItemInquiryData? activeInquiry]) async {
@@ -532,6 +547,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
 
     final requestedItemId = latestInquiry?.itemId ?? _conversation.itemId;
     if (requestedItemId == null ||
+        _hasOpenOffer(requestedItemId) ||
         !context.read<ChatDetailBloc>().state.ownedItemIds.contains(
           requestedItemId,
         )) {
@@ -601,29 +617,26 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       itemDetail = await itemSource.fetchById(itemId);
     } catch (_) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('โหลดข้อมูลจุดนัดรับไม่สำเร็จ กรุณาลองใหม่'),
-          ),
+        showAppPopup(
+          context,
+          content: Text('โหลดข้อมูลจุดนัดรับไม่สำเร็จ กรุณาลองใหม่'),
         );
       return;
     }
     if (!mounted) return;
     if (!itemDetail.isOwner) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('เฉพาะเจ้าของอุปกรณ์เท่านั้นที่สร้างข้อเสนอได้'),
-        ),
+      showAppPopup(
+        context,
+        content: Text('เฉพาะเจ้าของอุปกรณ์เท่านั้นที่สร้างข้อเสนอได้'),
       );
       return;
     }
     final pickup = itemDetail.pickupLocation;
     if (pickup == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'กรุณาระบุจุดนัดรับสินค้าในหน้าแก้ไขอุปกรณ์ก่อนส่งข้อเสนอ',
-          ),
+      showAppPopup(
+        context,
+        content: Text(
+          'กรุณาระบุจุดนัดรับสินค้าในหน้าแก้ไขอุปกรณ์ก่อนส่งข้อเสนอ',
         ),
       );
       return;
@@ -716,8 +729,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
           ),
           BlocBuilder<ChatDetailBloc, ChatDetailState>(
             buildWhen: (prev, curr) =>
-                prev.messages.length != curr.messages.length ||
-                prev.status != curr.status,
+                prev.messages != curr.messages || prev.status != curr.status,
             builder: (context, state) {
               final hasHandover = state.messages.any(
                 (m) =>
@@ -732,14 +744,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                     m.message.contains('คืนของสำเร็จ'),
               );
 
-              if (!hasHandover || hasReturn) {
-                return const SizedBox.shrink();
-              }
-
               BookingRequestData? activeBooking;
               ChatMessage? activeMessage;
               int? activeBookingId;
-              for (final m in state.messages) {
+              for (final m in state.messages.reversed) {
                 final data = BookingRequestData.fromChatMessage(
                   m.message,
                   imageUrl: m.imageUrl,
@@ -755,11 +763,25 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
               }
 
               if (activeBooking == null) return const SizedBox.shrink();
+              final status = activeBooking.status;
+              final isCompleted =
+                  status == 'completed' ||
+                  status == 'finished' ||
+                  (status == null && hasReturn);
+              final isActive =
+                  const {
+                    'active',
+                    'awaiting_return',
+                    'return_ready',
+                  }.contains(status) ||
+                  (status == null && hasHandover);
+              if (!isCompleted && !isActive) return const SizedBox.shrink();
 
               return ActiveRentalHeaderBanner(
                 bookingData: activeBooking,
                 bookingMessage: activeMessage,
-                bookingId: activeBookingId,
+                bookingId: activeBooking.bookingId ?? activeBookingId,
+                isCompleted: isCompleted,
                 isOwner: activeMessage?.isMine == true,
                 onTap: activeMessage != null
                     ? () => _scrollToMessage(activeMessage!.id)
@@ -774,11 +796,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                   listener: (context, state) {
                     if (state.status == ChatDetailStatus.failure &&
                         state.errorMessage != null) {
-                      ScaffoldMessenger.of(context)
-                        ..hideCurrentSnackBar()
-                        ..showSnackBar(
-                          SnackBar(content: Text(state.errorMessage!)),
-                        );
+                      showAppPopup(context, content: Text(state.errorMessage!));
                     } else if (state.status == ChatDetailStatus.success &&
                         state.messages.isNotEmpty) {
                       if (state.messages.length > _lastMessageCount) {
@@ -951,7 +969,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                       ) ||
                                       m.message.contains('คืนของสำเร็จ'),
                                 ),
-                                onSendBookingRequest: ownsInquiryItem
+                                onSendBookingRequest:
+                                    ownsInquiryItem &&
+                                        inquiry?.itemId != null &&
+                                        !_hasOpenOffer(inquiry!.itemId!)
                                     ? _openBookingRequest
                                     : null,
                                 onRetry: () {

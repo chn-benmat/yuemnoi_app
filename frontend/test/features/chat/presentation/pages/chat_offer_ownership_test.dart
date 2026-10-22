@@ -25,9 +25,10 @@ class _MockSendMessage extends Mock implements SendChatMessageUseCase {}
 class _MockRepository extends Mock implements ChatRepository {}
 
 void main() {
-  testWidgets(
-    'owner can offer the same item again after the previous rental completed',
-    (tester) async {
+  for (final status in ['pending', null, 'completed']) {
+    testWidgets('offer availability after previous status=$status', (
+      tester,
+    ) async {
       await initializeDateFormatting('th');
       SharedPreferences.setMockInitialValues({});
       BookingConfirmationTracker.clearMemoryCache();
@@ -59,7 +60,7 @@ void main() {
         endTime: const TimeOfDay(hour: 9, minute: 0),
         location: 'กรุงเทพ',
         bookingId: 10,
-        status: 'completed',
+        status: status,
       );
       const renewed = ItemInquiryData(
         itemId: 1,
@@ -113,12 +114,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('inquiry-send-request-1')),
-        findsOneWidget,
+        status == 'completed' ? findsOneWidget : findsNothing,
       );
-      expect(find.text('สร้างข้อเสนอการเช่า / นัดรับ'), findsOneWidget);
+      expect(
+        find.text('สร้างข้อเสนอการเช่า / นัดรับ'),
+        status == 'completed' ? findsOneWidget : findsNothing,
+      );
       await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+    });
+  }
 
   for (final isOwner in [false, null]) {
     testWidgets('inquiry card rejects creation callback when owner=$isOwner', (

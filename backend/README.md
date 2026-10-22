@@ -398,3 +398,42 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 ---
 
 นโยบายทุกวัยใช้ migration `supabase/migrations/20261011162207_remove_guardian_age_restrictions.sql` ยกเลิกการใช้ `is_minor` จำกัดลงประกาศ/จอง/อนุมัติตัวตนทั้ง Go guard และ database triggers รวมถึงถอด API `/api/identity/guardians`, คิวและคำสั่งผู้ปกครองจากระบบเจ้าหน้าที่ ข้อมูลประวัติผู้ปกครองและหลักฐานเก่ายังเก็บตามรอบลบเดิม การตรวจตัวตนโดยเจ้าหน้าที่และการระงับบัญชียังทำงานทุกวัย
+
+### ข้อมูลบัตรประชาชนในตั้งค่าบัญชี
+
+ติดตั้ง `supabase/migrations/20261021065036_identity_account_details.sql` ก่อนเปิด Backend รุ่นนี้ `GET /api/identity/account` อ่านเฉพาะข้อมูลของเจ้าของ Bearer token ส่ง `fields`, `status`, `has_identity`, `selfie_with_card` และรายการ `evidence` (ID/kind) โดยไม่ส่ง ciphertext, HMAC หรือ object path; `GET /api/identity/account/evidence/:id` ตรวจเจ้าของและกำหนดลบก่อนส่งภาพ base64 ใน `data` ทั้งสอง route ใช้ `Cache-Control: private, no-store` และไม่บันทึกข้อมูลตัวตนใน response log
+
+การแก้ไขใช้ session/submit เดิม ส่งข้อมูลส่วนบุคคลและที่อยู่ครบ พร้อม `selfie_with_card: true` และแนบเฉพาะภาพที่เปลี่ยน ระบบคัดลอกภาพเดิมที่ยังไม่หมดอายุเข้าสู่คำขอใหม่ได้ รูปเดิมที่ยังอ่านได้สามารถใช้ต่อได้แม้ไม่มีธง selfie_with_card ของรุ่นใหม่ โดยคง metadata เดิม ไม่ใช้ธงดังกล่าวแทนผลตรวจของเจ้าหน้าที่ การส่งซ้ำถูกป้องกันระหว่าง pending เลขบัตรเทียบกับ HMAC เดิมทั้ง Go และ database trigger หากต่างจะได้ `409 citizen_id_locked` และต้องติดต่อเจ้าหน้าที่ กรณีข้อมูลเก่าถูก purge แล้วจะแสดงเลขที่ปกปิดไว้และให้กรอกช่องอื่นใหม่ โดยคง HMAC เลขบัตรเดิม
+
+ข้อมูลที่อนุมัติล่าสุดเก็บเป็น ciphertext ใน `identity_profiles.raw_encrypted` จนกว่าข้อมูลบัญชีนั้นถูกแทนที่หรือลบบัญชี ใช้คีย์และการเข้ารหัสเดิม แยกจากข้อมูลคำขอและรูปหลักฐานที่ยังลบตาม retention เดิม ข้อมูล pending/corrections/rejected ไม่ทับ snapshot หรือสิทธิ์เดิม เมื่อเจ้าหน้าที่อนุมัติผ่าน workflow เดิมจึงแทนที่ snapshot โดยอัตโนมัติ หากอัปโหลดล้มเหลวจะยกเลิกรอบ capture ก่อน rollback รูป และจะไม่ลบรูปของคำขอที่เปลี่ยนเป็น pending แล้ว
+
+ตรวจด้วย `go test ./...`, `go vet ./...`, `go build ./...` และ `supabase/tests/identity_account_details.sql` ซึ่งสร้าง fixture แล้ว rollback ครอบคลุม ownership, สิทธิ์ RPC, เลขบัตรคงเดิม, pending/corrections/approval และการหมดอายุหลักฐาน
+
+
+## ค้นหาสถานที่นัดรับ
+
+- `GET /api/locations/search?q=สวนเบญจกิติ`: คำค้น 2–200 ตัวอักษร ผลเป็น array ของ `{name, display_name, latitude, longitude, type}` จากสถานที่จริงทั่วประเทศไทย ไม่มีการแทนผลลัพธ์ด้วยรายการยอดนิยม
+- `GET /api/locations/reverse?lat=13.7292243&lon=100.5585211`: object โครงสร้างเดียวกัน ใช้พิกัดที่ผู้ใช้เลือก
+- ใช้ app-secret middleware เดิม รองรับ guest โดยไม่ต้องมี bearer token; 400 คือคำค้น/พิกัดไม่ถูกต้อง, 429 พร้อม `Retry-After: 1` คือโควตาเต็ม, 502 คือ upstream ขัดข้อง ไม่มีการเปิดเผยรายละเอียดภายใน
+- `GEOCODING_URL` ค่าเริ่มต้น `https://nominatim.openstreetmap.org` เป็น Nominatim-compatible origin เปลี่ยนผู้ให้บริการที่ backend และ restart ได้โดยไม่อัปเดตแอป
+- [นโยบาย Nominatim](https://operations.osmfoundation.org/policies/nominatim/): ห้าม autocomplete, ไม่เกิน 1 request/วินาทีรวมทุกผู้ใช้, ต้องระบุแอปและแสดง attribution Frontend จึงเรียก Nominatim เมื่อผู้ใช้กด Search เท่านั้น แสดง © OpenStreetMap contributors และลิงก์ ODbL
+- Client instance เดียวที่ main ฉีดให้ routes รวมโควตา search/reverse และแคชผลสำเร็จ 24 ชั่วโมง ไม่เกิน 512 คำค้น/พิกัด ไม่ retry อัตโนมัติ **เมื่อใช้ public Nominatim ให้รัน geocoding ผ่าน backend เพียง instance เดียว** ถ้าต้อง scale หลาย replicas หรือมี traffic เกินโควตา ให้ใช้ geocoding gateway ที่รวมโควตาข้าม replicas หรือเปลี่ยนเป็นผู้ให้บริการ/self-hosted ที่รองรับ traffic ก่อน ห้ามกระจาย public quota แยกทุก replica
+
+
+### รายการแนะนำระหว่างพิมพ์
+
+`GET /api/locations/suggest?q=สวนเบญ` รับคำค้น 2–200 ตัวอักษรและคืน array โครงสร้าง Place เดียวกับ search ใช้ Photon (ค่าเริ่มต้น `PLACE_SUGGESTIONS_URL=https://photon.komoot.io`) ที่รองรับ autocomplete โดยไม่ส่ง prefix ไป Nominatim กรองประเทศไทยและเลขบ้านที่ไม่ตรง มีแคช 30 นาทีไม่เกิน 512 คำและจำกัด upstream รวมประมาณ 2.8 ครั้ง/วินาที/instance UI หน่วง 600ms หลังหยุดพิมพ์และทิ้งผลคำเก่า
+
+[Photon demo policy](https://github.com/komoot/photon#demo-server) อนุญาตให้ใช้ในโปรเจกต์ที่มีคำขอปริมาณเหมาะสม ไม่มีการรับประกัน uptime และอาจ throttle/ban เมื่อใช้มาก ก่อนขยาย traffic ให้เปลี่ยน `PLACE_SUGGESTIONS_URL` เป็น private instance หรือผู้ให้บริการที่รองรับปริมาณนั้น ไม่ใช้ Nominatim public เป็น fallback อัตโนมัติของ autocomplete
+
+
+### ขยายการค้นหาที่อยู่
+
+แปลงเลขไทยเป็นเลขอารบิก ขยาย ถ./ซ./ต./อ./จ. และกทม. ค้นหาเลขบ้านตรงก่อน หากไม่มีผล Photon จะลองตัดเลขบ้านออกและค้นหาชื่อถนน โดยตรวจว่าข้อความพื้นที่สัมพันธ์กับผลจริง จำกัดไม่เกิน 3 รูปแบบคำค้นต่อครั้งและใช้ limiter เดียวกันทุกคำสำรอง (ประมาณ 2.8 requests/s, deadline 12s) แคชผลรวมด้วยคำค้นที่ normalize แล้ว
+
+ผลที่พบเพียงถนน/พื้นที่จากคำค้นเลขบ้านมี `is_approximate: true` ให้ UI แสดงว่าต้องเลื่อนหมุดเลือกจุดนัดรับ ไม่ใส่เลขบ้านที่ค้นลงในพิกัดถนน การกด Search บนคีย์บอร์ดรวมผล Nominatim + Photon (ตัดชื่อ/พิกัดซ้ำ) และยังทำงานได้เมื่อ provider หนึ่งล้มเหลว มี deadline รวม 14s; autocomplete ใช้ Photon เท่านั้นตามเดิม ที่อยู่ที่ไม่อยู่ในฐานข้อมูลยังอาจไม่พบ และถนนชื่อเดียวกันอาจอยู่ต่างจังหวัด จึงควรระบุเขต/จังหวัดเพื่อให้ตรงพื้นที่
+
+
+### ภาษาแสดงผลสถานที่
+
+Nominatim ขอ `namedetails=1` พร้อม `accept-language=th,en` และเลือก `name:th` เฉพาะเมื่อเป็นข้อความไทยจริง Photon ใช้ `lang=default` เพื่อชื่อท้องถิ่น ไม่บังคับอังกฤษตามภาษาคำค้น (public Photon ไม่รองรับ `lang=th`) ถ้าชื่อยังเป็นอังกฤษ ใช้ชื่อจุดนัดรับตามถนน/พื้นที่ภาษาไทยจริง หรือ “จุดนัดรับที่เลือก” เมื่อไม่มีข้อมูลชื่อไทย พร้อมคืน `original_name` ให้ UI แสดงชื่อเดิมแยกไว้ ไม่เดาคำแปลชื่อเฉพาะหรือเปลี่ยนพิกัด

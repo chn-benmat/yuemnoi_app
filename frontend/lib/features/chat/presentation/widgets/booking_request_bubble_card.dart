@@ -12,6 +12,7 @@ import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../../profile/presentation/widgets/rentals/rental_status_widgets.dart';
 
 class BookingRequestBubbleCard extends StatefulWidget {
   const BookingRequestBubbleCard({
@@ -195,10 +196,16 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             cachedBookingId > 0) {
           _bookingId = cachedBookingId;
         }
-        if (widget.isReturnCompleted) {
+        final hasSharedStatus =
+            widget.bookingData.status != null || widget.initialStatus != null;
+        if (_rentalStatus == 'completed' ||
+            (!hasSharedStatus &&
+                (cachedStatus == 'completed' || widget.isReturnCompleted))) {
           _rentalStatus = 'completed';
           _countdownTimer?.cancel();
-        } else if (widget.isHandoverCompleted) {
+        } else if (widget.isHandoverCompleted &&
+            widget.bookingData.status == null &&
+            widget.initialStatus == null) {
           _rentalStatus = 'active';
           _startCountdownTimer();
         } else if (widget.bookingData.status == null &&
@@ -213,9 +220,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
       });
     }
 
-    if (widget.isHandoverCompleted && !widget.isReturnCompleted) {
+    if (widget.isHandoverCompleted && _rentalStatus == 'active') {
       await BookingConfirmationTracker.markActive(messageId: widget.message.id);
-    } else if (widget.isReturnCompleted) {
+    } else if (_rentalStatus == 'completed') {
       await BookingConfirmationTracker.setStatus(
         messageId: widget.message.id,
         status: 'completed',
@@ -258,13 +265,11 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
           }
 
           final String resolvedStatus;
-          if (widget.isReturnCompleted ||
-              rawDbStatus == 'completed' ||
+          if (rawDbStatus == 'completed' ||
               rawDbStatus == 'finished' ||
               rawDbStatus == 'คืนของสำเร็จ') {
             resolvedStatus = 'completed';
-          } else if (widget.isHandoverCompleted ||
-              rawDbStatus == 'active' ||
+          } else if (rawDbStatus == 'active' ||
               rawDbStatus == 'awaiting_return' ||
               rawDbStatus == 'return_ready' ||
               rawDbStatus == 'กำลังเช่า' ||
@@ -742,14 +747,19 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                   ),
-                  onPressed: () => AppRoutes.openRentalStatus(context),
+                  onPressed: () => AppRoutes.openRentalStatus(
+                    context,
+                    isLender: isOwnerUser,
+                  ),
                   icon: const FaIcon(
                     FontAwesomeIcons.receipt,
                     size: 13,
                     color: Color(0xFF475569),
                   ),
-                  label: const Text(
-                    'ดูสถานะการเช่า (กำลังเช่า / กำลังใช้ของ)',
+                  label: Text(
+                    isOwnerUser
+                        ? 'ดูสถานะปล่อยเช่า (กำลังเช่า / กำลังใช้ของ)'
+                        : 'ดูสถานะการเช่า (กำลังเช่า / กำลังใช้ของ)',
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13,
@@ -790,8 +800,13 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
               ),
             ] else if (_rentalStatus == 'cancelled') ...[
               OutlinedButton(
-                onPressed: () => AppRoutes.openRentalStatus(context),
-                child: const Text('ยกเลิกการเช่าแล้ว • ดูสถานะการเช่า'),
+                onPressed: () =>
+                    AppRoutes.openRentalStatus(context, isLender: isOwnerUser),
+                child: Text(
+                  isOwnerUser
+                      ? 'ยกเลิกการเช่าแล้ว • ดูสถานะปล่อยเช่า'
+                      : 'ยกเลิกการเช่าแล้ว • ดูสถานะการเช่า',
+                ),
               ),
             ] else if (_rentalStatus == 'completed') ...[
               SizedBox(
@@ -807,14 +822,35 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  onPressed: () => AppRoutes.openRentalStatus(context),
+                  onPressed: () => RentalStatusCard.showDetails(
+                    context,
+                    RentalStatusItemData(
+                      bookingId: _bookingId,
+                      itemId: item.id,
+                      title: item.title,
+                      ownerName: widget.senderName ?? item.ownerName,
+                      partnerRole: isOwnerUser ? 'ผู้เช่า' : 'เจ้าของอุปกรณ์',
+                      status: 'เสร็จสิ้น',
+                      statusCode: 'completed',
+                      statusColor: const Color(0xFF475569),
+                      iconData: Icons.inventory_2_outlined,
+                      imageUrl: displayImageUrl,
+                      startDate: widget.bookingData.startDateTime,
+                      endDate: widget.bookingData.endDateTime,
+                      duration:
+                          '${widget.bookingData.duration} ${widget.bookingData.rentalType.unit}',
+                      totalPrice: widget.bookingData.totalPrice.round(),
+                      pickupLocation: widget.bookingData.location,
+                      isOwner: isOwnerUser,
+                    ),
+                  ),
                   icon: const FaIcon(
                     FontAwesomeIcons.circleCheck,
                     size: 15,
                     color: Colors.white,
                   ),
-                  label: const Text(
-                    'การเช่าเสร็จสิ้น • ดูสถานะการเช่า',
+                  label: Text(
+                    'การเช่าเสร็จสิ้น',
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13,
@@ -869,14 +905,17 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  onPressed: () => AppRoutes.openRentalStatus(context),
+                  onPressed: () => AppRoutes.openRentalStatus(
+                    context,
+                    isLender: isOwnerUser,
+                  ),
                   icon: const FaIcon(
                     FontAwesomeIcons.receipt,
                     size: 12,
                     color: Color(0xFF475569),
                   ),
-                  label: const Text(
-                    'ดูสถานะการเช่า',
+                  label: Text(
+                    isOwnerUser ? 'ดูสถานะปล่อยเช่า' : 'ดูสถานะการเช่า',
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 12.5,

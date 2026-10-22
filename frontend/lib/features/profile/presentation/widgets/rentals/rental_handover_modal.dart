@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -452,9 +453,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('ยืนยันส่งมอบไม่สำเร็จ: $e')));
+        showAppPopup(context, content: Text('ยืนยันส่งมอบไม่สำเร็จ: $e'));
       }
       return;
     }
@@ -547,26 +546,6 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
       _clearSavedStep();
       Navigator.of(context).pop();
       widget.onHandoverSuccess?.call('cancelled');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'ยกเลิกการเช่าเรียบร้อยแล้ว ระบบได้บันทึกหลักฐานแล้ว',
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
     }
   }
 
@@ -1002,13 +981,6 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
             height: 48,
             child: ElevatedButton.icon(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'คุณได้แจ้งชำระเงินแล้ว กำลังรอผู้ปล่อยเช่ายืนยัน',
-                    ),
-                  ),
-                );
                 _setStep(2);
               },
               icon: const Icon(Icons.check_rounded, size: 18),
@@ -1228,18 +1200,6 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                   InkWell(
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: _generatedPin));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'คัดลอกรหัส PIN $_generatedPin เรียบร้อยแล้ว',
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
                     },
                     borderRadius: BorderRadius.circular(12),
                     child: const Padding(
@@ -1963,9 +1923,7 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ไม่สามารถเลือกรูปภาพได้')),
-        );
+        showAppPopup(context, content: Text('ไม่สามารถเลือกรูปภาพได้'));
       }
     }
   }
@@ -2144,9 +2102,7 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('ยกเลิกไม่สำเร็จ: $e')));
+        showAppPopup(context, content: Text('ยกเลิกไม่สำเร็จ: $e'));
       }
       return;
     }

@@ -1,7 +1,158 @@
+import 'package:dio/dio.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/services/location_service.dart';
 
 void main() {
+  test('street fallback retains the approximate-address marker', () async {
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              statusCode: 200,
+              data: [
+                {
+                  'name': 'ถนนพุดตานใน',
+                  'display_name': 'ถนนพุดตานใน, ดุสิต, กรุงเทพมหานคร',
+                  'latitude': 13.772,
+                  'longitude': 100.513,
+                  'is_approximate': true,
+                },
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    final client = DioApiClient(dio: dio, appSecret: '');
+    addTearDown(client.close);
+    final results = await LocationService(
+      apiClient: client,
+    ).suggestLocations('719/259 พุดตาน');
+    expect(results.single.isApproximate, isTrue);
+    expect(results.single.name, 'ถนนพุดตานใน');
+  });
+  test(
+    'suggestions use their own API instead of autocomplete on Nominatim search',
+    () async {
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            expect(options.path, '/api/locations/suggest');
+            expect(options.queryParameters['q'], 'สวนเบญ');
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: [
+                  {
+                    'name': 'สวนเบญจกิติ',
+                    'display_name': 'สวนเบญจกิติ, กรุงเทพมหานคร',
+                    'latitude': 13.7292243,
+                    'longitude': 100.5585211,
+                  },
+                ],
+              ),
+            );
+          },
+        ),
+      );
+      final client = DioApiClient(dio: dio, appSecret: '');
+      addTearDown(client.close);
+      final results = await LocationService(
+        apiClient: client,
+      ).suggestLocations('สวนเบญ');
+      expect(results.single.name, 'สวนเบญจกิติ');
+      expect(results.single.latitude, 13.7292243);
+    },
+  );
+  for (final query in ['สวนเบญจกิติ', 'Benchakitti Park']) {
+    test(
+      'real place search preserves name/address/coordinates for $query',
+      () async {
+        final dio = Dio();
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              expect(options.path, '/api/locations/search');
+              expect(options.queryParameters['q'], query);
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: [
+                    {
+                      'name': 'สวนเบญจกิติ',
+                      'display_name': 'สวนเบญจกิติ, เขตคลองเตย, กรุงเทพมหานคร',
+                      'latitude': 13.7292243,
+                      'longitude': 100.5585211,
+                      'type': 'park',
+                    },
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+        final client = DioApiClient(dio: dio, appSecret: '');
+        addTearDown(client.close);
+        final results = await LocationService(
+          apiClient: client,
+        ).searchLocations(query);
+        expect(results, hasLength(1));
+        expect(results.single.name, 'สวนเบญจกิติ');
+        expect(results.single.displayName, contains('คลองเตย'));
+        expect(results.single.latitude, 13.7292243);
+        expect(results.single.longitude, 100.5585211);
+      },
+    );
+  }
+  test('empty upstream search does not substitute curated landmarks', () async {
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          handler.resolve(
+            Response(requestOptions: options, statusCode: 200, data: []),
+          );
+        },
+      ),
+    );
+    final client = DioApiClient(dio: dio, appSecret: '');
+    addTearDown(client.close);
+    expect(
+      await LocationService(apiClient: client).searchLocations('สยาม'),
+      isEmpty,
+    );
+  });
+  test(
+    'search service failure must not masquerade as no real places',
+    () async {
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                type: DioExceptionType.connectionError,
+              ),
+            );
+          },
+        ),
+      );
+      await expectLater(
+        LocationService(
+          apiClient: DioApiClient(dio: dio, appSecret: ''),
+        ).searchLocations('สวนเบญจกิติ'),
+        throwsA(isA<ApiClientException>()),
+      );
+    },
+  );
   test('Google Maps URL uses the selected coordinates without a place ID', () {
     final uri = LocationService.buildGoogleMapsUri(13.7115884, 100.4341077);
 

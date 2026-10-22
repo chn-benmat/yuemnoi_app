@@ -54,7 +54,8 @@ func operationError(c fiber.Ctx, err error) error {
 		"last_staff_required":    "ต้องเหลือเจ้าหน้าที่ที่ใช้งานได้อย่างน้อยหนึ่งบัญชี", "self_suspend_forbidden": "ไม่สามารถระงับบัญชีตนเอง",
 		"manual_review_required": "กรุณายืนยันว่าตรวจหลักฐานด้วยตนเองแล้ว",
 		"evidence_unavailable":   "หลักฐานหมดอายุหรือถูกลบแล้ว", "invalid_date_range": "ช่วงเวลารายงานไม่ถูกต้อง",
-		"invalid_settings": "กรุณาระบุค่าการเปิดใช้งานเป็น true หรือ false",
+		"invalid_settings":  "กรุณาระบุค่าการเปิดใช้งานเป็น true หรือ false",
+		"citizen_id_locked": "หากต้องการเปลี่ยนเลขบัตร กรุณาติดต่อเจ้าหน้าที่",
 	}
 	message, known := messages[code]
 	if !known {
@@ -176,15 +177,42 @@ func (h *OperationsHandler) Submit(c fiber.Ctx) error {
 			ID, Status   string
 			CaptureUntil time.Time `json:"capture_until"`
 		} `json:"request"`
+		Control struct {
+			Suspended bool `json:"suspended"`
+		} `json:"control"`
+	}
+	if json.Unmarshal(status, &current) == nil && current.Control.Suspended {
+		return operationError(c, errors.New("account_suspended"))
 	}
 	if json.Unmarshal(status, &current) != nil || current.Request.ID != id || current.Request.Status != "capture" || current.Request.CaptureUntil.Before(time.Now()) {
 		return operationError(c, errors.New("capture_expired"))
 	}
 	legal := strings.TrimSpace(c.FormValue("legal_name"))
 	citizen := strings.TrimSpace(c.FormValue("citizen_id"))
+	account, err := h.account(c, u)
+	if err != nil {
+		return operationError(c, err)
+	}
+	locked := account.LockedHMAC != ""
+	if locked && citizen != "" && citizen != account.MaskedID && domain.CitizenHMAC(citizen, h.options.HMACKey) != account.LockedHMAC {
+		return operationError(c, errors.New("citizen_id_locked"))
+	}
+	if locked && (citizen == "" || citizen == account.MaskedID) && account.Raw != "" {
+		plain, failure := domain.DecryptIdentity(account.Raw, h.options.EncryptionKey)
+		if failure != nil {
+			return operationError(c, failure)
+		}
+		var saved struct {
+			CitizenID string `json:"citizen_id"`
+		}
+		if json.Unmarshal(plain, &saved) != nil {
+			return c.SendStatus(503)
+		}
+		citizen = saved.CitizenID
+	}
 	dob := c.FormValue("birth_date")
 	minor, err := domain.IdentityAge(dob, time.Now().UTC())
-	if err != nil || !domain.ValidThaiCitizenID(citizen) || len(legal) < 3 || len(legal) > 450 {
+	if err != nil || (!locked && !domain.ValidThaiCitizenID(citizen)) || len(legal) < 3 || len(legal) > 450 {
 		return c.Status(400).JSON(fiber.Map{"error": "กรุณาตรวจชื่อ เลขบัตร และวันเกิด"})
 	}
 	form, err := c.MultipartForm()
@@ -195,6 +223,9 @@ func (h *OperationsHandler) Submit(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "กรุณาตรวจคำนำหน้าชื่อ ชื่อ นามสกุล และที่อยู่ตามบัตรประชาชนให้ครบถ้วน"})
 	}
+	if locked && details == nil {
+		return c.Status(400).JSON(fiber.Map{"error": "กรุณากรอกข้อมูลบัตรประชาชนและที่อยู่ให้ครบถ้วน"})
+	}
 	if details != nil {
 		legal = details.NamePrefix + " " + details.FirstName + " " + details.LastName
 		if len(legal) > 450 {
@@ -203,7 +234,43 @@ func (h *OperationsHandler) Submit(c fiber.Ctx) error {
 	}
 	files := map[string][]byte{}
 	types := map[string]string{}
+	selfieWithCard := c.FormValue("selfie_with_card") == "true"
+	reuseEvidence := func(kind, evidenceID string) error {
+		evidence, failure := h.ownerEvidenceInfo(c, u, evidenceID, kind)
+		if failure != nil {
+			return failure
+		}
+		files[kind], types[kind], failure = h.options.Store.ReadEvidence(c.Context(), evidence.Path)
+		if kind == "selfie" {
+			selfieWithCard = evidence.SelfieWithCard
+		}
+		return failure
+	}
 	for _, kind := range []string{"card", "selfie"} {
+		if locked && len(form.File[kind]) == 0 {
+			if evidenceID := c.FormValue(kind + "_evidence_id"); evidenceID != "" {
+				err = reuseEvidence(kind, evidenceID)
+				if err != nil {
+					return operationError(c, err)
+				}
+			}
+			for _, evidence := range account.Evidence {
+				if len(files[kind]) != 0 {
+					break
+				}
+				if evidence.Kind == kind {
+					err = reuseEvidence(kind, evidence.ID)
+					if err != nil {
+						return operationError(c, err)
+					}
+					break
+				}
+			}
+			if len(files[kind]) == 0 {
+				return c.Status(400).JSON(fiber.Map{"error": "กรุณาเพิ่มรูปบัตรและรูปคู่บัตรที่ยังใช้งานได้"})
+			}
+			continue
+		}
 		if len(form.File[kind]) != 1 {
 			return c.Status(400).JSON(fiber.Map{"error": "ต้องมีภาพบัตรและภาพใบหน้าอย่างละหนึ่งภาพ"})
 		}
@@ -226,6 +293,14 @@ func (h *OperationsHandler) Submit(c fiber.Ctx) error {
 	rollback := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
+		// ต้องยืนยันว่าปิดรอบ capture ได้ก่อนลบ เผื่อ submit สำเร็จแต่คำตอบขาดหาย
+		result, failure := h.options.Store.RPC(ctx, "identity_cancel_capture", map[string]any{"p_actor": u, "p_id": id})
+		var cancelled struct {
+			Cancelled bool `json:"cancelled"`
+		}
+		if failure != nil || json.Unmarshal(result, &cancelled) != nil || !cancelled.Cancelled {
+			return
+		}
 		for _, p := range paths {
 			_ = h.options.Store.DeleteEvidence(ctx, p)
 		}
@@ -237,6 +312,9 @@ func (h *OperationsHandler) Submit(c fiber.Ctx) error {
 	}
 	// ลงทะเบียนกำหนดลบก่อนอัปโหลด ป้องกันไฟล์ตกค้างเมื่อโปรเซสหยุดกลางทาง
 	if _, err = h.options.Store.RPC(c.Context(), "identity_reserve_evidence", map[string]any{"p_actor": u, "p_id": id, "p_evidence": evidence}); err != nil {
+		if err.Error() == "active_request_exists" {
+			rollback()
+		}
 		return operationError(c, err)
 	}
 	// อัปโหลดคนละไฟล์พร้อมกัน และรอทั้งสองงานจบก่อนบันทึกหรือลบไฟล์คืน
@@ -257,10 +335,15 @@ func (h *OperationsHandler) Submit(c fiber.Ctx) error {
 		rollback()
 		return operationError(c, uploadError)
 	}
+	masked, citizenHMAC := account.MaskedID, account.LockedHMAC
+	if !locked {
+		masked = "*********" + citizen[9:]
+		citizenHMAC = domain.CitizenHMAC(citizen, h.options.HMACKey)
+	}
 	result, err := h.options.Store.RPC(c.Context(), "identity_submit", map[string]any{"p_actor": u, "p_id": id, "p_data": map[string]any{
-		"legal_name": legal, "masked_id": "*********" + citizen[9:], "citizen_hmac": domain.CitizenHMAC(citizen, h.options.HMACKey),
+		"legal_name": legal, "masked_id": masked, "citizen_hmac": citizenHMAC,
 		// อายุบัตรระบุโดยเจ้าหน้าที่หลังตรวจภาพเท่านั้น
-		"expires_on": nil, "lifetime": false, "is_minor": minor, "raw_encrypted": encrypted, "analysis": map[string]any{"review_mode": "manual"},
+		"expires_on": nil, "lifetime": false, "is_minor": minor, "raw_encrypted": encrypted, "analysis": map[string]any{"review_mode": "manual", "selfie_with_card": selfieWithCard},
 	}, "p_evidence": evidence})
 	if err != nil {
 		rollback()

@@ -116,7 +116,9 @@ void main() {
       await tester.tap(find.text('อ่านทั้งหมด'));
       await tester.pumpAndSettle();
       expect(service.inbox.value.unreadCount, 0);
-      expect(find.textContaining('ทำเครื่องหมายอ่านแล้ว'), findsOneWidget);
+      expect(find.textContaining('ทำเครื่องหมายอ่านแล้ว'), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
       await tester.pumpWidget(const SizedBox());
       service.dispose();
     });

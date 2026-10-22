@@ -104,6 +104,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _handlePrivacy({bool notificationsOnly = false}) async {
+    final authed = await AuthGuard.requireAuth(
+      context,
+      title: 'เข้าสู่ระบบ',
+      message: 'กรุณาเข้าสู่ระบบก่อนจัดการความเป็นส่วนตัว',
+    );
+    if (!authed || !mounted) return;
+    if (notificationsOnly) {
+      await AppRoutes.openNotificationSettings(context);
+    } else {
+      await AppRoutes.openChangeAccount(context);
+    }
+  }
+
   void _openUserProfile() async {
     final user = _currentUser;
     if (user == null) {
@@ -340,6 +354,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           const SizedBox(height: 12),
                           ProfileSection(
+                            icon: Icons.privacy_tip_outlined,
+                            title: 'ความเป็นส่วนตัว',
+                            items: [
+                              ProfileMenuItemData(
+                                icon: Icons.shield_outlined,
+                                title: 'ศูนย์ความเป็นส่วนตัว',
+                                onTap: () => _handlePrivacy(),
+                              ),
+                              ProfileMenuItemData(
+                                icon: Icons.notifications_outlined,
+                                title: 'การแจ้งเตือน',
+                                showDivider: false,
+                                onTap: () =>
+                                    _handlePrivacy(notificationsOnly: true),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          ProfileSection(
                             icon: Icons.help_outline_rounded,
                             title: 'ศูนย์ช่วยเหลือ',
                             items: [
@@ -353,19 +386,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 title: 'คำถามที่พบบ่อย',
                                 showDivider: false,
                                 onTap: () => AppRoutes.openFaq(context),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          ProfileSection(
-                            icon: Icons.security_outlined,
-                            title: 'หมวดหมู่ความปลอดภัย',
-                            items: [
-                              ProfileMenuItemData(
-                                icon: Icons.verified_user_outlined,
-                                title: 'การยืนยันตัวตน',
-                                showDivider: false,
-                                onTap: () => AppRoutes.openIdentity(context),
                               ),
                             ],
                           ),

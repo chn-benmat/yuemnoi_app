@@ -63,6 +63,11 @@ void main() {
     );
     await tester.tap(find.text('เปิดคำขอ'));
     await tester.pumpAndSettle();
+    for (final width in [320.0, 375.0, 414.0, 768.0]) {
+      await tester.binding.setSurfaceSize(Size(width, 900));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'layout at $width px');
+    }
     final submit = find.byKey(const ValueKey('submit-booking-request-button'));
     await tester.ensureVisible(submit);
     await tester.tap(submit);

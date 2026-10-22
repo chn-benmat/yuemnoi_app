@@ -24,6 +24,7 @@ class ItemDetailRemoteDataSource {
   final ApiClient _apiClient;
 
   Future<ItemDetail> fetchById(int itemId) async {
+    Map<String, dynamic>? apiItem;
     try {
       final token = AuthSession.accessToken;
       final response = await _apiClient.get(
@@ -31,10 +32,7 @@ class ItemDetailRemoteDataSource {
         headers: token == null ? null : {'Authorization': 'Bearer $token'},
       );
       if (response.statusCode == 200 && response.data is Map) {
-        return ItemDetailModel.fromApiResponse(
-          item: Map<String, dynamic>.from(response.data as Map),
-          currentUserId: _client.auth.currentUser?.id,
-        );
+        apiItem = Map<String, dynamic>.from(response.data as Map);
       }
       if (response.statusCode == 404) {
         throw const ItemDetailRemoteException('ไม่พบอุปกรณ์นี้');
@@ -46,24 +44,34 @@ class ItemDetailRemoteDataSource {
     }
 
     try {
-      final item = await _client
-          .from('item_tb')
-          .select(
-            'id,user_id,item_name,item_image_url,description,category,price,status,type,owner_hidden,pickup_location,pickup_address,pickup_note,pickup_latitude,pickup_longitude',
-          )
-          .eq('id', itemId)
-          .maybeSingle();
+      // API ส่งเฉพาะข้อมูลสินค้า จึงต้องโหลดรีวิวร่วมกันทั้งสองเส้นทาง
+      final item =
+          apiItem ??
+          await _client
+              .from('item_tb')
+              .select(
+                'id,user_id,item_name,item_image_url,description,category,price,status,type,owner_hidden,pickup_location,pickup_address,pickup_note,pickup_latitude,pickup_longitude',
+              )
+              .eq('id', itemId)
+              .maybeSingle();
       if (item == null) {
         throw const ItemDetailRemoteException('ไม่พบอุปกรณ์นี้');
       }
 
-      final rawReviews = await _client
-          .from('review_tb')
-          .select('id,user_id,item_id,rating,description,created_at')
-          .eq('item_id', itemId)
-          .order('created_at', ascending: false)
-          .limit(10);
-      final reviews = rawReviews.cast<Map<String, dynamic>>();
+      final reviews = <Map<String, dynamic>>[];
+      // โหลดเป็นชุดเพื่อให้หน้ารีวิวทั้งหมดไม่ถูกจำกัดอยู่แค่สิบรายการล่าสุด
+      const pageSize = 100;
+      for (var offset = 0; ; offset += pageSize) {
+        final batch = await _client
+            .from('review_tb')
+            .select('id,user_id,item_id,rating,description,created_at')
+            .eq('item_id', itemId)
+            .order('created_at', ascending: false)
+            .order('id', ascending: false)
+            .range(offset, offset + pageSize - 1);
+        reviews.addAll(batch.cast<Map<String, dynamic>>());
+        if (batch.length < pageSize) break;
+      }
 
       final userIds = <String>{
         if (item['user_id'] case final String ownerId) ownerId,
