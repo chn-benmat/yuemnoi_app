@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/services/location_service.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
@@ -6,6 +7,53 @@ import 'package:frontend/features/booking/presentation/widgets/booking_location_
 
 void main() {
   group('BookingLocationCard Tests', () {
+    testWidgets('opens the read-only pickup coordinates in Google Maps', (
+      tester,
+    ) async {
+      final launches = <MethodCall>[];
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) async {
+        launches.add(call);
+        return true;
+      });
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: BookingLocationCard(
+              location: 'สยามพารากอน (Siam Paragon)',
+              locationNote: 'ระบุโดยคุณ',
+              latitude: 13.7460,
+              longitude: 100.5349,
+              isEditable: false,
+              showMiniMap: false,
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('สยามพารากอน (Siam Paragon)'));
+      await tester.pumpAndSettle();
+
+      expect(launches, hasLength(1));
+      expect(launches.single.method, 'launch');
+      final arguments = launches.single.arguments as Map;
+      final uri = Uri.parse(arguments['url'] as String);
+      expect(uri.host, 'www.google.com');
+      expect(uri.path, '/maps/search/');
+      expect(uri.queryParameters['query'], '13.746,100.5349');
+      expect(arguments['useWebView'], isFalse);
+      expect(arguments['useSafariVC'], isFalse);
+      expect(find.byType(BookingLocationCard), findsOneWidget);
+    });
+
     testWidgets(
       'renders location title, note, and coordinates badge in editable mode',
       (tester) async {

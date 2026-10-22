@@ -17,6 +17,50 @@ RentalStatusCubit buildCubit(FakeRentalManagementRepository repository) {
 
 void main() {
   group('RentalStatusCubit', () {
+    test(
+      'completed returns disappear from both roles but pending returns remain',
+      () async {
+        final repo = FakeRentalManagementRepository();
+        final bookings = [
+          for (final status in [
+            'completed',
+            'finished',
+            'active',
+            'awaiting_return',
+            'return_ready',
+          ])
+            RentalBooking(
+              bookingId: status.length,
+              title: status,
+              partnerName: 'Partner',
+              partnerRole: 'Owner',
+              status: status,
+              statusCode: status,
+            ),
+        ];
+        repo.rentingList
+          ..clear()
+          ..addAll(bookings);
+        repo.lendingList
+          ..clear()
+          ..addAll(bookings);
+        final cubit = buildCubit(repo);
+        await cubit.loadBookings('user1');
+        final state = cubit.state as RentalStatusLoaded;
+        expect(state.rentingList.map((b) => b.statusCode), [
+          'active',
+          'awaiting_return',
+          'return_ready',
+        ]);
+        expect(state.lendingList.map((b) => b.statusCode), [
+          'active',
+          'awaiting_return',
+          'return_ready',
+        ]);
+        await cubit.close();
+      },
+    );
+
     test('initial state is RentalStatusInitial', () {
       final repository = FakeRentalManagementRepository();
       final cubit = buildCubit(repository);
@@ -53,7 +97,7 @@ void main() {
     );
 
     blocTest<RentalStatusCubit, RentalStatusState>(
-      'loadBookings filters out pending and rejected bookings',
+      'loadBookings keeps pending and confirmed but filters rejected bookings',
       build: () {
         final repo = FakeRentalManagementRepository();
         repo.rentingList.clear();
@@ -89,12 +133,8 @@ void main() {
       expect: () => [
         isA<RentalStatusLoading>(),
         isA<RentalStatusLoaded>()
-            .having((s) => s.rentingList.length, 'rentingList length', 1)
-            .having(
-              (s) => s.rentingList.first.bookingId,
-              'first bookingId',
-              103,
-            ),
+            .having((s) => s.rentingList.length, 'rentingList length', 2)
+            .having((s) => s.rentingList.last.bookingId, 'last bookingId', 103),
       ],
     );
   });

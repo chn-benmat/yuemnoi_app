@@ -11,12 +11,13 @@ abstract class ChatDetailEvent extends Equatable {
 }
 
 class ChatMessagesSubscriptionRequested extends ChatDetailEvent {
-  const ChatMessagesSubscriptionRequested(this.conversationId);
+  const ChatMessagesSubscriptionRequested(this.conversationId, {this.itemId});
 
   final String conversationId;
+  final int? itemId;
 
   @override
-  List<Object?> get props => [conversationId];
+  List<Object?> get props => [conversationId, itemId];
 }
 
 class ChatMessagesUpdated extends ChatDetailEvent {

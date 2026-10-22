@@ -34,7 +34,7 @@ class BookingPriceSummaryCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.03),
@@ -49,15 +49,18 @@ class BookingPriceSummaryCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    bookingData.priceBreakdownLabel,
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF595C5D),
+                  Expanded(
+                    child: Text(
+                      bookingData.priceBreakdownLabel,
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF595C5D),
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 12),
                   Text(
                     _formatCurrency(bookingData.totalPrice),
                     style: const TextStyle(
@@ -77,13 +80,15 @@ class BookingPriceSummaryCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'ยอดรวม',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E2022),
+                  const Expanded(
+                    child: Text(
+                      'ยอดรวม',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E2022),
+                      ),
                     ),
                   ),
                   Text(

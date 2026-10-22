@@ -82,4 +82,20 @@ class IdentityAddressCubit extends Cubit<IdentityAddressState> {
       error: state.error,
     ),
   );
+
+  void restore(String province, String district, String subdistrict) {
+    final p = state.provinces.where((p) => p.name == province).firstOrNull;
+    final d = p?.districts.where((d) => d.name == district).firstOrNull;
+    final s = d?.subdistricts.where((s) => s.name == subdistrict).firstOrNull;
+    emit(
+      IdentityAddressState(
+        provinces: state.provinces,
+        loading: state.loading,
+        error: state.error,
+        province: p,
+        district: d,
+        subdistrict: s,
+      ),
+    );
+  }
 }

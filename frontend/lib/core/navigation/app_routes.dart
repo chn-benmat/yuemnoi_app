@@ -1,3 +1,5 @@
+import 'package:frontend/core/widgets/app_popup.dart';
+import '../../features/rental_item/domain/entities/rental_item.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -5,8 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'item_detail_route_args.dart';
 import '../../features/identity/data/identity_api_repository.dart';
 import '../../features/identity/domain/identity_repository.dart';
-import '../../features/identity/presentation/identity_cubit.dart';
-import '../../features/identity/presentation/identity_page.dart';
+import '../../features/identity/presentation/identity_account_cubit.dart';
+import '../../features/identity/presentation/pages/identity_account_page.dart';
 
 import '../../features/auth/presentation/pages/change_password.dart';
 import '../../features/auth/presentation/pages/forget_password.dart';
@@ -112,7 +114,9 @@ abstract final class AppRoutes {
   static const settingAccount = '/setting/account';
   static const editProfile = '/setting/edit-profile';
   static const editContact = '/setting/edit-contact';
+  static const identityAccount = '/setting/identity';
   static const changeAccount = '/setting/change-account';
+  static const notificationSettings = '/setting/notifications';
   static const profileChangePassword = '/setting/change-password';
   static const itemDetail = '/items/:itemId';
   static const editRentalItem = '/items/:itemId/edit';
@@ -279,6 +283,7 @@ abstract final class AppRoutes {
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
             child: RentalStatusScreen(
+              isLender: state.uri.queryParameters['role'] == 'lender',
               initialBookingId: int.tryParse(
                 state.uri.queryParameters['booking_id'] ?? '',
               ),
@@ -514,6 +519,24 @@ abstract final class AppRoutes {
           ),
         ),
         GoRoute(
+          path: identityAccount,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: BlocProvider(
+              create: (_) =>
+                  IdentityAccountCubit(IdentityApiRepository())..load(),
+              child: const IdentityAccountPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: notificationSettings,
+          pageBuilder: (context, state) => MaterialPage<void>(
+            key: state.pageKey,
+            child: const ChangeAccountScreen(notificationsOnly: true),
+          ),
+        ),
+        GoRoute(
           path: changeAccount,
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
@@ -539,6 +562,8 @@ abstract final class AppRoutes {
                   initialData: map['initialData'] as BookingRequestData?,
                   itemId: map['itemId'] as int?,
                   isEditMode: map['isEditMode'] as bool? ?? false,
+                  onSendRequest:
+                      map['onSendRequest'] as ValueChanged<BookingRequestData>?,
                 ),
               );
             }
@@ -620,6 +645,8 @@ abstract final class AppRoutes {
                     ? (args['itemId'] as num).toInt()
                     : null,
                 ownerName: args['ownerName'] as String? ?? 'ผู้ปล่อยเช่า',
+                ownerId: args['ownerId'] as String?,
+                ownerAvatarUrl: args['ownerAvatarUrl'] as String?,
                 itemImageUrl: args['itemImageUrl'] as String?,
               ),
             );
@@ -710,6 +737,8 @@ abstract final class AppRoutes {
     String? itemName,
     int? itemId,
     String? ownerName,
+    String? ownerId,
+    String? ownerAvatarUrl,
     String? itemImageUrl,
   }) {
     return context.push<void>(
@@ -718,6 +747,8 @@ abstract final class AppRoutes {
         if (itemName != null) 'itemName': itemName,
         if (itemId != null) 'itemId': itemId,
         if (ownerName != null) 'ownerName': ownerName,
+        if (ownerId != null) 'ownerId': ownerId,
+        if (ownerAvatarUrl != null) 'ownerAvatarUrl': ownerAvatarUrl,
         if (itemImageUrl != null) 'itemImageUrl': itemImageUrl,
       },
     );
@@ -749,14 +780,16 @@ abstract final class AppRoutes {
     BookingRequestData? initialData,
     int? itemId,
     bool isEditMode = false,
+    ValueChanged<BookingRequestData>? onSendRequest,
   }) {
-    if (isEditMode || itemId != null) {
+    if (isEditMode || itemId != null || onSendRequest != null) {
       return context.push<void>(
         booking,
         extra: {
           'initialData': initialData,
           'itemId': itemId,
           'isEditMode': isEditMode,
+          'onSendRequest': onSendRequest,
         },
       );
     }
@@ -833,9 +866,7 @@ abstract final class AppRoutes {
       }
     } on IdentityFailure catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        showAppPopup(context, content: Text(e.message));
       }
       return;
     } finally {
@@ -844,23 +875,18 @@ abstract final class AppRoutes {
     return context.push<void>(addRentalItem);
   }
 
-  static Future<void> openIdentity(BuildContext context) async {
+  static Future<void> openIdentity(BuildContext context) =>
+      openIdentityAccount(context);
+
+  static Future<void> openIdentityAccount(BuildContext context) async {
     if (!await AuthGuard.requireAuth(
           context,
-          title: 'เข้าสู่ระบบเพื่อยืนยันตัวตน',
-          message: 'กรุณาเข้าสู่ระบบก่อนส่งหลักฐานยืนยันตัวตน',
+          title: 'เข้าสู่ระบบเพื่อดูข้อมูลบัตรประชาชน',
+          message: 'กรุณาเข้าสู่ระบบเพื่อจัดการข้อมูลส่วนตัวของคุณ',
         ) ||
-        !context.mounted) {
+        !context.mounted)
       return;
-    }
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => BlocProvider(
-          create: (_) => IdentityCubit(IdentityApiRepository())..load(),
-          child: const IdentityPage(),
-        ),
-      ),
-    );
+    return context.push<void>(identityAccount);
   }
 
   static Future<void> openMyItems(BuildContext context) {
@@ -875,8 +901,13 @@ abstract final class AppRoutes {
     return context.push<void>(faq);
   }
 
-  static Future<void> openRentalStatus(BuildContext context) {
-    return context.push<void>(rentalStatus);
+  static Future<void> openRentalStatus(
+    BuildContext context, {
+    bool isLender = false,
+  }) {
+    return context.push<void>(
+      isLender ? '$rentalStatus?role=lender' : rentalStatus,
+    );
   }
 
   static Future<void> openRentalTrackingMap(
@@ -955,6 +986,10 @@ abstract final class AppRoutes {
     return context.push<void>(editContact);
   }
 
+  static Future<void> openNotificationSettings(BuildContext context) {
+    return context.push<void>(notificationSettings);
+  }
+
   static Future<void> openChangeAccount(BuildContext context) {
     return context.push<void>(changeAccount);
   }
@@ -962,6 +997,32 @@ abstract final class AppRoutes {
   static Future<void> openProfileChangePassword(BuildContext context) {
     return context.push<void>(profileChangePassword);
   }
+
+  static Future<void> openItemPreview(
+    BuildContext context, {
+    required ItemDetail item,
+    required List<RentalItemPhoto> photos,
+  }) => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => BlocProvider(
+        create: (_) => ItemDetailBloc(
+          initialItem: item,
+          getItem: GetItemDetailUseCase(
+            ItemDetailRepositoryImpl(ItemDetailRemoteDataSource()),
+          ),
+          updateItem: UpdateItemUseCase(
+            ItemDetailRepositoryImpl(ItemDetailRemoteDataSource()),
+          ),
+        ),
+        child: ItemDetailScreen(
+          itemId: item.id,
+          preview: true,
+          previewItem: item,
+          previewPhotos: photos,
+        ),
+      ),
+    ),
+  );
 
   static Future<void> openItemDetail(
     BuildContext context, {

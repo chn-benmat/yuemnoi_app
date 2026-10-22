@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import '../../../item_detail/data/datasources/item_detail_remote_data_source.dart';
 import '../../../item_detail/domain/entities/item_detail.dart';
 import '../../../../core/widgets/package_chat_list.dart';
@@ -10,7 +11,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../../core/constants/colors.dart';
-import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/item_review_service.dart';
 import '../../../../core/services/phone_call_service.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -23,9 +23,11 @@ import '../../data/datasources/chat_remote_data_source.dart';
 import '../../data/repositories/chat_repository_impl.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/chat_reply_content.dart';
 import '../../domain/entities/item_inquiry_data.dart';
 import '../../domain/usecases/fetch_messages_usecase.dart';
 import '../../domain/usecases/get_conversation_contact_phone_usecase.dart';
+import '../../domain/usecases/get_owned_chat_item_ids_usecase.dart';
 import '../../domain/usecases/mark_messages_as_read_usecase.dart';
 import '../../domain/usecases/send_chat_message_usecase.dart';
 import '../../domain/usecases/stream_messages_usecase.dart';
@@ -41,26 +43,8 @@ import '../widgets/chat_message_composer.dart';
 import '../widgets/chat_skeleton_loading_view.dart';
 import '../widgets/chat_typing_indicator_bubble.dart';
 
-String _extractActualTextMessage(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.startsWith('↩ ตอบกลับ:') ||
-      trimmed.startsWith('💬 ตอบกลับ') ||
-      trimmed.startsWith('↪ ตอบกลับ')) {
-    final newlineIdx = trimmed.indexOf('\n');
-    if (newlineIdx != -1) {
-      return trimmed.substring(newlineIdx + 1).trim();
-    }
-    final parts = trimmed.split('|');
-    if (parts.length >= 2) {
-      return parts.last.trim();
-    }
-    final colonIdx = trimmed.indexOf(':');
-    if (colonIdx != -1) {
-      return trimmed.substring(colonIdx + 1).trim();
-    }
-  }
-  return trimmed;
-}
+String _extractActualTextMessage(String raw) =>
+    ChatReplyContent.messageText(raw);
 
 class ChatDetailScreen extends StatelessWidget {
   const ChatDetailScreen({
@@ -101,6 +85,7 @@ class ChatDetailScreen extends StatelessWidget {
         fetchMessages: FetchMessagesUseCase(repository),
         uploadChatImage: UploadChatImageUseCase(repository),
         markMessagesAsRead: MarkMessagesAsReadUseCase(repository),
+        getOwnedItemIds: GetOwnedChatItemIdsUseCase(repository),
       ),
       child: chatDetailView,
     );
@@ -146,7 +131,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     _conversation = widget.conversation;
     ActiveConversationTracker.instance.setActive(widget.conversation.id);
     context.read<ChatDetailBloc>().add(
-      ChatMessagesSubscriptionRequested(widget.conversation.id),
+      ChatMessagesSubscriptionRequested(
+        widget.conversation.id,
+        itemId: widget.conversation.itemId,
+      ),
     );
     _scrollController.addListener(_onScroll);
     _messageController.addListener(_onTextChanged);
@@ -229,9 +217,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   }
 
   void _showPhoneCallError(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showAppPopup(context, content: Text(message));
   }
 
   void _handleReply(ChatMessage message) {
@@ -399,19 +385,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     );
 
     if (_editingMessage != null) {
-      final raw = _editingMessage!.message;
-      final String editedFullMessage;
-      if (raw.startsWith('↩ ตอบกลับ:') || raw.startsWith('💬 ตอบกลับ')) {
-        final newlineIdx = raw.indexOf('\n');
-        if (newlineIdx != -1) {
-          final prefix = raw.substring(0, newlineIdx);
-          editedFullMessage = '$prefix\n$text';
-        } else {
-          editedFullMessage = text;
-        }
-      } else {
-        editedFullMessage = text;
-      }
+      final reply = ChatReplyContent.tryParse(_editingMessage!.message);
+      final editedFullMessage = reply?.toMessage(newText: text) ?? text;
 
       context.read<ChatDetailBloc>().add(
         ChatMessageEdited(
@@ -430,27 +405,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       final replyTargetLabel = isReplyingToSelf
           ? 'ตัวเอง'
           : widget.conversation.name;
-      final rawQuote = _extractActualTextMessage(
-        _replyingMessage!.message,
-      ).trim();
-      final hasImg =
-          _replyingMessage!.imageUrl != null &&
-          _replyingMessage!.imageUrl!.isNotEmpty;
-      final String quotePreview;
-      if (rawQuote.isNotEmpty &&
-          rawQuote != '📷 ส่งรูปภาพ' &&
-          rawQuote != '[รูปภาพ]') {
-        quotePreview = rawQuote.length > 50
-            ? '${rawQuote.substring(0, 50)}...'
-            : rawQuote;
-      } else {
-        quotePreview = hasImg ? '📷 รูปภาพ' : 'ข้อความ';
-      }
-      final cleanQuotePreview = quotePreview.replaceAll('|', ' ');
-      final quotedImg = _replyingMessage!.imageUrl ?? '';
-      final quotedId = _replyingMessage!.id;
-      sendingText =
-          '↩ ตอบกลับ:$replyTargetLabel|$cleanQuotePreview|$quotedId|$quotedImg\n$text';
+      sendingText = ChatReplyContent.compose(
+        original: _replyingMessage!,
+        target: replyTargetLabel,
+        text: text,
+      );
     } else {
       sendingText = text;
     }
@@ -484,9 +443,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('ไม่สามารถเปิดกล้องได้')));
+        showAppPopup(context, content: Text('ไม่สามารถเปิดกล้องได้'));
       }
     }
   }
@@ -508,9 +465,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ไม่สามารถเลือกรูปภาพได้')),
-        );
+        showAppPopup(context, content: Text('ไม่สามารถเลือกรูปภาพได้'));
       }
     }
   }
@@ -540,20 +495,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
         final replyTargetLabel = isReplyingToSelf
             ? 'ตัวเอง'
             : widget.conversation.name;
-        final rawQuote = _replyingMessage!.message;
-        final quotePreview =
-            rawQuote.isNotEmpty &&
-                rawQuote != '📷 ส่งรูปภาพ' &&
-                rawQuote != '[รูปภาพ]'
-            ? (rawQuote.length > 50
-                  ? '${rawQuote.substring(0, 50)}...'
-                  : rawQuote)
-            : '📷 รูปภาพ';
-        final quotedImg = _replyingMessage!.imageUrl ?? '';
-        final quotedId = _replyingMessage!.id;
-        final replyPrefix =
-            '↩ ตอบกลับ:$replyTargetLabel|$quotePreview|$quotedId|$quotedImg\n';
-        effectiveCaption = '$replyPrefix${effectiveCaption ?? ''}';
+        effectiveCaption = ChatReplyContent.compose(
+          original: _replyingMessage!,
+          target: replyTargetLabel,
+          text: effectiveCaption ?? '',
+        );
         _cancelReplyOrEdit();
       }
 
@@ -567,21 +513,46 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       _scrollToBottom(animate: true);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ')),
+        showAppPopup(
+          context,
+          content: Text('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ'),
         );
       }
     }
   }
 
-  bool get _isCurrentUserOwner =>
-      _conversation.role == ChatParticipantRole.renter;
+  bool _hasOpenOffer(int itemId) {
+    for (final message
+        in context.read<ChatDetailBloc>().state.messages.reversed) {
+      final booking = BookingRequestData.fromChatMessage(message.message);
+      if (booking?.item.id == itemId &&
+          !context.read<ChatDetailBloc>().state.failedMessageIds.contains(
+            message.id,
+          )) {
+        return !{
+          'completed',
+          'cancelled',
+          'rejected',
+          'expired',
+        }.contains(booking!.status);
+      }
+    }
+    return false;
+  }
 
   Future<void> _openBookingRequest([ItemInquiryData? activeInquiry]) async {
-    if (!_isCurrentUserOwner) return;
     final latestInquiry =
         activeInquiry ??
         _getLatestItemInquiry(context.read<ChatDetailBloc>().state.messages);
+
+    final requestedItemId = latestInquiry?.itemId ?? _conversation.itemId;
+    if (requestedItemId == null ||
+        _hasOpenOffer(requestedItemId) ||
+        !context.read<ChatDetailBloc>().state.ownedItemIds.contains(
+          requestedItemId,
+        )) {
+      return;
+    }
 
     final int itemId;
     final String title;
@@ -646,21 +617,26 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       itemDetail = await itemSource.fetchById(itemId);
     } catch (_) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('โหลดข้อมูลจุดนัดรับไม่สำเร็จ กรุณาลองใหม่'),
-          ),
+        showAppPopup(
+          context,
+          content: Text('โหลดข้อมูลจุดนัดรับไม่สำเร็จ กรุณาลองใหม่'),
         );
       return;
     }
     if (!mounted) return;
+    if (!itemDetail.isOwner) {
+      showAppPopup(
+        context,
+        content: Text('เฉพาะเจ้าของอุปกรณ์เท่านั้นที่สร้างข้อเสนอได้'),
+      );
+      return;
+    }
     final pickup = itemDetail.pickupLocation;
     if (pickup == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'กรุณาระบุจุดนัดรับสินค้าในหน้าแก้ไขอุปกรณ์ก่อนส่งข้อเสนอ',
-          ),
+      showAppPopup(
+        context,
+        content: Text(
+          'กรุณาระบุจุดนัดรับสินค้าในหน้าแก้ไขอุปกรณ์ก่อนส่งข้อเสนอ',
         ),
       );
       return;
@@ -670,8 +646,6 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
-    final ownerDisplayName = _isCurrentUserOwner ? 'ฉัน' : _conversation.name;
 
     final itemInfo = BookingItemInfo(
       id: itemId,
@@ -688,17 +662,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       defaultLocation: pickup.name,
       latitude: pickup.latitude,
       longitude: pickup.longitude,
-      ownerName: ownerDisplayName,
+      ownerName: 'ฉัน',
     );
-
-    final currentUserId =
-        SupabaseConfig.isConfigured && SupabaseConfig.isInitialized
-        ? SupabaseConfig.client.auth.currentUser?.id
-        : null;
-
-    final resolvedOwnerId = _isCurrentUserOwner
-        ? (currentUserId ?? _conversation.otherUserId)
-        : _conversation.otherUserId;
 
     final bookingData = BookingRequestData(
       item: itemInfo,
@@ -715,10 +680,24 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       latitude: pickup.latitude,
       longitude: pickup.longitude,
       conversationId: _conversation.id,
-      ownerId: resolvedOwnerId,
+      ownerId: itemDetail.owner.userId,
     );
 
-    AppRoutes.openBooking(context, initialData: bookingData);
+    final bloc = context.read<ChatDetailBloc>();
+    AppRoutes.openBooking(
+      context,
+      initialData: bookingData,
+      onSendRequest: (data) {
+        bloc.add(
+          ChatMessageSent(
+            conversationId: _conversation.id,
+            message: data.toChatMessagePayload(),
+            imageUrl: data.item.imageUrl.isEmpty ? null : data.item.imageUrl,
+          ),
+        );
+        _scrollToBottom();
+      },
+    );
   }
 
   ItemInquiryData? _getLatestItemInquiry(List<ChatMessage> messages) {
@@ -750,8 +729,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
           ),
           BlocBuilder<ChatDetailBloc, ChatDetailState>(
             buildWhen: (prev, curr) =>
-                prev.messages.length != curr.messages.length ||
-                prev.status != curr.status,
+                prev.messages != curr.messages || prev.status != curr.status,
             builder: (context, state) {
               final hasHandover = state.messages.any(
                 (m) =>
@@ -766,14 +744,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                     m.message.contains('คืนของสำเร็จ'),
               );
 
-              if (!hasHandover || hasReturn) {
-                return const SizedBox.shrink();
-              }
-
               BookingRequestData? activeBooking;
               ChatMessage? activeMessage;
               int? activeBookingId;
-              for (final m in state.messages) {
+              for (final m in state.messages.reversed) {
                 final data = BookingRequestData.fromChatMessage(
                   m.message,
                   imageUrl: m.imageUrl,
@@ -789,12 +763,26 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
               }
 
               if (activeBooking == null) return const SizedBox.shrink();
+              final status = activeBooking.status;
+              final isCompleted =
+                  status == 'completed' ||
+                  status == 'finished' ||
+                  (status == null && hasReturn);
+              final isActive =
+                  const {
+                    'active',
+                    'awaiting_return',
+                    'return_ready',
+                  }.contains(status) ||
+                  (status == null && hasHandover);
+              if (!isCompleted && !isActive) return const SizedBox.shrink();
 
               return ActiveRentalHeaderBanner(
                 bookingData: activeBooking,
                 bookingMessage: activeMessage,
-                bookingId: activeBookingId,
-                isOwner: _conversation.role == ChatParticipantRole.renter,
+                bookingId: activeBooking.bookingId ?? activeBookingId,
+                isCompleted: isCompleted,
+                isOwner: activeMessage?.isMine == true,
                 onTap: activeMessage != null
                     ? () => _scrollToMessage(activeMessage!.id)
                     : null,
@@ -808,11 +796,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                   listener: (context, state) {
                     if (state.status == ChatDetailStatus.failure &&
                         state.errorMessage != null) {
-                      ScaffoldMessenger.of(context)
-                        ..hideCurrentSnackBar()
-                        ..showSnackBar(
-                          SnackBar(content: Text(state.errorMessage!)),
-                        );
+                      showAppPopup(context, content: Text(state.errorMessage!));
                     } else if (state.status == ChatDetailStatus.success &&
                         state.messages.isNotEmpty) {
                       if (state.messages.length > _lastMessageCount) {
@@ -834,6 +818,9 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                     }
 
                     final renderItems = _buildRenderItems(state.messages);
+                    final messagesById = {
+                      for (final message in state.messages) message.id: message,
+                    };
 
                     int lastMyMessageIndex = -1;
                     for (int k = renderItems.length - 1; k >= 0; k--) {
@@ -882,7 +869,12 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                         final String? deliveryStatusLabel;
                         if (showDeliveryStatus) {
                           if (item.message.id.startsWith('temp_')) {
-                            deliveryStatusLabel = 'กำลังส่ง';
+                            deliveryStatusLabel =
+                                state.sendingMessageIds.contains(
+                                  item.message.id,
+                                )
+                                ? 'กำลังส่ง'
+                                : 'ส่งแล้ว';
                           } else if (item.message.isRead) {
                             deliveryStatusLabel = null;
                           } else {
@@ -899,6 +891,21 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                         for (final id in item.messageIds) {
                           _messageKeys[id] = itemKey;
                         }
+
+                        final inquiry = ItemInquiryData.fromChatMessage(
+                          item.message.message,
+                          defaultItemId: _conversation.itemId,
+                        );
+                        final ownsInquiryItem = state.ownedItemIds.contains(
+                          inquiry?.itemId,
+                        );
+                        // ข้อเสนอที่บันทึกแล้วมีผู้ส่งเป็นเจ้าของตามกฎฝั่งเซิร์ฟเวอร์
+                        final isOwner =
+                            BookingRequestData.isBookingRequest(
+                              item.message.message,
+                            )
+                            ? item.message.isMine
+                            : ownsInquiryItem;
 
                         return Container(
                           key: itemKey,
@@ -926,8 +933,13 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                 ),
                               ChatMessageBubble(
                                 message: item.message,
+                                quotedMessage:
+                                    messagesById[ChatReplyContent.tryParse(
+                                      item.message.message,
+                                    )?.quotedMessageId],
                                 imageUrls: item.imageUrls,
                                 otherAvatarAsset: _conversation.avatarAsset,
+                                otherUserName: _conversation.name,
                                 showAvatar: showAvatar,
                                 deliveryStatus: deliveryStatusLabel,
                                 isRead: item.message.isRead,
@@ -936,9 +948,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                 isFailed: state.failedMessageIds.contains(
                                   item.message.id,
                                 ),
-                                isOwner:
-                                    _conversation.role ==
-                                    ChatParticipantRole.renter,
+                                isOwner: isOwner,
                                 isHandoverCompleted: state.messages.any(
                                   (m) =>
                                       m.message.contains(
@@ -959,7 +969,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                       ) ||
                                       m.message.contains('คืนของสำเร็จ'),
                                 ),
-                                onSendBookingRequest: _isCurrentUserOwner
+                                onSendBookingRequest:
+                                    ownsInquiryItem &&
+                                        inquiry?.itemId != null &&
+                                        !_hasOpenOffer(inquiry!.itemId!)
                                     ? _openBookingRequest
                                     : null,
                                 onRetry: () {

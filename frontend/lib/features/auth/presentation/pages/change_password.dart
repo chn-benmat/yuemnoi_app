@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
@@ -56,18 +57,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     );
   }
 
-  void _showMessage(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: isError
-              ? Colors.red.shade700
-              : Colors.green.shade600,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+  void _showError(String message) {
+    showAppPopup(context, content: Text(message));
   }
 
   @override
@@ -84,23 +75,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           setState(() {
             _isLoading = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('เปลี่ยนรหัสผ่านสำเร็จแล้ว'),
-              backgroundColor: AppColors.primaryColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
+
           // นำทางกลับไปยังหน้า Login (โดยการล้าง Stack ทั้งหมดออกไปจนถึงหน้าแรกสุด หรือหน้าระดับบนสุด)
           AppRoutes.goToLogin(context);
         } else if (state is ChangePasswordFailure) {
           setState(() {
             _isLoading = false;
           });
-          _showMessage(state.message, isError: true);
+          _showError(state.message);
         }
       },
       child: Scaffold(

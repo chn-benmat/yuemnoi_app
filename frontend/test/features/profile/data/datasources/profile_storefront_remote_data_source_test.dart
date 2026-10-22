@@ -18,7 +18,17 @@ void main() {
         Object response;
         if (request.uri.path.endsWith('public_profile_v')) {
           expect(request.headers.value('accept-profile'), 'profiles');
-          response = {'display_name': 'Public Owner', 'is_verified': true};
+          response =
+              query.containsKey('user_id') &&
+                  query['user_id']!.startsWith('in.')
+              ? [
+                  {
+                    'user_id': 'reviewer',
+                    'display_name': 'Reviewer Name',
+                    'user_image_url': null,
+                  },
+                ]
+              : {'display_name': 'Public Owner', 'is_verified': true};
         } else if (request.uri.path.endsWith('item_tb')) {
           expect(
             request.headers.value('accept-profile'),
@@ -50,6 +60,9 @@ void main() {
               'id': offset + index,
               'item_id': 1,
               'rating': offset == 0 ? '4' : '5',
+              'user_id': 'reviewer',
+              'description': 'Great camera',
+              'created_at': '2026-10-21T10:00:00Z',
             },
           );
         }
@@ -76,6 +89,9 @@ void main() {
       final reviews = await repository.getReviews([1]);
       expect(reviews.length, 501);
       expect(reviews.last.rating, 5);
+      expect(reviews.last.reviewerName, 'Reviewer Name');
+      expect(reviews.last.description, 'Great camera');
+      expect(reviews.last.createdAt, DateTime.utc(2026, 10, 21, 10));
       expect(requests.where((uri) => uri.path.endsWith('review_tb')).length, 2);
       expect(requests.any((uri) => uri.path.endsWith('profile_tb')), isFalse);
     },

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../core/constants/colors.dart';
+import '../../widgets/account/account_page_intro.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../widgets/support/faq_widgets.dart';
 
@@ -16,7 +16,7 @@ class _FaqScreenState extends State<FaqScreen> {
     FaqItemData(
       question: 'สถานะของแอปพลิเคชัน',
       answer:
-          'ระบบและเซิร์ฟเวอร์ทั้งหมดของแอปพลิเคชัน Yuemnoi เปิดให้บริการตามปกติ คุณสามารถลงประกาศปล่อยเช่า ค้นหาอุปกรณ์ จองและชำระเงินออนไลน์ รวมถึงติดต่อสนทนาผ่านระบบแชทได้ตลอด 24 ชั่วโมง ทั้งนี้ หากมีช่วงเวลาปิดปรับปรุงระบบเพื่อพัฒนายกระดับการบริการ ทีมงานจะแจ้งให้ทราบล่วงหน้าผ่านการแจ้งเตือนในแอปพลิเคชัน',
+          'Yuemnoi ช่วยให้คุณค้นหาอุปกรณ์ ลงประกาศ และคุยรายละเอียดการเช่าผ่านแชทได้ ขณะนี้ฟีเจอร์กระเป๋าเงิน การเติมเงิน และ QR ชำระเงินบางส่วนยังเป็นระบบจำลอง จึงยังไม่รองรับการรับชำระเงินจริงครบทุกขั้นตอน หน้านี้ไม่ได้แสดงสถานะเซิร์ฟเวอร์แบบเรียลไทม์',
       isExpanded: true,
     ),
     FaqItemData(
@@ -39,10 +39,11 @@ class _FaqScreenState extends State<FaqScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F9),
+      backgroundColor: const Color(0xFFFAF9FD),
       appBar: AppBar(
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFFFAF9FD),
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: const Color(0xFF292235),
         leading: const BackButton(),
         title: const Text(
           'คำถามที่พบบ่อย',
@@ -52,23 +53,29 @@ class _FaqScreenState extends State<FaqScreen> {
             fontSize: 18,
           ),
         ),
-        centerTitle: true,
+        centerTitle: false,
         elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'คำถามที่พบบ่อย',
-              style: TextStyle(
-                fontFamily: AppTextStyles.fontFamily,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primaryColor,
+            const AccountPageIntro(
+              title: 'มีอะไรให้ช่วยไหม?',
+              description: 'รวมเรื่องที่ควรรู้ ก่อนเช่าและปล่อยเช่าบน Yuemnoi',
+            ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'เริ่มต้นใช้งาน · 4 คำถาม',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF665D73),
+                ),
               ),
             ),
-            const SizedBox(height: 20),
             ..._faqs.asMap().entries.map((entry) {
               final index = entry.key;
               final faq = entry.value;

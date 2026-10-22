@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../domain/entities/chat_message.dart';
@@ -50,25 +51,20 @@ class AISummaryBottomSheet extends StatelessWidget {
     if (uri == null ||
         !['http', 'https'].contains(uri.scheme) ||
         uri.host.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('ไม่สามารถเปิดลิงก์ได้เนื่องจาก URL ไม่ถูกต้อง'),
-        ),
+      showAppPopup(
+        context,
+        content: Text('ไม่สามารถเปิดลิงก์ได้เนื่องจาก URL ไม่ถูกต้อง'),
       );
       return;
     }
     try {
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!opened && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ไม่สามารถเปิดเบราว์เซอร์ได้')),
-        );
+        showAppPopup(context, content: Text('ไม่สามารถเปิดเบราว์เซอร์ได้'));
       }
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('เกิดข้อผิดพลาดในการเปิดลิงก์')),
-        );
+        showAppPopup(context, content: Text('เกิดข้อผิดพลาดในการเปิดลิงก์'));
       }
     }
   }

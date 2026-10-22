@@ -4,6 +4,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../network/api_client.dart';
+
 /// ข้อมูลผลลัพธ์สถานที่จากการค้นหาหรือปักหมุด
 class LocationSearchResult {
   final String name;
@@ -11,6 +13,8 @@ class LocationSearchResult {
   final double latitude;
   final double longitude;
   final String? type;
+  final bool isApproximate;
+  final String? originalName;
 
   const LocationSearchResult({
     required this.name,
@@ -18,6 +22,8 @@ class LocationSearchResult {
     required this.latitude,
     required this.longitude,
     this.type,
+    this.isApproximate = false,
+    this.originalName,
   });
 
   LatLng get latLng => LatLng(latitude, longitude);
@@ -65,7 +71,8 @@ class DrivingRouteResult {
 
 /// บริการจัดการพิกัด แผนที่ และการค้นหาสถานที่
 class LocationService {
-  LocationService();
+  LocationService({ApiClient? apiClient})
+    : _apiClient = apiClient ?? DioApiClient();
   static final LocationService instance = LocationService();
   Position? _lastPosition;
   final Map<String, ({LatLng start, DrivingRouteResult route, DateTime at})>
@@ -99,6 +106,7 @@ class LocationService {
     }
   }
 
+  final ApiClient _apiClient;
   final Dio _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 8),
@@ -262,138 +270,77 @@ class LocationService {
     return defaultBangkokLocation;
   }
 
-  /// ค้นหาสถานที่ตามคำค้น (Search Geocoding)
+  /// ค้นหาสถานที่จริงเมื่อผู้ใช้กดค้นหา ผ่าน backend ที่รวมโควตาและแคช
   Future<List<LocationSearchResult>> searchLocations(String query) async {
-    final cleanQuery = query.trim();
-    if (cleanQuery.isEmpty) return popularLandmarks;
-
-    // 1. ตรวจสอบกับรายการสถานที่ยอดนิยมที่มีก่อนเพื่อความรวดเร็ว
-    final matchedLandmarks = popularLandmarks.where((item) {
-      return item.name.toLowerCase().contains(cleanQuery.toLowerCase()) ||
-          item.displayName.toLowerCase().contains(cleanQuery.toLowerCase());
-    }).toList();
-
-    // 2. ค้นหาจาก OpenStreetMap Nominatim API
-    try {
-      final response = await _dio.get<dynamic>(
-        'https://nominatim.openstreetmap.org/search',
-        queryParameters: {
-          'q': cleanQuery,
-          'format': 'json',
-          'addressdetails': '1',
-          'countrycodes': 'th',
-          'limit': '10',
-        },
-      );
-
-      final List<LocationSearchResult> apiResults = [];
-      if (response.data is List) {
-        for (final item in response.data as List) {
-          if (item is Map<String, dynamic>) {
-            final lat = double.tryParse(item['lat']?.toString() ?? '');
-            final lon = double.tryParse(item['lon']?.toString() ?? '');
-            if (lat != null && lon != null) {
-              final rawName = item['name']?.toString() ?? '';
-              final displayName = item['display_name']?.toString() ?? '';
-              final type = item['type']?.toString() ?? '';
-
-              String title = rawName;
-              if (title.isEmpty) {
-                final parts = displayName.split(',');
-                title = parts.isNotEmpty ? parts.first.trim() : displayName;
-              }
-
-              // ตรวจสอบไม่ให้ซ้ำกับ landmark ที่มีอยู่แล้ว
-              final isDuplicate = matchedLandmarks.any(
-                (l) =>
-                    (l.latitude - lat).abs() < 0.0005 &&
-                    (l.longitude - lon).abs() < 0.0005,
-              );
-
-              if (!isDuplicate) {
-                apiResults.add(
-                  LocationSearchResult(
-                    name: title,
-                    displayName: displayName,
-                    latitude: lat,
-                    longitude: lon,
-                    type: type,
-                  ),
-                );
-              }
-            }
-          }
-        }
-      }
-
-      return [...matchedLandmarks, ...apiResults];
-    } catch (e) {
-      debugPrint('Error searching locations: $e');
-      return matchedLandmarks;
-    }
+    return _fetchPlaces('/api/locations/search', query);
   }
 
-  /// แปลงพิกัดเป็นชื่อสถานที่และที่อยู่ (Reverse Geocoding)
+  Future<List<LocationSearchResult>> suggestLocations(String query) async {
+    return _fetchPlaces('/api/locations/suggest', query);
+  }
+
+  Future<List<LocationSearchResult>> _fetchPlaces(
+    String path,
+    String query,
+  ) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return [];
+    final response = await _apiClient.get(
+      path,
+      queryParameters: {'q': cleanQuery},
+    );
+    if (response.statusCode != 200 || response.data is! List) {
+      throw StateError('Location search unavailable (${response.statusCode})');
+    }
+    return (response.data as List).map(_parsePlace).toList();
+  }
+
+  static LocationSearchResult _parsePlace(dynamic value) {
+    if (value is! Map<String, dynamic>) {
+      throw const FormatException('Invalid place');
+    }
+    final lat = double.tryParse(value['latitude'].toString());
+    final lon = double.tryParse(value['longitude'].toString());
+    final name = value['name']?.toString().trim() ?? '';
+    final address = value['display_name']?.toString().trim() ?? '';
+    if (lat == null ||
+        lon == null ||
+        !lat.isFinite ||
+        !lon.isFinite ||
+        lat.abs() > 90 ||
+        lon.abs() > 180 ||
+        name.isEmpty ||
+        address.isEmpty) {
+      throw const FormatException('Invalid place coordinates or address');
+    }
+    return LocationSearchResult(
+      name: name,
+      displayName: address,
+      latitude: lat,
+      longitude: lon,
+      type: value['type']?.toString(),
+      isApproximate: value['is_approximate'] == true,
+      originalName: value['original_name']?.toString(),
+    );
+  }
+
+  /// แปลงพิกัดที่ผู้ใช้เลือกผ่านโควตาเดียวกับการค้นหา
   Future<LocationSearchResult?> reverseGeocode(double lat, double lon) async {
-    // 1. ตรวจสอบสถานที่ยอดนิยมที่มีพิกัดใกล้เคียงมาก่อน (< 100 เมตร)
     for (final landmark in popularLandmarks) {
       if ((landmark.latitude - lat).abs() < 0.001 &&
           (landmark.longitude - lon).abs() < 0.001) {
         return landmark;
       }
     }
-
-    // 2. เรียก Nominatim Reverse API
     try {
-      final response = await _dio.get<dynamic>(
-        'https://nominatim.openstreetmap.org/reverse',
-        queryParameters: {
-          'lat': lat,
-          'lon': lon,
-          'format': 'json',
-          'addressdetails': '1',
-          'accept-language': 'th,en',
-        },
+      final response = await _apiClient.get(
+        '/api/locations/reverse',
+        queryParameters: {'lat': lat, 'lon': lon},
       );
-
-      if (response.data is Map<String, dynamic>) {
-        final map = response.data as Map<String, dynamic>;
-        final displayName = map['display_name']?.toString() ?? '';
-        final address = map['address'] as Map<String, dynamic>?;
-
-        String placeName = '';
-        if (map['name'] != null && map['name'].toString().isNotEmpty) {
-          placeName = map['name'].toString();
-        } else if (address != null) {
-          placeName =
-              address['amenity']?.toString() ??
-              address['shop']?.toString() ??
-              address['building']?.toString() ??
-              address['road']?.toString() ??
-              address['neighbourhood']?.toString() ??
-              address['suburb']?.toString() ??
-              address['city_district']?.toString() ??
-              '';
-        }
-
-        if (placeName.isEmpty) {
-          final parts = displayName.split(',');
-          placeName = parts.isNotEmpty ? parts.first.trim() : 'พิกัดที่เลือก';
-        }
-
-        return LocationSearchResult(
-          name: placeName,
-          displayName: displayName.isNotEmpty
-              ? displayName
-              : 'พิกัด: $lat, $lon',
-          latitude: lat,
-          longitude: lon,
-        );
-      }
-    } catch (e) {
-      debugPrint('Error reverse geocoding: $e');
+      if (response.statusCode == 200) return _parsePlace(response.data);
+    } catch (_) {
+      // ยังยืนยันพิกัดที่เลือกได้เมื่อบริการที่อยู่ไม่พร้อม
     }
-
     return LocationSearchResult(
       name: 'พิกัดที่ปักหมุด',
       displayName: '${lat.toStringAsFixed(5)}, ${lon.toStringAsFixed(5)}',
@@ -470,23 +417,20 @@ class LocationService {
     });
   }
 
-  static Future<void> openInExternalMaps(
+  static Future<bool> openInExternalMaps(
     double latitude,
     double longitude,
   ) async {
     final googleMapsUrl = buildGoogleMapsUri(latitude, longitude);
 
     try {
-      if (await canLaunchUrl(googleMapsUrl)) {
-        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-      } else {
-        await launchUrl(
-          Uri.parse('https://maps.google.com/?q=$latitude,$longitude'),
-          mode: LaunchMode.externalApplication,
-        );
-      }
+      return await launchUrl(
+        googleMapsUrl,
+        mode: LaunchMode.externalApplication,
+      );
     } catch (e) {
       debugPrint('Cannot launch map: $e');
+      return false;
     }
   }
 

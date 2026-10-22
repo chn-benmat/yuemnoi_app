@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -687,9 +688,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
         if (!_isConfirmationSheetOpen &&
             errorMessage != null &&
             errorMessage.isNotEmpty) {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(SnackBar(content: Text(errorMessage)));
+          showAppPopup(context, content: Text(errorMessage));
         }
       },
       child: scaffold,

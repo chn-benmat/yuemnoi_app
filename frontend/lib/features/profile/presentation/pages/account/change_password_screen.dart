@@ -1,3 +1,5 @@
+import 'package:frontend/core/widgets/app_popup.dart';
+import '../../widgets/account/account_page_intro.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -20,12 +22,10 @@ class ProfileChangePasswordScreen extends StatefulWidget {
 class _ProfileChangePasswordScreenState
     extends State<ProfileChangePasswordScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _currentPwCtrl = TextEditingController();
   final _newPwCtrl = TextEditingController();
   final _confirmPwCtrl = TextEditingController();
   late final ProfileCubit _cubit;
 
-  bool _showCurrentPw = false;
   bool _showNewPw = false;
   bool _showConfirmPw = false;
 
@@ -37,7 +37,6 @@ class _ProfileChangePasswordScreenState
 
   @override
   void dispose() {
-    _currentPwCtrl.dispose();
     _newPwCtrl.dispose();
     _confirmPwCtrl.dispose();
     _cubit.close();
@@ -52,22 +51,16 @@ class _ProfileChangePasswordScreenState
         : null;
     final accessToken = session?.accessToken;
     if (accessToken == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      showAppPopup(
+        context,
+        content: Text('กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน'),
       );
       return;
     }
 
     await _cubit.changeUserPassword(
       accessToken: accessToken,
-      newPassword: _newPwCtrl.text.trim(),
+      newPassword: _newPwCtrl.text,
     );
   }
 
@@ -78,32 +71,13 @@ class _ProfileChangePasswordScreenState
       child: BlocConsumer<ProfileCubit, ProfileState>(
         listener: (context, state) {
           if (state is ProfileActionSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  state.message,
-                  style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-                ),
-                backgroundColor: AppColors.primaryColor,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            );
             Navigator.of(context).pop();
           } else if (state is ProfileActionFailure) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  state.message.replaceAll('Exception: ', ''),
-                  style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-                ),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+            showAppPopup(
+              context,
+              content: Text(
+                state.message.replaceAll('Exception: ', ''),
+                style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
               ),
             );
           }
@@ -112,10 +86,11 @@ class _ProfileChangePasswordScreenState
           final isSaving = state is ProfileActionInProgress;
 
           return Scaffold(
-            backgroundColor: const Color(0xFFF7F7F9),
+            backgroundColor: const Color(0xFFFAF9FD),
             appBar: AppBar(
-              backgroundColor: AppColors.primaryColor,
-              foregroundColor: Colors.white,
+              backgroundColor: const Color(0xFFFAF9FD),
+              foregroundColor: const Color(0xFF292235),
+              surfaceTintColor: Colors.transparent,
               leading: const BackButton(),
               title: const Text(
                 'เปลี่ยนรหัสผ่าน',
@@ -125,7 +100,7 @@ class _ProfileChangePasswordScreenState
                   fontSize: 18,
                 ),
               ),
-              centerTitle: true,
+              centerTitle: false,
               elevation: 0,
             ),
             body: SingleChildScrollView(
@@ -135,21 +110,11 @@ class _ProfileChangePasswordScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Current password ──────────────────────────
-                    ChangePasswordField(
-                      controller: _currentPwCtrl,
-                      label: 'รหัสผ่านเดิม',
-                      hint: 'กรอกรหัสผ่านปัจจุบัน',
-                      showPassword: _showCurrentPw,
-                      onToggle: () =>
-                          setState(() => _showCurrentPw = !_showCurrentPw),
-                      validator: AppFormValidators.password(
-                        requiredMessage: 'กรุณากรอกรหัสผ่านเดิม',
-                        lengthMessage: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัว',
-                      ),
+                    const AccountPageIntro(
+                      title: 'ตั้งรหัสผ่านใหม่',
+                      description:
+                          'ใช้ตัวอักษรอย่างน้อย 6 ตัว และหลีกเลี่ยงรหัสผ่านที่ใช้กับบัญชีอื่น',
                     ),
-                    const SizedBox(height: 14),
-
                     // ── New password ──────────────────────────────
                     ChangePasswordField(
                       controller: _newPwCtrl,
@@ -189,7 +154,7 @@ class _ProfileChangePasswordScreenState
                             .withValues(alpha: 0.6),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         minimumSize: const Size(double.infinity, 52),
                       ),

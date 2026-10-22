@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
@@ -47,18 +48,8 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
     );
   }
 
-  void _showMessage(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: isError
-              ? Colors.red.shade700
-              : Colors.green.shade600,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+  void _showError(String message) {
+    showAppPopup(context, content: Text(message));
   }
 
   @override
@@ -83,7 +74,7 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
           setState(() {
             _isLoading = false;
           });
-          _showMessage(state.message, isError: true);
+          _showError(state.message);
         }
       },
       child: Scaffold(

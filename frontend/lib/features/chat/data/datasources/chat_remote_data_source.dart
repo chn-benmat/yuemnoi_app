@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -6,8 +7,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/chat_reply_content.dart';
+import '../../domain/entities/item_inquiry_data.dart';
+import '../../domain/usecases/should_send_item_inquiry_usecase.dart';
 import '../models/chat_conversation_model.dart';
 import '../models/chat_message_model.dart';
 
@@ -28,6 +33,13 @@ class ChatRemoteDataSource {
   final SupabaseClient? _client;
   ApiClient? _apiClient;
   static const _chatBucket = 'chat_bk';
+  static final _signedImages =
+      <
+        (SupabaseClient, String, String),
+        ({DateTime expiresAt, Future<String> url, String? resolved})
+      >{};
+  static final _pendingInquiries =
+      <(SupabaseClient, String, String, int), Future<void>>{};
 
   ApiClient get _backendClient => _apiClient ??= DioApiClient();
 
@@ -206,6 +218,21 @@ class ChatRemoteDataSource {
       debugPrint('getConversationById error: $e');
       return null;
     }
+  }
+
+  Future<Set<int>> getOwnedItemIds(Set<int> itemIds) async {
+    if (itemIds.isEmpty) return {};
+    if (!SupabaseConfig.isInitialized && _client == null) return {};
+    final userId = _currentUserId;
+    final rows = await _supabaseClient
+        .from('item_tb')
+        .select('id')
+        .eq('user_id', userId)
+        .inFilter('id', itemIds.toList(growable: false));
+    return {
+      for (final row in rows)
+        if (int.tryParse(row['id'].toString()) case final int id) id,
+    };
   }
 
   Future<List<ChatConversation>> getConversations() async {
@@ -457,13 +484,15 @@ class ChatRemoteDataSource {
           .order('created_at', ascending: false)
           .limit(limit);
 
-      final list = (records as List)
-          .cast<Map<String, dynamic>>()
-          .map(
-            (json) =>
-                ChatMessageModel.fromJson(json, currentUserId: currentUserId),
-          )
-          .toList(growable: false);
+      final list = records
+          .map((json) => _messageWithCachedImages(json, currentUserId))
+          .toList();
+      // รีเฟรชลิงก์รูปคู่ขนาน ไม่ให้ข้อความและการเลื่อนประวัติรอเครือข่ายรูป
+      unawaited(
+        Future.wait(
+          records.map((json) => _messageWithFreshImages(json, currentUserId)),
+        ),
+      );
 
       // Return messages in chronological order (oldest to newest)
       return list.reversed.toList(growable: false);
@@ -482,25 +511,269 @@ class ChatRemoteDataSource {
     final client = _supabaseClient;
     final currentUserId = _currentUserId;
 
-    return client
+    final recordsStream = client
         .schema('messaging')
         .from('chat_message_tb')
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
-        .order('created_at', ascending: true)
-        .map(
-          (records) => records
+        .order('created_at', ascending: true);
+
+    return Stream<List<ChatMessage>>.multi((controller) {
+      var active = true;
+      var revision = 0;
+      var latestMessages = <ChatMessage>[];
+      var bookingIds = <int>{};
+      var bookingStatuses = <int, String>{};
+      StreamSubscription<List<Map<String, dynamic>>>? bookingsSubscription;
+
+      void emitMessages() {
+        if (!active) return;
+        controller.add(
+          latestMessages.map((message) {
+            final booking = BookingRequestData.fromChatMessage(message.message);
+            final status = bookingStatuses[booking?.bookingId];
+            if (booking == null || status == null) return message;
+            return ChatMessage(
+              id: message.id,
+              conversationId: message.conversationId,
+              senderId: message.senderId,
+              message: booking.copyWith(status: status).toChatMessagePayload(),
+              createdAt: message.createdAt,
+              isMine: message.isMine,
+              imageUrl: message.imageUrl,
+              isRead: message.isRead,
+            );
+          }).toList(),
+        );
+      }
+
+      final subscription = recordsStream.listen(
+        (records) {
+          final currentRevision = ++revision;
+          final immediate = records
+              .map((record) => _messageWithCachedImages(record, currentUserId))
+              .toList();
+          latestMessages = immediate;
+          emitMessages();
+          final ids = immediate
               .map(
-                (json) => ChatMessageModel.fromJson(
-                  json,
-                  currentUserId: currentUserId,
-                ),
+                (m) => BookingRequestData.fromChatMessage(m.message)?.bookingId,
               )
-              .toList(),
-        )
-        .handleError((error) {
-          debugPrint('streamMessages connection error: $error');
-        });
+              .whereType<int>()
+              .where((id) => id > 0)
+              .toSet();
+          if (!setEquals(ids, bookingIds)) {
+            bookingIds = ids;
+            unawaited(bookingsSubscription?.cancel());
+            if (ids.isNotEmpty) {
+              // ใช้สถานะของการจองจริง เพื่อให้การคืนเปลี่ยนแชทได้โดยไม่ต้องมีข้อความใหม่
+              final watchedIds = ids;
+              bookingsSubscription = client
+                  .from('booking_tb')
+                  .stream(primaryKey: ['id'])
+                  .inFilter('id', ids.toList())
+                  .listen((rows) {
+                    if (!active || !setEquals(watchedIds, bookingIds)) return;
+                    bookingStatuses = {
+                      for (final row in rows)
+                        (row['id'] as num).toInt(): row['status'].toString(),
+                    };
+                    emitMessages();
+                  }, onError: controller.addError);
+            }
+          }
+          // ข้อความใหม่ต้องผ่านได้ แม้การรีเฟรชรูปของชุดก่อนยังไม่เสร็จ
+          unawaited(
+            Future.wait(
+              records.map(
+                (record) => _messageWithFreshImages(record, currentUserId),
+              ),
+            ).then((fresh) {
+              if (active &&
+                  currentRevision == revision &&
+                  !listEquals(immediate, fresh)) {
+                latestMessages = fresh;
+                emitMessages();
+              }
+            }),
+          );
+        },
+        onError: controller.addError,
+        onDone: () {
+          active = false;
+          unawaited(bookingsSubscription?.cancel());
+          controller.close();
+        },
+      );
+      controller.onPause = subscription.pause;
+      controller.onResume = subscription.resume;
+      controller.onCancel = () async {
+        active = false;
+        await bookingsSubscription?.cancel();
+        await subscription.cancel();
+      };
+    });
+  }
+
+  ChatMessage _messageWithCachedImages(
+    Map<String, dynamic> record,
+    String userId,
+  ) {
+    final message = ChatMessageModel.fromJson(record, currentUserId: userId);
+    final reply = ChatReplyContent.tryParse(message.message);
+    String? cached(String? url) {
+      if (url == null) return null;
+      final uri = Uri.tryParse(url);
+      const prefix = '/storage/v1/object/sign/chat_bk/';
+      if (uri == null || !uri.path.startsWith(prefix)) return url;
+      if (uri.origin !=
+          Uri.parse(
+            _supabaseClient.storage.from(_chatBucket).getPublicUrl(''),
+          ).origin)
+        return url;
+      final path = Uri.decodeComponent(uri.path.substring(prefix.length));
+      final entry = _signedImages[(_supabaseClient, userId, path)];
+      return entry != null && entry.expiresAt.isAfter(DateTime.now())
+          ? entry.resolved ?? url
+          : url;
+    }
+
+    return _replaceMessageImages(
+      message,
+      cached(message.imageUrl),
+      cached(reply?.quotedImageUrl),
+    );
+  }
+
+  Future<ChatMessage> _messageWithFreshImages(
+    Map<String, dynamic> record,
+    String currentUserId,
+  ) async {
+    final message = ChatMessageModel.fromJson(
+      record,
+      currentUserId: currentUserId,
+    );
+    final reply = ChatReplyContent.tryParse(message.message);
+    final images = await Future.wait([
+      _freshImageUrl(message.imageUrl, message.conversationId, currentUserId),
+      _freshImageUrl(
+        reply?.quotedImageUrl,
+        message.conversationId,
+        currentUserId,
+      ),
+    ]);
+    return _replaceMessageImages(message, images[0], images[1]);
+  }
+
+  ChatMessage _replaceMessageImages(
+    ChatMessage message,
+    String? imageUrl,
+    String? quotedImageUrl,
+  ) {
+    final reply = ChatReplyContent.tryParse(message.message);
+    final refreshedReply =
+        reply != null && quotedImageUrl != reply.quotedImageUrl
+        ? ChatReplyContent(
+            target: reply.target,
+            quotedText: reply.quotedText,
+            quotedMessageId: reply.quotedMessageId,
+            quotedImageUrl: quotedImageUrl,
+            text: reply.text,
+          ).toMessage()
+        : message.message;
+    return ChatMessage(
+      id: message.id,
+      conversationId: message.conversationId,
+      senderId: message.senderId,
+      message: refreshedReply,
+      createdAt: message.createdAt,
+      isMine: message.isMine,
+      isRead: message.isRead,
+      imageUrl: imageUrl,
+    );
+  }
+
+  Future<String> refreshChatImageUrl(String imageUrl) async {
+    if (!SupabaseConfig.isInitialized && _client == null) return imageUrl;
+    final uri = Uri.tryParse(imageUrl);
+    const prefix = '/storage/v1/object/sign/chat_bk/';
+    if (uri == null || !uri.path.startsWith(prefix)) return imageUrl;
+    final segments = Uri.decodeComponent(
+      uri.path.substring(prefix.length),
+    ).split('/');
+    if (segments.length < 2) return imageUrl;
+    return await _freshImageUrl(
+          imageUrl,
+          segments[segments.length - 2],
+          _currentUserId,
+        ) ??
+        imageUrl;
+  }
+
+  Future<String?> _freshImageUrl(
+    String? imageUrl,
+    String conversationId,
+    String currentUserId,
+  ) async {
+    if (imageUrl == null) return null;
+    final uri = Uri.tryParse(imageUrl);
+    const prefix = '/storage/v1/object/sign/chat_bk/';
+    if (uri == null || !uri.path.startsWith(prefix)) return imageUrl;
+
+    try {
+      final bucket = _supabaseClient.storage.from(_chatBucket);
+      final storageOrigin = Uri.parse(bucket.getPublicUrl('')).origin;
+      if (uri.origin != storageOrigin) return imageUrl;
+      final path = Uri.decodeComponent(uri.path.substring(prefix.length));
+      final segments = path.split('/');
+      // รูปเก่าใช้ senderId/conversationId/file ส่วนรูปใหม่ใช้ conversationId/file
+      final belongsToConversation =
+          (segments.length == 2 && segments.first == conversationId) ||
+          (segments.length == 3 && segments[1] == conversationId);
+      if (!belongsToConversation || segments.contains('..')) return imageUrl;
+      final now = DateTime.now();
+      // ใช้ลิงก์ที่ยังไม่หมดอายุเพื่อรักษา identity ของข้อความที่กำลังส่ง
+      try {
+        final token = uri.queryParameters['token'] ?? '';
+        final claims =
+            jsonDecode(
+                  utf8.decode(
+                    base64Url.decode(base64Url.normalize(token.split('.')[1])),
+                  ),
+                )
+                as Map<String, dynamic>;
+        final expires = claims['exp'];
+        if (expires is num && expires > now.millisecondsSinceEpoch ~/ 1000 + 60)
+          return imageUrl;
+      } catch (_) {}
+
+      // ข้อความเก่าเก็บ signed URL อายุหนึ่งชั่วโมงไว้ จึงต้องลงนามใหม่ก่อนแสดง
+      _signedImages.removeWhere((_, entry) => !entry.expiresAt.isAfter(now));
+      final key = (_supabaseClient, currentUserId, path);
+      final entry = _signedImages.putIfAbsent(
+        key,
+        () => (
+          expiresAt: now.add(const Duration(minutes: 55)),
+          url: bucket.createSignedUrl(path, 3600),
+          resolved: null,
+        ),
+      );
+      try {
+        final resolved = await entry.url;
+        _signedImages[key] = (
+          expiresAt: entry.expiresAt,
+          url: entry.url,
+          resolved: resolved,
+        );
+        return resolved;
+      } catch (_) {
+        _signedImages.remove(key);
+        return imageUrl;
+      }
+    } catch (_) {
+      // ความผิดพลาดของรูปไม่ควรทำให้ประวัติข้อความทั้งห้องหายไป
+      return imageUrl;
+    }
   }
 
   RealtimeChannel? _roomChannel;
@@ -603,6 +876,111 @@ class ChatRemoteDataSource {
       throw ChatRemoteException('อัปโหลดรูปภาพไม่สำเร็จ: ${e.message}');
     } catch (_) {
       throw const ChatRemoteException('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
+    }
+  }
+
+  Future<void> sendItemInquiryIfNeeded({
+    required String conversationId,
+    required ItemInquiryData inquiry,
+    String? imageUrl,
+  }) async {
+    final itemId = inquiry.itemId;
+    if (itemId == null || itemId <= 0) {
+      throw const ChatRemoteException('ไม่พบอุปกรณ์สำหรับเริ่มการสนทนา');
+    }
+    final userId = _currentUserId;
+    final key = (_supabaseClient, userId, conversationId, itemId);
+    final pending = _pendingInquiries[key];
+    if (pending != null) return pending;
+
+    final operation = _sendItemInquiryIfNeeded(
+      conversationId: conversationId,
+      userId: userId,
+      inquiry: inquiry,
+      imageUrl: imageUrl,
+    );
+    _pendingInquiries[key] = operation;
+    try {
+      await operation;
+    } on ChatRemoteException {
+      rethrow;
+    } catch (_) {
+      throw const ChatRemoteException(
+        'ตรวจสอบการสนทนาเดิมไม่สำเร็จ กรุณาลองใหม่',
+      );
+    } finally {
+      if (identical(_pendingInquiries[key], operation))
+        _pendingInquiries.remove(key);
+    }
+  }
+
+  Future<void> _sendItemInquiryIfNeeded({
+    required String conversationId,
+    required String userId,
+    required ItemInquiryData inquiry,
+    String? imageUrl,
+  }) async {
+    final bookings = await _supabaseClient
+        .from('booking_tb')
+        .select('id,status')
+        .eq('user_id', userId)
+        .eq('item_id', inquiry.itemId!)
+        .order('created_at', ascending: false)
+        .order('id', ascending: false)
+        .limit(1);
+    final latestBooking = bookings.isEmpty ? null : bookings.first;
+    final bookingId = latestBooking == null
+        ? null
+        : int.tryParse(latestBooking['id'].toString());
+    if (latestBooking != null && bookingId == null) {
+      throw const ChatRemoteException('ข้อมูลรายการเช่าเดิมไม่ถูกต้อง');
+    }
+    final latestInquiry = await _findLatestItemInquiry(
+      conversationId: conversationId,
+      userId: userId,
+      itemId: inquiry.itemId!,
+    );
+    if (!const ShouldSendItemInquiryUseCase()(
+      latestInquiry: latestInquiry,
+      latestBookingId: bookingId,
+      latestBookingStatus: latestBooking?['status']?.toString(),
+    ))
+      return;
+
+    if (_currentUserId != userId) {
+      throw const ChatRemoteException('บัญชีผู้ใช้เปลี่ยน กรุณาเปิดแชตใหม่');
+    }
+    await sendMessage(
+      conversationId: conversationId,
+      message: inquiry.withPreviousBookingId(bookingId).toChatMessagePayload(),
+      imageUrl: imageUrl,
+    );
+  }
+
+  Future<ItemInquiryData?> _findLatestItemInquiry({
+    required String conversationId,
+    required String userId,
+    required int itemId,
+  }) async {
+    const pageSize = 100;
+    for (var offset = 0; ; offset += pageSize) {
+      final rows = await _supabaseClient
+          .schema('messaging')
+          .from('chat_message_tb')
+          .select('message')
+          .eq('conversation_id', conversationId)
+          .eq('sender_id', userId)
+          .or('message.like.%[ITEM_INQUIRY:%,message.like.ฉันสนใจ%')
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .range(offset, offset + pageSize - 1);
+      for (final row in rows) {
+        final inquiry = ItemInquiryData.fromChatMessage(
+          row['message']?.toString() ?? '',
+        );
+        if (inquiry?.itemId == itemId) return inquiry;
+      }
+      if (rows.length < pageSize) return null;
     }
   }
 

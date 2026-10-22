@@ -1,3 +1,5 @@
+import 'package:frontend/core/widgets/app_popup.dart';
+import '../../widgets/account/account_page_intro.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -69,16 +71,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
         : null;
     final accessToken = session?.accessToken;
     if (accessToken == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('กรุณาเข้าสู่ระบบก่อน'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      showAppPopup(context, content: Text('กรุณาเข้าสู่ระบบก่อน'));
       return;
     }
 
@@ -107,32 +100,12 @@ class _EditContactScreenState extends State<EditContactScreen> {
             if (_emailCtrl.text.isEmpty && state.profile.email.isNotEmpty) {
               _emailCtrl.text = state.profile.email;
             }
-          } else if (state is ProfileActionSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  state.message,
-                  style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-                ),
-                backgroundColor: AppColors.primaryColor,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            );
           } else if (state is ProfileActionFailure) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  state.message.replaceAll('Exception: ', ''),
-                  style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
-                ),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+            showAppPopup(
+              context,
+              content: Text(
+                state.message.replaceAll('Exception: ', ''),
+                style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
               ),
             );
           }
@@ -141,10 +114,11 @@ class _EditContactScreenState extends State<EditContactScreen> {
           final isSaving = state is ProfileActionInProgress;
 
           return Scaffold(
-            backgroundColor: const Color(0xFFF7F7F9),
+            backgroundColor: const Color(0xFFFAF9FD),
             appBar: AppBar(
-              backgroundColor: AppColors.primaryColor,
-              foregroundColor: Colors.white,
+              backgroundColor: const Color(0xFFFAF9FD),
+              foregroundColor: const Color(0xFF292235),
+              surfaceTintColor: Colors.transparent,
               leading: const BackButton(),
               title: const Text(
                 'ข้อมูลติดต่อ',
@@ -154,7 +128,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
                   fontSize: 18,
                 ),
               ),
-              centerTitle: true,
+              centerTitle: false,
               elevation: 0,
             ),
             body: SingleChildScrollView(
@@ -164,16 +138,33 @@ class _EditContactScreenState extends State<EditContactScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const AccountPageIntro(
+                      title: 'ติดต่อกันได้ง่ายขึ้น',
+                      description:
+                          'อัปเดตเบอร์โทรสำหรับการติดต่อเรื่องเช่าของคุณ',
+                    ),
                     // ── Email (Read-only) ──────────────────────────
                     EditContactField(
                       controller: _emailCtrl,
-                      label: 'อีเมล',
+                      label: 'อีเมลบัญชี',
+                      readOnly: true,
                       hint: 'example@email.com',
                       icon: Icons.email_outlined,
                       keyboardType: TextInputType.emailAddress,
                       validator: null,
                     ),
-                    const SizedBox(height: 20),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                        'อีเมลนี้ใช้เข้าสู่ระบบ ยังไม่สามารถเปลี่ยนในหน้านี้ได้',
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.5,
+                          color: Color(0xFF665D73),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
 
                     // ── Phone ──────────────────────────────────────
                     EditContactField(
@@ -196,7 +187,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
                             .withValues(alpha: 0.6),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         minimumSize: const Size(double.infinity, 52),
                       ),

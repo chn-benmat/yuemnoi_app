@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -46,9 +47,7 @@ class _HomeFeedViewState extends State<HomeFeedView> {
   void _onItemTap(FeedItem item) {
     final itemId = int.tryParse(item.id);
     if (itemId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ไม่สามารถเปิดรายละเอียดอุปกรณ์ได้')),
-      );
+      showAppPopup(context, content: Text('ไม่สามารถเปิดรายละเอียดอุปกรณ์ได้'));
       return;
     }
     AppRoutes.openItemDetail(

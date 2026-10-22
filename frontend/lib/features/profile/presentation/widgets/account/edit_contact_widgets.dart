@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../core/constants/colors.dart';
-import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/widgets/app_text_form_field.dart';
+import '../../../../../core/theme/app_form_field_styles.dart';
 
 // ─── Contact Field ────────────────────────────────────────────────────────────
 
@@ -10,6 +10,7 @@ class EditContactField extends StatelessWidget {
   final String label;
   final String hint;
   final IconData icon;
+  final bool readOnly;
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
 
@@ -19,74 +20,22 @@ class EditContactField extends StatelessWidget {
     required this.label,
     required this.hint,
     required this.icon,
+    this.readOnly = false,
     this.keyboardType,
     this.validator,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        validator: validator,
-        style: const TextStyle(
-          fontFamily: AppTextStyles.fontFamily,
-          fontSize: 14,
-          color: Color(0xFF1A1A2E),
-        ),
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          labelStyle: const TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontSize: 13,
-            color: AppColors.hintTextColor,
-          ),
-          hintStyle: const TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontSize: 13,
-            color: AppColors.hintTextColor,
-          ),
-          prefixIcon: Icon(icon, color: AppColors.fieldIconColor, size: 20),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.grey.shade200),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(
-              color: AppColors.primaryColor,
-              width: 1.5,
-            ),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Colors.red),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Colors.red, width: 1.5),
-          ),
-        ),
-      ),
+    return AppTextFormField(
+      controller: controller,
+      label: label,
+      hintText: hint,
+      validator: validator,
+      variant: AppFormFieldVariant.outlined,
+      readOnly: readOnly,
+      keyboardType: keyboardType,
+      prefixIcon: icon,
     );
   }
 }

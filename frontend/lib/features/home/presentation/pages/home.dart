@@ -144,7 +144,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
               builder: (context, notifications, _) => CustomBottomNavbar(
                 selectedIndex: _selectedIndex,
                 hasUnreadChat: hasUnread,
-                hasUnreadNotification: notifications.unreadCount > 0,
+                hasUnreadNotification: notifications.hasUnreadNotification,
                 onTabChange: (index) {
                   setState(() {
                     _selectedIndex = index;

@@ -11,6 +11,15 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/recover"
 )
 
+func RegisterLocationRoutes(router *fiber.App, geocoder domain.Geocoder, suggesters ...domain.PlaceSuggester) {
+	handler := NewLocationHandler(geocoder, suggesters...)
+	router.Get("/api/locations/search", handler.Search)
+	router.Get("/api/locations/reverse", handler.Reverse)
+	if len(suggesters) > 0 {
+		router.Get("/api/locations/suggest", NewLocationSuggestionHandler(suggesters[0]))
+	}
+}
+
 func SetupRouterWithOperations(
 	operations domain.OperationsOptions,
 	itemRepo domain.ItemRepository,
@@ -161,6 +170,8 @@ func SetupRouterWithOperations(
 	identityLimit := RateLimitMiddleware(NewRateLimiter(5.0/60.0, 5), "ส่งคำขอถี่เกินไป กรุณารอสักครู่")
 	router.Post("/api/admin/login", RateLimitMiddleware(authRateLimiter, "กรุณารอสักครู่แล้วลองใหม่"), dashboardLogin(authGateway, operations.Store))
 	router.Get("/api/identity/status", operationsHandler.Status)
+	router.Get("/api/identity/account", operationsHandler.AccountDetails)
+	router.Get("/api/identity/account/evidence/:id", operationsHandler.AccountEvidence)
 	router.Post("/api/identity/sessions", identityLimit, operationsHandler.Begin)
 	router.Post("/api/identity/sessions/:id/submit", identityLimit, operationsHandler.Submit)
 	router.Post("/api/complaints", identityLimit, operationsHandler.Complaint)

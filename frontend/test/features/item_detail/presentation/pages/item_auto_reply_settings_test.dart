@@ -148,7 +148,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('save-auto-reply')));
     await tester.pumpAndSettle();
     expect(repository.stored.message, 'จะตอบกลับในไม่ช้า');
-    expect(find.text('บันทึกการตอบกลับอัตโนมัติแล้ว'), findsOneWidget);
+    expect(find.text('บันทึกการตอบกลับอัตโนมัติแล้ว'), findsNothing);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
   });
 
   for (final message in [

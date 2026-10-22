@@ -11,6 +11,7 @@ class ChatConversation extends Equatable {
     required this.avatarAsset,
     required this.preview,
     required this.timeLabel,
+    this.lastMessageAt,
     this.itemId,
     this.itemName,
     this.itemImageUrl,
@@ -27,6 +28,7 @@ class ChatConversation extends Equatable {
   final String avatarAsset;
   final String preview;
   final String timeLabel;
+  final DateTime? lastMessageAt;
   final int? itemId;
   final String? itemName;
   final String? itemImageUrl;
@@ -43,6 +45,7 @@ class ChatConversation extends Equatable {
     String? avatarAsset,
     String? preview,
     String? timeLabel,
+    DateTime? lastMessageAt,
     int? itemId,
     String? itemName,
     String? itemImageUrl,
@@ -59,6 +62,7 @@ class ChatConversation extends Equatable {
       avatarAsset: avatarAsset ?? this.avatarAsset,
       preview: preview ?? this.preview,
       timeLabel: timeLabel ?? this.timeLabel,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       itemId: itemId ?? this.itemId,
       itemName: itemName ?? this.itemName,
       itemImageUrl: itemImageUrl ?? this.itemImageUrl,
@@ -78,6 +82,7 @@ class ChatConversation extends Equatable {
     avatarAsset,
     preview,
     timeLabel,
+    lastMessageAt,
     itemId,
     itemName,
     itemImageUrl,

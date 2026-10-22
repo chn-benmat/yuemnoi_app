@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:collection/collection.dart';
 import '../../../../core/cache/app_cache.dart';
 import 'dart:async';
 
@@ -7,7 +9,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/datasources/chat_remote_data_source.dart';
 import '../../data/models/chat_message_model.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/item_inquiry_data.dart';
 import '../../domain/usecases/fetch_messages_usecase.dart';
+import '../../domain/usecases/get_owned_chat_item_ids_usecase.dart';
 import '../../domain/usecases/mark_messages_as_read_usecase.dart';
 import '../../domain/usecases/send_chat_message_usecase.dart';
 import '../../domain/usecases/stream_messages_usecase.dart';
@@ -33,7 +37,24 @@ class ChatMessagesCache {
     final recent = confirmed.length > 50
         ? confirmed.sublist(confirmed.length - 50)
         : confirmed;
+    AppCache.rememberSnapshot(
+      'chat',
+      conversationId,
+      userId,
+      recent.map(ChatMessageModel.toJson).toList(),
+    );
     unawaited(_persist(conversationId, userId, recent));
+  }
+
+  static List<ChatMessage>? peek(
+    String conversationId, {
+    String? currentUserId,
+  }) {
+    final userId = currentUserId ?? _userId;
+    if (userId.isEmpty) return null;
+    return AppCache.readMemorySnapshot('chat', conversationId, userId)
+        ?.map((row) => ChatMessageModel.fromJson(row, currentUserId: userId))
+        .toList();
   }
 
   static Future<void> _persist(
@@ -58,12 +79,18 @@ class ChatMessagesCache {
     required String currentUserId,
   }) async {
     if (currentUserId.isEmpty) return null;
+    final memory = peek(conversationId, currentUserId: currentUserId);
+    if (memory != null) return memory;
+    final revision = AppCache.scopeRevision(currentUserId);
     try {
       final rows = await AppCache.database.readSnapshot(
         'chat',
         conversationId,
         currentUserId,
       );
+      if (revision != AppCache.scopeRevision(currentUserId)) return null;
+      if (rows != null)
+        AppCache.rememberSnapshot('chat', conversationId, currentUserId, rows);
       return rows
           ?.map(
             (row) =>
@@ -81,6 +108,16 @@ class ChatMessagesCache {
   }
 }
 
+class _ChatItemOwnershipUpdated extends ChatDetailEvent {
+  const _ChatItemOwnershipUpdated(this.itemIds, this.epoch);
+
+  final Set<int> itemIds;
+  final int epoch;
+
+  @override
+  List<Object?> get props => [itemIds, epoch];
+}
+
 class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
   ChatDetailBloc({
     required StreamMessagesUseCase streamMessages,
@@ -88,6 +125,7 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     FetchMessagesUseCase? fetchMessages,
     UploadChatImageUseCase? uploadChatImage,
     MarkMessagesAsReadUseCase? markMessagesAsRead,
+    GetOwnedChatItemIdsUseCase? getOwnedItemIds,
     String? conversationId,
   }) : _streamMessages = streamMessages,
        _conversationId = conversationId,
@@ -95,7 +133,8 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
        _fetchMessages = fetchMessages,
        _uploadChatImage = uploadChatImage,
        _markMessagesAsRead = markMessagesAsRead,
-       super(const ChatDetailState()) {
+       _getOwnedItemIds = getOwnedItemIds,
+       super(_initialState(conversationId)) {
     on<ChatMessagesSubscriptionRequested>(_onSubscriptionRequested);
     on<ChatMessagesUpdated>(_onMessagesUpdated);
     on<ChatMessagesLoadFailed>(
@@ -116,6 +155,23 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     on<ChatDirectMessageReceived>(_onDirectMessageReceived);
     on<ChatReadReceiptsUpdated>(_onReadReceiptsUpdated);
     on<ChatRetryMessageSent>(_onRetryMessageSent);
+    on<_ChatItemOwnershipUpdated>((event, emit) {
+      if (event.epoch != _subscriptionEpoch ||
+          _cacheUserId != ChatMessagesCache._userId)
+        return;
+      emit(
+        state.copyWith(ownedItemIds: {...state.ownedItemIds, ...event.itemIds}),
+      );
+    });
+  }
+
+  static ChatDetailState _initialState(String? conversationId) {
+    final cached = conversationId == null
+        ? null
+        : ChatMessagesCache.peek(conversationId);
+    return cached == null
+        ? const ChatDetailState()
+        : ChatDetailState(status: ChatDetailStatus.success, messages: cached);
   }
 
   final StreamMessagesUseCase _streamMessages;
@@ -123,9 +179,46 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
   final FetchMessagesUseCase? _fetchMessages;
   final UploadChatImageUseCase? _uploadChatImage;
   final MarkMessagesAsReadUseCase? _markMessagesAsRead;
+  final GetOwnedChatItemIdsUseCase? _getOwnedItemIds;
+  final Set<int> _checkedItemIds = {};
+  int? _fallbackItemId;
   String? _conversationId;
   String? _cacheUserId;
   int _subscriptionEpoch = 0;
+
+  @override
+  void onChange(Change<ChatDetailState> change) {
+    super.onChange(change);
+    if (!identical(change.currentState.messages, change.nextState.messages)) {
+      unawaited(_resolveItemOwnership(change.nextState.messages));
+    }
+  }
+
+  Future<void> _resolveItemOwnership(List<ChatMessage> messages) async {
+    final getOwnedItemIds = _getOwnedItemIds;
+    if (getOwnedItemIds == null) return;
+    final itemIds = <int>{
+      for (final message in messages)
+        if (ItemInquiryData.fromChatMessage(
+              message.message,
+              defaultItemId: _fallbackItemId,
+            )?.itemId
+            case final int id)
+          if (!_checkedItemIds.contains(id)) id,
+    };
+    if (itemIds.isEmpty) return;
+    final epoch = _subscriptionEpoch;
+    _checkedItemIds.addAll(itemIds);
+    try {
+      final ownedIds = await getOwnedItemIds(itemIds);
+      if (!isClosed && epoch == _subscriptionEpoch) {
+        add(_ChatItemOwnershipUpdated(ownedIds.intersection(itemIds), epoch));
+      }
+    } catch (_) {
+      // หากตรวจเจ้าของไม่ได้ ให้ซ่อนปุ่มและลองใหม่เมื่อข้อความเปลี่ยน
+      if (epoch == _subscriptionEpoch) _checkedItemIds.removeAll(itemIds);
+    }
+  }
 
   void _cacheMessages(String conversationId, List<ChatMessage> messages) {
     final ownerId = _cacheUserId;
@@ -152,10 +245,14 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
   ) async {
     _conversationId = event.conversationId;
     final epoch = ++_subscriptionEpoch;
+    _fallbackItemId = event.itemId;
+    _checkedItemIds.clear();
+    emit(state.copyWith(ownedItemIds: const {}));
     final userId = SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentUser?.id ?? ''
         : '';
     _cacheUserId = userId;
+    unawaited(_resolveItemOwnership(state.messages));
     final cached = await ChatMessagesCache.loadFromDisk(
       event.conversationId,
       currentUserId: userId,
@@ -282,6 +379,48 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     }
   }
 
+  bool _sameOutgoingMessage(ChatMessage a, ChatMessage b) {
+    if (a.conversationId != b.conversationId || a.imageUrl != b.imageUrl)
+      return false;
+    if (a.message.trim() == b.message.trim()) return true;
+    Map<String, dynamic>? metadata(String text) {
+      const tag = '[BOOKING_DATA:';
+      final start = text.indexOf(tag);
+      final end = text.lastIndexOf(']');
+      if (start < 0 || end <= start) return null;
+      try {
+        final data =
+            jsonDecode(text.substring(start + tag.length, end))
+                as Map<String, dynamic>;
+        // Trigger เติมสถานะและข้อมูลจุดนัดรับจาก snapshot หลังบันทึก
+        for (final key in [
+          'status',
+          'bookingId',
+          'originalMessageId',
+          'latitude',
+          'longitude',
+          'location',
+          'defaultLocation',
+          'locationAddress',
+          'locationNote',
+          'ownerId',
+          'conversationId',
+        ]) {
+          data.remove(key);
+        }
+        return data;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final left = metadata(a.message);
+    final right = metadata(b.message);
+    return left != null &&
+        right != null &&
+        const DeepCollectionEquality().equals(left, right);
+  }
+
   void _onMessagesUpdated(
     ChatMessagesUpdated event,
     Emitter<ChatDetailState> emit,
@@ -299,21 +438,13 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
       }
     }
 
-    // ข้อความของฉันที่ Server บันทึกและยืนยันแล้ว
-    final serverMineTexts = event.messages
-        .where((m) => m.isMine)
-        .map((m) => '${m.message.trim()}_${m.imageUrl ?? ''}')
-        .toSet();
-
-    // รักษาเฉพาะข้อความ Optimistic ชั่วคราวที่เป็นของฉัน (isMine) และยังไม่ได้รับการบันทึกจาก Server
-    // ข้อความจากฝั่งอื่น (isMine == false) ที่เคยรับผ่าน temporary broadcast จะถูกแทนที่ด้วยข้อมูลจริงจาก Server ทันที
     final pendingOptimistic = state.messages
         .where(
           (m) =>
               m.isMine &&
               m.id.startsWith('temp_') &&
-              !serverMineTexts.contains(
-                '${m.message.trim()}_${m.imageUrl ?? ''}',
+              !event.messages.any(
+                (saved) => saved.isMine && _sameOutgoingMessage(m, saved),
               ),
         )
         .toList();
@@ -452,6 +583,15 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
   ) async {
     final trimmed = event.message.trim();
     if (trimmed.isEmpty) return;
+    if (trimmed.contains('[BOOKING_DATA:')) {
+      if (state.messages.any(
+        (m) =>
+            m.isMine &&
+            m.message.trim() == trimmed &&
+            !state.failedMessageIds.contains(m.id),
+      ))
+        return;
+    }
 
     // ⚡ Optimistic UI Update: แสดงข้อความบนหน้าจอทันทีแบบ 0ms ไม่ต้องรอ Server
     final currentUserId = SupabaseConfig.isInitialized
@@ -465,7 +605,7 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
       message: trimmed,
       createdAt: DateTime.now(),
       isMine: true,
-      imageUrl: null,
+      imageUrl: event.imageUrl,
       isRead: false,
     );
 
@@ -474,6 +614,7 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
       state.copyWith(
         status: ChatDetailStatus.success,
         messages: updatedMessages,
+        sendingMessageIds: {...state.sendingMessageIds, tempId},
       ),
     );
     _cacheMessages(event.conversationId, updatedMessages);
@@ -488,11 +629,21 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
       await _sendMessage(
         conversationId: event.conversationId,
         message: trimmed,
+        imageUrl: event.imageUrl,
+      );
+      emit(
+        state.copyWith(
+          sendingMessageIds: {...state.sendingMessageIds}..remove(tempId),
+        ),
       );
     } catch (e) {
       final failed = {...state.failedMessageIds, tempId};
       emit(
-        state.copyWith(failedMessageIds: failed, errorMessage: e.toString()),
+        state.copyWith(
+          failedMessageIds: failed,
+          sendingMessageIds: {...state.sendingMessageIds}..remove(tempId),
+          errorMessage: e.toString(),
+        ),
       );
     }
   }
@@ -508,7 +659,12 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     if (msg.message.isEmpty) return;
 
     final failed = {...state.failedMessageIds}..remove(event.tempMessageId);
-    emit(state.copyWith(failedMessageIds: failed));
+    emit(
+      state.copyWith(
+        failedMessageIds: failed,
+        sendingMessageIds: {...state.sendingMessageIds, event.tempMessageId},
+      ),
+    );
 
     try {
       await _sendMessage(
@@ -516,10 +672,18 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
         message: msg.message,
         imageUrl: msg.imageUrl,
       );
+      emit(
+        state.copyWith(
+          sendingMessageIds: {...state.sendingMessageIds}
+            ..remove(event.tempMessageId),
+        ),
+      );
     } catch (e) {
       emit(
         state.copyWith(
           failedMessageIds: {...state.failedMessageIds, event.tempMessageId},
+          sendingMessageIds: {...state.sendingMessageIds}
+            ..remove(event.tempMessageId),
           errorMessage: e.toString(),
         ),
       );

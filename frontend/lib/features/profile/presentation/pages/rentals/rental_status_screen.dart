@@ -13,9 +13,14 @@ import '../../../domain/entities/rental_booking.dart';
 import '../../widgets/rentals/rental_status_widgets.dart';
 
 class RentalStatusScreen extends StatefulWidget {
-  const RentalStatusScreen({super.key, this.initialBookingId});
+  const RentalStatusScreen({
+    super.key,
+    this.initialBookingId,
+    this.isLender = false,
+  });
 
   final int? initialBookingId;
+  final bool isLender;
 
   @override
   State<RentalStatusScreen> createState() => _RentalStatusScreenState();
@@ -32,7 +37,11 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.isLender ? 1 : 0,
+    );
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });

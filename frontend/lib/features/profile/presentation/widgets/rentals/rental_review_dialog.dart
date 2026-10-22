@@ -63,12 +63,6 @@ class _RentalReviewDialogState extends State<RentalReviewDialog> {
   void _handleSubmit() {
     Navigator.pop(context);
     widget.onSubmit?.call();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('ขอบคุณสำหรับการให้คะแนนและรีวิว!'),
-        backgroundColor: Color(0xFF10B981),
-      ),
-    );
   }
 
   @override

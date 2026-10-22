@@ -33,6 +33,11 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<Set<int>> getOwnedItemIds(Set<int> itemIds) {
+    return _remoteDataSource.getOwnedItemIds(itemIds);
+  }
+
+  @override
   Future<List<ChatMessage>> fetchMessages({
     required String conversationId,
     DateTime? before,

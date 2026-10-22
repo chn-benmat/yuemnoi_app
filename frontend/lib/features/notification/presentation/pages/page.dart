@@ -51,6 +51,7 @@ class _NotificationView extends StatelessWidget {
             child: BlocBuilder<NotificationCubit, NotificationInboxState>(
               builder: (context, state) {
                 final cubit = context.read<NotificationCubit>();
+                final visibleItems = state.visibleItems;
                 return RefreshIndicator(
                   color: AppColors.primaryColor,
                   backgroundColor: Colors.white,
@@ -73,8 +74,7 @@ class _NotificationView extends StatelessWidget {
                       if (!state.isAuthenticated)
                         const _Notice(
                           title: 'เข้าสู่ระบบเพื่อดูการแจ้งเตือน',
-                          subtitle:
-                              'ข้อความแชต สถานะการเช่า และข้อมูลบัญชีจะแสดงที่นี่',
+                          subtitle: 'สถานะการเช่าและข้อมูลบัญชีจะแสดงที่นี่',
                         )
                       else ...[
                         Align(
@@ -86,15 +86,6 @@ class _NotificationView extends StatelessWidget {
                                     try {
                                       await cubit.markAllRead();
                                       if (!context.mounted) return;
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'ทำเครื่องหมายอ่านแล้วทั้งหมด',
-                                          ),
-                                        ),
-                                      );
                                     } catch (_) {
                                       // สถานะผิดพลาดแสดงจาก Cubit โดยไม่แสร้งว่าอ่านสำเร็จ
                                     }
@@ -104,12 +95,11 @@ class _NotificationView extends StatelessWidget {
                         ),
                         for (final category in const [
                           AppNotificationCategory.rental,
-                          AppNotificationCategory.chat,
                           AppNotificationCategory.app,
                         ]) ...[
                           _NotificationSection(
                             category: category,
-                            items: state.items
+                            items: visibleItems
                                 .where((item) => item.category == category)
                                 .toList(),
                             isLoading: state.isLoading,

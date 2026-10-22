@@ -1,3 +1,4 @@
+import 'package:frontend/core/widgets/app_popup.dart';
 import '../../../../core/widgets/package_chat_list.dart';
 import 'dart:async';
 
@@ -248,14 +249,6 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                     onTap: () {
                       Navigator.of(modalContext).pop();
                       Clipboard.setData(ClipboardData(text: message.content));
-                      ScaffoldMessenger.of(context)
-                        ..hideCurrentSnackBar()
-                        ..showSnackBar(
-                          const SnackBar(
-                            content: Text('คัดลอกข้อความแล้ว'),
-                            duration: Duration(seconds: 1),
-                          ),
-                        );
                     },
                     child: const Padding(
                       padding: EdgeInsets.symmetric(
@@ -779,11 +772,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(content: Text('ไม่พบรหัสอุปกรณ์ กรุณาลองค้นหาใหม่')),
-      );
+    showAppPopup(context, content: Text('ไม่พบรหัสอุปกรณ์ กรุณาลองค้นหาใหม่'));
   }
 }
 

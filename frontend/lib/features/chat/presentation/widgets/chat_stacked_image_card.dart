@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'chat_cached_image.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/constants/colors.dart';
 
@@ -110,7 +110,7 @@ class ChatStackedImageCard extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      CachedNetworkImage(
+                      ChatCachedImage(
                         imageUrl: primaryUrl,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Container(

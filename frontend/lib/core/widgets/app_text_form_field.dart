@@ -54,6 +54,19 @@ class AppTextFormField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final outlined = variant == AppFormFieldVariant.outlined;
+    final multilineIcon = maxLines > 1 && prefixIcon != null;
+    final inputStyle = Theme.of(context).textTheme.titleMedium!.merge(
+      outlined ? AppFormFieldStyles.textStyle : const TextStyle(fontSize: 16),
+    );
+    final linePainter = multilineIcon
+        ? (TextPainter(
+            text: TextSpan(text: 'ก', style: inputStyle),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout())
+        : null;
+    final line = linePainter?.computeLineMetrics().first;
+    linePainter?.dispose();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -62,59 +75,87 @@ class AppTextFormField extends StatelessWidget {
           style: outlined ? AppFormFieldStyles.labelTextStyle : null,
           padding: EdgeInsets.only(left: outlined ? 0 : 4, bottom: 8),
         ),
-        TextFormField(
-          key: fieldKey,
-          readOnly: readOnly,
-          enabled: enabled,
-          enableInteractiveSelection: enableInteractiveSelection,
-          onTap: onTap,
-          onChanged: onChanged,
-          textInputAction: textInputAction,
-          controller: controller,
-          obscureText: obscureText,
-          validator: validator,
-          keyboardType: keyboardType,
-          inputFormatters: inputFormatters,
-          maxLines: maxLines,
-          minLines: minLines,
-          style: outlined
-              ? AppFormFieldStyles.textStyle.copyWith(
-                  color: enabled
-                      ? AppFormFieldStyles.outlinedTextColor
-                      : AppFormFieldStyles.outlinedHintColor,
-                )
-              : const TextStyle(fontSize: 16, color: Colors.black87),
-          decoration:
-              AppFormFieldStyles.decoration(
-                context,
-                variant: variant,
-                enabled: enabled,
-              ).copyWith(
-                hintText: hintText,
-                prefixIcon: prefix != null
-                    ? Padding(
-                        padding: EdgeInsetsDirectional.only(
-                          start: outlined ? 16 : 20,
-                          end: 12,
-                        ),
-                        child: Align(
-                          alignment: Alignment.center,
-                          widthFactor: 1,
-                          heightFactor: 1,
-                          child: prefix,
-                        ),
-                      )
-                    : prefixIcon != null
-                    ? Icon(
-                        prefixIcon,
-                        color: outlined
-                            ? AppFormFieldStyles.outlinedHintColor
-                            : AppColors.fieldIconColor,
-                        size: 22,
-                      )
-                    : null,
-                suffixIcon: suffixIcon,
+        Stack(
+          children: [
+            TextFormField(
+              key: fieldKey,
+              readOnly: readOnly,
+              enabled: enabled,
+              enableInteractiveSelection: enableInteractiveSelection,
+              onTap: onTap,
+              onChanged: onChanged,
+              textInputAction: textInputAction,
+              controller: controller,
+              obscureText: obscureText,
+              validator: validator,
+              keyboardType: keyboardType,
+              inputFormatters: inputFormatters,
+              maxLines: maxLines,
+              minLines: minLines,
+              style: outlined
+                  ? AppFormFieldStyles.textStyle.copyWith(
+                      color: enabled
+                          ? AppFormFieldStyles.outlinedTextColor
+                          : AppFormFieldStyles.outlinedHintColor,
+                    )
+                  : const TextStyle(fontSize: 16, color: Colors.black87),
+              decoration:
+                  AppFormFieldStyles.decoration(
+                    context,
+                    variant: variant,
+                    enabled: enabled,
+                  ).copyWith(
+                    hintText: hintText,
+                    hintStyle: multilineIcon
+                        ? inputStyle.copyWith(
+                            color: outlined
+                                ? AppFormFieldStyles.outlinedHintColor
+                                : AppColors.hintTextColor,
+                          )
+                        : null,
+                    contentPadding: multilineIcon
+                        ? const EdgeInsetsDirectional.fromSTEB(50, 16, 16, 16)
+                        : null,
+                    prefixIcon: prefix != null
+                        ? Padding(
+                            padding: EdgeInsetsDirectional.only(
+                              start: outlined ? 16 : 20,
+                              end: 12,
+                            ),
+                            child: Align(
+                              alignment: Alignment.center,
+                              widthFactor: 1,
+                              heightFactor: 1,
+                              child: prefix,
+                            ),
+                          )
+                        : prefixIcon != null && maxLines == 1
+                        ? Icon(
+                            prefixIcon,
+                            color: outlined
+                                ? AppFormFieldStyles.outlinedHintColor
+                                : AppColors.fieldIconColor,
+                            size: 22,
+                          )
+                        : null,
+                    suffixIcon: suffixIcon,
+                  ),
+            ),
+            if (multilineIcon)
+              PositionedDirectional(
+                start: 16,
+                top: 16 + ((line?.height ?? 24) - 22) / 2,
+                child: IgnorePointer(
+                  child: Icon(
+                    prefixIcon,
+                    size: 22,
+                    color: outlined
+                        ? AppFormFieldStyles.outlinedHintColor
+                        : AppColors.fieldIconColor,
+                  ),
+                ),
               ),
+          ],
         ),
       ],
     );

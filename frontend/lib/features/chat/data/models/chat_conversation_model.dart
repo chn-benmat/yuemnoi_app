@@ -123,6 +123,7 @@ abstract final class ChatConversationModel {
       avatarAsset: avatarUrl.isEmpty ? 'assets/images/user.png' : avatarUrl,
       preview: cleanPreview,
       timeLabel: timeLabel,
+      lastMessageAt: lastMessageAt,
       itemId: itemId,
       itemName: itemName,
       itemImageUrl: itemImageUrl,

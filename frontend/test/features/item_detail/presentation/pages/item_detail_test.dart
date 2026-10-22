@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/models/pickup_location.dart';
@@ -26,6 +27,7 @@ void main() {
     String description = 'อุปกรณ์ถ่ายภาพสำหรับงานทุกประเภท',
     String status = 'verified',
     bool ownerVerified = false,
+    List<ItemReview> reviews = const [],
     bool longContent = false,
   }) => ItemDetail(
     id: 7,
@@ -44,7 +46,7 @@ void main() {
     price: longContent ? 1250000 : 1000,
     status: status,
     rentalType: 'รายวัน',
-    reviews: const [],
+    reviews: reviews,
     isOwner: isOwner,
     pickupLocation: longContent
         ? const PickupLocation(
@@ -63,8 +65,10 @@ void main() {
     String description = 'อุปกรณ์ถ่ายภาพสำหรับงานทุกประเภท',
     String status = 'verified',
     bool ownerVerified = false,
+    List<ItemReview> reviews = const [],
     bool longContent = false,
     double textScale = 1,
+    bool preview = false,
   }) async {
     final repository = _MockItemDetailRepository();
     final bloc = ItemDetailBloc(
@@ -77,6 +81,7 @@ void main() {
         status: status,
         ownerVerified: ownerVerified,
         longContent: longContent,
+        reviews: reviews,
       ),
     );
     addTearDown(bloc.close);
@@ -90,12 +95,103 @@ void main() {
         ),
         home: BlocProvider.value(
           value: bloc,
-          child: const ItemDetailScreen(itemId: 7),
+          child: ItemDetailScreen(itemId: 7, preview: preview),
         ),
       ),
     );
     await tester.pump();
   }
+
+  testWidgets('review content stays readable at narrow width and large text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const message = 'Great condition and easy pickup. Would rent again!';
+    await pumpDetail(
+      tester,
+      isOwner: false,
+      textScale: 1.3,
+      reviews: const [
+        ItemReview(
+          id: 1,
+          reviewer: ItemOwner(
+            userId: 'renter',
+            displayName: 'A very long reviewer display name',
+            imageUrl: '',
+          ),
+          rating: 4.5,
+          description: message,
+        ),
+      ],
+    );
+    await tester.ensureVisible(find.text(message));
+    await tester.pumpAndSettle();
+    expect(find.text('4.5/5'), findsOneWidget);
+    final text = tester.widget<Text>(find.text(message));
+    expect(text.style?.fontStyle, isNot(FontStyle.italic));
+    expect(text.maxLines, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reviews swipe, auto advance, cap at four and open more', (
+    tester,
+  ) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final reviews = List.generate(
+      6,
+      (index) => ItemReview(
+        id: index,
+        reviewer: ItemOwner(
+          userId: 'r$index',
+          displayName: 'Renter $index',
+          imageUrl: '',
+        ),
+        rating: index == 5 ? 1 : 5,
+        description: 'Review number $index',
+      ),
+    );
+    await pumpDetail(tester, isOwner: false, reviews: reviews);
+    final carousel = find.byKey(const ValueKey('review-carousel'));
+    await tester.ensureVisible(carousel);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<PageView>(carousel).childrenDelegate.estimatedChildCount,
+      4,
+    );
+    expect(find.text('1 / 4'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 4'), findsOneWidget);
+    await tester.drag(carousel, const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('3 / 4'), findsOneWidget);
+    await tester.ensureVisible(find.text('ดูเพิ่มเติม'));
+    await tester.tap(find.text('ดูเพิ่มเติม'));
+    await tester.pumpAndSettle();
+    expect(find.text('รีวิวทั้งหมด'), findsOneWidget);
+    final list = find.byType(ListView);
+    await tester.scrollUntilVisible(
+      find.text('Review number 5'),
+      300,
+      scrollable: find.descendant(of: list, matching: find.byType(Scrollable)),
+    );
+    expect(find.text('Review number 5'), findsOneWidget);
+    await tester.tap(find.text('1 ดาว'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 รีวิว'), findsOneWidget);
+    expect(find.text('Review number 0'), findsNothing);
+    expect(find.text('Review number 5'), findsOneWidget);
+    await tester.tap(find.text('2 ดาว'));
+    await tester.pumpAndSettle();
+    expect(find.text('ยังไม่มีรีวิวในระดับดาวนี้'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('shows option A management sections for the owner', (
     tester,
@@ -103,6 +199,7 @@ void main() {
     await pumpDetail(tester, isOwner: true);
 
     expect(find.text('รายละเอียดอุปกรณ์'), findsOneWidget);
+    expect(find.text('ดูรายละเอียด'), findsNothing);
     expect(find.text('การแสดงผล'), findsOneWidget);
     expect(find.text('แก้ไขอุปกรณ์'), findsOneWidget);
     expect(find.text('ข้อความตอบกลับอัตโนมัติ'), findsOneWidget);
@@ -110,6 +207,32 @@ void main() {
     expect(find.text('รูปภาพ'), findsNothing);
     expect(find.text('ลบอุปกรณ์'), findsOneWidget);
     expect(find.text('แชทสอบถาม'), findsNothing);
+  });
+
+  testWidgets(
+    'owner can preview the renter view without chatting with themselves',
+    (tester) async {
+      await pumpDetail(tester, isOwner: true, preview: true);
+      expect(find.text('แชทสอบถาม'), findsOneWidget);
+      expect(find.text('การแสดงผล'), findsNothing);
+      expect(find.text('แก้ไขอุปกรณ์'), findsNothing);
+      final button = tester.widget<FilledButton>(
+        find.ancestor(
+          of: find.text('แชทสอบถาม'),
+          matching: find.byType(FilledButton),
+        ),
+      );
+      expect(button.onPressed, isNull);
+    },
+  );
+
+  testWidgets('owner management does not show a rental status badge', (
+    tester,
+  ) async {
+    await pumpDetail(tester, isOwner: true, status: 'available');
+    expect(find.text('เปิดให้เช่า'), findsNothing);
+    expect(find.text('พร้อมให้เช่า'), findsNothing);
+    expect(find.text('ดูรายละเอียด'), findsNothing);
   });
 
   testWidgets('shows chat action when the signed-in user is not the owner', (
@@ -123,6 +246,55 @@ void main() {
     expect(find.text('การแสดงผล'), findsNothing);
     expect(find.text('ลบอุปกรณ์'), findsNothing);
   });
+
+  for (final isOwner in [false, true]) {
+    testWidgets(
+      '${isOwner ? 'owner' : 'renter'} opens the pickup pin in external Google Maps',
+      (tester) async {
+        final launches = <MethodCall>[];
+        const channel = MethodChannel('plugins.flutter.io/url_launcher');
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          (call) async {
+            launches.add(call);
+            return true;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            channel,
+            null,
+          ),
+        );
+        await pumpDetail(tester, isOwner: isOwner, longContent: true);
+
+        final location = find.text(
+          isOwner
+              ? 'หน้ามหาวิทยาลัยบริเวณประตูทางเข้าฝั่งสถานีรถไฟฟ้า\nกรุงเทพมหานคร'
+              : 'หน้ามหาวิทยาลัยบริเวณประตูทางเข้าฝั่งสถานีรถไฟฟ้า',
+        );
+        await tester.ensureVisible(location);
+        await tester.pumpAndSettle();
+        await tester.tap(location);
+        await tester.pumpAndSettle();
+
+        expect(launches, hasLength(1));
+        expect(launches.single.method, 'launch');
+        final arguments = launches.single.arguments as Map;
+        final uri = Uri.parse(arguments['url'] as String);
+        expect(uri.host, 'www.google.com');
+        expect(uri.path, '/maps/search/');
+        expect(uri.queryParameters['api'], '1');
+        expect(uri.queryParameters['query'], '13.75,100.5');
+        expect(arguments['useWebView'], isFalse);
+        expect(arguments['useSafariVC'], isFalse);
+        expect(
+          Navigator.of(tester.element(find.byType(ItemDetailScreen))).canPop(),
+          isFalse,
+        );
+      },
+    );
+  }
 
   testWidgets('asks for a contact phone before opening a rental chat', (
     tester,
@@ -155,6 +327,8 @@ void main() {
       await tester.tap(find.byIcon(Icons.favorite_border_rounded));
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
 
       // รายงานปัญหาอยู่ในเมนูเพิ่มเติม เพื่อให้ส่วนรูปสินค้าโปร่งขึ้น
       await tester.tap(find.byTooltip('เพิ่มเติม'));
@@ -232,7 +406,7 @@ void main() {
       ownerVerified: true,
       status: 'available',
     );
-    expect(find.text('พร้อมให้เช่า'), findsOneWidget);
+    expect(find.text('พร้อมให้เช่า'), findsNothing);
     expect(find.text('ยืนยันตัวตนแล้ว'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

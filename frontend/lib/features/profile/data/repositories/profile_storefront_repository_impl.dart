@@ -43,6 +43,11 @@ class ProfileStorefrontRepositoryImpl implements ProfileStorefrontRepository {
           (row) => StorefrontReview(
             itemId: int.tryParse('${row['item_id']}') ?? -1,
             rating: double.tryParse('${row['rating']}') ?? double.nan,
+            reviewerName:
+                row['reviewer']?['display_name']?.toString() ?? 'ผู้ใช้',
+            avatarUrl: row['reviewer']?['user_image_url']?.toString(),
+            description: row['description']?.toString() ?? '',
+            createdAt: DateTime.tryParse(row['created_at']?.toString() ?? ''),
           ),
         )
         .toList(growable: false);
