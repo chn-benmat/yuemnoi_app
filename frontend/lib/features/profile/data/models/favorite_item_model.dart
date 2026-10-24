@@ -36,7 +36,16 @@ class FavoriteItemModel {
   factory FavoriteItemModel.fromJson(
     Map<String, dynamic> json, {
     String? ownerName,
-  }) => _$FavoriteItemModelFromJson({...json, '_owner_name': ownerName});
+  }) {
+    final resolvedOwnerName =
+        (ownerName ?? json['owner_name']?.toString() ?? '').trim();
+    return _$FavoriteItemModelFromJson({
+      ...json,
+      '_owner_name': resolvedOwnerName.isNotEmpty
+          ? resolvedOwnerName
+          : 'ไม่พบชื่อเจ้าของ',
+    });
+  }
 
   static String _title(Object? value) => value?.toString() ?? 'อุปกรณ์';
   static String _string(Object? value) => value?.toString() ?? '';

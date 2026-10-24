@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/widgets/skeleton_shimmer.dart';
@@ -16,11 +15,12 @@ class FavoriteLoadingSkeleton extends StatelessWidget {
       child: GridView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 280,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
-          childAspectRatio: 0.85,
+          mainAxisExtent:
+              270 + (MediaQuery.textScalerOf(context).scale(14) - 14) * 4,
         ),
         itemCount: 6,
         itemBuilder: (context, index) => const _FavoriteSkeletonCard(),
@@ -108,113 +108,104 @@ class FavoriteItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => AppRoutes.openItemDetail(context, itemId: item.id),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.primaryColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
+    return Material(
+      color: const Color(0xFFF0E6FF),
+      elevation: 1,
+      shadowColor: const Color(0x267C3AED),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Color(0xFFD8BFF0)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => AppRoutes.openItemDetail(context, itemId: item.id),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Image ──
             Expanded(
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Container(
-                    margin: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: Colors.white,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child:
-                        item.imageUrl != null &&
-                            item.imageUrl!.trim().isNotEmpty
-                        ? Image.network(
-                            item.imageUrl!.trim(),
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                                  color: const Color(0xFF2E1065),
-                                  child: const Icon(
+                  ColoredBox(
+                    color: const Color(0xFFE8D9FA),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child:
+                          item.imageUrl != null &&
+                              item.imageUrl!.trim().isNotEmpty
+                          ? Image.network(
+                              item.imageUrl!.trim(),
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(
                                     Icons.image_not_supported_outlined,
-                                    color: Colors.white54,
+                                    color: Color(0xFF9485A8),
                                     size: 36,
                                   ),
-                                ),
-                          )
-                        : Container(
-                            color: const Color(0xFF2E1065),
-                            child: const Icon(
+                            )
+                          : const Icon(
                               Icons.devices_other_outlined,
-                              color: Colors.white54,
+                              color: Color(0xFF9485A8),
                               size: 36,
                             ),
-                          ),
+                    ),
                   ),
-                  // Heart button to remove
                   Positioned(
-                    top: 10,
-                    right: 10,
-                    child: GestureDetector(
-                      onTap: onRemoveFavorite,
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.favorite_rounded,
-                          color: Color(0xFFFF3B5F),
-                          size: 18,
-                        ),
+                    top: 6,
+                    right: 6,
+                    child: IconButton.filled(
+                      tooltip: 'นำออกจากรายการโปรด',
+                      onPressed: onRemoveFavorite,
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFFE44875),
+                        minimumSize: const Size(48, 48),
                       ),
+                      icon: const Icon(Icons.favorite_rounded, size: 22),
                     ),
                   ),
                 ],
               ),
             ),
-
-            // ── Text Details ──
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 2, 10, 10),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      height: 1.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF201A2D),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'เจ้าของ: ${item.ownerName}',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 11,
-                      color: Colors.white.withValues(alpha: 0.85),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.storefront_outlined,
+                        size: 14,
+                        color: Color(0xFF82798E),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          item.ownerName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 11,
+                            color: Color(0xFF71677E),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

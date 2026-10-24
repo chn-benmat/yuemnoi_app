@@ -9,92 +9,99 @@ class ProfileHeader extends StatelessWidget {
   final String displayName;
   final String? avatarUrl;
   final VoidCallback? onProfileTap;
+  final bool isGuest;
 
   const ProfileHeader({
     super.key,
     required this.displayName,
     required this.avatarUrl,
     this.onProfileTap,
+    this.isGuest = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
 
-    return Material(
-      color: AppColors.primaryColor,
-      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onProfileTap,
-        splashColor: Colors.white.withValues(alpha: 0.16),
-        highlightColor: Colors.white.withValues(alpha: 0.08),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(20, topPadding + 20, 20, 28),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.24),
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppColors.primaryColor,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF6B00B8),
+            AppColors.primaryColor,
+            Color(0xFF8618E2),
+          ],
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, topPadding + 12, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onProfileTap,
+            child: Row(
+              children: [
+                if (isGuest)
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white38),
+                    ),
+                    child: const Icon(
+                      Icons.person_outline_rounded,
+                      color: Colors.white,
+                      size: 34,
+                    ),
+                  )
+                else
+                  ProfileAvatar(avatarUrl: avatarUrl, displayName: displayName),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isGuest ? 'เข้าสู่ระบบ / ลงทะเบียน' : 'ดูโปรไฟล์',
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 13,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: ProfileAvatar(
-                  avatarUrl: avatarUrl,
-                  displayName: displayName,
-                ),
-              ),
-              const SizedBox(width: 18),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      displayName,
-                      style: const TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        height: 1.25,
-                        color: Colors.white,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'ดูโปรไฟล์',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: Colors.white70,
-                          size: 16,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
+                if (!isGuest)
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.white70,
+                    size: 16,
+                  ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -172,25 +179,23 @@ class ProfileQuickActionsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: const BorderSide(color: Color(0xFFE8DDF3)),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: items
-            .map((item) => Expanded(child: ProfileQuickActionItem(data: item)))
-            .toList(),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: items
+              .map(
+                (item) => Expanded(child: ProfileQuickActionItem(data: item)),
+              )
+              .toList(),
+        ),
       ),
     );
   }
@@ -216,66 +221,80 @@ class ProfileQuickActionItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: data.onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3E8FF),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Center(
-              child: data.imageAsset != null
-                  ? Image.asset(
-                      data.imageAsset!,
-                      width: 28,
-                      height: 28,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) {
-                        if (data.imageAsset == 'assets/icons/calendar.png') {
-                          return Image.asset(
-                            'assets/icons/calender.png',
-                            width: 28,
-                            height: 28,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) => Icon(
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: data.onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFF6EEFF), Color(0xFFEBD9FF)],
+                  ),
+                  border: Border.all(color: const Color(0xFFE2CCF8)),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: data.imageAsset != null
+                      ? Image.asset(
+                          data.imageAsset!,
+                          width: 28,
+                          height: 28,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) {
+                            if (data.imageAsset ==
+                                'assets/icons/calendar.png') {
+                              return Image.asset(
+                                'assets/icons/calender.png',
+                                width: 28,
+                                height: 28,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) => Icon(
+                                  data.icon ?? Icons.category_rounded,
+                                  color: AppColors.primaryColor,
+                                  size: 22,
+                                ),
+                              );
+                            }
+                            return Icon(
                               data.icon ?? Icons.category_rounded,
                               color: AppColors.primaryColor,
                               size: 22,
-                            ),
-                          );
-                        }
-                        return Icon(
+                            );
+                          },
+                        )
+                      : Icon(
                           data.icon ?? Icons.category_rounded,
                           color: AppColors.primaryColor,
                           size: 22,
-                        );
-                      },
-                    )
-                  : Icon(
-                      data.icon ?? Icons.category_rounded,
-                      color: AppColors.primaryColor,
-                      size: 22,
-                    ),
-            ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                data.label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF40324F),
+                  height: 1.5,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            data.label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontSize: 10,
-              color: AppColors.labelColor,
-              height: 1.3,
-            ),
-            maxLines: 2,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -311,18 +330,13 @@ class ProfileSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        side: const BorderSide(color: Color(0xFFEDE8F2)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -332,13 +346,15 @@ class ProfileSection extends StatelessWidget {
               children: [
                 Icon(icon, color: AppColors.primaryColor, size: 20),
                 const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A2E),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1A2E),
+                    ),
                   ),
                 ),
               ],
@@ -364,7 +380,7 @@ class ProfileMenuItem extends StatelessWidget {
           onTap: data.onTap,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
                 Icon(data.icon, size: 18, color: AppColors.fieldIconColor),
@@ -379,11 +395,12 @@ class ProfileMenuItem extends StatelessWidget {
                     ),
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.hintTextColor,
-                  size: 20,
-                ),
+                if (data.onTap != null)
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.hintTextColor,
+                    size: 20,
+                  ),
               ],
             ),
           ),

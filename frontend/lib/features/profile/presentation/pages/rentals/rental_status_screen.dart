@@ -227,7 +227,6 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                   _buildTopControlDeck(
                     rentingCount: rentingItems.length,
                     lendingCount: lendingItems.length,
-                    isLoading: isLoading,
                   ),
 
                   // ── 2. Content Body ──
@@ -279,7 +278,6 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
   Widget _buildTopControlDeck({
     required int rentingCount,
     required int lendingCount,
-    required bool isLoading,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -328,15 +326,7 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                       ),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.refresh_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                    tooltip: 'รีเฟรชข้อมูล',
-                    onPressed: isLoading ? null : _loadData,
-                  ),
+                  const SizedBox(width: 48),
                 ],
               ),
             ),
@@ -397,7 +387,7 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 8.5),
+        padding: const EdgeInsets.symmetric(vertical: 13),
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
