@@ -887,11 +887,6 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                               ),
                               shape: BoxShape.circle,
                             ),
-                            decoration: InputDecoration(
-                              isDense: true,
-                              hintText: widget.placeNameHint,
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
                             child: const Icon(
                               Icons.location_on_rounded,
                               color: AppColors.primaryColor,
@@ -908,9 +903,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF1E2022),
                               ),
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 isDense: true,
-                                hintText: 'ชื่อสถานที่นัดพบ...',
+                                hintText: widget.placeNameHint,
                                 border: InputBorder.none,
                                 contentPadding: EdgeInsets.zero,
                               ),
@@ -927,9 +922,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                             ),
                         ],
                       ),
-
                       const SizedBox(height: 6),
-
                       if (_selectedOriginalName?.isNotEmpty ?? false)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 6),
@@ -991,20 +984,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                             Icons.check_circle_rounded,
                             size: 20,
                           ),
-                        ),
-                        onPressed: _isReverseGeocoding
-                            ? null
-                            : _onConfirmLocation,
-                        icon: const Icon(Icons.check_circle_rounded, size: 20),
-                        label: Text(
-                          widget.confirmLabel,
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.bold,
-                          label: const Text(
-                            'ยืนยันสถานที่นัดพบนี้',
-                            style: TextStyle(
+                          label: Text(
+                            widget.confirmLabel,
+                            style: const TextStyle(
                               fontFamily: AppTextStyles.fontFamily,
                               fontSize: 15.5,
                               fontWeight: FontWeight.bold,
