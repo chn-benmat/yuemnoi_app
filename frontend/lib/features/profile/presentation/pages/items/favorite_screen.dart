@@ -44,7 +44,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
     return BlocProvider.value(
       value: _cubit,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F7F9),
+        backgroundColor: const Color(0xFFF7F6FA),
         appBar: AppBar(
           backgroundColor: AppColors.primaryColor,
           foregroundColor: Colors.white,
@@ -59,6 +59,10 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
           ),
           centerTitle: true,
           elevation: 0,
+          toolbarHeight: 64,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+          ),
         ),
         body: BlocBuilder<FavoriteCubit, FavoriteState>(
           builder: (context, state) {
@@ -76,15 +80,18 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
               color: AppColors.primaryColor,
               onRefresh: () async => _cubit.loadFavorites(),
               child: GridView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 20,
                 ),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
+                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 280,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 0.85,
+                  mainAxisExtent:
+                      270 +
+                      (MediaQuery.textScalerOf(context).scale(14) - 14) * 4,
                 ),
                 itemCount: items.length,
                 itemBuilder: (context, index) {

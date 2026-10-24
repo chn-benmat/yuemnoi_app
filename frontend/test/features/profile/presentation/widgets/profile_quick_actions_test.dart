@@ -29,7 +29,7 @@ void main() {
         ),
         const ProfileQuickActionData(
           icon: Icons.calendar_today_outlined,
-          imageAsset: 'assets/icons/calendar.png',
+          imageAsset: 'assets/icons/calender.png',
           label: 'ประวัติการเช่า',
         ),
       ];
@@ -70,7 +70,7 @@ void main() {
       );
       expect(
         (imageWidgets[4].image as AssetImage).assetName,
-        'assets/icons/calendar.png',
+        'assets/icons/calender.png',
       );
     },
   );

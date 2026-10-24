@@ -273,6 +273,7 @@ Base path คือ `/api` เส้นทางทั้งหมดอยู�
 Migration ย้ายการรักษา `conversation_tb.last_message` มาอยู่ฝั่งฐานข้อมูลพร้อมข้อความตอบกลับ และป้องกัน client รุ่นเดิมเขียนทับด้วยข้อความขาเข้า ตรวจแบบ rollback ด้วย `../supabase/tests/item_auto_reply.sql` โดยไม่มีข้อความทดสอบค้างในห้องจริง
 
 - รายการสินค้าใช้ query `search` และ `category`; ยังไม่มี pagination แบบ `limit` / `offset` ใน handler ปัจจุบัน
+- รายละเอียด `GET /api/items/:id` ส่ง `owner_name` โดยใช้ `display_name` ของเจ้าของจาก `profiles.public_profile_v` และใช้ “ผู้ใช้งาน” เมื่อยังไม่ได้ตั้งชื่อ หน้าอุปกรณ์ที่ถูกใจใช้ข้อมูลนี้แสดงชื่อบัญชีเจ้าของแต่ละชิ้น
 - สร้าง item รองรับ JSON หรือ multipart; field รูปชื่อ `images` ไม่เกิน **5 รูป**, รูปละ **5 MiB**, JPEG / PNG / WebP
 - รูปโปรไฟล์ใช้ multipart field `image` ไม่เกิน **5 MiB**
 - รูปสินค้าใหม่เก็บที่ `item_bk/<owner_user_id>/<item_id>/<filename>` หลังสร้างไอดีสินค้า ส่วนรูปโปรไฟล์ทั้งตอนสมัครและแก้ไขเก็บที่ `profile_bk/<user_id>/<filename>`; URL และการลบรูปเดิมยังอ้างอิง path ที่บันทึกไว้
