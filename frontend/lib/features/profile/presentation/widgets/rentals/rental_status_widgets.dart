@@ -497,7 +497,7 @@ class _RentalStatusListState extends State<RentalStatusList> {
       borderRadius: BorderRadius.circular(20),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
         decoration: BoxDecoration(
           color: isSelected ? activeColor : Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -1086,10 +1086,13 @@ class RentalStatusCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    _buildStatusBadge(item),
                   ],
                 ),
+
+                if (!_isItemOverdue(item)) ...[
+                  const SizedBox(height: 12),
+                  _buildStatusBadge(item),
+                ],
 
                 // ── 2. Time Countdown Highlight (if active) ──
                 _buildTimeHighlightBox(item),

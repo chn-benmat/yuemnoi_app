@@ -185,7 +185,9 @@ func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domai
 	_ = schemaDatabase(r.client, profilesSchema).From("public_profile_v").Select("display_name,user_image_url,is_verified").Eq("user_id", item.UserID).ExecuteWithContext(ctx, &profiles)
 	item.OwnerName = "ผู้ใช้งาน"
 	if len(profiles) > 0 {
-		item.OwnerName = profiles[0].DisplayName
+		if name := strings.TrimSpace(profiles[0].DisplayName); name != "" {
+			item.OwnerName = name
+		}
 		item.OwnerAvatarURL = profiles[0].UserImageURL
 		item.IsVerified = profiles[0].IsVerified
 	}

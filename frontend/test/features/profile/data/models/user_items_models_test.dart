@@ -82,15 +82,29 @@ void main() {
   });
 
   group('FavoriteItemModel', () {
-    test('keeps caller owner names separate from item payloads', () {
+    test('keeps image parsing and explicit owner name overrides', () {
       final model = FavoriteItemModel.fromJson({
-        'owner_name': 'Ignored payload name',
+        'owner_name': 'Payload name',
         'item_image_url': [null, '', ' https://img.com/item.jpg '],
-      });
+      }, ownerName: ' Explicit name ');
       expect(model.id, 0);
-      expect(model.ownerName, 'เจ้าของอุปกรณ์');
+      expect(model.ownerName, 'Explicit name');
       expect(model.imageUrl, 'https://img.com/item.jpg');
-      expect(FavoriteItemModel.fromJson({}, ownerName: '').ownerName, '');
+    });
+
+    test('uses the account name supplied by the item API', () {
+      final model = FavoriteItemModel.fromJson({
+        'id': 20,
+        'owner_name': '  Alice Camera  ',
+      });
+      expect(model.toEntity().ownerName, 'Alice Camera');
+    });
+
+    test('handles an unavailable account name', () {
+      expect(
+        FavoriteItemModel.fromJson({'owner_name': '  '}).ownerName,
+        'ไม่พบชื่อเจ้าของ',
+      );
     });
 
     test('fromJson parses correctly and converts toEntity', () {
