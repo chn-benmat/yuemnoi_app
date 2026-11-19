@@ -25,7 +25,8 @@ import 'home_feed_view.dart';
 
 class HomeScreen extends StatelessWidget {
   final int initialIndex;
-  const HomeScreen({super.key, this.initialIndex = 0});
+  final String? initialMessage;
+  const HomeScreen({super.key, this.initialIndex = 0, this.initialMessage});
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +58,7 @@ class HomeScreen extends StatelessWidget {
       child: _HomeScreenContent(
         key: ValueKey('home_content_$initialIndex'),
         initialIndex: initialIndex,
+        initialMessage: initialMessage,
       ),
     );
   }
@@ -64,7 +66,12 @@ class HomeScreen extends StatelessWidget {
 
 class _HomeScreenContent extends StatefulWidget {
   final int initialIndex;
-  const _HomeScreenContent({super.key, this.initialIndex = 0});
+  final String? initialMessage;
+  const _HomeScreenContent({
+    super.key,
+    this.initialIndex = 0,
+    this.initialMessage,
+  });
 
   @override
   State<_HomeScreenContent> createState() => _HomeScreenContentState();
@@ -78,6 +85,17 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     super.initState();
     _selectedIndex = widget.initialIndex;
     _checkNotifications();
+    _showInitialMessage(widget.initialMessage);
+  }
+
+  void _showInitialMessage(String? message) {
+    if (message == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    });
   }
 
   Future<void> _checkNotifications() async {
@@ -87,7 +105,12 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
   @override
   void didUpdateWidget(covariant _HomeScreenContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialIndex != widget.initialIndex) {
+    if (oldWidget.initialMessage != widget.initialMessage) {
+      _showInitialMessage(widget.initialMessage);
+    }
+    if (oldWidget.initialIndex != widget.initialIndex ||
+        (widget.initialMessage != null &&
+            oldWidget.initialMessage != widget.initialMessage)) {
       setState(() {
         _selectedIndex = widget.initialIndex;
       });

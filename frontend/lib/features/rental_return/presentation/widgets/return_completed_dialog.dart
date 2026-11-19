@@ -61,7 +61,7 @@ class ReturnCompletedDialog extends StatelessWidget {
             const SizedBox(height: 18),
 
             const Text(
-              'คืนอุปกรณ์สำเร็จเรียบร้อย!',
+              'คืนอุปกรณ์สำเร็จ!',
               style: TextStyle(
                 fontFamily: AppTextStyles.fontFamily,
                 fontSize: 20,

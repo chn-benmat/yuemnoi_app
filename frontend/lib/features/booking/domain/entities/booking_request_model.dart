@@ -181,6 +181,8 @@ class BookingRequestData {
       'location': location,
       'locationNote': locationNote,
       'locationAddress': locationAddress,
+      'latitude': latitude,
+      'longitude': longitude,
       'totalPrice': totalPrice,
       'paymentMethod': paymentMethod,
       'conversationId': conversationId,
@@ -247,7 +249,7 @@ $metaStartTag$jsonString$metaEndTag''';
           );
 
           final resolvedOriginalMessageId =
-              (map['originalMessageId'] as String?) ?? messageId;
+              messageId ?? (map['originalMessageId'] as String?);
 
           return BookingRequestData(
             item: item,
@@ -262,9 +264,8 @@ $metaStartTag$jsonString$metaEndTag''';
             locationNote:
                 map['locationNote'] as String? ?? 'เลือกโดยผู้ปล่อยเช่า',
             locationAddress: map['locationAddress'] as String?,
-            // พิกัดเป็นข้อมูลของประกาศอุปกรณ์ ไม่อ่านจากข้อมูลคำขอเช่าเก่า
-            latitude: null,
-            longitude: null,
+            latitude: (map['latitude'] as num?)?.toDouble(),
+            longitude: (map['longitude'] as num?)?.toDouble(),
             conversationId: map['conversationId'] as String?,
             ownerId: map['ownerId'] as String?,
             originalMessageId: resolvedOriginalMessageId,

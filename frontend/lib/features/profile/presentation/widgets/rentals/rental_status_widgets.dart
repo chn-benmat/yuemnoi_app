@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
-import '../../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/widgets/rental_countdown_timer_widget.dart';
 import '../../../../../core/widgets/skeleton_shimmer.dart';
@@ -667,26 +666,7 @@ class _RentalStatusListState extends State<RentalStatusList> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 DateTime _computeEffectiveRentalEnd(RentalStatusItemData item) {
-  final initialEnd = item.endDate;
-  final handoverStart = BookingConfirmationTracker.getHandoverStartTimeSync(
-    bookingId: item.bookingId,
-  );
-
-  Duration duration = const Duration(days: 1);
-  if (item.startDate != null && item.endDate != null) {
-    final diff = item.endDate!.difference(item.startDate!);
-    if (diff > Duration.zero) {
-      duration = diff;
-    }
-  }
-
-  final now = DateTime.now();
-
-  if (handoverStart != null) {
-    return handoverStart.add(duration);
-  }
-
-  return initialEnd ?? now.add(duration);
+  return item.endDate?.toLocal() ?? DateTime.now();
 }
 
 class RentalStatusCard extends StatelessWidget {

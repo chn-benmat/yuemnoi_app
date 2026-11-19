@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 
@@ -33,5 +34,26 @@ void main() {
     expect(booking.item.imageUrl, 'override');
     expect(booking.item.hourlyRate, 100.0);
     expect(booking.originalMessageId, 'message');
+  });
+
+  test('offer retains selected coordinates and uses actual message id', () {
+    final data = BookingRequestData(
+      item: BookingItemInfo.defaultMockItem,
+      startDate: DateTime(2026, 11, 19),
+      endDate: DateTime(2026, 11, 20),
+      startTime: const TimeOfDay(hour: 9, minute: 0),
+      endTime: const TimeOfDay(hour: 10, minute: 0),
+      location: 'จุดนัดพบ',
+      latitude: 13.8,
+      longitude: 100.5,
+      originalMessageId: 'old',
+    );
+    final restored = BookingRequestData.fromChatMessage(
+      data.toChatMessagePayload(),
+      messageId: 'actual',
+    )!;
+    expect(restored.latitude, 13.8);
+    expect(restored.longitude, 100.5);
+    expect(restored.originalMessageId, 'actual');
   });
 }
