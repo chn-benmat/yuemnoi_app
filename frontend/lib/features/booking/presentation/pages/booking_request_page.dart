@@ -62,8 +62,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
           longitude: 100.4341077,
         );
     _selectedRentalType = _bookingData.rentalType;
-    _hasSelectedLocation =
-        _bookingData.latitude != null && _bookingData.longitude != null;
+    _hasSelectedLocation = _bookingData.location.trim().isNotEmpty;
     _locationAddress = _bookingData.locationAddress;
   }
 

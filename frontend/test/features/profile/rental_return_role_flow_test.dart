@@ -96,6 +96,64 @@ void main() {
       },
     );
 
+    testWidgets('submitted evidence cannot be sent again after reload', (
+      tester,
+    ) async {
+      final submitted = RentalReturnSession.createMockSession().copyWith(
+        step: RentalReturnStep.lenderInspecting,
+      );
+      when(
+        () => mockRepository.getReturnSession(any()),
+      ).thenAnswer((_) async => submitted);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RentalReturnPage(isLender: false, repository: mockRepository),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      final button = tester.widget<ElevatedButton>(
+        find.ancestor(
+          of: find.text('ส่งภาพเรียบร้อยแล้ว'),
+          matching: find.byType(ElevatedButton),
+        ),
+      );
+      expect(button.onPressed, isNull);
+    });
+
+    testWidgets('lender sees completion after polling while QR is open', (
+      tester,
+    ) async {
+      final initial = RentalReturnSession.createMockSession().copyWith(
+        step: RentalReturnStep.merchantQrReady,
+        merchantQrToken: 'return-token',
+        merchantOtp: '123456',
+      );
+      var completed = false;
+      when(() => mockRepository.getReturnSession(any())).thenAnswer(
+        (_) async => completed
+            ? initial.copyWith(step: RentalReturnStep.completed)
+            : initial,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RentalReturnPage(isLender: true, repository: mockRepository),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text('เปิดแสดง QR Code ให้ลูกค้าสแกน'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('QR Code คืนอุปกรณ์'), findsOneWidget);
+      completed = true;
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('QR Code คืนอุปกรณ์'), findsNothing);
+      expect(find.text('คืนอุปกรณ์สำเร็จเรียบร้อย!'), findsOneWidget);
+    });
+
     testWidgets(
       'ProfileScreen safety section does NOT contain test return item',
       (tester) async {

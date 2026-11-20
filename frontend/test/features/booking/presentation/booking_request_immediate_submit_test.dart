@@ -4,10 +4,47 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/booking/presentation/pages/booking_request_page.dart';
+import 'package:frontend/features/booking/presentation/widgets/booking_location_card.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 void main() {
   setUpAll(() => initializeDateFormatting('th'));
+
+  testWidgets(
+    'editing keeps the existing location without requiring coordinates',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(600, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final data = BookingRequestData(
+        item: BookingItemInfo.defaultMockItem,
+        startDate: DateTime(2026, 11, 19),
+        endDate: DateTime(2026, 11, 20),
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 10, minute: 0),
+        location: 'สถานที่เดิม',
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BookingRequestPage(initialData: data, isEditMode: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final location = tester.widget<BookingLocationCard>(
+        find.byType(BookingLocationCard),
+      );
+      expect(location.location, 'สถานที่เดิม');
+      expect(location.isEditable, isFalse);
+      await tester.tap(
+        find.byKey(const ValueKey('submit-booking-request-button')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('กรุณาเลือกสถานที่นัดพบ'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('confirm-send-booking-request-button')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('confirming a rental returns to chat while saving is pending', (
     tester,

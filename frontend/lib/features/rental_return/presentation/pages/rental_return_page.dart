@@ -14,6 +14,7 @@ import '../widgets/lender_inspection_view.dart';
 import '../widgets/live_camera_capture_sheet.dart';
 import '../widgets/merchant_qr_dialog.dart';
 import '../widgets/rental_time_card.dart';
+import '../widgets/return_completed_dialog.dart';
 import '../widgets/renter_qr_scanner_sheet.dart';
 import '../../domain/repositories/rental_return_repository.dart';
 import '../widgets/urgent_return_alarm_dialog.dart';
@@ -52,6 +53,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
   bool _didShowAlarm = false;
   bool _didShowSuccess = false;
   Timer? _refreshTimer;
+  bool _qrOpen = false;
 
   @override
   void initState() {
@@ -78,6 +80,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
 
   void _openMerchantQrModal(BuildContext context, RentalReturnState state) {
     if (state.session.merchantQrToken == null) return;
+    _qrOpen = true;
     MerchantQrDialog.show(
       context: context,
       qrData: state.session.merchantQrToken!,
@@ -90,7 +93,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
           _openMerchantQrModal(context, cubit.state);
         }
       },
-    );
+    ).whenComplete(() => _qrOpen = false);
   }
 
   @override
@@ -125,11 +128,8 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
           );
         }
 
-        if (state.session.step == RentalReturnStep.completed &&
-            state.successMessage != null &&
-            !_didShowSuccess) {
-          _didShowSuccess = true;
-          unawaited(_leaveReturnFlow(state));
+        if (state.session.step == RentalReturnStep.completed) {
+          _showCompletion(state);
         }
       },
       builder: (context, state) {
@@ -153,6 +153,13 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
           );
         }
 
+        if (state.status == RentalReturnStatus.loaded &&
+            state.session.step == RentalReturnStep.completed &&
+            !_didShowSuccess) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showCompletion(state);
+          });
+        }
         final session = state.session;
         final isRenter = state.isRenter;
         final isCompleted = session.step == RentalReturnStep.completed;
@@ -186,6 +193,8 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
               children: [
                 // ข้อมูลอุปกรณ์และกำหนดเวลาคืน (อ่านง่าย)
                 RentalTimeCard(session: session),
+
+                _ReturnProgress(session: session),
 
                 // มุมมองตามบทบาท
                 if (isRenter) ...[
@@ -291,18 +300,104 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
     );
   }
 
-  Future<void> _leaveReturnFlow(RentalReturnState state) async {
-    _refreshTimer?.cancel();
-    if (state.isRenter) {
-      await AppRoutes.openReview(
-        context,
-        itemName: state.session.itemName,
-        itemId: state.session.itemId,
-        ownerName: state.session.lenderName,
-        ownerId: state.session.lenderId,
-        itemImageUrl: state.session.itemImageUrl,
-      );
+  void _showCompletion(RentalReturnState state) {
+    if (_didShowSuccess) return;
+    _didShowSuccess = true;
+    if (!state.isRenter && _qrOpen) {
+      Navigator.of(context, rootNavigator: true).pop();
+      _qrOpen = false;
     }
-    if (mounted) AppRoutes.goToHome(context);
+    unawaited(
+      ReturnCompletedDialog.show(
+        context: context,
+        session: state.session,
+        onDismiss: _leaveReturnFlow,
+      ),
+    );
+  }
+
+  void _leaveReturnFlow() {
+    _refreshTimer?.cancel();
+    if (mounted) AppRoutes.goToHomeAfterRental(context);
+  }
+}
+
+class _ReturnProgress extends StatelessWidget {
+  const _ReturnProgress({required this.session});
+  final RentalReturnSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final step = switch (session.step) {
+      RentalReturnStep.awaitingHandover ||
+      RentalReturnStep.lenderInspecting => 1,
+      RentalReturnStep.merchantQrReady || RentalReturnStep.completed => 2,
+      _ => 0,
+    };
+    const labels = ['ตรวจสภาพ', 'ตรวจรับคืน', 'ยืนยันคืน'];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++) ...[
+            if (i > 0)
+              Expanded(
+                child: Container(
+                  height: 1.5,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  color: i <= step
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFE2E8F0),
+                ),
+              ),
+            Column(
+              children: [
+                Container(
+                  width: 22,
+                  height: 22,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: i == step
+                        ? AppColors.primaryColor
+                        : i < step
+                        ? const Color(0xFF0F172A)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: i < step
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 13,
+                          color: Colors.white,
+                        )
+                      : Text(
+                          '${i + 1}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: i == step
+                                ? Colors.white
+                                : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  labels[i],
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 11,
+                    fontWeight: i == step ? FontWeight.w700 : FontWeight.w500,
+                    color: i == step
+                        ? AppColors.primaryColor
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }

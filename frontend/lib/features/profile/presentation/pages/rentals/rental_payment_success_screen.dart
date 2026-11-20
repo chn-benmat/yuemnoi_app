@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -6,11 +7,42 @@ import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 
 /// หน้าจอ "ชำระเงินเสร็จสิ้น" เมื่อกระบวนการส่งมอบและยืนยันรหัส PIN / QR Code สำเร็จทั้งสองฝั่ง
-class RentalPaymentSuccessScreen extends StatelessWidget {
-  const RentalPaymentSuccessScreen({super.key});
+class RentalPaymentSuccessScreen extends StatefulWidget {
+  const RentalPaymentSuccessScreen({super.key, this.returnToChat = false});
 
-  void _returnToHome(BuildContext context) {
-    AppRoutes.goToHome(context);
+  final bool returnToChat;
+
+  @override
+  State<RentalPaymentSuccessScreen> createState() =>
+      _RentalPaymentSuccessScreenState();
+}
+
+class _RentalPaymentSuccessScreenState
+    extends State<RentalPaymentSuccessScreen> {
+  Timer? _redirectTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.returnToChat) {
+      _redirectTimer = Timer(const Duration(seconds: 2), _leave);
+    }
+  }
+
+  @override
+  void dispose() {
+    _redirectTimer?.cancel();
+    super.dispose();
+  }
+
+  void _leave() {
+    if (!mounted) return;
+    _redirectTimer?.cancel();
+    if (widget.returnToChat) {
+      AppRoutes.goToChatAfterHandover(context);
+    } else {
+      AppRoutes.goToHome(context);
+    }
   }
 
   @override
@@ -19,7 +51,7 @@ class RentalPaymentSuccessScreen extends StatelessWidget {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        _returnToHome(context);
+        _leave();
       },
       child: Scaffold(
         backgroundColor: Colors.white,
@@ -57,8 +89,10 @@ class RentalPaymentSuccessScreen extends StatelessWidget {
                 const SizedBox(height: 36),
 
                 // ── Title & Subtitle ──
-                const Text(
-                  'ชำระเงินเสร็จสิ้น',
+                Text(
+                  widget.returnToChat
+                      ? 'เริ่มเช่าอุปกรณ์สำเร็จ'
+                      : 'ชำระเงินเสร็จสิ้น',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
@@ -68,8 +102,10 @@ class RentalPaymentSuccessScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'ยินดีด้วยคุณชำระเงินเสร็จสิ้นสำเร็จ!',
+                Text(
+                  widget.returnToChat
+                      ? 'ยืนยันการรับมอบอุปกรณ์เรียบร้อยแล้ว'
+                      : 'ยินดีด้วยคุณชำระเงินเสร็จสิ้นสำเร็จ!',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
@@ -85,7 +121,7 @@ class RentalPaymentSuccessScreen extends StatelessWidget {
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: () => _returnToHome(context),
+                    onPressed: _leave,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryColor,
                       foregroundColor: Colors.white,
@@ -97,8 +133,10 @@ class RentalPaymentSuccessScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(28),
                       ),
                     ),
-                    child: const Text(
-                      'กลับสู่หน้าหลัก',
+                    child: Text(
+                      widget.returnToChat
+                          ? 'กลับสู่หน้าแชท'
+                          : 'กลับสู่หน้าหลัก',
                       style: TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
                         fontSize: 16,

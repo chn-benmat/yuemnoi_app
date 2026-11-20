@@ -119,6 +119,11 @@ class _ChatItemOwnershipUpdated extends ChatDetailEvent {
 }
 
 class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
+  static const _chatConnectionError =
+      'แชตไม่สามารถอัปเดตข้อความอัตโนมัติได้ กรุณาตรวจสอบอินเทอร์เน็ต '
+      'แล้วออกจากแชตและเปิดใหม่ หากกำลังทำรายการเช่า '
+      'กรุณาตรวจสอบสถานะการเช่าก่อนกดยืนยันอีกครั้ง';
+
   ChatDetailBloc({
     required StreamMessagesUseCase streamMessages,
     required SendChatMessageUseCase sendMessage,
@@ -274,9 +279,9 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
             add(ChatMessagesUpdated(messages));
           }
         },
-        onError: (error) {
+        onError: (_) {
           if (_isCurrentSubscription(event.conversationId, userId, epoch)) {
-            add(ChatMessagesLoadFailed(error.toString()));
+            add(const ChatMessagesLoadFailed(_chatConnectionError));
           }
         },
       );
@@ -369,11 +374,11 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
           _roomBroadcastChannel?.subscribe();
         } catch (_) {}
       }
-    } catch (e) {
+    } catch (_) {
       emit(
         state.copyWith(
           status: ChatDetailStatus.failure,
-          errorMessage: e.toString(),
+          errorMessage: _chatConnectionError,
         ),
       );
     }
