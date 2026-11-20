@@ -165,12 +165,21 @@ abstract final class AppRoutes {
         GoRoute(
           path: home,
           pageBuilder: (context, state) {
-            final initialIndex = (state.extra as int?) ?? 0;
+            final extra = state.extra;
+            final initialIndex = extra is int
+                ? extra
+                : extra is Map
+                ? (extra['initialIndex'] as int? ?? 0)
+                : 0;
+            final message = extra is Map ? extra['message'] as String? : null;
             return CustomTransitionPage<void>(
               key: state.pageKey,
               child: HomeScreen(
-                key: ValueKey('home_screen_$initialIndex'),
+                key: ValueKey(
+                  'home_screen_${initialIndex}_${extra is Map ? extra['navigationId'] : ''}',
+                ),
                 initialIndex: initialIndex,
+                initialMessage: message,
               ),
               transitionDuration: const Duration(milliseconds: 600),
               transitionsBuilder:
@@ -710,6 +719,17 @@ abstract final class AppRoutes {
       Navigator.of(context).popUntil((route) => route.isFirst);
     }
     context.go(home, extra: initialIndex);
+  }
+
+  static void goToHomeAfterRental(BuildContext context) {
+    GoRouter.of(context).go(home, extra: 0);
+  }
+
+  static void goToChatAfterHandover(BuildContext context) {
+    GoRouter.of(context).go(
+      home,
+      extra: {'initialIndex': 1, 'message': 'เริ่มเช่าอุปกรณ์เรียบร้อยแล้ว'},
+    );
   }
 
   static void openNotification(BuildContext context) {

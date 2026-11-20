@@ -158,7 +158,14 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
 
   /// กดส่งผลตรวจสภาพสดไปยังร้านค้า
   Future<void> submitLiveConditionVerification() async {
-    if (!state.isRenter || state.isSubmitting) return;
+    if (!state.isRenter ||
+        state.isSubmitting ||
+        ![
+          RentalReturnStep.inProgress,
+          RentalReturnStep.nearReturnAlert,
+          RentalReturnStep.liveVerification,
+        ].contains(state.session.step))
+      return;
     if (!state.session.hasAllMandatoryPhotos) {
       emit(state.copyWith(errorMessage: 'กรุณาถ่ายภาพให้ครบทั้ง 3 มุม'));
       return;

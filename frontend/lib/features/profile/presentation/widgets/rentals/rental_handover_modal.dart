@@ -198,6 +198,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   final TextEditingController _pinController = TextEditingController();
   String? _pinErrorMessage;
   bool _isSubmitting = false;
+  bool _handoverCompleted = false;
 
   Timer? _statusPollTimer;
   RealtimeChannel? _realtimeChannel;
@@ -410,6 +411,8 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   }
 
   void _onHandoverCompleted() {
+    if (_handoverCompleted || !mounted) return;
+    _handoverCompleted = true;
     _statusPollTimer?.cancel();
     _realtimeChannel?.unsubscribe();
     _clearSavedStep();
@@ -428,7 +431,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
     nav.push(
       MaterialPageRoute<void>(
         settings: const RouteSettings(name: AppRoutes.rentalPaymentSuccess),
-        builder: (_) => const RentalPaymentSuccessScreen(),
+        builder: (_) => RentalPaymentSuccessScreen(returnToChat: !_isOwner),
       ),
     );
   }

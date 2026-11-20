@@ -14,6 +14,32 @@ class _Send extends Mock implements SendChatMessageUseCase {}
 class _Stream extends Mock implements StreamMessagesUseCase {}
 
 void main() {
+  test(
+    'chat connection failure explains what to do without technical error',
+    () async {
+      final stream = _Stream();
+      final controller = StreamController<List<ChatMessage>>();
+      when(() => stream('room')).thenAnswer((_) => controller.stream);
+      final bloc = ChatDetailBloc(streamMessages: stream, sendMessage: _Send());
+      addTearDown(() async {
+        await bloc.close();
+        await controller.close();
+      });
+
+      bloc.add(const ChatMessagesSubscriptionRequested('room'));
+      await pumpEventQueue();
+      controller.addError(Exception('RealtimeSubscribeException code 1006'));
+      await pumpEventQueue();
+
+      expect(bloc.state.errorMessage, contains('ตรวจสอบอินเทอร์เน็ต'));
+      expect(bloc.state.errorMessage, contains('ตรวจสอบสถานะการเช่า'));
+      expect(
+        bloc.state.errorMessage,
+        isNot(contains('RealtimeSubscribeException')),
+      );
+    },
+  );
+
   test('server-normalized booking replaces optimistic card', () async {
     final send = _Send();
     when(

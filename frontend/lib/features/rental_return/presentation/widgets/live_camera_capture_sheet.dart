@@ -95,6 +95,11 @@ class LiveCameraCaptureSheet extends StatelessWidget {
       builder: (context, state) {
         final session = state.session;
         final cubit = context.read<RentalReturnCubit>();
+        final submitted = ![
+          RentalReturnStep.inProgress,
+          RentalReturnStep.nearReturnAlert,
+          RentalReturnStep.liveVerification,
+        ].contains(session.step);
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -200,7 +205,9 @@ class LiveCameraCaptureSheet extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: _CompactPhotoSlot(
                         photo: photo,
-                        onTap: () => _capturePhoto(context, photo.angleKey),
+                        onTap: submitted
+                            ? null
+                            : () => _capturePhoto(context, photo.angleKey),
                       ),
                     ),
                   );
@@ -226,18 +233,24 @@ class LiveCameraCaptureSheet extends StatelessWidget {
               _ChecklistTile(
                 title: 'เครื่องเปิดติดและทำงานได้ตามปกติ',
                 value: session.checklist['power_on'] ?? false,
-                onChanged: (val) => cubit.toggleChecklist('power_on', val),
+                onChanged: submitted
+                    ? null
+                    : (val) => cubit.toggleChecklist('power_on', val),
               ),
               _ChecklistTile(
                 title: 'ไม่มีรอยแตกร้าวหรือความเสียหายใหม่',
                 value: session.checklist['no_new_cracks'] ?? false,
-                onChanged: (val) => cubit.toggleChecklist('no_new_cracks', val),
+                onChanged: submitted
+                    ? null
+                    : (val) => cubit.toggleChecklist('no_new_cracks', val),
               ),
               _ChecklistTile(
                 title: 'อุปกรณ์เสริม สายชาร์จ และกล่องครบถ้วน',
                 value: session.checklist['accessories_complete'] ?? false,
-                onChanged: (val) =>
-                    cubit.toggleChecklist('accessories_complete', val),
+                onChanged: submitted
+                    ? null
+                    : (val) =>
+                          cubit.toggleChecklist('accessories_complete', val),
               ),
 
               const SizedBox(height: 14),
@@ -247,7 +260,7 @@ class LiveCameraCaptureSheet extends StatelessWidget {
                 width: double.infinity,
                 height: 44,
                 child: ElevatedButton.icon(
-                  onPressed: state.isSubmitting
+                  onPressed: state.isSubmitting || submitted
                       ? null
                       : () => cubit.submitLiveConditionVerification(),
                   icon: state.isSubmitting
@@ -267,6 +280,8 @@ class LiveCameraCaptureSheet extends StatelessWidget {
                   label: Text(
                     state.isSubmitting
                         ? 'กำลังส่งข้อมูล...'
+                        : submitted
+                        ? 'ส่งภาพเรียบร้อยแล้ว'
                         : 'ส่งภาพยืนยันให้ร้านค้า',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
@@ -294,7 +309,7 @@ class LiveCameraCaptureSheet extends StatelessWidget {
 
 class _CompactPhotoSlot extends StatelessWidget {
   final ReturnInspectionPhoto photo;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _CompactPhotoSlot({required this.photo, required this.onTap});
 
@@ -324,7 +339,9 @@ class _CompactPhotoSlot extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (hasImage && photo.localPath != null)
+                  if (photo.imageUrl != null && photo.imageUrl!.isNotEmpty)
+                    Image.network(photo.imageUrl!, fit: BoxFit.cover)
+                  else if (hasImage && photo.localPath != null)
                     (kIsWeb
                         ? Image.network(
                             photo.localPath!,
@@ -378,7 +395,7 @@ class _CompactPhotoSlot extends StatelessWidget {
                     ),
 
                   // ปุ่มถ่ายใหม่ขนาดเล็กเมื่อมีรูปแล้ว
-                  if (hasImage)
+                  if (hasImage && onTap != null)
                     Positioned(
                       bottom: 4,
                       right: 4,
@@ -423,7 +440,7 @@ class _CompactPhotoSlot extends StatelessWidget {
 class _ChecklistTile extends StatelessWidget {
   final String title;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   const _ChecklistTile({
     required this.title,
@@ -434,7 +451,7 @@ class _ChecklistTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => onChanged(!value),
+      onTap: onChanged == null ? null : () => onChanged!(!value),
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -445,7 +462,9 @@ class _ChecklistTile extends StatelessWidget {
               height: 22,
               child: Checkbox(
                 value: value,
-                onChanged: (v) => onChanged(v ?? false),
+                onChanged: onChanged == null
+                    ? null
+                    : (v) => onChanged!(v ?? false),
                 activeColor: AppColors.primaryColor,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(5),
