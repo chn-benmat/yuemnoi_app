@@ -13,6 +13,7 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../widgets/auth_divider.dart';
+import '../widgets/auth_inline_error.dart';
 import '../widgets/social_button.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -29,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _isGoogleLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -70,10 +72,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _showError(String message) {
-    if (!mounted) return;
-
-    showAppPopup(context, content: Text(message));
+  void _clearFormError() {
+    if (_errorMessage != null) setState(() => _errorMessage = null);
   }
 
   void _login() {
@@ -81,6 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    setState(() => _errorMessage = null);
     FocusScope.of(context).unfocus();
     context.read<AuthBloc>().add(
       AuthLoginRequested(
@@ -107,16 +108,19 @@ class _LoginScreenState extends State<LoginScreen> {
           setState(() {
             _isLoading = false;
             _isGoogleLoading = false;
+            _errorMessage = null;
           });
         } else if (state is LoginLoading) {
           setState(() {
             _isLoading = true;
             _isGoogleLoading = false;
+            _errorMessage = null;
           });
         } else if (state is GoogleLoginLoading) {
           setState(() {
             _isLoading = false;
             _isGoogleLoading = true;
+            _errorMessage = null;
           });
         } else if (state is LoginSuccess || state is GoogleLoginSuccess) {
           setState(() {
@@ -128,8 +132,8 @@ class _LoginScreenState extends State<LoginScreen> {
           setState(() {
             _isLoading = false;
             _isGoogleLoading = false;
+            _errorMessage = userFriendlyErrorMessage(state.message);
           });
-          _showError(state.message);
         }
       },
       child: Scaffold(
@@ -188,6 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   hintText: 'name@exemple.com',
                   prefixIcon: Icons.email_outlined,
                   controller: _emailController,
+                  onChanged: (_) => _clearFormError(),
                   keyboardType: TextInputType.emailAddress,
                   validator: AppFormValidators.email(),
                 ),
@@ -198,6 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: Icons.lock_outline_rounded,
                   obscureText: _obscurePassword,
                   controller: _passwordController,
+                  onChanged: (_) => _clearFormError(),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword
@@ -241,6 +247,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   isLoading: _isLoading,
                   onPressed: _login,
                 ),
+                const SizedBox(height: 12),
+                AuthInlineError(message: _errorMessage),
                 const SizedBox(height: 32),
                 const AuthDivider(),
                 const SizedBox(height: 32),

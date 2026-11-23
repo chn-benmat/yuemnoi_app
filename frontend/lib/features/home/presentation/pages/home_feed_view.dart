@@ -114,10 +114,12 @@ class _HomeFeedViewState extends State<HomeFeedView> {
               return _buildFeedContent(null);
             }
             if (state is HomeError) {
-              return _HomeErrorView(
-                message: state.message,
-                onRetry: () =>
-                    context.read<HomeBloc>().add(const LoadHomeFeedStarted()),
+              return _buildFeedContent(
+                null,
+                errorMessage: state.message,
+                onRetry: () => context.read<HomeBloc>().add(
+                  const LoadHomeFeedStarted(),
+                ),
               );
             }
             if (state is HomeLoaded) {
@@ -130,7 +132,11 @@ class _HomeFeedViewState extends State<HomeFeedView> {
     );
   }
 
-  Widget _buildFeedContent(HomeLoaded? state) {
+  Widget _buildFeedContent(
+    HomeLoaded? state, {
+    String? errorMessage,
+    VoidCallback? onRetry,
+  }) {
     final displayedItems = _getDisplayedItems(state);
 
     return Column(
@@ -182,17 +188,23 @@ class _HomeFeedViewState extends State<HomeFeedView> {
 
         // ── 2. Scrollable Product Feed Layer (Pull to Refresh) ──
         Expanded(
-          child: state == null
+          child: errorMessage != null
+              ? _HomeErrorView(
+                  message: errorMessage,
+                  onRetry: onRetry ?? () {},
+                )
+              : state == null
               ? const _HomeLoadingView()
               : RefreshIndicator(
                   color: AppColors.primaryColor,
                   backgroundColor: Colors.white,
                   onRefresh: () async {
-                    context.read<HomeBloc>().add(
-                      const RefreshHomeFeedRequested(),
-                    );
-                    await Future<void>.delayed(
-                      const Duration(milliseconds: 400),
+                    final bloc = context.read<HomeBloc>();
+                    bloc.add(const RefreshHomeFeedRequested());
+                    await bloc.stream.firstWhere(
+                      (state) =>
+                          (state is HomeLoaded && !state.isRefreshing) ||
+                          state is HomeError,
                     );
                   },
                   child: CustomScrollView(
@@ -205,10 +217,17 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                       const SliverToBoxAdapter(child: SizedBox(height: 10)),
 
                       // รายการสินค้า
-                      _buildProductGridSliver(
-                        displayedItems,
-                        state.searchQuery,
-                      ),
+                      if (state.searchErrorMessage != null)
+                        SliverToBoxAdapter(
+                          child: _HomeSearchErrorBanner(
+                            message: state.searchErrorMessage!,
+                          ),
+                        )
+                      else
+                        _buildProductGridSliver(
+                          displayedItems,
+                          state.searchQuery,
+                        ),
 
                       // ระยะห่างด้านล่างสำหรับ FloatingActionButton & Bottom Navigation Bar
                       const SliverToBoxAdapter(child: SizedBox(height: 110)),
@@ -266,7 +285,6 @@ class _HomeFeedViewState extends State<HomeFeedView> {
           await AppRoutes.openSearch(
             context,
             initialQuery: label,
-            curatedItems: _getDisplayedItems(state),
             categories: state?.categories ?? const [],
           );
           if (mounted &&
@@ -300,7 +318,6 @@ class _HomeFeedViewState extends State<HomeFeedView> {
               onTap: () async {
                 await AppRoutes.openSearch(
                   context,
-                  curatedItems: _getDisplayedItems(state),
                   initialQuery: _searchController.text.isNotEmpty
                       ? _searchController.text
                       : null,
@@ -507,7 +524,7 @@ class _HomeErrorView extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded),
-              label: const Text('ลองใหม่อีกครั้ง'),
+              label: const Text('กรุณาลองอีกครั้ง'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryColor,
                 foregroundColor: Colors.white,
@@ -516,6 +533,35 @@ class _HomeErrorView extends StatelessWidget {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeSearchErrorBanner extends StatelessWidget {
+  const _HomeSearchErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFFD6D6)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: Color(0xFFE53935)),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
           ],
         ),
       ),

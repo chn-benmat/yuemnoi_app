@@ -56,7 +56,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           .toString(),
     );
     _bioCtrl = TextEditingController(text: (meta['bio'] ?? '').toString());
-    _avatarUrl = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
+    _avatarUrl =
+        (meta['user_image_url'] ?? meta['avatar_url'] ?? meta['picture'] ?? '')
+            .toString();
     if (_avatarUrl!.isEmpty) _avatarUrl = null;
 
     final session = SupabaseConfig.isInitialized
@@ -141,7 +143,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             if (_bioCtrl.text.isEmpty && state.profile.bio.isNotEmpty) {
               _bioCtrl.text = state.profile.bio;
             }
-            if (_avatarUrl == null && state.profile.avatarUrl != null) {
+            if (state.profile.avatarUrl != null &&
+                state.profile.avatarUrl!.isNotEmpty &&
+                state.profile.avatarUrl != _avatarUrl) {
               setState(() => _avatarUrl = state.profile.avatarUrl);
             }
           } else if (state is ProfileActionSuccess) {

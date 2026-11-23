@@ -530,6 +530,15 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   }
 
   Future<void> _openCancellationModal() async {
+    if (_isOwner) return;
+    if (widget.bookingId == null || widget.bookingId! <= 0) {
+      showAppPopup(
+        context,
+        content: const Text('ไม่พบรายการเช่าที่ต้องการยกเลิก'),
+      );
+      return;
+    }
+
     final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -1325,6 +1334,15 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                   controller: _pinController,
                   keyboardType: TextInputType.number,
                   maxLength: 4,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
+                  onChanged: (_) {
+                    if (_pinErrorMessage != null) {
+                      setState(() => _pinErrorMessage = null);
+                    }
+                  },
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
@@ -1912,6 +1930,11 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    if (_attachedImages.length >= 5) {
+      showAppPopup(context, content: const Text('แนบภาพถ่ายได้ไม่เกิน 5 รูป'));
+      return;
+    }
+
     try {
       final picked = await _imagePicker.pickImage(
         source: source,
@@ -2102,10 +2125,13 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
         note: _noteController.text.trim(),
         photos: _attachedImages,
       );
-    } catch (e) {
+    } catch (error) {
       if (mounted) {
         setState(() => _isSubmitting = false);
-        showAppPopup(context, content: Text('ยกเลิกไม่สำเร็จ: $e'));
+        final message = error is StateError
+            ? error.message.toString()
+            : 'ยกเลิกการเช่าไม่สำเร็จ กรุณาลองใหม่';
+        showAppPopup(context, content: Text(message));
       }
       return;
     }
@@ -2524,6 +2550,7 @@ class _RentalCancellationModalState extends State<RentalCancellationModal> {
               TextField(
                 controller: _noteController,
                 maxLines: 2,
+                inputFormatters: [LengthLimitingTextInputFormatter(2000)],
                 decoration: InputDecoration(
                   hintText: 'รายละเอียดเพิ่มเติมเพื่อแจ้งผู้ปล่อยเช่า...',
                   hintStyle: const TextStyle(

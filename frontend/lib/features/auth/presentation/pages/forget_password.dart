@@ -11,6 +11,7 @@ import '../../../../core/widgets/app_text_form_field.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
+import '../widgets/auth_inline_error.dart';
 
 class ForgetPasswordScreen extends StatefulWidget {
   const ForgetPasswordScreen({super.key});
@@ -23,6 +24,7 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -42,14 +44,11 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
       return;
     }
 
+    setState(() => _errorMessage = null);
     FocusScope.of(context).unfocus();
     context.read<AuthBloc>().add(
       AuthSendOtpRequested(email: _emailController.text.trim()),
     );
-  }
-
-  void _showError(String message) {
-    showAppPopup(context, content: Text(message));
   }
 
   @override
@@ -61,6 +60,7 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
         if (state is SendOtpLoading) {
           setState(() {
             _isLoading = true;
+            _errorMessage = null;
           });
         } else if (state is SendOtpSuccess) {
           setState(() {
@@ -73,8 +73,8 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
         } else if (state is SendOtpFailure) {
           setState(() {
             _isLoading = false;
+            _errorMessage = userFriendlyErrorMessage(state.message);
           });
-          _showError(state.message);
         }
       },
       child: Scaffold(
@@ -142,10 +142,16 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
                   label: 'อีเมล',
                   hintText: 'กรุณากรอกอีเมล',
                   controller: _emailController,
+                  onChanged: (_) {
+                    if (_errorMessage != null) {
+                      setState(() => _errorMessage = null);
+                    }
+                  },
                   keyboardType: TextInputType.emailAddress,
                   validator: AppFormValidators.required('กรุณากรอกอีเมล'),
                 ),
                 const SizedBox(height: 48),
+                AuthInlineError(message: _errorMessage),
                 AppPrimaryButton(
                   text: 'ส่งรหัส OTP',
                   isLoading: _isLoading,

@@ -85,6 +85,21 @@ class SettingAccountScreen extends StatelessWidget {
                   color: Colors.grey.shade100,
                 ),
                 AccountSettingItem(
+                  icon: Icons.location_on_outlined,
+                  iconBgColor: const Color(0xFFFFF1E7),
+                  iconColor: const Color(0xFFE37400),
+                  title: 'ตำแหน่งแนะนำสินค้า',
+                  subtitle: 'เปลี่ยนตำแหน่งที่ใช้แนะนำอุปกรณ์ใกล้คุณ',
+                  onTap: () =>
+                      AppRoutes.openRecommendationLocationSettings(context),
+                ),
+                Divider(
+                  height: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: Colors.grey.shade100,
+                ),
+                AccountSettingItem(
                   icon: Icons.contact_mail_outlined,
                   iconBgColor: const Color(0xFFE3F2FF),
                   iconColor: const Color(0xFF1976D2),

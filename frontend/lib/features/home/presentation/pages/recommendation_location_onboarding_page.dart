@@ -31,11 +31,6 @@ class _RecommendationLocationOnboardingPageState
       _message = null;
     });
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        throw const RecommendationLocationServiceException(
-          'กรุณาเปิดบริการตำแหน่งในเครื่อง แล้วลองอีกครั้ง หรือเลือกข้ามไปก่อน',
-        );
-      }
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -44,6 +39,11 @@ class _RecommendationLocationOnboardingPageState
           permission == LocationPermission.deniedForever) {
         await _continueWithoutLocation();
         return;
+      }
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw const RecommendationLocationServiceException(
+          'กรุณาเปิดบริการตำแหน่งในเครื่อง แล้วลองอีกครั้ง หรือเลือกข้ามไปก่อน',
+        );
       }
 
       final position = await LocationService.instance.getCurrentPosition();
@@ -116,7 +116,7 @@ class _RecommendationLocationOnboardingPageState
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'อนุญาตให้ใช้ตำแหน่งปัจจุบันเพื่อแนะนำอุปกรณ์และแสดงระยะทางจากคุณ ระบบจะบันทึกตำแหน่งไว้ในบัญชีเมื่อเข้าสู่ระบบ และไม่ติดตามตำแหน่งต่อเนื่อง คุณเปลี่ยนหรือลบตำแหน่งได้ในหน้าแก้ไขโปรไฟล์',
+                    'ใช้ตำแหน่งเพื่อแนะนำอุปกรณ์ใกล้คุณและแสดงระยะทาง ระบบจะบันทึกตำแหน่งไว้ในบัญชีเมื่อเข้าสู่ระบบ และไม่ติดตามตำแหน่งต่อเนื่อง คุณเปลี่ยนหรือลบตำแหน่งได้ในหน้าแก้ไขโปรไฟล์ เมื่อแตะปุ่ม ระบบจะแสดงคำขออนุญาตของโทรศัพท์',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
@@ -128,7 +128,7 @@ class _RecommendationLocationOnboardingPageState
                   FilledButton.icon(
                     onPressed: _busy ? null : _allowLocation,
                     icon: const Icon(Icons.my_location_rounded),
-                    label: const Text('ยินยอมและใช้ตำแหน่งปัจจุบัน'),
+                    label: const Text('ใช้ตำแหน่งปัจจุบัน'),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 15),

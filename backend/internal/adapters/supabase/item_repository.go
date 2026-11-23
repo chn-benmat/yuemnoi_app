@@ -33,18 +33,19 @@ func NewSupabaseItemRepository(sbClient *supabase.Client, serviceKey string) dom
 func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, images []domain.ItemImage) (*domain.Item, error) {
 	var items []domain.Item
 	payload := map[string]interface{}{
-		"user_id":          item.UserID,
-		"item_name":        item.ItemName,
-		"description":      item.Description,
-		"category":         item.Category,
-		"price":            item.Price,
-		"status":           item.Status,
-		"type":             item.Type,
-		"pickup_location":  item.PickupLocation,
-		"pickup_address":   item.PickupAddress,
-		"pickup_note":      item.PickupNote,
-		"pickup_latitude":  item.PickupLatitude,
-		"pickup_longitude": item.PickupLongitude,
+		"user_id":           item.UserID,
+		"item_name":         item.ItemName,
+		"description":       item.Description,
+		"category":          item.Category,
+		"price":             item.Price,
+		"status":            item.Status,
+		"moderation_hidden": true,
+		"type":              item.Type,
+		"pickup_location":   item.PickupLocation,
+		"pickup_address":    item.PickupAddress,
+		"pickup_note":       item.PickupNote,
+		"pickup_latitude":   item.PickupLatitude,
+		"pickup_longitude":  item.PickupLongitude,
 	}
 	if item.ItemImageURL != nil {
 		payload["item_image_url"] = item.ItemImageURL
@@ -167,7 +168,7 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domain.Item, error) {
 	var items []domain.Item
 
-	err := r.client.DB.From("item_tb").Select("*").Eq("id", strconv.FormatInt(id, 10)).Eq("moderation_hidden", "false").ExecuteWithContext(ctx, &items)
+	err := r.client.DB.From("item_tb").Select("*").Eq("id", strconv.FormatInt(id, 10)).ExecuteWithContext(ctx, &items)
 	if err != nil {
 		return nil, fmt.Errorf("supabase find by id failed: %w", err)
 	}

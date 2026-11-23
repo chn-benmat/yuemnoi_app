@@ -10,6 +10,8 @@ import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../../auth/presentation/bloc/auth_state.dart';
+import '../../bloc/profile_cubit.dart';
+import '../../bloc/profile_state.dart';
 import '../../../../../core/network/auth_session.dart';
 import '../../../../../core/services/fcm_service.dart';
 import '../../../../../core/services/favorite_service.dart';
@@ -30,11 +32,32 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _guestPromptOpen = false;
   bool _guestPromptScheduled = false;
+  late final ProfileCubit _profileCubit;
 
   @override
   void initState() {
     super.initState();
+    _profileCubit = ProfileCubit();
+    _loadCurrentProfile();
     _scheduleGuestPrompt();
+  }
+
+  void _loadCurrentProfile() {
+    final user = _currentUser;
+    if (user == null) return;
+    final session = SupabaseConfig.client.auth.currentSession;
+    unawaited(
+      _profileCubit.loadProfile(
+        userId: user.id,
+        accessToken: session?.accessToken,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _profileCubit.close();
+    super.dispose();
   }
 
   @override
@@ -92,8 +115,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? get _avatarUrl {
     final user = _currentUser;
     if (user == null) return null;
-    return user.userMetadata?['avatar_url'] as String? ??
-        user.userMetadata?['picture'] as String?;
+    final metadata = user.userMetadata;
+    final profileImage = _profileCubit.currentProfile?.avatarUrl;
+    for (final candidate in [
+      profileImage,
+      metadata?['user_image_url'],
+      metadata?['avatar_url'],
+      metadata?['picture'],
+    ]) {
+      final url = candidate?.toString().trim();
+      if (url != null && url.isNotEmpty) return url;
+    }
+    return null;
   }
 
   Future<void> _handleMyItems() async {
@@ -250,9 +283,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
-        if (mounted) setState(() {});
+        if (!mounted) return;
+        setState(() {});
+        if (state is LoginSuccess || state is GoogleLoginSuccess) {
+          _loadCurrentProfile();
+        }
       },
-      child: Container(
+      child: BlocListener<ProfileCubit, ProfileState>(
+        bloc: _profileCubit,
+        listener: (context, state) {
+          if (mounted && state is ProfileLoaded) setState(() {});
+        },
+        child: Container(
         color: const Color(0xFFF7F6FA),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,6 +459,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

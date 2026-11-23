@@ -8,7 +8,6 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/booking_confirmation_tracker.dart';
-import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../domain/entities/chat_message.dart';
@@ -347,6 +346,36 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     return widget.message.isMine;
   }
 
+  void _openMeetupLocation(BuildContext context) {
+    final bookingData = widget.bookingData;
+    final isOwner = _checkIsOwner();
+    AppRoutes.openRentalTrackingMap(
+      context,
+      isOwner: isOwner,
+      trackingArgs: {
+        'itemTitle': bookingData.item.title,
+        'itemImageUrl': bookingData.item.imageUrl,
+        // พิกัดในข้อมูลอุปกรณ์เป็นจุดที่เจ้าของเลือกไว้ตอนลงประกาศ
+        'pickupLocation': bookingData.item.defaultLocation.isNotEmpty
+            ? bookingData.item.defaultLocation
+            : bookingData.location,
+        'destinationLat':
+            bookingData.item.latitude ?? bookingData.latitude,
+        'destinationLng':
+            bookingData.item.longitude ?? bookingData.longitude,
+        'pickupNote': bookingData.locationNote,
+        'ownerName': bookingData.item.ownerName,
+        'periodText': bookingData.formattedPeriodSummary,
+        'totalPrice': bookingData.totalPrice,
+        'statusCode': _rentalStatus,
+        'bookingId': _bookingId ?? bookingData.bookingId,
+        'conversationId':
+            bookingData.conversationId ?? widget.message.conversationId,
+        'isOwner': isOwner,
+      },
+    );
+  }
+
   Future<void> _handleAction(
     BuildContext context, {
     required bool isEditMode,
@@ -640,17 +669,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                       label: 'จุดนัดพบ',
                       value: widget.bookingData.location,
                       showLinkIcon: true,
-                      onTap: () {
-                        final coordinates = LocationService.resolveCoordinates(
-                          locationName: widget.bookingData.location,
-                          latitude: widget.bookingData.latitude,
-                          longitude: widget.bookingData.longitude,
-                        );
-                        LocationService.openInExternalMaps(
-                          coordinates.latitude,
-                          coordinates.longitude,
-                        );
-                      },
+                      onTap: () => _openMeetupLocation(context),
                     ),
                     const SizedBox(height: 7),
                     _buildMiniInfoRow(

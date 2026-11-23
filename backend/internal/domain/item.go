@@ -19,21 +19,22 @@ type Item struct {
 	PickupLatitude  *float64 `json:"pickup_latitude" form:"pickup_latitude"`
 	PickupLongitude *float64 `json:"pickup_longitude" form:"pickup_longitude"`
 
-	ID             int64     `json:"id"`
-	UserID         string    `json:"user_id"`
-	ItemName       string    `json:"item_name"`
-	ItemImageURL   []string  `json:"item_image_url"`
-	Description    string    `json:"description"`
-	Category       string    `json:"category"`
-	Price          int       `json:"price"`
-	Status         string    `json:"status"` // เช่น "pending", "verified", "rejected"
-	OwnerHidden    bool      `json:"owner_hidden"`
-	Type           string    `json:"type"` // เช่น "รายวัน", "รายชั่วโมง"
-	OwnerName      string    `json:"owner_name,omitempty"`
-	IsVerified     bool      `json:"is_verified"`
-	OwnerAvatarURL string    `json:"owner_avatar_url,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID               int64     `json:"id"`
+	UserID           string    `json:"user_id"`
+	ItemName         string    `json:"item_name"`
+	ItemImageURL     []string  `json:"item_image_url"`
+	Description      string    `json:"description"`
+	Category         string    `json:"category"`
+	Price            int       `json:"price"`
+	Status           string    `json:"status"` // เช่น "pending", "verified", "rejected"
+	ModerationHidden bool      `json:"moderation_hidden"`
+	OwnerHidden      bool      `json:"owner_hidden"`
+	Type             string    `json:"type"` // เช่น "รายวัน", "รายชั่วโมง"
+	OwnerName        string    `json:"owner_name,omitempty"`
+	IsVerified       bool      `json:"is_verified"`
+	OwnerAvatarURL   string    `json:"owner_avatar_url,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // RankedItem คือข้อมูลอุปกรณ์พร้อมสัญญาณจริงที่ใช้แสดงในฟีดหน้า Home

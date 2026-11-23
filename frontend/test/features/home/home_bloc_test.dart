@@ -53,7 +53,7 @@ void main() {
           bloc.stream,
           emitsInOrder([
             const HomeLoading(),
-            const HomeError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่'),
+            const HomeError('ไม่มีการเชื่อมต่ออินเทอร์เน็ต กรุณาลองใหม่'),
           ]),
         );
 

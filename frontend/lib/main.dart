@@ -75,13 +75,7 @@ Future<void> main() async {
     }
   }
 
-  final locationPrompted = await RecommendationLocationService.instance
-      .hasCompletedFirstRunPrompt;
   runApp(
-    YuemnoiApp(
-      initialRoute: locationPrompted
-          ? AppRoutes.home
-          : AppRoutes.recommendationLocationOnboarding,
-    ),
+    YuemnoiApp(initialRoute: AppRoutes.home),
   );
 }

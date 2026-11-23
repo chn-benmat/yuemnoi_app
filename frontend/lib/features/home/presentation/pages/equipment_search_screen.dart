@@ -63,6 +63,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
   bool _isLoadingResults = false;
   bool _isLoadingCurated = false;
   String _lastSubmittedQuery = '';
+  String? _searchErrorMessage;
 
   @override
   void initState() {
@@ -264,6 +265,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       _isSearchSubmitted = true;
       _isLoadingResults = true;
       _lastSubmittedQuery = trimmed;
+      _searchErrorMessage = null;
     });
 
     if (trimmed.isNotEmpty) await _saveSearchQuery(trimmed);
@@ -281,6 +283,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
         setState(() {
           _searchResults = results;
           _isLoadingResults = false;
+          _searchErrorMessage = null;
         });
       }
     } catch (e) {
@@ -289,6 +292,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
         setState(() {
           _searchResults = [];
           _isLoadingResults = false;
+          _searchErrorMessage = 'ไม่มีการเชื่อมต่ออินเตอร์เน็ตกรุณาลองใหม่';
         });
       }
     }
@@ -878,6 +882,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
   }
 
   Widget _buildEmptyResultsState() {
+    final hasSearchError = _searchErrorMessage != null;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
       child: Center(
@@ -887,19 +892,27 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
             Container(
               width: 72,
               height: 72,
-              decoration: const BoxDecoration(
-                color: Color(0xFFF4F4F5),
+              decoration: BoxDecoration(
+                color: hasSearchError
+                    ? const Color(0xFFFFEEEE)
+                    : const Color(0xFFF4F4F5),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.search_off_rounded,
+              child: Icon(
+                hasSearchError
+                    ? Icons.cloud_off_rounded
+                    : Icons.search_off_rounded,
                 size: 36,
-                color: Color(0xFF71717A),
+                color: hasSearchError
+                    ? const Color(0xFFE53935)
+                    : const Color(0xFF71717A),
               ),
             ),
             const SizedBox(height: 18),
             Text(
-              _selectedCategoryId != 'all'
+              hasSearchError
+                  ? _searchErrorMessage!
+                  : _selectedCategoryId != 'all'
                   ? 'ไม่พบอุปกรณ์ในหมวดหมู่ "${CategoryFilterChips.getCategoryLabel(_selectedCategoryId)}"'
                   : _lastSubmittedQuery.isNotEmpty
                   ? 'ไม่พบอุปกรณ์ที่ตรงกับ "$_lastSubmittedQuery"'
@@ -913,8 +926,10 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'ลองตรวจสอบตัวสะกด หรือใช้คำค้นหาทั่วไป\nเช่น "กล้อง", "MacBook", "เต็นท์", "ไมโครโฟน"',
+            Text(
+              hasSearchError
+                  ? 'ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองค้นหาอีกครั้ง'
+                  : 'ลองตรวจสอบตัวสะกด หรือใช้คำค้นหาทั่วไป\nเช่น "กล้อง", "MacBook", "เต็นท์", "ไมโครโฟน"',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF71717A),
@@ -924,7 +939,9 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
             ),
             const SizedBox(height: 24),
             OutlinedButton(
-              onPressed: _resetToPreSearch,
+              onPressed: hasSearchError
+                  ? () => _executeSearch(_lastSubmittedQuery)
+                  : _resetToPreSearch,
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primaryColor,
                 side: const BorderSide(
@@ -939,9 +956,14 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
                   vertical: 12,
                 ),
               ),
-              child: const Text(
-                'กลับไปดูอุปกรณ์แนะนำ',
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+              child: Text(
+                hasSearchError
+                    ? 'กรุณาลองอีกครั้ง'
+                    : 'กลับไปดูอุปกรณ์แนะนำ',
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],

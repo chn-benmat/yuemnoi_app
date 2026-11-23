@@ -85,11 +85,44 @@ const columns: Record<string, Column[]> = {
     { key: "item_name", label: "สินค้า" },
     { key: "owner_name", label: "เจ้าของ" },
     { key: "category", label: "หมวดหมู่" },
+    { key: "description", label: "รายละเอียด" },
+    {
+      key: "item_image_url",
+      label: "รูปภาพ",
+      render: (r) => {
+        const images = Array.isArray(r.item_image_url)
+          ? r.item_image_url.filter((url): url is string => typeof url === "string")
+          : [];
+        return (
+          <div style={{ display: "flex", gap: 6 }}>
+            {images.slice(0, 4).map((url, index) => (
+              <a key={url + index} href={url} target="_blank" rel="noreferrer">
+                <img
+                  src={url}
+                  alt={`รูปสินค้า ${index + 1}`}
+                  style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8 }}
+                />
+              </a>
+            ))}
+          </div>
+        );
+      },
+    },
     { key: "price", label: "ราคา" },
     {
       key: "status",
       label: "สถานะ",
-      render: (r) => <Badge value={r.moderation_hidden ? "ซ่อน" : r.status} />,
+      render: (r) => (
+        <Badge
+          value={
+            r.status === "pending_review" || r.status === "rejected"
+              ? r.status
+              : r.moderation_hidden
+                ? "ซ่อน"
+                : r.status
+          }
+        />
+      ),
     },
     dateColumn,
   ],
@@ -327,6 +360,35 @@ export default function Dashboard({
           )}
         </>
       );
+    if (section === "items" && r.status === "pending_review")
+      return (
+        <>
+          <button
+            disabled={preview}
+            onClick={() =>
+              action(
+                r,
+                "review-item",
+                "อนุมัติและโพสต์ประกาศ",
+                { decision: "approved" },
+              )
+            }
+          >
+            อนุมัติและโพสต์
+          </button>
+          <button
+            disabled={preview}
+            onClick={() =>
+              action(r, "review-item", "ปฏิเสธประกาศ", {
+                decision: "rejected",
+              })
+            }
+          >
+            ปฏิเสธ
+          </button>
+        </>
+      );
+    if (section === "items" && r.status === "rejected") return null;
     if (section === "items" || section === "reviews")
       return (
         <button
@@ -735,7 +797,7 @@ export default function Dashboard({
                             "awaiting_return",
                           ]
                         : section === "items"
-                          ? ["available", "hidden"]
+                          ? ["pending_review", "available", "rejected", "hidden"]
                           : []
                 }
               />
@@ -954,6 +1016,7 @@ function Filter({
                   in_progress: "กำลังดำเนินการ",
                   resolved: "ปิดเรื่อง",
                   available: "พร้อมให้เช่า",
+                  pending_review: "รอตรวจสอบประกาศ",
                   hidden: "ซ่อน",
                   confirmed: "ยืนยันแล้ว",
                   active: "กำลังเช่า",

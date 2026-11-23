@@ -50,54 +50,20 @@ class _RecommendationLocationSettingsPageState
     }
   }
 
-  Future<bool> _requestConsent() async {
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text(
-          'ใช้ตำแหน่งเพื่อแนะนำสินค้าใกล้คุณ',
-          style: TextStyle(
-            fontFamily: AppTextStyles.fontFamily,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: const Text(
-          'แอปจะบันทึกตำแหน่งที่คุณเลือกไว้ในบัญชี เพื่อคำนวณระยะถึงจุดรับสินค้าและจัดอันดับสินค้าใกล้คุณ จะไม่ติดตามตำแหน่งต่อเนื่อง คุณเลือกตำแหน่งเองแทน GPS ได้ และลบตำแหน่งที่บันทึกไว้ได้ทุกเมื่อ',
-          style: TextStyle(fontFamily: AppTextStyles.fontFamily, height: 1.45),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('ยกเลิก'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primaryColor,
-            ),
-            child: const Text('ยินยอมและดำเนินการ'),
-          ),
-        ],
-      ),
-    );
-    return accepted == true;
-  }
-
   Future<void> _useGps() async {
-    if (!await _requestConsent() || !mounted) return;
     setState(() {
       _isSaving = true;
       _error = null;
     });
     try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
       if (!await Geolocator.isLocationServiceEnabled()) {
         throw const RecommendationLocationServiceException(
           'กรุณาเปิดบริการตำแหน่ง หรือเลือกตำแหน่งบนแผนที่',
         );
-      }
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
@@ -146,7 +112,6 @@ class _RecommendationLocationSettingsPageState
   }
 
   Future<void> _chooseManually() async {
-    if (!await _requestConsent() || !mounted) return;
     final current = _savedLocation;
     final picked = await Navigator.of(context).push<LocationPickerResult>(
       MaterialPageRoute(

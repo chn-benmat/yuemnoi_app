@@ -2,6 +2,8 @@ import '../../domain/entities/user_item.dart';
 
 enum MyItemsFilter {
   available,
+  pendingReview,
+  rejected,
   rented,
   hidden;
 
@@ -10,6 +12,10 @@ enum MyItemsFilter {
     hidden => item.ownerHidden,
     available =>
       !item.ownerHidden && item.listingStatus == UserItemStatus.available,
+    pendingReview =>
+      !item.ownerHidden && item.listingStatus == UserItemStatus.pendingReview,
+    rejected =>
+      !item.ownerHidden && item.listingStatus == UserItemStatus.rejected,
     rented => !item.ownerHidden && item.listingStatus == UserItemStatus.rented,
   };
 }
