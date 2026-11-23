@@ -104,6 +104,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
     final cubit = context.read<RentalRequestCubit>();
 
     final messageId = _bookingData.originalMessageId ?? '';
+    final canConfirmOffer = messageId.trim().isNotEmpty;
 
     final orderNumberStr = BookingConfirmationTracker.formatOrderNumber(
       effectiveBookingId,
@@ -153,7 +154,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
               ),
               const SizedBox(height: 12),
               Text(
-                'ตรวจสอบและยืนยันการเช่า',
+                canConfirmOffer ? 'ตรวจสอบและยืนยันการเช่า' : 'ส่งคำขอเช่าแล้ว',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
@@ -165,7 +166,9 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                'กรุณาตรวจสอบรายละเอียดก่อนกดยืนยันการเช่า',
+                canConfirmOffer
+                    ? 'กรุณาตรวจสอบรายละเอียดก่อนกดยืนยันการเช่า'
+                    : 'คำขอเช่าถูกบันทึกแล้ว รอผู้ปล่อยเช่าตรวจสอบคำขอ',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
@@ -328,6 +331,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                 cubit,
                 effectiveBookingId,
                 messageId,
+                canConfirmOffer: canConfirmOffer,
               ),
             ],
           ),
@@ -346,14 +350,16 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
     BuildContext sheetContext,
     RentalRequestCubit cubit,
     int bookingId,
-    String messageId,
-  ) {
+    String messageId, {
+    required bool canConfirmOffer,
+  }) {
     return BlocBuilder<RentalRequestCubit, RentalRequestState>(
       bloc: cubit,
       builder: (context, state) {
         final isConfirming =
-            state.status == RentalRequestStatus.confirming ||
-            state.status == RentalRequestStatus.confirmed;
+            canConfirmOffer &&
+            (state.status == RentalRequestStatus.confirming ||
+                state.status == RentalRequestStatus.confirmed);
         return PopScope(
           canPop: !isConfirming,
           child: Column(
@@ -381,6 +387,10 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                   onPressed: isConfirming
                       ? null
                       : () async {
+                          if (!canConfirmOffer) {
+                            Navigator.pop(sheetContext, true);
+                            return;
+                          }
                           final confirmed = await cubit.confirm(
                             offerMessageId: messageId,
                           );
@@ -408,9 +418,9 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          'ยืนยันการเช่า',
-                          style: TextStyle(
+                      : Text(
+                          canConfirmOffer ? 'ยืนยันการเช่า' : 'ดูสถานะคำขอ',
+                          style: const TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 15,
                             fontWeight: FontWeight.w700,

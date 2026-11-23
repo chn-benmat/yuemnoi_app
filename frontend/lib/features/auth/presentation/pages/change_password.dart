@@ -11,6 +11,7 @@ import '../../../../core/widgets/app_text_form_field.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
+import '../widgets/auth_inline_error.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key, required this.accessToken});
@@ -28,6 +29,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -48,6 +50,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       return;
     }
 
+    setState(() => _errorMessage = null);
     FocusScope.of(context).unfocus();
     context.read<AuthBloc>().add(
       AuthChangePasswordRequested(
@@ -55,10 +58,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         newPassword: _passwordController.text,
       ),
     );
-  }
-
-  void _showError(String message) {
-    showAppPopup(context, content: Text(message));
   }
 
   @override
@@ -70,6 +69,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         if (state is ChangePasswordLoading) {
           setState(() {
             _isLoading = true;
+            _errorMessage = null;
           });
         } else if (state is ChangePasswordSuccess) {
           setState(() {
@@ -81,8 +81,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         } else if (state is ChangePasswordFailure) {
           setState(() {
             _isLoading = false;
+            _errorMessage = userFriendlyErrorMessage(state.message);
           });
-          _showError(state.message);
         }
       },
       child: Scaffold(
@@ -138,6 +138,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   hintText: 'กรุณากรอกรหัสผ่านใหม่',
                   obscureText: _obscurePassword,
                   controller: _passwordController,
+                  onChanged: (_) => _clearFormError(),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword
@@ -161,6 +162,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   hintText: 'กรอกรหัสยืนยันผ่านใหม่',
                   obscureText: _obscureConfirmPassword,
                   controller: _confirmPasswordController,
+                  onChanged: (_) => _clearFormError(),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscureConfirmPassword
@@ -180,6 +182,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   ),
                 ),
                 const SizedBox(height: 48),
+                AuthInlineError(message: _errorMessage),
                 AppPrimaryButton(
                   text: 'เปลี่ยนรหัสผ่าน',
                   isLoading: _isLoading,
@@ -191,5 +194,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         ),
       ),
     );
+  }
+
+  void _clearFormError() {
+    if (_errorMessage != null) setState(() => _errorMessage = null);
   }
 }

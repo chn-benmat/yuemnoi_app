@@ -7,23 +7,27 @@ import '../../domain/entities/rental_return_session.dart';
 class ReturnCompletedDialog extends StatelessWidget {
   final RentalReturnSession session;
   final VoidCallback onDismiss;
+  final Future<void> Function()? onReview;
 
   const ReturnCompletedDialog({
     super.key,
     required this.session,
     required this.onDismiss,
+    this.onReview,
   });
 
   static Future<void> show({
     required BuildContext context,
     required RentalReturnSession session,
     required VoidCallback onDismiss,
+    Future<void> Function()? onReview,
   }) {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => ReturnCompletedDialog(
         session: session,
+        onReview: onReview,
         onDismiss: () {
           Navigator.pop(ctx);
           onDismiss();
@@ -181,6 +185,36 @@ class ReturnCompletedDialog extends StatelessWidget {
             ),
 
             const SizedBox(height: 24),
+
+            if (onReview != null) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await onReview!();
+                  },
+                  icon: const Icon(Icons.star_rounded, size: 19),
+                  label: const Text(
+                    'เขียนรีวิวอุปกรณ์',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primaryColor,
+                    side: const BorderSide(color: Color(0xFFE1C8F7)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
 
             // ปุ่มกลับหน้าหลัก
             SizedBox(

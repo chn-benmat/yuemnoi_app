@@ -60,7 +60,6 @@ type updateItemRequest struct {
 	Description  *string   `json:"description" validate:"omitempty,min=1,max=2000"`
 	Category     *string   `json:"category" validate:"omitempty,max=100"`
 	Price        *int      `json:"price" validate:"omitempty,gt=0"`
-	Status       *string   `json:"status" validate:"omitempty,max=50"`
 	Type         *string   `json:"type" validate:"omitempty,max=100"`
 	OwnerHidden  *bool     `json:"owner_hidden"`
 }
@@ -137,8 +136,8 @@ func (h *ItemHandler) GetItemByID(c fiber.Ctx) error {
 	if err != nil {
 		return writeItemError(c, err)
 	}
-	if item.OwnerHidden {
-		// รายการที่ซ่อนอ่านได้เฉพาะเจ้าของและผู้เช่าที่มีประวัติอ้างอิงอยู่
+	if item.ModerationHidden || item.OwnerHidden {
+		// รายการที่ถูกซ่อนจากฟีดอ่านได้เฉพาะเจ้าของและผู้เช่าที่มีประวัติอ้างอิงอยู่
 		auth := strings.Fields(c.Get("Authorization"))
 		if len(auth) != 2 || !strings.EqualFold(auth[0], "Bearer") || h.tokenVerifier == nil {
 			return writeItemError(c, domain.ErrItemNotFound)
@@ -196,7 +195,7 @@ func (h *ItemHandler) CreateItem(c fiber.Ctx) error {
 		Description:     strings.TrimSpace(req.Description),
 		Category:        strings.TrimSpace(req.Category),
 		Price:           req.Price,
-		Status:          "available",
+		Status:          "pending_review",
 		Type:            req.Type,
 	}, images)
 	if err != nil {
@@ -288,7 +287,8 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 	}
 
 	fields := make(map[string]interface{})
-	if req.ItemName != nil || req.Description != nil || req.Category != nil || req.Price != nil || req.Type != nil || req.PickupLocation != "" || req.PickupLatitude != nil || req.PickupLongitude != nil {
+	listingContentChanged := req.ItemName != nil || req.ItemImageURL != nil || req.Description != nil || req.Category != nil || req.Price != nil || req.Type != nil || req.PickupLocation != "" || req.PickupLatitude != nil || req.PickupLongitude != nil
+	if listingContentChanged {
 		if !validPickupLocation(req.PickupLocation, req.PickupLatitude, req.PickupLongitude) {
 			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกจุดนัดรับสินค้าบนแผนที่"})
 		}
@@ -313,14 +313,16 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 	if req.Price != nil {
 		fields["price"] = *req.Price
 	}
-	if req.Status != nil {
-		fields["status"] = *req.Status
-	}
 	if req.Type != nil {
 		fields["type"] = *req.Type
 	}
 	if req.OwnerHidden != nil {
 		fields["owner_hidden"] = *req.OwnerHidden
+	}
+	if listingContentChanged {
+		// การแก้เนื้อหาประกาศต้องกลับเข้าคิวตรวจสอบก่อนแสดงในฟีดอีกครั้ง
+		fields["status"] = "pending_review"
+		fields["moderation_hidden"] = true
 	}
 	if len(fields) == 0 {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุข้อมูลที่ต้องการแก้ไขอย่างน้อย 1 ช่อง"})

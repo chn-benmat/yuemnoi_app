@@ -70,7 +70,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         ),
       );
     } catch (e) {
-      emit(const HomeError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่'));
+      emit(const HomeError('ไม่มีการเชื่อมต่ออินเทอร์เน็ต กรุณาลองใหม่'));
     }
   }
 
@@ -180,10 +180,22 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       );
 
       emit(
-        currentState.copyWith(searchQuery: event.query, nearbyItems: nearby),
+        currentState.copyWith(
+          searchQuery: event.query,
+          nearbyItems: nearby,
+          searchErrorMessage: null,
+        ),
       );
     } catch (_) {
-      // จัดการกรณีผิดพลาด
+      if (event.query.trim().isNotEmpty) {
+        emit(
+          currentState.copyWith(
+            searchQuery: event.query,
+            nearbyItems: const [],
+            searchErrorMessage: 'ไม่มีการเชื่อมต่ออินเตอร์เน็ตกรุณาลองใหม่',
+          ),
+        );
+      }
     }
   }
 
@@ -259,7 +271,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final query = currentState is HomeLoaded ? currentState.searchQuery : '';
 
     if (currentState is HomeLoaded) {
-      emit(currentState.copyWith(isRefreshing: true));
+      emit(const HomeLoading());
     }
 
     homeRepository.clearCache();
@@ -284,13 +296,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         ),
       );
     } catch (e) {
-      if (currentState is HomeLoaded) {
-        emit(currentState.copyWith(isRefreshing: false));
-      } else {
-        emit(
-          const HomeError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่'),
-        );
-      }
+      const message = 'ไม่มีการเชื่อมต่ออินเทอร์เน็ต กรุณาลองใหม่';
+      emit(const HomeError(message));
     }
   }
 }

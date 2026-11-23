@@ -17,6 +17,7 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../widgets/register_profile_image_picker.dart';
+import '../widgets/auth_inline_error.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -39,6 +40,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   Uint8List? _profileImageBytes;
   String? _profileImageFileName;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -89,6 +91,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    setState(() => _errorMessage = null);
     FocusScope.of(context).unfocus();
     context.read<AuthBloc>().add(
       AuthRegisterRequested(
@@ -105,6 +108,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _showError(String message) {
     showAppPopup(context, content: Text(message));
+  }
+
+  void _clearFormError() {
+    if (_errorMessage != null) setState(() => _errorMessage = null);
   }
 
   @override
@@ -124,6 +131,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         if (state is RegisterLoading) {
           setState(() {
             _isLoading = true;
+            _errorMessage = null;
           });
         } else if (state is RegisterSuccess) {
           setState(() {
@@ -134,8 +142,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         } else if (state is RegisterFailure) {
           setState(() {
             _isLoading = false;
+            _errorMessage = userFriendlyErrorMessage(state.message);
           });
-          _showError(state.message);
         }
       },
       child: Scaffold(
@@ -171,6 +179,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   label: 'ชื่อ - นามสกุล',
                   hintText: 'กรุณากรอกชื่อ - นามสกุล',
                   controller: _nameController,
+                  onChanged: (_) => _clearFormError(),
                   validator: AppFormValidators.required(
                     'กรุณากรอกชื่อ - นามสกุล',
                   ),
@@ -181,6 +190,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   label: 'อีเมล',
                   hintText: 'name@exemple.com',
                   controller: _emailController,
+                  onChanged: (_) => _clearFormError(),
                   keyboardType: TextInputType.emailAddress,
                   validator: AppFormValidators.email(),
                 ),
@@ -190,6 +200,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   label: 'เบอร์โทรศัพท์',
                   hintText: '0812345678',
                   controller: _phoneController,
+                  onChanged: (_) => _clearFormError(),
                   keyboardType: TextInputType.phone,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
@@ -204,6 +215,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   hintText: 'กรุณากรอกรหัสผ่าน',
                   obscureText: _obscurePassword,
                   controller: _passwordController,
+                  onChanged: (_) => _clearFormError(),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword
@@ -226,6 +238,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   hintText: 'กรุณากรอกรหัสยืนยันผ่าน',
                   obscureText: _obscureConfirmPassword,
                   controller: _confirmPasswordController,
+                  onChanged: (_) => _clearFormError(),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscureConfirmPassword
@@ -244,6 +257,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
+                AuthInlineError(message: _errorMessage),
                 // Register Button
                 AppPrimaryButton(
                   text: 'สร้างบัญชี',

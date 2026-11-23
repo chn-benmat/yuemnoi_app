@@ -1,4 +1,12 @@
-enum UserItemStatus { available, rented, unavailable, maintenance, unknown }
+enum UserItemStatus {
+  available,
+  pendingReview,
+  rejected,
+  rented,
+  unavailable,
+  maintenance,
+  unknown,
+}
 
 // คำอธิบาย: Entity แทนรายการอุปกรณ์ของผู้ใช้ในชั้น Domain
 class UserItem {
@@ -29,6 +37,8 @@ class UserItem {
   // สถานะประกาศไม่ได้ยืนยันว่าอุปกรณ์ว่างในช่วงวันที่ต้องการเช่า
   UserItemStatus get listingStatus => switch (status.trim().toLowerCase()) {
     'available' || 'พร้อมใช้งาน' || 'พร้อมให้เช่า' => UserItemStatus.available,
+    'pending_review' => UserItemStatus.pendingReview,
+    'rejected' => UserItemStatus.rejected,
     'rented' || 'renting' || 'กำลังเช่า' || 'ถูกเช่า' => UserItemStatus.rented,
     'unavailable' || 'ไม่พร้อมใช้งาน' => UserItemStatus.unavailable,
     'maintenance' || 'ซ่อมบำรุง' => UserItemStatus.maintenance,

@@ -20,6 +20,7 @@ const actions = new Set([
   "identity-review",
   "suspend-user",
   "hide-item",
+  "review-item",
   "hide-review",
   "pilot",
   "staff",

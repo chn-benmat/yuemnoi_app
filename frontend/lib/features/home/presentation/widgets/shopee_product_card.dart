@@ -171,39 +171,10 @@ class ShopeeProductCard extends StatelessWidget {
 
                           const SizedBox(height: 4),
 
-                          // แถวล่างสุด: ดาวรีวิว + จำนวนรีวิว + ชื่อเจ้าของ
+                          // แสดงชื่อเจ้าของใต้ราคา โดยไม่แสดงคะแนนรีวิวในการ์ด Home
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              // ดาวและคะแนน
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.star_rounded,
-                                    size: 14,
-                                    color: Color(0xFFFFB800),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    item.rating.toStringAsFixed(1),
-                                    style: const TextStyle(
-                                      color: Color(0xFF2C3035),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '(${item.reviewCount})',
-                                    style: const TextStyle(
-                                      color: Color(0xFF9EA3A8),
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              // ชื่อเจ้าของแบบย่อ
                               Flexible(
                                 child: Text(
                                   item.ownerName,

@@ -69,6 +69,7 @@ class _RentalHistorySkeletonCard extends StatelessWidget {
 // ─── Data Model ───────────────────────────────────────────────────────────────
 
 class RentalHistoryItemData {
+  final int? bookingId;
   final int? itemId;
   final String title;
   final String ownerName;
@@ -78,8 +79,11 @@ class RentalHistoryItemData {
   final Color statusColor;
   final Color statusBgColor;
   final IconData iconData;
+  final bool isCompleted;
+  final bool alreadyReviewed;
 
   RentalHistoryItemData({
+    this.bookingId,
     this.itemId,
     required this.title,
     required this.ownerName,
@@ -89,6 +93,8 @@ class RentalHistoryItemData {
     required this.statusColor,
     required this.statusBgColor,
     required this.iconData,
+    this.isCompleted = false,
+    this.alreadyReviewed = false,
   });
 
   factory RentalHistoryItemData.fromEntity(
@@ -103,6 +109,7 @@ class RentalHistoryItemData {
           '${entity.startDate!.day}/${entity.startDate!.month}/${entity.startDate!.year}';
     }
     return RentalHistoryItemData(
+      bookingId: entity.bookingId,
       itemId: entity.itemId,
       title: entity.title,
       ownerName: entity.partnerName,
@@ -112,7 +119,13 @@ class RentalHistoryItemData {
       statusColor: statusColor,
       statusBgColor: statusBgColor,
       iconData: iconData,
+      isCompleted: _isCompletedStatus(entity.statusCode),
     );
+  }
+
+  static bool _isCompletedStatus(String value) {
+    final status = value.toLowerCase().trim();
+    return status == 'completed' || status == 'finished';
   }
 }
 
@@ -120,17 +133,13 @@ class RentalHistoryItemData {
 
 class RentalHistoryCard extends StatelessWidget {
   final RentalHistoryItemData item;
+  final VoidCallback? onReview;
 
-  const RentalHistoryCard({super.key, required this.item});
+  const RentalHistoryCard({super.key, required this.item, this.onReview});
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: item.itemId != null
-          ? () => AppRoutes.openItemDetail(context, itemId: item.itemId!)
-          : null,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
+    return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -143,9 +152,17 @@ class RentalHistoryCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            InkWell(
+              onTap: item.itemId != null
+                  ? () => AppRoutes.openItemDetail(context, itemId: item.itemId!)
+                  : null,
+              borderRadius: BorderRadius.circular(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
             // ── Icon Box ──
             Container(
               width: 56,
@@ -239,9 +256,61 @@ class RentalHistoryCard extends StatelessWidget {
                 ),
               ),
             ),
+                ],
+              ),
+            ),
+            if (item.isCompleted) ...[
+              const SizedBox(height: 14),
+              const Divider(height: 1, color: Color(0xFFF0EAF5)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.star_rounded,
+                    color: Color(0xFFF59E0B),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      item.alreadyReviewed
+                          ? 'รีวิวอุปกรณ์นี้แล้ว'
+                          : 'คืนอุปกรณ์เรียบร้อยแล้ว',
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 12,
+                        color: Color(0xFF5B5265),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (!item.alreadyReviewed && onReview != null)
+                    OutlinedButton.icon(
+                      onPressed: onReview,
+                      icon: const Icon(Icons.rate_review_outlined, size: 16),
+                      label: const Text('ให้คะแนน'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primaryColor,
+                        side: const BorderSide(color: Color(0xFFE3D2F2)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ],
         ),
-      ),
-    );
+      );
   }
 }

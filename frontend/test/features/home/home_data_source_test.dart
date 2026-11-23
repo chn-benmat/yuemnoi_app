@@ -130,17 +130,14 @@ void main() {
     },
   );
 
-  test(
-    'an empty server snapshot stays empty when the next request is offline',
-    () async {
-      final api = _FakeApiClient(const ApiResponse(statusCode: 200, data: []));
-      final source = HomeSupabaseDataSource(apiClient: api);
-      expect(await source.fetchNearbyItems(), isEmpty);
-      api.failure = const ApiClientException(ApiClientErrorType.connection);
-      source.clearMemoryCache();
-      expect(await source.fetchNearbyItems(), isEmpty);
-    },
-  );
+  test('an offline feed request uses the stored feed snapshot', () async {
+    final api = _FakeApiClient(const ApiResponse(statusCode: 200, data: []));
+    final source = HomeSupabaseDataSource(apiClient: api);
+    expect(await source.fetchNearbyItems(), isEmpty);
+    api.failure = const ApiClientException(ApiClientErrorType.connection);
+    source.clearMemoryCache();
+    expect(await source.fetchNearbyItems(), isEmpty);
+  });
 
   test(
     'a delayed request cannot publish the previous account into the next cache',
@@ -281,7 +278,15 @@ void main() {
       final nextSession = await HomeSupabaseDataSource(
         apiClient: api,
       ).fetchNearbyItems();
-      expect(nextSession.take(2).map((item) => item.id), ['3', '4']);
+      expect(nextSession.take(2).map((item) => item.id), ['4', '3']);
+      expect(
+        nextSession
+            .take(2)
+            .map((item) => item.id)
+            .toSet()
+            .intersection(refreshed.take(4).map((item) => item.id).toSet()),
+        isEmpty,
+      );
     },
   );
 

@@ -6,11 +6,13 @@ import '../../../../core/constants/colors.dart';
 class OtpInputFields extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
+  final ValueChanged<String>? onChanged;
 
   const OtpInputFields({
     super.key,
     required this.controller,
     required this.focusNode,
+    this.onChanged,
   });
 
   @override
@@ -28,6 +30,7 @@ class OtpInputFields extends StatelessWidget {
           length: 6,
           controller: controller,
           focusNode: focusNode,
+          onChanged: onChanged,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           separatorBuilder: (_) => SizedBox(width: spacing),

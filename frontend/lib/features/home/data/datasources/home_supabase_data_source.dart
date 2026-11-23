@@ -13,8 +13,8 @@ import '../models/feed_category_model.dart';
 import '../models/feed_item_model.dart';
 import 'home_mock_data_source.dart';
 
-/// Data Source สำหรับดึงข้อมูลอุปกรณ์จริงจาก Supabase และ Go Backend REST API (`/api/items`)
-/// พร้อม fallback ไปยัง Local Cache
+/// Data Source สำหรับดึงข้อมูลล่าสุดจาก Supabase หรือ Go Backend REST API (`/api/items`)
+/// เก็บ snapshot ไว้ในเครื่องได้ แต่ไม่ใช้ snapshot แสดงผลเมื่อดึงข้อมูลสดไม่ได้
 class HomeSupabaseDataSource {
   HomeSupabaseDataSource({
     SupabaseClient? supabaseClient,
@@ -200,6 +200,8 @@ class HomeSupabaseDataSource {
   DateTime? _lastFetchTime;
   String? _memoryOwner;
   Set<String> _deferPreviouslyShownIds = {};
+  static const int _curatedItemCount = 4;
+  static const int _recentRecommendationWindow = 12;
 
   String _recentItemsKey(String ownerId) =>
       'home_recent_recommendations_$ownerId';
@@ -208,7 +210,7 @@ class HomeSupabaseDataSource {
     final cachedItems = _cachedFeedItems;
     if (cachedItems != null) {
       _deferPreviouslyShownIds = cachedItems
-          .take(4)
+          .take(_curatedItemCount)
           .map((item) => item.id)
           .toSet();
     }
@@ -226,32 +228,47 @@ class HomeSupabaseDataSource {
     } catch (_) {
       // Keep the feed available even if local preference storage is unavailable.
     }
-    final persistedIds = prefs?.getStringList(_recentItemsKey(ownerId));
-    final deferredIds = _deferPreviouslyShownIds.isNotEmpty
-        ? _deferPreviouslyShownIds
-        : (persistedIds ?? const <String>[]).toSet();
-
+    final persistedHistory = prefs?.getStringList(_recentItemsKey(ownerId)) ??
+        const <String>[];
+    final history = _deferPreviouslyShownIds.isNotEmpty
+        ? [..._deferPreviouslyShownIds, ...persistedHistory]
+        : persistedHistory;
+    final deferredIds = history.toSet();
+    final availableById = {for (final item in items) item.id: item};
     final unseenItems = items
         .where((item) => !deferredIds.contains(item.id))
         .toList();
-    final previouslyShownItems = items
-        .where((item) => deferredIds.contains(item.id))
-        .toList();
-    final rotationPoint = unseenItems.length < 4 ? unseenItems.length : 4;
+    final featured = <FeedItemModel>[
+      ...unseenItems.take(_curatedItemCount),
+    ];
+    // If the candidate pool is smaller than the recent-history window, cycle
+    // from the least recently featured items instead of repeating its first row.
+    final repeatOrder = unseenItems.isEmpty ? history.reversed : history;
+    for (final id in repeatOrder) {
+      final item = availableById[id];
+      if (featured.length >= _curatedItemCount) break;
+      if (item != null && !featured.any((current) => current.id == id)) {
+        featured.add(item);
+      }
+    }
+    final featuredIds = featured.map((item) => item.id).toSet();
     final rotated = <FeedItemModel>[
-      ...unseenItems.take(rotationPoint),
-      ...previouslyShownItems,
-      ...unseenItems.skip(rotationPoint),
+      ...featured,
+      ...items.where((item) => !featuredIds.contains(item.id)),
     ];
     _deferPreviouslyShownIds = {};
     final diversified = [
       for (var index = 0; index < rotated.length; index++)
-        rotated[index].copyWith(isCurated: index < 4),
+        rotated[index].copyWith(isCurated: index < _curatedItemCount),
     ];
     try {
+      final updatedHistory = <String>[
+        ...diversified.take(_curatedItemCount).map((item) => item.id),
+        ...history,
+      ].toSet().take(_recentRecommendationWindow).toList();
       await prefs?.setStringList(
         _recentItemsKey(ownerId),
-        diversified.take(4).map((item) => item.id).toList(),
+        updatedHistory,
       );
     } catch (_) {
       // Rotation still works for this app session without persistent storage.
@@ -522,7 +539,7 @@ class HomeSupabaseDataSource {
               item['user_id']?.toString() == currentUserId,
           ownerAvatarUrl: ownerAvatar,
           imageUrl: imageUrl,
-          isCurated: i < 4,
+          isCurated: i < _curatedItemCount,
           isFavorite: FavoriteService.instance.isItemFavorite(
             int.tryParse(id) ?? -1,
           ),
@@ -620,9 +637,10 @@ class HomeSupabaseDataSource {
     return _mapRawListToFeedItems(rawList, profilesMap: profilesMap);
   }
 
-  /// ดึงข้อมูลทั้งหมดผ่าน Supabase Direct, Go Backend API (`/api/items`) หรือ Local Cache
+  /// ดึงรายการสดก่อน และใช้ cache เป็น fallback เฉพาะฟีดที่ไม่ได้ค้นหา
   Future<List<FeedItemModel>> _fetchAllSupabaseItems({
     bool forceRefresh = false,
+    bool allowOfflineCache = true,
   }) async {
     final ownerId = _cacheOwner;
     if (_memoryOwner != ownerId) {
@@ -632,7 +650,9 @@ class HomeSupabaseDataSource {
       _memoryOwner = ownerId;
     }
     await FavoriteService.instance.init();
-    if (!forceRefresh &&
+
+    if (allowOfflineCache &&
+        !forceRefresh &&
         _cachedFeedItems != null &&
         _lastFetchTime != null &&
         DateTime.now().difference(_lastFetchTime!).inSeconds < 15) {
@@ -647,8 +667,12 @@ class HomeSupabaseDataSource {
         // ลอง Go API ต่อเมื่อการอ่าน Supabase ล้มเหลวเท่านั้น
       }
     }
-    if (ownerId != _cacheOwner)
-      return _fetchAllSupabaseItems(forceRefresh: true);
+    if (ownerId != _cacheOwner) {
+      return _fetchAllSupabaseItems(
+        forceRefresh: true,
+        allowOfflineCache: allowOfflineCache,
+      );
+    }
     if (freshItems == null) {
       try {
         final response = await _apiClient.get('/api/items');
@@ -656,34 +680,52 @@ class HomeSupabaseDataSource {
           freshItems = _mapRawListToFeedItems(response.data as List);
         }
       } catch (_) {
-        // Cache เป็น fallback เมื่อบริการภายนอกติดต่อไม่ได้
+        // ลองแหล่งข้อมูลถัดไปและแจ้ง error หากเชื่อมต่อไม่ได้ทั้งหมด
       }
     }
-    if (ownerId != _cacheOwner)
-      return _fetchAllSupabaseItems(forceRefresh: true);
+    if (ownerId != _cacheOwner) {
+      return _fetchAllSupabaseItems(
+        forceRefresh: true,
+        allowOfflineCache: allowOfflineCache,
+      );
+    }
     if (freshItems != null) {
       freshItems = await _rotateRecentlyShownItems(freshItems, ownerId);
       _cachedFeedItems = freshItems;
       _lastFetchTime = DateTime.now();
       await _saveCachedItems(freshItems, ownerId);
-      if (ownerId != _cacheOwner)
-        return _fetchAllSupabaseItems(forceRefresh: true);
+      if (ownerId != _cacheOwner) {
+        return _fetchAllSupabaseItems(
+          forceRefresh: true,
+          allowOfflineCache: allowOfflineCache,
+        );
+      }
       return _withCurrentFavoriteState(freshItems);
     }
-    final cached = await _loadCachedItems(ownerId);
-    if (ownerId != _cacheOwner)
-      return _fetchAllSupabaseItems(forceRefresh: true);
-    if (cached != null) {
-      final rotated = await _rotateRecentlyShownItems(cached, ownerId);
-      _cachedFeedItems = rotated;
-      return _withCurrentFavoriteState(rotated);
+
+    if (allowOfflineCache) {
+      final cachedItems = await _loadCachedItems(ownerId);
+      if (ownerId != _cacheOwner) {
+        return _fetchAllSupabaseItems(
+          forceRefresh: true,
+          allowOfflineCache: allowOfflineCache,
+        );
+      }
+      if (cachedItems != null) {
+        final rotated = await _rotateRecentlyShownItems(cachedItems, ownerId);
+        _cachedFeedItems = rotated;
+        _lastFetchTime = DateTime.now();
+        return _withCurrentFavoriteState(rotated);
+      }
+
+      final fallbackItems = await _fallbackDataSource.fetchNearbyItems();
+      if (fallbackItems.isNotEmpty) {
+        return _withCurrentFavoriteState(fallbackItems);
+      }
     }
-    final fallbackItems = await _fallbackDataSource.fetchNearbyItems();
-    if (fallbackItems.isNotEmpty) {
-      return _withCurrentFavoriteState(fallbackItems);
-    }
+
     throw const FormatException(
-      'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่',
+      'ไม่มีการเชื่อมต่ออินเทอร์เน็ต กรุณาลองใหม่',
     );
   }
 
@@ -746,7 +788,11 @@ class HomeSupabaseDataSource {
     int? maxPrice,
     double? minRating,
   }) async {
-    var items = await _fetchAllSupabaseItems();
+    final isSearching = searchQuery?.trim().isNotEmpty == true;
+    var items = await _fetchAllSupabaseItems(
+      forceRefresh: isSearching,
+      allowOfflineCache: !isSearching,
+    );
 
     if (categoryId != null && categoryId.isNotEmpty && categoryId != 'all') {
       items = items.where((item) => item.categoryId == categoryId).toList();

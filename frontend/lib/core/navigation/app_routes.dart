@@ -649,6 +649,9 @@ abstract final class AppRoutes {
             final args = extra is Map ? extra : const <String, dynamic>{};
             return MaterialPage<void>(
               child: RentalReviewScreen(
+                  bookingId: args['bookingId'] is num
+                      ? (args['bookingId'] as num).toInt()
+                      : null,
                 itemName: args['itemName'] as String? ?? 'อุปกรณ์ที่เช่า',
                 itemId: args['itemId'] is num
                     ? (args['itemId'] as num).toInt()
@@ -756,6 +759,7 @@ abstract final class AppRoutes {
     BuildContext context, {
     String? itemName,
     int? itemId,
+    int? bookingId,
     String? ownerName,
     String? ownerId,
     String? ownerAvatarUrl,
@@ -766,6 +770,7 @@ abstract final class AppRoutes {
       extra: {
         if (itemName != null) 'itemName': itemName,
         if (itemId != null) 'itemId': itemId,
+        if (bookingId != null) 'bookingId': bookingId,
         if (ownerName != null) 'ownerName': ownerName,
         if (ownerId != null) 'ownerId': ownerId,
         if (ownerAvatarUrl != null) 'ownerAvatarUrl': ownerAvatarUrl,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../../core/constants/colors.dart';
+import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../data/repositories/rental_management_repository_impl.dart';
@@ -47,6 +48,31 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
 
     try {
       final bookings = await _getRentalHistoryUseCase.execute(currentUserId);
+      final completedBookingIds = bookings
+          .where(
+            (booking) =>
+                booking.bookingId != null &&
+                booking.itemId != null &&
+                _isCompleted(booking.statusCode),
+          )
+          .map((booking) => booking.bookingId!)
+          .toList();
+      final reviewedBookingIds = <int>{};
+      if (completedBookingIds.isNotEmpty) {
+        try {
+          final reviews = await SupabaseConfig.client
+              .from('review_tb')
+              .select('booking_id')
+              .eq('user_id', currentUserId)
+              .inFilter('booking_id', completedBookingIds);
+          for (final review in reviews as List) {
+            final bookingId = (review['booking_id'] as num?)?.toInt();
+            if (bookingId != null) reviewedBookingIds.add(bookingId);
+          }
+        } catch (_) {
+          // หากตรวจประวัติรีวิวไม่ได้ ยังให้เปิดแบบฟอร์มที่มีการตรวจซ้ำก่อนบันทึก
+        }
+      }
       final List<RentalHistoryItemData> result = [];
 
       for (final b in bookings) {
@@ -66,6 +92,7 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
 
         result.add(
           RentalHistoryItemData(
+            bookingId: b.bookingId,
             itemId: b.itemId,
             title: b.title,
             ownerName: b.partnerName,
@@ -75,6 +102,9 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
             statusColor: statusColor,
             statusBgColor: statusBg,
             iconData: _mapCategoryToIcon(b.category),
+            isCompleted: _isCompleted(b.statusCode),
+            alreadyReviewed:
+                b.bookingId != null && reviewedBookingIds.contains(b.bookingId),
           ),
         );
       }
@@ -88,6 +118,23 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  bool _isCompleted(String? status) {
+    final normalized = status?.toLowerCase().trim();
+    return normalized == 'completed' || normalized == 'finished';
+  }
+
+  Future<void> _openReview(RentalHistoryItemData item) async {
+    if (item.bookingId == null || item.itemId == null) return;
+    await AppRoutes.openReview(
+      context,
+      bookingId: item.bookingId,
+      itemId: item.itemId,
+      itemName: item.title,
+      ownerName: item.ownerName,
+    );
+    if (mounted) await _loadRentalHistory();
   }
 
   (String, Color, Color) _formatStatus(String? status) {
@@ -200,7 +247,12 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
                     const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final item = _history[index];
-                  return RentalHistoryCard(item: item);
+                  return RentalHistoryCard(
+                    item: item,
+                    onReview: item.isCompleted && !item.alreadyReviewed
+                        ? () => _openReview(item)
+                        : null,
+                  );
                 },
               ),
             ),

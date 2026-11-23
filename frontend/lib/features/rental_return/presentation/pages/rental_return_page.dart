@@ -311,6 +311,21 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
       ReturnCompletedDialog.show(
         context: context,
         session: state.session,
+        onReview: state.isRenter && state.session.itemId != null
+            ? () async {
+                final session = state.session;
+                await AppRoutes.openReview(
+                  context,
+                  bookingId: session.rentalId,
+                  itemId: session.itemId,
+                  itemName: session.itemName,
+                  ownerName: session.lenderName,
+                  ownerId: session.lenderId,
+                  itemImageUrl: session.itemImageUrl,
+                );
+                if (mounted) _leaveReturnFlow();
+              }
+            : null,
         onDismiss: _leaveReturnFlow,
       ),
     );

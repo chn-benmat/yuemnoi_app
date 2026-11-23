@@ -51,6 +51,9 @@ func operationError(c fiber.Ctx, err error) error {
 		"self_review_forbidden": "ต้องให้เจ้าหน้าที่คนอื่นพิจารณาคำขอนี้", "identity_duplicate": "พบข้อมูลซ้ำ กรุณาตรวจสอบโดยเจ้าหน้าที่",
 		"card_expired": "บัตรหมดอายุ กรุณาใช้บัตรปัจจุบัน", "reason_required": "กรุณาระบุเหตุผล 3–500 ตัวอักษร",
 		"card_validity_required": "กรุณาระบุวันหมดอายุหรือบัตรตลอดชีพตามภาพบัตรที่ตรวจแล้ว",
+		"item_not_pending":       "ประกาศนี้ผ่านการพิจารณาแล้วหรือไม่มีรายการแล้ว",
+		"item_not_found":         "ไม่พบประกาศที่ต้องการตรวจ",
+		"invalid_item_review":    "เลือกผลการพิจารณาประกาศไม่ถูกต้อง",
 		"last_staff_required":    "ต้องเหลือเจ้าหน้าที่ที่ใช้งานได้อย่างน้อยหนึ่งบัญชี", "self_suspend_forbidden": "ไม่สามารถระงับบัญชีตนเอง",
 		"manual_review_required": "กรุณายืนยันว่าตรวจหลักฐานด้วยตนเองแล้ว",
 		"evidence_unavailable":   "หลักฐานหมดอายุหรือถูกลบแล้ว", "invalid_date_range": "ช่วงเวลารายงานไม่ถูกต้อง",
@@ -71,6 +74,9 @@ func operationError(c fiber.Ctx, err error) error {
 	}
 	if code == "evidence_unavailable" {
 		status = 410
+	}
+	if code == "item_not_found" {
+		status = http.StatusNotFound
 	}
 	return c.Status(status).JSON(fiber.Map{"error": message, "code": code})
 }
@@ -392,7 +398,13 @@ func (h *OperationsHandler) Read(c fiber.Ctx) error {
 	if module == "guardians" || module == "guardian-detail" {
 		return c.SendStatus(404)
 	}
-	raw, err := h.options.Store.RPC(c.Context(), "admin_read", map[string]any{"p_actor": u, "p_module": module, "p_query": q})
+	rpcName := "admin_read"
+	args := map[string]any{"p_actor": u, "p_module": module, "p_query": q}
+	if module == "items" {
+		rpcName = "admin_items_read"
+		args = map[string]any{"p_actor": u, "p_query": q}
+	}
+	raw, err := h.options.Store.RPC(c.Context(), rpcName, args)
 	if err != nil {
 		return operationError(c, err)
 	}
@@ -442,6 +454,18 @@ func (h *OperationsHandler) Action(c fiber.Ctx) error {
 	var data map[string]any
 	if err := c.Bind().JSON(&data); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "ข้อมูลการดำเนินงานไม่ถูกต้อง"})
+	}
+	if c.Params("action") == "review-item" {
+		itemID, err := strconv.ParseInt(c.Params("target"), 10, 64)
+		if err != nil || itemID <= 0 {
+			return c.Status(400).JSON(fiber.Map{"error": "รหัสประกาศไม่ถูกต้อง"})
+		}
+		return h.rpc(c, "admin_review_item", map[string]any{
+			"p_actor":    u,
+			"p_item":     itemID,
+			"p_decision": data["decision"],
+			"p_reason":   data["reason"],
+		})
 	}
 	return h.rpc(c, "admin_action", map[string]any{"p_actor": u, "p_action": c.Params("action"), "p_target": c.Params("target"), "p_data": data})
 }

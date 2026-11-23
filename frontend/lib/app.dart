@@ -4,7 +4,9 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart';
 
+import 'core/services/location_service.dart';
 import 'core/navigation/app_routes.dart';
 import 'core/navigation/item_deep_link.dart';
 import 'core/network/supabase_client.dart';
@@ -14,6 +16,7 @@ import 'core/services/app_notification_service.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/recommendation_location_service.dart';
 import 'core/theme/app_theme.dart';
+import 'core/widgets/app_popup.dart';
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
@@ -34,6 +37,7 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   late final GoRouter _router;
   StreamSubscription<Uri>? _deepLinkSubscription;
   StreamSubscription<dynamic>? _authStateSubscription;
+  final Set<String> _promptedLocationUsers = {};
 
   @override
   void initState() {
@@ -56,6 +60,12 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
                     .syncPendingForSignedInUser(),
               );
             }
+            if (data.event.name == 'signedIn') {
+              final userId = data.session?.user.id;
+              if (userId != null && userId.isNotEmpty) {
+                unawaited(_promptForRecommendationLocation(userId));
+              }
+            }
           });
     }
     unawaited(_handleInitialDeepLink());
@@ -68,7 +78,99 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
       AppOrientationService.setupOrientation();
       // ผูก callback หลัง navigator พร้อม เพื่อไม่ทำการแตะ Push ตอน cold start หาย
       FcmService.instance.onNotificationOpened = _openPush;
+      final userId = SupabaseConfig.isInitialized
+          ? SupabaseConfig.client.auth.currentUser?.id
+          : null;
+      if (userId != null && userId.isNotEmpty) {
+        unawaited(_promptForRecommendationLocation(userId));
+      }
     });
+  }
+
+  Future<void> _promptForRecommendationLocation(String userId) async {
+    if (!_promptedLocationUsers.add(userId)) return;
+
+    // Allow the login route to finish its navigation before showing the prompt.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted ||
+        SupabaseConfig.client.auth.currentUser?.id != userId) {
+      return;
+    }
+
+    final service = RecommendationLocationService.instance;
+    try {
+      if (await service.load() != null) return;
+    } catch (_) {
+      // Do not create a second saved location when the existing one cannot be checked.
+      return;
+    }
+
+    final context = AppRoutes.navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    final shouldUseLocation = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.location_on_rounded),
+        title: const Text('แนะนำอุปกรณ์ใกล้คุณ'),
+        content: const Text(
+          'อนุญาตให้แอปใช้ GPS เพื่อบันทึกตำแหน่งปัจจุบันและแนะนำอุปกรณ์บริเวณใกล้เคียงได้ไหม คุณเปลี่ยนตำแหน่งภายหลังได้ในการตั้งค่าบัญชี',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('ไว้ก่อน'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('อนุญาตใช้ GPS'),
+          ),
+        ],
+      ),
+    );
+    if (shouldUseLocation != true || !mounted) return;
+
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw const RecommendationLocationServiceException(
+          'กรุณาเปิดบริการตำแหน่งในโทรศัพท์แล้วลองอีกครั้ง',
+        );
+      }
+
+      final position = await LocationService.instance.getCurrentPosition();
+      if (position == null) {
+        throw const RecommendationLocationServiceException(
+          'รับตำแหน่งปัจจุบันไม่ได้ กรุณาลองอีกครั้ง',
+        );
+      }
+      final place = await LocationService.instance.reverseGeocode(
+        position.latitude,
+        position.longitude,
+      );
+      await service.save(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        source: 'gps',
+        label: place?.displayName ?? 'ตำแหน่งปัจจุบัน',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      showAppPopup(
+        context,
+        content: Text(
+          error is RecommendationLocationServiceException
+              ? error.message
+              : 'บันทึกตำแหน่งไม่สำเร็จ กรุณาลองใหม่ในการตั้งค่าบัญชี',
+        ),
+      );
+    }
   }
 
   Future<void> _openConversation(String conversationId) async {

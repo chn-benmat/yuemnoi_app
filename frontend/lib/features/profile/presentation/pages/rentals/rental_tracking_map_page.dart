@@ -96,6 +96,12 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   late bool _isOwner;
   int _renterHandoverStep = 0;
 
+  // Routes opened from a chat bubble carry the booking ID in BookingRequestData,
+  // while routes opened from rental status pass it as a separate argument.
+  // Resolve one canonical ID so both participants generate the same PIN.
+  int? get _resolvedBookingId =>
+      widget.bookingId ?? widget.bookingData?.bookingId;
+
   DateTime? get _startDate {
     return widget.bookingData?.startDate;
   }
@@ -119,6 +125,18 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   }
 
   void _openPaymentOrHandover() {
+    if (_currentStatusCode != 'confirmed') {
+      showAppPopup(
+        context,
+        content: Text(
+          _currentStatusCode == 'pending'
+              ? 'คำขอเช่ายังรอการยืนยัน จึงยังดำเนินการนัดรับหรือยกเลิกไม่ได้'
+              : 'สถานะการเช่านี้ไม่สามารถดำเนินการนัดรับหรือยกเลิกได้',
+        ),
+      );
+      return;
+    }
+
     if (_isBeforeMeetupDate) {
       showDialog<void>(
         context: context,
@@ -194,7 +212,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   void _showHandoverModal() {
     RentalHandoverModal.show(
       context,
-      bookingId: widget.bookingId,
+      bookingId: _resolvedBookingId,
       conversationId:
           widget.conversationId ?? widget.bookingData?.conversationId,
       itemId: widget.bookingData?.item.id,
@@ -214,6 +232,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
         }
       },
       onHandoverSuccess: (newStatus) {
+        if (!mounted) return;
         setState(() {
           _currentStatusCode = newStatus;
           _renterHandoverStep = 0;
@@ -309,7 +328,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
 
   Future<void> _loadSavedHandoverStep() async {
     final step = await RentalHandoverModal.getSavedStep(
-      bookingId: widget.bookingId,
+      bookingId: _resolvedBookingId,
       conversationId:
           widget.conversationId ?? widget.bookingData?.conversationId,
       itemId: widget.bookingData?.item.id,
@@ -519,7 +538,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       final phone =
           await (widget.contactDataSource ?? RentalContactRemoteDataSource())
               .getPhone(
-                bookingId: widget.bookingId,
+                bookingId: _resolvedBookingId,
                 conversationId:
                     widget.conversationId ?? widget.bookingData?.conversationId,
               );

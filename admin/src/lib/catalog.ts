@@ -92,6 +92,7 @@ export const statusNames: Record<string, string> = {
   unverified: "ยังไม่ยืนยัน",
   revoked: "เพิกถอน",
   pending: "รอพิจารณา",
+  pending_review: "รอตรวจสอบประกาศ",
   capture: "รอส่งหลักฐาน",
   rejected: "ปฏิเสธ",
   corrections: "ขอข้อมูลเพิ่ม",

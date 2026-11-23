@@ -188,24 +188,34 @@ class RentalReturnRemoteDataSource {
     required String note,
     required List<XFile> photos,
   }) async {
-    final files = <ApiUpload>[];
-    for (final photo in photos) {
-      files.add(
-        ApiUpload(
-          fieldName: 'photos',
-          bytes: await photo.readAsBytes(),
-          fileName: photo.name,
+    try {
+      final files = <ApiUpload>[];
+      for (final photo in photos) {
+        files.add(
+          ApiUpload(
+            fieldName: 'photos',
+            bytes: await photo.readAsBytes(),
+            fileName: photo.name,
+          ),
+        );
+      }
+      _result(
+        await _api.postMultipart(
+          '/api/rentals/$rentalId/cancel',
+          fields: {'reason': reason, 'note': note},
+          files: files,
+          headers: _headers,
         ),
       );
+    } on ApiClientException catch (error) {
+      final message = switch (error.type) {
+        ApiClientErrorType.timeout => 'การยกเลิกใช้เวลานานเกินไป กรุณาลองใหม่',
+        ApiClientErrorType.connection =>
+          'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
+        ApiClientErrorType.invalidResponse => 'เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง กรุณาลองใหม่',
+      };
+      throw StateError(message);
     }
-    _result(
-      await _api.postMultipart(
-        '/api/rentals/$rentalId/cancel',
-        fields: {'reason': reason, 'note': note},
-        files: files,
-        headers: _headers,
-      ),
-    );
   }
 
   Future<String> uploadPhoto({

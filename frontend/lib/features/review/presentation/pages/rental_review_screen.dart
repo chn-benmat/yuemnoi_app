@@ -10,6 +10,7 @@ import '../../../profile/data/datasources/profile_storefront_remote_data_source.
 /// หน้าจอ UI สำหรับรีวิวประสบการณ์การเช่าสินค้า (Rental Review Screen)
 /// แบบฟอร์มรีวิวพร้อมบันทึกผลลง Supabase หลังยืนยันการส่ง
 class RentalReviewScreen extends StatefulWidget {
+  final int? bookingId;
   final String itemName;
   final int? itemId;
   final String itemSubtitle;
@@ -21,6 +22,7 @@ class RentalReviewScreen extends StatefulWidget {
 
   const RentalReviewScreen({
     super.key,
+    this.bookingId,
     this.itemName = 'อุปกรณ์ที่เช่า',
     this.itemId,
     this.itemSubtitle = '',
@@ -116,6 +118,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
     final itemId = widget.itemId;
     final userId = client?.auth.currentUser?.id;
     if (client == null ||
+        widget.bookingId == null ||
         itemId == null ||
         itemId <= 0 ||
         userId == null ||
@@ -125,6 +128,49 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
         content: Text(
           'ไม่พบข้อมูลการเช่าหรือบัญชีผู้ใช้ กรุณาเปิดรีวิวจากรายการเช่า',
         ),
+      );
+      return;
+    }
+
+    try {
+      final booking = await client
+          .from('booking_tb')
+          .select('id')
+          .eq('id', widget.bookingId!)
+          .eq('user_id', userId)
+          .eq('item_id', itemId)
+          .inFilter('status', ['completed', 'finished'])
+          .limit(1);
+      if ((booking as List).isEmpty) {
+        if (!mounted) return;
+        showAppPopup(
+          context,
+          content: const Text(
+            'สามารถรีวิวได้หลังจากเจ้าของยืนยันการรับคืนอุปกรณ์แล้ว',
+          ),
+        );
+        return;
+      }
+
+      final existingReview = await client
+          .from('review_tb')
+          .select('id')
+          .eq('booking_id', widget.bookingId!)
+          .limit(1);
+      if ((existingReview as List).isNotEmpty) {
+        if (!mounted) return;
+        showAppPopup(
+          context,
+          content: const Text('คุณรีวิวอุปกรณ์นี้ไปแล้ว'),
+        );
+        return;
+      }
+    } catch (error) {
+      debugPrint('Could not verify rental review eligibility: $error');
+      if (!mounted) return;
+      showAppPopup(
+        context,
+        content: const Text('ตรวจสอบสิทธิ์การรีวิวไม่สำเร็จ กรุณาลองอีกครั้ง'),
       );
       return;
     }
@@ -141,6 +187,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
       await client.from('review_tb').insert({
         'user_id': userId,
         'item_id': itemId,
+        'booking_id': widget.bookingId,
         'rating': _selectedRating.toString(),
         'description': description.isEmpty ? null : description,
       });

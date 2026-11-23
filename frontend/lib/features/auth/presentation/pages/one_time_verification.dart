@@ -1,5 +1,5 @@
-import 'package:frontend/core/widgets/app_popup.dart';
 import 'dart:async';
+import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
@@ -13,6 +13,7 @@ import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../widgets/otp_input_fields.dart';
 import '../widgets/otp_resend_section.dart';
+import '../widgets/auth_inline_error.dart';
 
 class OneTimeVerificationScreen extends StatefulWidget {
   const OneTimeVerificationScreen({super.key, required this.email});
@@ -33,6 +34,7 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
   bool _canResend = false;
   bool _isResending = false;
   bool _isVerifying = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -77,10 +79,11 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
 
     final otp = _otpController.text;
     if (otp.length != 6) {
-      showAppPopup(context, content: Text('กรุณากรอกรหัส OTP ให้ครบ 6 หลัก'));
+      setState(() => _errorMessage = 'กรุณากรอกรหัส OTP ให้ครบ 6 หลัก');
       return;
     }
 
+    setState(() => _errorMessage = null);
     FocusScope.of(context).unfocus();
     context.read<AuthBloc>().add(
       AuthVerifyOtpRequested(email: widget.email, otpCode: otp),
@@ -89,11 +92,8 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
 
   void _resendOtp() {
     if (!_canResend || _isResending || _isVerifying) return;
+    setState(() => _errorMessage = null);
     context.read<AuthBloc>().add(AuthSendOtpRequested(email: widget.email));
-  }
-
-  void _showError(String message) {
-    showAppPopup(context, content: Text(message));
   }
 
   @override
@@ -105,6 +105,7 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
         if (state is VerifyOtpLoading) {
           setState(() {
             _isVerifying = true;
+            _errorMessage = null;
           });
         } else if (state is VerifyOtpSuccess) {
           setState(() {
@@ -117,16 +118,17 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
         } else if (state is VerifyOtpFailure) {
           setState(() {
             _isVerifying = false;
+            _errorMessage = userFriendlyErrorMessage(
+              otpVerificationMessageForDisplay(
+                state.message,
+                hasExpired: _secondsRemaining <= 0,
+              ),
+            );
           });
-          _showError(
-            otpVerificationMessageForDisplay(
-              state.message,
-              hasExpired: _secondsRemaining <= 0,
-            ),
-          );
         } else if (state is SendOtpLoading) {
           setState(() {
             _isResending = true;
+            _errorMessage = null;
           });
         } else if (state is SendOtpSuccess) {
           setState(() {
@@ -138,8 +140,8 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
         } else if (state is SendOtpFailure) {
           setState(() {
             _isResending = false;
+            _errorMessage = userFriendlyErrorMessage(state.message);
           });
-          _showError(state.message);
         }
       },
       child: Scaffold(
@@ -207,7 +209,14 @@ class _OneTimeVerificationScreenState extends State<OneTimeVerificationScreen> {
               OtpInputFields(
                 controller: _otpController,
                 focusNode: _otpFocusNode,
+                onChanged: (_) {
+                  if (_errorMessage != null) {
+                    setState(() => _errorMessage = null);
+                  }
+                },
               ),
+              const SizedBox(height: 12),
+              AuthInlineError(message: _errorMessage),
               const SizedBox(height: 32),
               // นับเวลาถอยหลังส่งรหัสใหม่ / ปุ่มส่งรหัสอีกครั้ง
               OtpResendSection(

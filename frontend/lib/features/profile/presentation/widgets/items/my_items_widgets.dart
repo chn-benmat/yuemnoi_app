@@ -10,18 +10,24 @@ import '../../bloc/my_items_state.dart';
 extension MyItemsFilterStyle on MyItemsFilter {
   String get label => switch (this) {
     MyItemsFilter.available => 'เปิดให้เช่า',
+    MyItemsFilter.pendingReview => 'รอตรวจสอบ',
+    MyItemsFilter.rejected => 'ไม่ผ่านการตรวจ',
     MyItemsFilter.rented => 'กำลังถูกเช่า',
     MyItemsFilter.hidden => 'กำลังซ่อน',
   };
 
   Color get foreground => switch (this) {
     MyItemsFilter.available => const Color(0xFF176B47),
+    MyItemsFilter.pendingReview => const Color(0xFF8C5719),
+    MyItemsFilter.rejected => const Color(0xFFA33434),
     MyItemsFilter.rented => const Color(0xFF315FA6),
     MyItemsFilter.hidden => const Color(0xFF626574),
   };
 
   IconData get icon => switch (this) {
     MyItemsFilter.available => Icons.check_circle_outline_rounded,
+    MyItemsFilter.pendingReview => Icons.hourglass_top_rounded,
+    MyItemsFilter.rejected => Icons.cancel_outlined,
     MyItemsFilter.rented => Icons.schedule_rounded,
     MyItemsFilter.hidden => Icons.visibility_off_outlined,
   };
@@ -30,6 +36,8 @@ extension MyItemsFilterStyle on MyItemsFilter {
 extension MyItemStatusStyle on UserItemStatus {
   String get label => switch (this) {
     UserItemStatus.available => 'เปิดให้เช่า',
+    UserItemStatus.pendingReview => 'รอแอดมินตรวจสอบ',
+    UserItemStatus.rejected => 'ไม่ผ่านการตรวจสอบ',
     UserItemStatus.rented => 'กำลังถูกเช่า',
     UserItemStatus.unavailable => 'ยังไม่พร้อม',
     UserItemStatus.maintenance => 'อยู่ระหว่างดูแล',
@@ -38,6 +46,8 @@ extension MyItemStatusStyle on UserItemStatus {
 
   Color get foreground => switch (this) {
     UserItemStatus.available => const Color(0xFF176B47),
+    UserItemStatus.pendingReview => const Color(0xFF8C5719),
+    UserItemStatus.rejected => const Color(0xFFA33434),
     UserItemStatus.rented => const Color(0xFF315FA6),
     UserItemStatus.maintenance => const Color(0xFF8C5719),
     _ => const Color(0xFF626574),
@@ -45,6 +55,8 @@ extension MyItemStatusStyle on UserItemStatus {
 
   Color get background => switch (this) {
     UserItemStatus.available => const Color(0xFFECF7F0),
+    UserItemStatus.pendingReview => const Color(0xFFFFF4E5),
+    UserItemStatus.rejected => const Color(0xFFFFEEEE),
     UserItemStatus.rented => const Color(0xFFEDF3FF),
     UserItemStatus.maintenance => const Color(0xFFFFF4E5),
     _ => const Color(0xFFF0F1F5),
@@ -52,6 +64,8 @@ extension MyItemStatusStyle on UserItemStatus {
 
   IconData get icon => switch (this) {
     UserItemStatus.available => Icons.check_circle_outline_rounded,
+    UserItemStatus.pendingReview => Icons.hourglass_top_rounded,
+    UserItemStatus.rejected => Icons.cancel_outlined,
     UserItemStatus.rented => Icons.schedule_rounded,
     UserItemStatus.unavailable => Icons.pause_circle_outline_rounded,
     UserItemStatus.maintenance => Icons.build_circle_outlined,
@@ -302,6 +316,20 @@ class MyItemCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 9),
+                    if (item.status == UserItemStatus.rejected) ...[
+                      Text(
+                        'แก้ไขประกาศเพื่อส่งตรวจสอบอีกครั้ง',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 12,
+                          height: 1.4,
+                          color: Color(0xFFA33434),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     Text.rich(
                       TextSpan(
                         text: '฿$price',
