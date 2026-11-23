@@ -12,8 +12,9 @@ import (
 )
 
 type supabaseRentalRepository struct {
-	client  *supabase.Client
-	storage *storageClient
+	client     *supabase.Client
+	storage    *storageClient
+	codePepper string
 }
 
 func NewSupabaseRentalRepository(sbClient *supabase.Client, serviceKeys ...string) domain.RentalRepository {
@@ -21,7 +22,7 @@ func NewSupabaseRentalRepository(sbClient *supabase.Client, serviceKeys ...strin
 	if len(serviceKeys) > 0 {
 		key = serviceKeys[0]
 	}
-	return &supabaseRentalRepository{client: sbClient, storage: newStorageClient(sbClient, key)}
+	return &supabaseRentalRepository{client: sbClient, storage: newStorageClient(sbClient, key), codePepper: key}
 }
 
 func (r *supabaseRentalRepository) CreateRental(
@@ -64,7 +65,42 @@ func (r *supabaseRentalRepository) UpdateRentalStatus(
 	if targetStatus != "active" {
 		return nil, domain.ErrRentalStatusTransition
 	}
-	return r.rentalAction(ctx, userID, rentalID, "handover", map[string]any{})
+	return nil, domain.ErrRentalHandoverCode
+}
+
+func (r *supabaseRentalRepository) CompleteHandover(ctx context.Context, userID string, rentalID int64, handoverCode string) (*domain.RentalOrder, error) {
+	if r.codePepper == "" {
+		return nil, fmt.Errorf("handover code secret is not configured")
+	}
+	if len(handoverCode) != 6 || strings.Trim(handoverCode, "0123456789") != "" {
+		return nil, domain.ErrRentalHandoverCode
+	}
+	digest := r.handoverCodeDigest(rentalID, handoverCode)
+	var result map[string]any
+	err := r.client.DB.Rpc("complete_rental_handover_pin", map[string]any{
+		"p_actor": userID, "p_booking": rentalID, "p_code_digest": digest,
+	}).ExecuteWithContext(ctx, &result)
+	if err != nil {
+		return nil, rentalLifecycleError(err)
+	}
+	if result["error"] == "invalid_handover_pin" {
+		return nil, domain.ErrRentalHandoverCode
+	}
+	if result["error"] == "rental_not_started" {
+		return nil, domain.ErrRentalNotStarted
+	}
+	raw, err := json.Marshal(result["booking"])
+	if err != nil {
+		return nil, err
+	}
+	var order domain.RentalOrder
+	if err = json.Unmarshal(raw, &order); err != nil {
+		return nil, err
+	}
+	if order.ID <= 0 {
+		return nil, fmt.Errorf("handover RPC returned no booking")
+	}
+	return &order, nil
 }
 
 func mapRentalRepositoryError(operation string, err error) error {

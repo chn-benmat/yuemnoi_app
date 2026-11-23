@@ -43,6 +43,7 @@ class BookingRequestBubbleCard extends StatefulWidget {
 class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   bool _isConfirmed = false;
   int? _bookingId;
+  String _paymentMethod = 'cash';
   String _rentalStatus =
       'pending'; // 'pending', 'confirmed', 'active', 'completed'
   DateTime? _endDateTime;
@@ -92,11 +93,13 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   @override
   void initState() {
     super.initState();
+    _paymentMethod = widget.bookingData.paymentMethod;
     _applySharedStatus();
     _checkConfirmedStatus();
   }
 
   void _applySharedStatus() {
+    _paymentMethod = widget.bookingData.paymentMethod;
     final status = widget.bookingData.status ?? widget.initialStatus;
     if (status != null) {
       _rentalStatus = status;
@@ -120,7 +123,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
         widget.message != oldWidget.message ||
         widget.initialStatus != oldWidget.initialStatus ||
         widget.bookingData.status != oldWidget.bookingData.status ||
-        widget.bookingData.bookingId != oldWidget.bookingData.bookingId) {
+        widget.bookingData.bookingId != oldWidget.bookingData.bookingId ||
+        widget.bookingData.paymentMethod !=
+            oldWidget.bookingData.paymentMethod) {
       _applySharedStatus();
       _checkConfirmedStatus();
     }
@@ -243,7 +248,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
         final exactBooking = await client
             .from('booking_tb')
             .select(
-              'id, status, created_at, start_at, end_at, start_date, end_date, user_id',
+              'id, status, created_at, start_at, end_at, start_date, end_date, user_id, payment_method',
             )
             .eq('id', targetBookingId)
             .maybeSingle();
@@ -262,6 +267,8 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
           } else {
             parsedEndAt = null;
           }
+          final databasePaymentMethod = exactBooking['payment_method']
+              ?.toString();
 
           final String resolvedStatus;
           if (rawDbStatus == 'completed' ||
@@ -295,6 +302,10 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             }.contains(resolvedStatus);
             _rentalStatus = resolvedStatus;
             _bookingId = targetBookingId;
+            if (databasePaymentMethod == 'cash' ||
+                databasePaymentMethod == 'promptpay') {
+              _paymentMethod = databasePaymentMethod!;
+            }
             if (parsedEndAt != null) {
               _endDateTime = parsedEndAt;
             }
@@ -359,10 +370,8 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
         'pickupLocation': bookingData.item.defaultLocation.isNotEmpty
             ? bookingData.item.defaultLocation
             : bookingData.location,
-        'destinationLat':
-            bookingData.item.latitude ?? bookingData.latitude,
-        'destinationLng':
-            bookingData.item.longitude ?? bookingData.longitude,
+        'destinationLat': bookingData.item.latitude ?? bookingData.latitude,
+        'destinationLng': bookingData.item.longitude ?? bookingData.longitude,
         'pickupNote': bookingData.locationNote,
         'ownerName': bookingData.item.ownerName,
         'periodText': bookingData.formattedPeriodSummary,
@@ -383,13 +392,23 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     final isOwner = _checkIsOwner();
     final attachedData = widget.bookingData.copyWith(
       bookingId: _bookingId,
+      paymentMethod: _paymentMethod,
       originalMessageId: widget.message.id,
       conversationId:
           widget.bookingData.conversationId ?? widget.message.conversationId,
     );
 
-    // เมื่อกดยืนยันแล้ว (ทั้งฝั่งผู้เช่าและปล่อยเช่า) กด "รายละเอียดนัดรับ" จะเป็นการเปิดดูเส้นทางนัดรับบนแผนที่โดยตรง
+    // ผู้เช่าตรวจสอบสรุปและวิธีชำระก่อน ส่วนผู้ปล่อยเช่าหรือรายการที่เริ่มเช่าแล้วเปิดแผนที่ได้เลย
     if (_isConfirmed) {
+      if (!isOwner && _rentalStatus == 'confirmed') {
+        // ให้ผู้เช่าตรวจสอบวันเวลา สถานที่ ราคา และเลือกวิธีชำระก่อนเปิดแผนที่
+        await AppRoutes.openBookingConfirmation(
+          context,
+          bookingData: attachedData,
+          isDetailView: true,
+        );
+        return;
+      }
       AppRoutes.openRentalTrackingMap(
         context,
         bookingData: attachedData,
@@ -638,6 +657,35 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
 
             const SizedBox(height: 10),
 
+            SizedBox(
+              width: double.infinity,
+              height: 36,
+              child: OutlinedButton.icon(
+                key: const ValueKey('chat-booking-item-detail-button'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryColor,
+                  side: const BorderSide(color: Color(0xFFD8B4FE), width: 1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+                onPressed: () => AppRoutes.openItemDetail(
+                  context,
+                  itemId: item.id,
+                ),
+                icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                label: const Text(
+                  'ดูรายละเอียดสินค้า',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+
             // 3. กล่องข้อมูลการเช่าแบบ Swiss Table (แสดงเฉพาะก่อนเริ่มการเช่า)
             if (!_isRentalActive) ...[
               Container(
@@ -674,7 +722,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     const SizedBox(height: 7),
                     _buildMiniInfoRow(
                       label: 'การชำระเงิน',
-                      value: widget.bookingData.paymentMethod == 'promptpay'
+                      value: _paymentMethod == 'promptpay'
                           ? 'พร้อมเพย์ (ชำระเมื่อรับของ)'
                           : 'เงินสด (ชำระเมื่อรับของ)',
                     ),

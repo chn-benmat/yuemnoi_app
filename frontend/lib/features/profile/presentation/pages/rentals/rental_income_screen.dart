@@ -19,6 +19,8 @@ class RentalIncomeScreen extends StatefulWidget {
 class _RentalIncomeScreenState extends State<RentalIncomeScreen> {
   late final GetRentalIncomeUseCase _getRentalIncomeUseCase;
   bool _isLoading = true;
+  bool _incomeAvailable = false;
+  String? _loadError;
   double _totalIncome = 0.0;
   double _pendingIncome = 0.0;
   List<RentalIncomeTransaction> _transactions = [];
@@ -33,7 +35,12 @@ class _RentalIncomeScreenState extends State<RentalIncomeScreen> {
   }
 
   Future<void> _loadRentalIncome() async {
-    setState(() => _isLoading = true);
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
+    }
     final currentUserId = SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentUser?.id ?? ''
         : '';
@@ -43,6 +50,7 @@ class _RentalIncomeScreenState extends State<RentalIncomeScreen> {
         setState(() {
           _totalIncome = summary.totalIncome;
           _pendingIncome = summary.pendingIncome;
+          _incomeAvailable = summary.isAvailable;
           _transactions = summary.transactions
               .map(RentalIncomeTransaction.fromEntity)
               .toList();
@@ -50,7 +58,12 @@ class _RentalIncomeScreenState extends State<RentalIncomeScreen> {
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _loadError = 'โหลดข้อมูลรายได้ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';
+        });
+      }
     }
   }
 
@@ -76,6 +89,56 @@ class _RentalIncomeScreenState extends State<RentalIncomeScreen> {
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primaryColor),
+            )
+          : _loadError != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_loadError!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: _loadRentalIncome,
+                      child: const Text('ลองใหม่'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : !_incomeAvailable
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(28),
+              children: const [
+                SizedBox(height: 100),
+                Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: AppColors.primaryColor,
+                  size: 56,
+                ),
+                SizedBox(height: 18),
+                Text(
+                  'ยังไม่มีข้อมูลรายได้จริง',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'ระบบยังไม่รองรับการสรุปยอดรับเงินจริง รายการเช่าจึงไม่ถูกนำมาแสดงเป็นรายได้',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    color: AppColors.hintTextColor,
+                    height: 1.5,
+                  ),
+                ),
+              ],
             )
           : RefreshIndicator(
               color: AppColors.primaryColor,

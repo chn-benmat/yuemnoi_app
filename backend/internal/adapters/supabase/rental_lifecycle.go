@@ -3,8 +3,12 @@ package supabase
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -32,11 +36,126 @@ func rentalLifecycleError(err error) error {
 			return domain.ErrRentalNotFound
 		case strings.Contains(e.Message, "rental_transition"):
 			return domain.ErrRentalStatusTransition
+		case strings.Contains(e.Message, "rental_not_started"):
+			return domain.ErrRentalNotStarted
+		case strings.Contains(e.Message, "handover_code_already_active"):
+			return domain.ErrRentalHandoverCodeActive
 		case strings.Contains(e.Message, "invalid_rental"):
 			return domain.ErrInvalidRental
 		}
 	}
 	return fmt.Errorf("rental lifecycle: %w", err)
+}
+
+func (r *supabaseRentalRepository) handoverCodeDigest(bookingID int64, code string) string {
+	mac := hmac.New(sha256.New, []byte(r.codePepper))
+	_, _ = fmt.Fprintf(mac, "%d:%s", bookingID, code)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func handoverCodeEncryptionKey(secret string) []byte {
+	key := sha256.Sum256([]byte("yuemnoi:rental-handover-pin:v1:" + secret))
+	return key[:]
+}
+
+func encryptHandoverCode(secret, code string) (string, error) {
+	block, err := aes.NewCipher(handoverCodeEncryptionKey(secret))
+	if err != nil {
+		return "", fmt.Errorf("create handover code cipher: %w", err)
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("create handover code AEAD: %w", err)
+	}
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", fmt.Errorf("generate handover code nonce: %w", err)
+	}
+	ciphertext := aead.Seal(nonce, nonce, []byte(code), nil)
+	return "v1." + base64.RawURLEncoding.EncodeToString(ciphertext), nil
+}
+
+func decryptHandoverCode(secret, encoded string) (string, error) {
+	if !strings.HasPrefix(encoded, "v1.") {
+		return "", fmt.Errorf("unsupported handover code ciphertext version")
+	}
+	ciphertext, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(encoded, "v1."))
+	if err != nil {
+		return "", fmt.Errorf("decode handover code ciphertext: %w", err)
+	}
+	block, err := aes.NewCipher(handoverCodeEncryptionKey(secret))
+	if err != nil {
+		return "", fmt.Errorf("create handover code cipher: %w", err)
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("create handover code AEAD: %w", err)
+	}
+	if len(ciphertext) < aead.NonceSize()+aead.Overhead() {
+		return "", fmt.Errorf("handover code ciphertext is too short")
+	}
+	nonce, body := ciphertext[:aead.NonceSize()], ciphertext[aead.NonceSize():]
+	plaintext, err := aead.Open(nil, nonce, body, nil)
+	if err != nil {
+		return "", fmt.Errorf("decrypt handover code: %w", err)
+	}
+	code := string(plaintext)
+	if len(code) != 6 || strings.Trim(code, "0123456789") != "" {
+		return "", fmt.Errorf("decrypted handover code has invalid format")
+	}
+	return code, nil
+}
+
+func (r *supabaseRentalRepository) CreateHandoverCode(ctx context.Context, user string, id int64) (string, time.Time, error) {
+	if r.codePepper == "" {
+		return "", time.Time{}, fmt.Errorf("handover code secret is not configured")
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("generate handover code: %w", err)
+	}
+	code := fmt.Sprintf("%06d", n.Int64())
+	codeCiphertext, err := encryptHandoverCode(r.codePepper, code)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	expiresAt := time.Now().UTC().Add(10 * time.Minute)
+	var result map[string]any
+	err = r.client.DB.Rpc("issue_rental_handover_pin_idempotent", map[string]any{
+		"p_actor":           user,
+		"p_booking":         id,
+		"p_code_digest":     r.handoverCodeDigest(id, code),
+		"p_code_ciphertext": codeCiphertext,
+		"p_expires_at":      expiresAt,
+	}).ExecuteWithContext(ctx, &result)
+	if err != nil {
+		return "", time.Time{}, rentalLifecycleError(err)
+	}
+	if result["error"] != nil {
+		if result["error"] == "rental_forbidden" {
+			return "", time.Time{}, domain.ErrRentalForbidden
+		}
+		if result["error"] == "rental_not_found" {
+			return "", time.Time{}, domain.ErrRentalNotFound
+		}
+		return "", time.Time{}, domain.ErrRentalStatusTransition
+	}
+	storedCiphertext, ok := result["code_ciphertext"].(string)
+	if !ok || storedCiphertext == "" {
+		return "", time.Time{}, fmt.Errorf("handover RPC returned no code ciphertext")
+	}
+	storedCode, err := decryptHandoverCode(r.codePepper, storedCiphertext)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	if rawExpiresAt, ok := result["expires_at"].(string); ok {
+		parsed, err := time.Parse(time.RFC3339Nano, rawExpiresAt)
+		if err != nil {
+			return "", time.Time{}, fmt.Errorf("parse handover code expiry: %w", err)
+		}
+		expiresAt = parsed
+	}
+	return storedCode, expiresAt, nil
 }
 
 func (r *supabaseRentalRepository) lifecycleRPC(ctx context.Context, user string, id int64, action string, data map[string]any) (map[string]any, error) {

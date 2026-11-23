@@ -412,6 +412,41 @@ func (h *OperationsHandler) Read(c fiber.Ctx) error {
 	if err = json.Unmarshal(raw, &result); err != nil {
 		return operationError(c, err)
 	}
+	if module == "bookings" {
+		rows, ok := result["rows"].([]any)
+		if ok {
+			itemIDs := make([]int64, 0, len(rows))
+			for _, value := range rows {
+				row, ok := value.(map[string]any)
+				if !ok {
+					continue
+				}
+				itemID, ok := adminItemID(row["item_id"])
+				if ok {
+					itemIDs = append(itemIDs, itemID)
+				}
+			}
+			if imageReader, ok := h.options.Store.(interface {
+				ReadItemImages(context.Context, []int64) (map[int64][]string, error)
+			}); ok {
+				itemImages, readErr := imageReader.ReadItemImages(c.Context(), itemIDs)
+				if readErr != nil {
+					return operationError(c, readErr)
+				}
+				for _, value := range rows {
+					row, ok := value.(map[string]any)
+					if !ok {
+						continue
+					}
+					itemID, ok := adminItemID(row["item_id"])
+					if !ok || row["item_image_url"] != nil {
+						continue
+					}
+					row["item_image_url"] = itemImages[itemID]
+				}
+			}
+		}
+	}
 	if module == "identity-detail" && validUUID(c.Query("id")) {
 		sensitive, e := h.options.Store.RPC(c.Context(), "identity_sensitive", map[string]any{"p_actor": u, "p_id": c.Query("id")})
 		if e != nil {
@@ -442,6 +477,20 @@ func (h *OperationsHandler) Read(c fiber.Ctx) error {
 		}
 	}
 	return c.JSON(result)
+}
+func adminItemID(value any) (int64, bool) {
+	switch id := value.(type) {
+	case float64:
+		return int64(id), id > 0 && id == float64(int64(id))
+	case json.Number:
+		parsed, err := id.Int64()
+		return parsed, err == nil && parsed > 0
+	case string:
+		parsed, err := strconv.ParseInt(id, 10, 64)
+		return parsed, err == nil && parsed > 0
+	default:
+		return 0, false
+	}
 }
 func (h *OperationsHandler) Action(c fiber.Ctx) error {
 	if c.Params("action") == "guardian-review" || c.Params("action") == "revoke-guardian" {

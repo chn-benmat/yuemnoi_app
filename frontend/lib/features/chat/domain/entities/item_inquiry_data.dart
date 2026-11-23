@@ -98,8 +98,10 @@ $metaStartTag$jsonString$metaEndTag''';
           final jsonStr = text.substring(startIdx, endIdx);
           final map = jsonDecode(jsonStr) as Map<String, dynamic>;
 
-          final parsedItemId =
-              (map['itemId'] as num?)?.toInt() ?? defaultItemId;
+          final rawItemId = map['itemId'];
+          final parsedItemId = rawItemId is num
+              ? rawItemId.toInt()
+              : int.tryParse(rawItemId?.toString() ?? '') ?? defaultItemId;
           final parsedItemName = map['itemName'] as String? ?? 'อุปกรณ์เช่า';
           final parsedPrice = (map['price'] as num?)?.toDouble();
           final parsedUnitLabel = map['unitLabel'] as String?;

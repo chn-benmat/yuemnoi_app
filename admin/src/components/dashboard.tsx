@@ -34,7 +34,7 @@ import {
   type Row,
   type Overview as Summary,
 } from "@/lib/catalog";
-import { useAdminData } from "@/lib/api";
+import { api, useAdminData } from "@/lib/api";
 import { toCSV } from "@/lib/export";
 import { groupSeries, type Group } from "@/lib/reports";
 import Overview, { BookingChart, Breakdown } from "./overview";
@@ -65,6 +65,40 @@ const dateColumn: Column = {
   label: "วันที่",
   render: (r) => date(r.created_at),
 };
+function ImagePreview({ value, label }: { value: unknown; label: string }) {
+  let images: string[] = [];
+  if (Array.isArray(value)) {
+    images = value.filter((url): url is string => typeof url === "string");
+  } else if (typeof value === "string" && value.trim()) {
+    const trimmed = value.trim();
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      images = Array.isArray(parsed)
+        ? parsed.filter((url): url is string => typeof url === "string")
+        : [trimmed];
+    } catch {
+      images = trimmed.split(",").map((url) => url.trim()).filter(Boolean);
+    }
+  }
+  if (images.length === 0) return <span className="muted">ไม่มีรูปภาพ</span>;
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      {images.slice(0, 4).map((url, index) => (
+        <a key={url + index} href={url} target="_blank" rel="noreferrer">
+          <img
+            src={url}
+            alt={`${label} ${index + 1}`}
+            loading="lazy"
+            style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8 }}
+            onError={(event) => {
+              event.currentTarget.style.visibility = "hidden";
+            }}
+          />
+        </a>
+      ))}
+    </div>
+  );
+}
 const columns: Record<string, Column[]> = {
   users: [
     { key: "display_name", label: "ชื่อผู้ใช้" },
@@ -89,24 +123,7 @@ const columns: Record<string, Column[]> = {
     {
       key: "item_image_url",
       label: "รูปภาพ",
-      render: (r) => {
-        const images = Array.isArray(r.item_image_url)
-          ? r.item_image_url.filter((url): url is string => typeof url === "string")
-          : [];
-        return (
-          <div style={{ display: "flex", gap: 6 }}>
-            {images.slice(0, 4).map((url, index) => (
-              <a key={url + index} href={url} target="_blank" rel="noreferrer">
-                <img
-                  src={url}
-                  alt={`รูปสินค้า ${index + 1}`}
-                  style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8 }}
-                />
-              </a>
-            ))}
-          </div>
-        );
-      },
+      render: (r) => <ImagePreview value={r.item_image_url} label="รูปสินค้า" />,
     },
     { key: "price", label: "ราคา" },
     {
@@ -128,6 +145,11 @@ const columns: Record<string, Column[]> = {
   ],
   bookings: [
     { key: "id", label: "เลขรายการ" },
+    {
+      key: "item_image_url",
+      label: "รูปสินค้า",
+      render: (r) => <ImagePreview value={r.item_image_url} label="รูปสินค้าเช่า" />,
+    },
     { key: "item_name", label: "สินค้า" },
     { key: "display_name", label: "ผู้เช่า" },
     { key: "start_at", label: "เริ่มเช่า", render: (r) => date(r.start_at) },
@@ -219,6 +241,7 @@ export default function Dashboard({
   const [to, setTo] = useState("");
   const [operation, setOperation] = useState<Operation | null>(null);
   const [message, setMessage] = useState("");
+  const [approvingItemId, setApprovingItemId] = useState<string | null>(null);
   useEffect(() => {
     const saved = localStorage.getItem("yuemnoi-theme") === "dark";
     setDark(saved);
@@ -318,6 +341,27 @@ export default function Dashboard({
       data,
     });
   }
+  async function approveItem(r: Row) {
+    const itemId = String(r.id ?? "");
+    if (!itemId || approvingItemId) return;
+    setApprovingItemId(itemId);
+    setMessage("");
+    try {
+      await api(`actions/review-item/${encodeURIComponent(itemId)}`, {
+        method: "POST",
+        body: JSON.stringify({
+          decision: "approved",
+          reason: "อนุมัติและโพสต์ประกาศ",
+        }),
+      });
+      setMessage("อนุมัติและโพสต์ประกาศเรียบร้อยแล้ว");
+      result.reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "อนุมัติประกาศไม่สำเร็จ");
+    } finally {
+      setApprovingItemId(null);
+    }
+  }
   function rowActions(r: Row) {
     if (section === "users")
       return (
@@ -364,17 +408,10 @@ export default function Dashboard({
       return (
         <>
           <button
-            disabled={preview}
-            onClick={() =>
-              action(
-                r,
-                "review-item",
-                "อนุมัติและโพสต์ประกาศ",
-                { decision: "approved" },
-              )
-            }
+            disabled={preview || approvingItemId !== null}
+            onClick={() => void approveItem(r)}
           >
-            อนุมัติและโพสต์
+            {approvingItemId === String(r.id) ? "กำลังอนุมัติ…" : "อนุมัติและโพสต์"}
           </button>
           <button
             disabled={preview}

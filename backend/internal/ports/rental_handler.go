@@ -118,8 +118,18 @@ func (h *RentalHandler) HandoverRental(c fiber.Ctx) error {
 	if !ok {
 		return nil
 	}
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := c.Bind().JSON(&req); err != nil || len(req.Code) != 6 || strings.Trim(req.Code, "0123456789") != "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณากรอกรหัสส่งมอบ 6 หลักจากผู้เช่า"})
+	}
 
-	order, err := h.rentalRepository.UpdateRentalStatus(c.Context(), userID, id, "active")
+	handoverRepo, ok := h.rentalRepository.(domain.RentalHandoverRepository)
+	if !ok {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ระบบยืนยันส่งมอบยังไม่พร้อมใช้งาน"})
+	}
+	order, err := handoverRepo.CompleteHandover(c.Context(), userID, id, req.Code)
 	if err != nil {
 		return writeRentalStatusError(c, err)
 	}
@@ -129,6 +139,28 @@ func (h *RentalHandler) HandoverRental(c fiber.Ctx) error {
 		"message": "ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว",
 		"rental":  order,
 	})
+}
+
+// CreateHandoverCode สร้าง PIN ส่งมอบให้ผู้เช่าของรายการนี้เท่านั้น
+func (h *RentalHandler) CreateHandoverCode(c fiber.Ctx) error {
+	userID, ok := authenticatedUserID(c, h.tokenVerifier)
+	if !ok {
+		return nil
+	}
+	id, ok := parseRentalID(c)
+	if !ok {
+		return nil
+	}
+	handoverRepo, ok := h.rentalRepository.(domain.RentalHandoverRepository)
+	if !ok {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ระบบสร้างรหัสส่งมอบยังไม่พร้อมใช้งาน"})
+	}
+	code, expiresAt, err := handoverRepo.CreateHandoverCode(c.Context(), userID, id)
+	if err != nil {
+		return writeRentalStatusError(c, err)
+	}
+	c.Set("Cache-Control", "private, no-store")
+	return c.JSON(fiber.Map{"code": code, "expires_at": expiresAt})
 }
 
 // [POST] /api/rentals/:id/return - ยืนยันการรับคืนอุปกรณ์ (เปลี่ยนสถานะเป็น completed)
@@ -166,6 +198,12 @@ func writeRentalStatusError(c fiber.Ctx, err error) error {
 		return c.Status(400).JSON(fiber.Map{"error": "ข้อมูลหรือหลักฐานการเช่าไม่ครบถ้วน"})
 	case errors.Is(err, domain.ErrRentalReturnToken):
 		return c.Status(400).JSON(fiber.Map{"error": "รหัสยืนยันไม่ถูกต้องหรือหมดอายุ กรุณาขอรหัสใหม่จากเจ้าของอุปกรณ์", "code": "invalid_return_token"})
+	case errors.Is(err, domain.ErrRentalHandoverCode):
+		return c.Status(400).JSON(fiber.Map{"error": "รหัสส่งมอบไม่ถูกต้อง หมดอายุ หรือกรอกผิดครบจำนวนครั้งแล้ว กรุณาขอรหัสใหม่จากผู้เช่า", "code": "invalid_handover_pin"})
+	case errors.Is(err, domain.ErrRentalHandoverCodeActive):
+		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "มีรหัสส่งมอบที่ยังใช้งานอยู่ กรุณาใช้รหัสจากหน้าจอที่ขอครั้งแรก หรือรอให้รหัสหมดอายุแล้วขอใหม่", "code": "handover_code_already_active"})
+	case errors.Is(err, domain.ErrRentalNotStarted):
+		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "ยังไม่ถึงเวลาเริ่มเช่าตามที่นัดไว้"})
 	case errors.Is(err, domain.ErrRentalNotFound):
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบรายการเช่านี้"})
 	case errors.Is(err, domain.ErrRentalForbidden):

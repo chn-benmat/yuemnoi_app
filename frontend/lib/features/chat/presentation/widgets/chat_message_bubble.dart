@@ -35,6 +35,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.onDelete,
     this.onQuotedTap,
     this.onSendBookingRequest,
+    this.defaultItemId,
     this.isHandoverCompleted = false,
     this.isReturnCompleted = false,
   });
@@ -56,6 +57,7 @@ class ChatMessageBubble extends StatelessWidget {
   final VoidCallback? onRetry;
   final ValueChanged<ChatMessage>? onReply;
   final void Function(ItemInquiryData)? onSendBookingRequest;
+  final int? defaultItemId;
   final ValueChanged<ChatMessage>? onEdit;
   final ValueChanged<ChatMessage>? onDelete;
   final ValueChanged<String>? onQuotedTap;
@@ -237,6 +239,7 @@ class ChatMessageBubble extends StatelessWidget {
       final inquiryData = ItemInquiryData.fromChatMessage(
         message.message,
         imageUrl: message.imageUrl,
+        defaultItemId: defaultItemId,
       );
 
       if (inquiryData != null) {

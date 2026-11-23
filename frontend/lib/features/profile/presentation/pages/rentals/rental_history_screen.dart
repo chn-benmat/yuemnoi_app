@@ -21,6 +21,7 @@ class RentalHistoryScreen extends StatefulWidget {
 class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
   late final GetRentalHistoryUseCase _getRentalHistoryUseCase;
   bool _isLoading = true;
+  String? _loadError;
   List<RentalHistoryItemData> _history = [];
 
   @override
@@ -34,17 +35,30 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
 
   Future<void> _loadRentalHistory() async {
     if (!SupabaseConfig.isInitialized) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _loadError = 'ระบบข้อมูลการเช่ายังไม่พร้อมใช้งาน';
+        });
+      }
       return;
     }
 
     final currentUserId = SupabaseConfig.client.auth.currentUser?.id;
     if (currentUserId == null || currentUserId.isEmpty) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _loadError = 'กรุณาเข้าสู่ระบบเพื่อดูประวัติการเช่า';
+        });
+      }
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
 
     try {
       final bookings = await _getRentalHistoryUseCase.execute(currentUserId);
@@ -116,7 +130,12 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _loadError = 'โหลดประวัติการเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';
+        });
+      }
     }
   }
 
@@ -232,6 +251,23 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
       ),
       body: _isLoading
           ? const RentalHistoryLoadingSkeleton()
+          : _loadError != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_loadError!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: _loadRentalHistory,
+                      child: const Text('ลองใหม่'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           : _history.isEmpty
           ? _buildEmptyState()
           : RefreshIndicator(

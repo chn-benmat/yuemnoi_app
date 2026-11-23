@@ -19,7 +19,7 @@ const config: NextConfig = {
             value:
               "default-src 'self'; script-src 'self' 'unsafe-inline'" +
               (process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "") +
-              "; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'" +
+              "; style-src 'self' 'unsafe-inline'; img-src 'self' https: blob: data:; font-src 'self'; connect-src 'self'" +
               (process.env.NODE_ENV === "development" ? " ws:" : "") +
               "; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
           },

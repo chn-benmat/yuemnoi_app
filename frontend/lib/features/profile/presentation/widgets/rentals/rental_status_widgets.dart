@@ -691,6 +691,7 @@ class RentalStatusCard extends StatelessWidget {
         'totalPrice': item.totalPrice?.toDouble(),
         'statusCode': item.statusCode,
         'bookingId': item.bookingId,
+        'startDate': item.startDate,
         'isOwner': isOwner,
       },
     );
@@ -1670,6 +1671,7 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                           'totalPrice': item.totalPrice?.toDouble(),
                           'statusCode': item.statusCode,
                           'bookingId': item.bookingId,
+                          'startDate': item.startDate,
                           'isOwner': item.isOwner,
                         },
                       );
