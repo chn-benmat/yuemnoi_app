@@ -65,3 +65,6 @@ Desktop.ini
 
 
 docs/*
+
+# เก็บ Supabase migrations ไว้เฉพาะเครื่อง ไม่ส่งขึ้น GitHub
+/supabase/migrations/

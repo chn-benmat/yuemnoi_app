@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../../core/constants/colors.dart';
+import '../../../../../core/network/auth_session.dart';
+import '../../../../../core/utils/auth_guard.dart';
 import '../../../../../core/services/location_service.dart';
 import '../../../../../core/services/phone_call_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
@@ -32,7 +34,9 @@ class RentalTrackingMapPage extends StatefulWidget {
   final String? conversationId;
   final String? statusCode;
   final int? bookingId;
+  final DateTime? startDate;
   final bool? isOwner;
+  final bool requireBookingId;
   final LocationService? locationService;
   final RentalContactRemoteDataSource? contactDataSource;
   final PhoneCallService phoneCallService;
@@ -53,7 +57,9 @@ class RentalTrackingMapPage extends StatefulWidget {
     this.conversationId,
     this.statusCode,
     this.bookingId,
+    this.startDate,
     this.isOwner,
+    this.requireBookingId = false,
     this.locationService,
     this.contactDataSource,
     this.phoneCallService = const UrlPhoneCallService(),
@@ -76,9 +82,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   DrivingRouteResult? _routeResult;
 
   bool _isLoadingRoute = true;
-  bool _isSimulatedLocation = false;
-  LatLng? _rawDeviceGps;
-  bool _forceUseRawDeviceGps = false;
   StreamSubscription<Position>? _positionStreamSubscription;
   bool _isAutoFollow = false;
   late final RentalRouteCubit _routeCubit;
@@ -103,16 +106,13 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       widget.bookingId ?? widget.bookingData?.bookingId;
 
   DateTime? get _startDate {
-    return widget.bookingData?.startDate;
+    return widget.bookingData?.startDate ?? widget.startDate;
   }
 
   bool get _isBeforeMeetupDate {
     final start = _startDate;
     if (start == null) return false;
-    final now = DateTime.now();
-    final startDay = DateTime(start.year, start.month, start.day);
-    final today = DateTime(now.year, now.month, now.day);
-    return today.isBefore(startDay);
+    return DateTime.now().isBefore(start.toLocal());
   }
 
   int get _daysUntilMeetup {
@@ -137,6 +137,16 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       return;
     }
 
+    if (_startDate == null) {
+      showAppPopup(
+        context,
+        content: const Text(
+          'ไม่พบเวลานัดเช่าของรายการนี้ กรุณาตรวจสอบรายละเอียดการเช่า',
+        ),
+      );
+      return;
+    }
+
     if (_isBeforeMeetupDate) {
       showDialog<void>(
         context: context,
@@ -152,7 +162,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
               ),
               const SizedBox(width: 8),
               Text(
-                _isOwner ? 'ยังไม่ถึงวันนัดส่งมอบ' : 'ยังไม่ถึงวันนัดเช่า',
+                _isOwner ? 'ยังไม่ถึงเวลานัดส่งมอบ' : 'ยังไม่ถึงเวลาเริ่มเช่า',
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontWeight: FontWeight.bold,
@@ -162,7 +172,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
             ],
           ),
           content: Text(
-            'วันนัดรับอุปกรณ์คือ ${_startDate != null ? DateFormat('d MMMM yyyy', 'th').format(_startDate!) : 'ตามที่ตกลง'}\n\n${_isOwner ? 'ระบบจะเปิดให้ส่งมอบอุปกรณ์และตรวจสอบการชำระเงินในวันนัดรับของจริง เพื่อความปลอดภัยของผู้เช่าและผู้ปล่อยเช่า' : 'ระบบจะเปิดให้ตรวจรับสินค้าและชำระเงินในวันนัดรับของจริง เพื่อความปลอดภัยของผู้เช่าและผู้ปล่อยเช่า'}',
+            'กำหนดเริ่มเช่า ${_startDate != null ? DateFormat('d MMMM yyyy เวลา HH:mm', 'th').format(_startDate!.toLocal()) : 'ตามที่ตกลง'} น.\n\nระบบจะเปิดให้ยืนยันส่งมอบเมื่อถึงเวลานัด เพื่อความปลอดภัยของทั้งสองฝ่าย',
             style: const TextStyle(
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 13.5,
@@ -177,26 +187,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                 style: TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                _showHandoverModal();
-              },
-              child: const Text(
-                'ดูตัวอย่างหน้าตรวจรับ',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 12,
                 ),
               ),
             ),
@@ -342,78 +332,42 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   }
 
   Future<void> _initLocationsAndRoute() async {
+    if (!mounted) return;
     setState(() {
       _isLoadingRoute = _routeResult == null;
     });
 
     // เริ่มจากพิกัดล่าสุดก่อน ระหว่างรอ GPS ใหม่ที่อาจใช้เวลาหลายวินาที
-    final lastKnown = await _locationService.getLastKnownPosition();
+    Position? lastKnown;
+    try {
+      lastKnown = await _locationService.getLastKnownPosition();
+    } catch (_) {}
     if (!mounted) return;
     if (lastKnown != null) {
       final point = LatLng(lastKnown.latitude, lastKnown.longitude);
-      if (const Distance().as(
-                LengthUnit.Kilometer,
-                point,
-                _destinationLocation,
-              ) <=
-              500 ||
-          _forceUseRawDeviceGps) {
-        setState(() => _userLocation = point);
-        _routeCubit.updatePosition(point);
-      }
+      setState(() => _userLocation = point);
+      _routeCubit.updatePosition(point);
     }
 
-    // 1. ดึงตำแหน่ง GPS ของตัวเรา
-    LatLng userPos;
-    bool isSimulated = false;
+    // ใช้พิกัดจากอุปกรณ์จริงโดยไม่อนุมานจากระยะห่างจากจุดนัดรับ
+    Position? position;
     try {
-      final pos = await _locationService.getCurrentPosition();
-      if (pos != null) {
-        final rawLatLng = LatLng(pos.latitude, pos.longitude);
-        _rawDeviceGps = rawLatLng;
-
-        const distanceCalc = Distance();
-        final distanceKm = distanceCalc.as(
-          LengthUnit.Kilometer,
-          rawLatLng,
-          _destinationLocation,
-        );
-
-        // หากตำแหน่งอยู่ไกลกว่า 500 กม. (มักเกิดจากการทดสอบบน Emulator ที่ค่าเริ่มต้นของพิกัดอยู่สหรัฐฯ หรือ ยุโรป เช่น ลิสบอน/สเปน)
-        if (!_forceUseRawDeviceGps && distanceKm > 500) {
-          isSimulated = true;
-          // จำลองตำแหน่งในกรุงเทพฯ ห่างจากจุดนัดรับประมาณ 2.5 กม. เพื่อให้เห็นเส้นทางการเดินทางจริง
-          userPos = LatLng(
-            _destinationLocation.latitude - 0.018,
-            _destinationLocation.longitude - 0.015,
-          );
-        } else {
-          userPos = rawLatLng;
-        }
-      } else {
-        isSimulated = true;
-        // Fallback ตำแหน่งจำลองในกรุงเทพฯ ห่างจากจุดนัดรับเล็กน้อย เพื่อให้เห็นเส้นทางชัดเจน
-        userPos = LatLng(
-          _destinationLocation.latitude - 0.018,
-          _destinationLocation.longitude - 0.015,
-        );
-      }
-    } catch (_) {
-      isSimulated = true;
-      userPos = LatLng(
-        _destinationLocation.latitude - 0.018,
-        _destinationLocation.longitude - 0.015,
-      );
-    }
+      position = await _locationService.getCurrentPosition();
+    } catch (_) {}
 
     if (!mounted) return;
-    setState(() {
-      _userLocation = userPos;
-      _isSimulatedLocation = isSimulated;
-    });
+    if (position != null) {
+      final userPos = LatLng(position.latitude, position.longitude);
+      setState(() {
+        _userLocation = userPos;
+      });
+      _routeCubit.updatePosition(userPos);
+    }
 
-    _routeCubit.updatePosition(userPos);
     _startLiveLocationTracking();
+    if (position == null && _userLocation == null && mounted) {
+      setState(() => _isLoadingRoute = false);
+    }
   }
 
   /// สตรีมติดตามตำแหน่งพิกัดแบบ Real-time
@@ -443,27 +397,9 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   void _onRealtimePositionUpdated(Position pos) {
     if (!mounted) return;
     final newGps = LatLng(pos.latitude, pos.longitude);
-    _rawDeviceGps = newGps;
-
-    const distanceCalc = Distance();
-    final distKm = distanceCalc.as(
-      LengthUnit.Kilometer,
-      newGps,
-      _destinationLocation,
-    );
-
-    // ถ้าพิกัดยังอยู่ไกลเกิน 500 กม. และไม่ได้กดบังคับใช้ GPS จริง ให้คงการจำลองไว้
-    if (!_forceUseRawDeviceGps && distKm > 500) {
-      return;
-    }
 
     // อัปเดตตำแหน่งหมุดทันทีแบบ Real-time
-    setState(() {
-      _userLocation = newGps;
-      if (distKm <= 500) {
-        _isSimulatedLocation = false;
-      }
-    });
+    setState(() => _userLocation = newGps);
 
     // หากเปิดโหมดติดตามตำแหน่งอัตโนมัติ ให้เลื่อนกล้องตามหมุด
     if (_isAutoFollow) {
@@ -471,22 +407,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     }
 
     _routeCubit.updatePosition(newGps);
-  }
-
-  /// ดึงข้อมูลเส้นทางใหม่สำหรับพิกัดเริ่มต้นที่ระบุ
-  Future<void> _fetchRouteForPosition(LatLng startPos) async {
-    _routeCubit.updatePosition(startPos);
-  }
-
-  /// จำลองการขยับตำแหน่งตัวเรา (เมื่อแตะบนแผนที่ในโหมดจำลอง)
-  void _simulateMoveTo(LatLng point) {
-    setState(() {
-      _userLocation = point;
-    });
-    if (_isAutoFollow) {
-      _mapController.move(point, _mapController.camera.zoom);
-    }
-    _fetchRouteForPosition(point);
   }
 
   void _fitBoundsToRoute() {
@@ -582,8 +502,54 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
         lng.abs() <= 180;
   }
 
+  Widget _buildUnavailableState(String message, {bool showLogin = false}) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('จุดนัดรับสินค้า'),
+        leading: const BackButton(),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontFamily: AppTextStyles.fontFamily),
+              ),
+              if (showLogin) ...[
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () async {
+                    final authenticated = await AuthGuard.requireAuth(context);
+                    if (authenticated && mounted) setState(() {});
+                  },
+                  child: const Text('เข้าสู่ระบบ'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.requireBookingId &&
+        (_resolvedBookingId == null || _resolvedBookingId! <= 0)) {
+      return _buildUnavailableState(
+        'ไม่พบรายการเช่านี้ กรุณาเปิดหน้าจากรายการเช่าของคุณ',
+      );
+    }
+    if (widget.requireBookingId && !AuthSession.isAuthenticated) {
+      return _buildUnavailableState(
+        'กรุณาเข้าสู่ระบบเพื่อดูรายละเอียดนัดรับ',
+        showLogin: true,
+      );
+    }
     if (!_hasDestinationCoordinates)
       return Scaffold(
         appBar: AppBar(title: const Text('จุดนัดรับสินค้า')),
@@ -609,11 +575,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                   setState(() {
                     _isAutoFollow = false;
                   });
-                }
-              },
-              onTap: (tapPosition, point) {
-                if (_isSimulatedLocation) {
-                  _simulateMoveTo(point);
                 }
               },
             ),
@@ -737,159 +698,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
             ),
           ),
 
-          // ─── แถบแจ้งเตือนจำลองพิกัดสำหรับ Emulator ───
-          if (_isSimulatedLocation)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 64,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B).withValues(alpha: 0.94),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.devices_other_rounded,
-                      color: Color(0xFF38BDF8),
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'จำลองตำแหน่งใน กทม. (แตะแผนที่เพื่อขยับหมุดทดสอบ หรือเปลี่ยน GPS บน Emulator ได้)',
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 11.5,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    if (_rawDeviceGps != null) ...[
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: () {
-                          setState(() {
-                            _forceUseRawDeviceGps = true;
-                          });
-                          if (_hasDestinationCoordinates)
-                            _initLocationsAndRoute();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'ใช้ GPS จริง',
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 11,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-
-          if (_forceUseRawDeviceGps &&
-              !_isSimulatedLocation &&
-              _rawDeviceGps != null)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 64,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFB45309).withValues(alpha: 0.94),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.gps_fixed_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'กำลังแสดงพิกัดจริงของ GPS เครื่อง',
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 11.5,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          _forceUseRawDeviceGps = false;
-                        });
-                        if (_hasDestinationCoordinates)
-                          _initLocationsAndRoute();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.25),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'จำลองใน กทม.',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 11,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
           // ─── 3. Floating Action Controls (ฝั่งขวา) ───
           Positioned(
             right: 16,
@@ -958,7 +766,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
             ],
           ),
           child: Text(
-            _isSimulatedLocation ? 'ตัวคุณ (จำลอง)' : 'ตัวคุณ',
+            'ตัวคุณ',
             style: const TextStyle(
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 10.5,
@@ -1222,6 +1030,37 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                   ],
                 ),
                 const SizedBox(height: 12),
+              ] else if (_userLocation == null) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'ยังระบุตำแหน่ง GPS ของเครื่องไม่ได้ จึงยังคำนวณเส้นทางไม่ได้',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 12,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _initLocationsAndRoute,
+                        child: const Text('ลองอีกครั้ง'),
+                      ),
+                    ],
+                  ),
+                ),
               ],
 
               // แบนเนอร์แจ้งเตือนกรณี "ยังไม่ถึงวันนัดเช่า"

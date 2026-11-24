@@ -306,7 +306,10 @@ abstract final class AppRoutes {
             if (extra is BookingRequestData) {
               return MaterialPage<void>(
                 key: state.pageKey,
-                child: RentalTrackingMapPage(bookingData: extra),
+                child: RentalTrackingMapPage(
+                  bookingData: extra,
+                  requireBookingId: true,
+                ),
               );
             } else if (extra is Map<String, dynamic>) {
               return MaterialPage<void>(
@@ -326,12 +329,16 @@ abstract final class AppRoutes {
                   conversationId: extra['conversationId'] as String?,
                   statusCode: extra['statusCode'] as String?,
                   bookingId: (extra['bookingId'] as num?)?.toInt(),
+                  startDate: extra['startDate'] is DateTime
+                      ? extra['startDate'] as DateTime
+                      : DateTime.tryParse(extra['startDate']?.toString() ?? ''),
+                  requireBookingId: true,
                 ),
               );
             }
             return MaterialPage<void>(
               key: state.pageKey,
-              child: const RentalTrackingMapPage(),
+              child: const RentalTrackingMapPage(requireBookingId: true),
             );
           },
         ),
@@ -649,9 +656,9 @@ abstract final class AppRoutes {
             final args = extra is Map ? extra : const <String, dynamic>{};
             return MaterialPage<void>(
               child: RentalReviewScreen(
-                  bookingId: args['bookingId'] is num
-                      ? (args['bookingId'] as num).toInt()
-                      : null,
+                bookingId: args['bookingId'] is num
+                    ? (args['bookingId'] as num).toInt()
+                    : null,
                 itemName: args['itemName'] as String? ?? 'อุปกรณ์ที่เช่า',
                 itemId: args['itemId'] is num
                     ? (args['itemId'] as num).toInt()
@@ -940,7 +947,13 @@ abstract final class AppRoutes {
     BookingRequestData? bookingData,
     Map<String, dynamic>? trackingArgs,
     bool? isOwner,
+    DateTime? startDate,
   }) {
+    final rawStartDate = trackingArgs?['startDate'];
+    final parsedStartDate = rawStartDate is DateTime
+        ? rawStartDate
+        : DateTime.tryParse(rawStartDate?.toString() ?? '');
+
     final page = RentalTrackingMapPage(
       bookingData:
           bookingData ?? (trackingArgs?['bookingData'] as BookingRequestData?),
@@ -957,7 +970,9 @@ abstract final class AppRoutes {
       conversationId: trackingArgs?['conversationId'] as String?,
       statusCode: trackingArgs?['statusCode'] as String?,
       bookingId: (trackingArgs?['bookingId'] as num?)?.toInt(),
+      startDate: startDate ?? parsedStartDate,
       isOwner: isOwner ?? (trackingArgs?['isOwner'] as bool?),
+      requireBookingId: true,
     );
 
     return Navigator.of(context).push<void>(

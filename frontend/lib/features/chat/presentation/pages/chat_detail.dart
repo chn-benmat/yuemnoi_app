@@ -975,6 +975,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                         !_hasOpenOffer(inquiry!.itemId!)
                                     ? _openBookingRequest
                                     : null,
+                                defaultItemId: _conversation.itemId,
                                 onRetry: () {
                                   context.read<ChatDetailBloc>().add(
                                     ChatRetryMessageSent(

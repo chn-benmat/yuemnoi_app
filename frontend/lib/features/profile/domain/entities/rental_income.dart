@@ -3,11 +3,13 @@ class RentalIncomeSummary {
   final double totalIncome;
   final double pendingIncome;
   final List<RentalIncomeEntry> transactions;
+  final bool isAvailable;
 
   const RentalIncomeSummary({
     required this.totalIncome,
     required this.pendingIncome,
     required this.transactions,
+    this.isAvailable = true,
   });
 }
 

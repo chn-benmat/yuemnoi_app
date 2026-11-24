@@ -2,6 +2,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../domain/entities/rental_handover_code.dart';
 import '../../domain/entities/rental_income.dart';
 import '../models/rental_booking_model.dart';
 
@@ -19,8 +20,9 @@ class RentalManagementRemoteDataSource {
   ApiClient? _apiClient;
   ApiClient get _backendClient => _apiClient ??= DioApiClient();
   Future<List<RentalBookingModel>> getRentingBookings(String userId) async {
-    if ((_client == null && !SupabaseConfig.isInitialized) || userId.isEmpty)
-      return [];
+    if ((_client == null && !SupabaseConfig.isInitialized) || userId.isEmpty) {
+      throw StateError('ไม่สามารถเชื่อมต่อหรือยืนยันบัญชีเพื่อโหลดประวัติการเช่าได้');
+    }
 
     try {
       final client = _supabaseClient;
@@ -78,13 +80,14 @@ class RentalManagementRemoteDataSource {
       }
       return result;
     } catch (_) {
-      return [];
+      throw StateError('โหลดประวัติการเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่');
     }
   }
 
   Future<List<RentalBookingModel>> getLendingBookings(String userId) async {
-    if ((_client == null && !SupabaseConfig.isInitialized) || userId.isEmpty)
-      return [];
+    if ((_client == null && !SupabaseConfig.isInitialized) || userId.isEmpty) {
+      throw StateError('ไม่สามารถเชื่อมต่อหรือยืนยันบัญชีเพื่อโหลดรายการปล่อยเช่าได้');
+    }
 
     try {
       final client = _supabaseClient;
@@ -154,7 +157,7 @@ class RentalManagementRemoteDataSource {
       }
       return result;
     } catch (_) {
-      return [];
+      throw StateError('โหลดรายการปล่อยเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่');
     }
   }
 
@@ -162,82 +165,77 @@ class RentalManagementRemoteDataSource {
     return getRentingBookings(userId);
   }
 
+  Future<RentalHandoverCode> createHandoverCode({required int bookingId}) async {
+    final token = AuthSession.accessToken;
+    if (token == null || token.isEmpty) {
+      throw StateError('กรุณาเข้าสู่ระบบก่อนดำเนินการ');
+    }
+    final response = await _backendClient.post(
+      '/api/rentals/$bookingId/handover-code',
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode != 200 || response.data is! Map) {
+      final data = response.data;
+      throw StateError(
+        data is Map
+            ? data['error']?.toString() ?? 'สร้างรหัสส่งมอบไม่สำเร็จ'
+            : 'สร้างรหัสส่งมอบไม่สำเร็จ',
+      );
+    }
+    final code = (response.data as Map)['code']?.toString() ?? '';
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      throw StateError('เซิร์ฟเวอร์ส่งรหัสส่งมอบไม่ถูกต้อง');
+    }
+    final expiresAtValue = (response.data as Map)['expires_at']?.toString();
+    final expiresAt = expiresAtValue == null ? null : DateTime.tryParse(expiresAtValue);
+    if (expiresAt == null) {
+      throw StateError('เซิร์ฟเวอร์ไม่ส่งเวลาหมดอายุของรหัสส่งมอบ');
+    }
+    return RentalHandoverCode(code: code, expiresAt: expiresAt.toLocal());
+  }
+
   Future<void> updateBookingStatus({
     required int bookingId,
     required String status,
+  }) async {
+    if (status == 'active') {
+      throw StateError('กรุณายืนยันรหัสส่งมอบจากผู้เช่าก่อน');
+    }
+    throw StateError('กรุณาดำเนินการผ่านขั้นตอนตรวจสภาพและยืนยันการคืน');
+  }
+
+  Future<void> completeHandover({
+    required int bookingId,
+    required String code,
   }) async {
     final token = AuthSession.accessToken;
     if (token == null || token.isEmpty) {
       throw StateError('กรุณาเข้าสู่ระบบก่อนดำเนินการ');
     }
-
-    final String endpoint;
-    if (status == 'active') {
-      endpoint = '/api/rentals/$bookingId/handover';
-    } else {
-      throw StateError('กรุณาดำเนินการผ่านขั้นตอนตรวจสภาพและยืนยันการคืน');
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      throw StateError('กรุณากรอกรหัสส่งมอบ 6 หลักจากผู้เช่า');
     }
-
     final response = await _backendClient.post(
-      endpoint,
+      '/api/rentals/$bookingId/handover',
       headers: {'Authorization': 'Bearer $token'},
+      data: {'code': code},
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final data = response.data;
       throw StateError(
         data is Map
-            ? data['error']?.toString() ?? 'อัปเดตสถานะไม่สำเร็จ'
-            : 'อัปเดตสถานะไม่สำเร็จ',
+            ? data['error']?.toString() ?? 'ยืนยันรหัสส่งมอบไม่สำเร็จ'
+            : 'ยืนยันรหัสส่งมอบไม่สำเร็จ',
       );
     }
   }
 
   Future<RentalIncomeSummary> getRentalIncome(String userId) async {
-    // โครงสร้างสำหรับ Dashboard รายได้ และ Transaction ประวัติ
-    const totalIncome = 12500.0;
-    const pendingIncome = 1200.0;
-    final history = [
-      const RentalIncomeEntry(
-        itemName: 'Sony A7 IV',
-        date: '12 ส.ค. 2026',
-        duration: 'เช่า 3 วัน',
-        amount: 2400,
-        status: 'เสร็จสิ้น',
-      ),
-      const RentalIncomeEntry(
-        itemName: 'DJI Mavic Pro',
-        date: '10 ส.ค. 2026',
-        duration: 'เช่า 1 วัน',
-        amount: 800,
-        status: 'เสร็จสิ้น',
-      ),
-      const RentalIncomeEntry(
-        itemName: 'MacBook Pro M2',
-        date: '5 ส.ค. 2026',
-        duration: 'เช่า 5 วัน',
-        amount: 4500,
-        status: 'เสร็จสิ้น',
-      ),
-      const RentalIncomeEntry(
-        itemName: 'Sony A7 IV',
-        date: '1 ส.ค. 2026',
-        duration: 'เช่า 2 วัน',
-        amount: 1600,
-        status: 'เสร็จสิ้น',
-      ),
-      const RentalIncomeEntry(
-        itemName: 'เลนส์ FE 50mm f/1.8',
-        date: '28 ก.ค. 2026',
-        duration: 'เช่า 4 วัน',
-        amount: 1200,
-        status: 'เสร็จสิ้น',
-      ),
-    ];
-
     return RentalIncomeSummary(
-      totalIncome: totalIncome,
-      pendingIncome: pendingIncome,
-      transactions: history,
+      totalIncome: 0,
+      pendingIncome: 0,
+      transactions: const [],
+      isAvailable: false,
     );
   }
 
@@ -262,7 +260,9 @@ class RentalManagementRemoteDataSource {
           }
         }
       }
-    } catch (_) {}
+    } catch (_) {
+      throw StateError('โหลดข้อมูลอุปกรณ์ในประวัติไม่สำเร็จ');
+    }
     return itemsMap;
   }
 

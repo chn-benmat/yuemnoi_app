@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
+import '../../../../../core/network/api_client.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../../core/theme/app_text_styles.dart';
@@ -194,14 +195,33 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   int _maxStepReached = 0;
 
   // สเต็ป 3: Handover PIN & QR Code
-  late final String _generatedPin;
+  String? _generatedPin;
+  DateTime? _handoverCodeExpiresAt;
+  bool _isLoadingHandoverCode = false;
   final TextEditingController _pinController = TextEditingController();
   String? _pinErrorMessage;
   bool _isSubmitting = false;
   bool _handoverCompleted = false;
 
   Timer? _statusPollTimer;
+  Timer? _handoverCodeExpiryTimer;
   RealtimeChannel? _realtimeChannel;
+
+  bool get _handoverCodeExpired =>
+      _handoverCodeExpiresAt != null &&
+      !DateTime.now().isBefore(_handoverCodeExpiresAt!);
+
+  String get _handoverCodeCountdown {
+    final expiresAt = _handoverCodeExpiresAt;
+    if (expiresAt == null) return '';
+    final seconds = expiresAt
+        .difference(DateTime.now())
+        .inSeconds
+        .clamp(0, 599);
+    final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
+    final remainder = (seconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$remainder';
+  }
 
   String get _storageKey {
     return RentalHandoverModal.getStorageKey(
@@ -257,16 +277,71 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
       _loadSavedStep();
     }
 
-    if (widget.bookingId != null && widget.bookingId! > 0) {
-      _generatedPin = (1000 + (widget.bookingId! * 137) % 9000).toString();
-    } else if (widget.itemId != null && widget.itemId! > 0) {
-      _generatedPin = (1000 + (widget.itemId! * 137) % 9000).toString();
-    } else {
-      _generatedPin = '8492';
-    }
+    if (!_isOwner) _loadHandoverCode();
 
     // เริ่มการซิงก์สถานะส่งมอบแบบ Realtime (ทั้งสองฝั่ง)
     _initHandoverSync();
+  }
+
+  Future<void> _loadHandoverCode() async {
+    if (_isLoadingHandoverCode) return;
+    final bookingId = widget.bookingId;
+    if (bookingId == null || bookingId <= 0) {
+      if (mounted) {
+        setState(
+          () => _pinErrorMessage = 'ไม่พบรายการเช่าสำหรับสร้างรหัสส่งมอบ',
+        );
+      }
+      return;
+    }
+    _handoverCodeExpiryTimer?.cancel();
+    setState(() {
+      _isLoadingHandoverCode = true;
+      _pinErrorMessage = null;
+      _generatedPin = null;
+      _handoverCodeExpiresAt = null;
+    });
+    try {
+      final handoverCode = await _updateBookingStatusUseCase.createHandoverCode(
+        bookingId: bookingId,
+      );
+      if (mounted) {
+        setState(() {
+          _generatedPin = handoverCode.code;
+          _handoverCodeExpiresAt = handoverCode.expiresAt;
+        });
+        _handoverCodeExpiryTimer = Timer.periodic(const Duration(seconds: 1), (
+          _,
+        ) {
+          if (!mounted) return;
+          setState(() {});
+          if (_handoverCodeExpired) _handoverCodeExpiryTimer?.cancel();
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _pinErrorMessage = _userFacingHandoverError(error));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingHandoverCode = false);
+    }
+  }
+
+  String _userFacingHandoverError(Object error) {
+    if (error is ApiClientException) {
+      return switch (error.type) {
+        ApiClientErrorType.connection =>
+          'ไม่มีการเชื่อมต่ออินเทอร์เน็ต กรุณาตรวจสอบแล้วลองใหม่',
+        ApiClientErrorType.timeout =>
+          'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่',
+        ApiClientErrorType.invalidResponse =>
+          'ระบบยังตอบกลับไม่สมบูรณ์ กรุณาลองใหม่',
+      };
+    }
+    if (error is StateError) {
+      return error.message.toString();
+    }
+    return 'ทำรายการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
   }
 
   Future<void> _loadSavedStep() async {
@@ -405,6 +480,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   @override
   void dispose() {
     _statusPollTimer?.cancel();
+    _handoverCodeExpiryTimer?.cancel();
     _realtimeChannel?.unsubscribe();
     _pinController.dispose();
     super.dispose();
@@ -436,7 +512,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
     );
   }
 
-  Future<void> _completeHandover() async {
+  Future<void> _completeHandover({required String code}) async {
     if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
 
@@ -445,19 +521,32 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
       if (widget.bookingId == null || widget.bookingId! <= 0) {
         throw StateError('ไม่พบรายการเช่าสำหรับการส่งมอบ');
       }
-      await _updateBookingStatusUseCase.execute(
+      await _updateBookingStatusUseCase.completeHandover(
         bookingId: widget.bookingId!,
-        status: 'active',
+        code: code,
       );
       await BookingConfirmationTracker.markHandoverStarted(
         bookingId: widget.bookingId,
         startTime: DateTime.now(),
       );
     } catch (e) {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-        showAppPopup(context, content: Text('ยืนยันส่งมอบไม่สำเร็จ: $e'));
+      final status = await _readHandoverBookingStatus();
+      if (!mounted) return;
+      if (status == 'active') {
+        _onHandoverCompleted();
+        return;
       }
+      setState(() => _isSubmitting = false);
+      showAppPopup(
+        context,
+        content: Text(
+          status == null
+              ? 'ส่งคำขอยืนยันแล้ว แต่ยังตรวจสอบผลไม่ได้ '
+                    'กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วกดยืนยันอีกครั้งเพื่อตรวจสอบสถานะ'
+              : 'ยังยืนยันการส่งมอบไม่สำเร็จ: '
+                    '${_userFacingHandoverError(e)}',
+        ),
+      );
       return;
     }
 
@@ -469,7 +558,6 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
           payload: {
             'status': 'active',
             'bookingId': widget.bookingId,
-            'pin': _generatedPin,
             'completedAt': DateTime.now().toIso8601String(),
           },
         );
@@ -502,28 +590,49 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
     _onHandoverCompleted();
   }
 
-  void _verifyPinAndSubmit() {
-    if (_pinController.text.trim() == _generatedPin) {
-      setState(() => _pinErrorMessage = null);
-      _completeHandover();
-    } else {
-      setState(() {
-        _pinErrorMessage =
-            'รหัส PIN ไม่ถูกต้อง (รหัสตัวอย่างคือ $_generatedPin)';
-      });
+  Future<String?> _readHandoverBookingStatus() async {
+    final bookingId = widget.bookingId;
+    if (bookingId == null || bookingId <= 0 || !SupabaseConfig.isInitialized) {
+      return null;
+    }
+    try {
+      final row = await SupabaseConfig.client
+          .from('booking_tb')
+          .select('status')
+          .eq('id', bookingId)
+          .maybeSingle();
+      return row?['status']?.toString();
+    } catch (_) {
+      return null;
     }
   }
 
+  void _verifyPinAndSubmit() {
+    final code = _pinController.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      setState(() => _pinErrorMessage = 'กรุณากรอกรหัสส่งมอบ 6 หลัก');
+      return;
+    }
+    setState(() => _pinErrorMessage = null);
+    _completeHandover(code: code);
+  }
+
   void _openQrScannerSheet() {
+    final bookingId = widget.bookingId;
+    if (bookingId == null || bookingId <= 0) {
+      setState(() => _pinErrorMessage = 'ไม่พบรายการเช่าสำหรับยืนยันส่งมอบ');
+      return;
+    }
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _OwnerQrScannerDialog(
-        expectedPin: _generatedPin,
-        onSuccess: () {
+        expectedBookingId: bookingId,
+        onCodeScanned: (code) {
           Navigator.pop(ctx);
-          _completeHandover();
+          _pinController.text = code;
+          _completeHandover(code: code);
         },
       ),
     );
@@ -1073,7 +1182,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildStepPinVerification() {
     final qrData =
-        'yuemnoi://handover?bookingId=${widget.bookingId ?? 0}&pin=$_generatedPin';
+        'yuemnoi://handover?bookingId=${widget.bookingId ?? 0}&pin=${_generatedPin ?? ''}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1093,8 +1202,8 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
         const SizedBox(height: 6),
         Text(
           _isOwner
-              ? 'สแกน QR Code หรือกรอกรหัส PIN 4 หลักจากหน้าจอของผู้เช่า เพื่อยืนยันเริ่มการเช่า'
-              : 'แสดง QR Code หรือบอกรหัส PIN 4 หลักนี้แก่ผู้ปล่อยเช่า\nเพื่อให้ผู้ปล่อยเช่าสแกนยืนยันเริ่มการเช่าของสำเร็จ',
+              ? 'สแกน QR Code หรือกรอกรหัส PIN 6 หลักจากหน้าจอของผู้เช่า เพื่อยืนยันเริ่มการเช่า'
+              : 'แสดง QR Code หรือบอกรหัส PIN 6 หลักนี้แก่ผู้ปล่อยเช่า\nเพื่อยืนยันเริ่มการเช่า',
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontFamily: AppTextStyles.fontFamily,
@@ -1125,160 +1234,197 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // QR Code
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      color: Colors.white,
-                      child: QrImageView(
-                        data: qrData,
-                        version: QrVersions.auto,
-                        size: 160.0,
-                        backgroundColor: Colors.white,
-                        eyeStyle: const QrEyeStyle(
-                          eyeShape: QrEyeShape.square,
-                          color: AppColors.primaryColor,
+                  if (_generatedPin == null || _handoverCodeExpired) ...[
+                    if (_isLoadingHandoverCode)
+                      const Padding(
+                        padding: EdgeInsets.all(18),
+                        child: CircularProgressIndicator(),
+                      )
+                    else ...[
+                      Text(
+                        _handoverCodeExpired
+                            ? 'รหัสส่งมอบหมดอายุแล้ว กรุณาขอรหัสใหม่'
+                            : _pinErrorMessage ?? 'ยังไม่มีรหัสส่งมอบ',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          color: Color(0xFFB42318),
                         ),
-                        dataModuleStyle: const QrDataModuleStyle(
-                          dataModuleShape: QrDataModuleShape.square,
-                          color: Color(0xFF1E2022),
+                      ),
+                      TextButton(
+                        onPressed: _loadHandoverCode,
+                        child: const Text('ขอรหัสส่งมอบใหม่'),
+                      ),
+                    ],
+                  ] else ...[
+                    // QR Code
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        color: Colors.white,
+                        child: QrImageView(
+                          data: qrData,
+                          version: QrVersions.auto,
+                          size: 160.0,
+                          backgroundColor: Colors.white,
+                          eyeStyle: const QrEyeStyle(
+                            eyeShape: QrEyeShape.square,
+                            color: AppColors.primaryColor,
+                          ),
+                          dataModuleStyle: const QrDataModuleStyle(
+                            dataModuleShape: QrDataModuleShape.square,
+                            color: Color(0xFF1E2022),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  // แถบแยก
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 1,
-                        color: const Color(0xFFE2E8F0),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(
-                          'หรือบอกรหัส PIN 4 หลัก',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 11.5,
-                            color: Color(0xFF94A3B8),
-                          ),
+                    const SizedBox(height: 12),
+                    // แถบแยก
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 1,
+                          color: const Color(0xFFE2E8F0),
                         ),
-                      ),
-                      Container(
-                        width: 28,
-                        height: 1,
-                        color: const Color(0xFFE2E8F0),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  // แสดงรหัส PIN 4 หลักเป็นกล่องตัวเลข
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: _generatedPin.split('').map((digit) {
-                      return Container(
-                        width: 44,
-                        height: 50,
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF5F3FF),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.primaryColor.withValues(
-                              alpha: 0.35,
-                            ),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Text(
-                          digit,
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primaryColor,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 8),
-                  // ปุ่มคัดลอกรหัส PIN
-                  InkWell(
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: _generatedPin));
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.copy_rounded,
-                            size: 14,
-                            color: AppColors.primaryColor,
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'คัดลอกรหัส PIN',
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(
+                            'หรือบอกรหัส PIN 6 หลัก',
                             style: TextStyle(
                               fontFamily: AppTextStyles.fontFamily,
                               fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          width: 28,
+                          height: 1,
+                          color: const Color(0xFFE2E8F0),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // แสดงรหัส PIN ที่ server สร้างให้
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: _generatedPin!.split('').map((digit) {
+                        return Container(
+                          width: 38,
+                          height: 50,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F3FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.primaryColor.withValues(
+                                alpha: 0.35,
+                              ),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Text(
+                            digit,
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 21,
+                              fontWeight: FontWeight.bold,
                               color: AppColors.primaryColor,
                             ),
                           ),
-                        ],
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'เวลาใช้งานรหัสเหลือ $_handoverCodeCountdown นาที',
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    // ปุ่มคัดลอกรหัส PIN
+                    InkWell(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: _generatedPin!));
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.copy_rounded,
+                              size: 14,
+                              color: AppColors.primaryColor,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'คัดลอกรหัส PIN',
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.fontFamily,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
           const SizedBox(height: 14),
           // แถบสถานะรอผู้ปล่อยเช่าสแกน
-          Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.primaryColor,
+          if (_generatedPin != null && !_handoverCodeExpired)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primaryColor,
+                      ),
                     ),
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'กำลังรอผู้ปล่อยเช่าสแกนหรือใส่รหัส PIN...',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 12,
-                      color: Color(0xFF64748B),
+                    SizedBox(width: 8),
+                    Text(
+                      'กำลังรอผู้ปล่อยเช่าสแกนหรือใส่รหัส PIN...',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 14),
         ] else ...[
           // ── ฝั่งผู้ปล่อยเช่า: สแกน QR Code หรือกรอกรหัส PIN จากผู้เช่า ────────
@@ -1313,7 +1459,7 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
-                  'หรือกรอกรหัส PIN 4 หลักจากผู้เช่า',
+                  'หรือกรอกรหัส PIN 6 หลักจากผู้เช่า',
                   style: TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 11.5,
@@ -1329,14 +1475,14 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               SizedBox(
-                width: 180,
+                width: 220,
                 child: TextField(
                   controller: _pinController,
                   keyboardType: TextInputType.number,
-                  maxLength: 4,
+                  maxLength: 6,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(4),
+                    LengthLimitingTextInputFormatter(6),
                   ],
                   onChanged: (_) {
                     if (_pinErrorMessage != null) {
@@ -1348,13 +1494,13 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 8,
+                    letterSpacing: 6,
                   ),
                   decoration: InputDecoration(
                     counterText: '',
-                    hintText: '••••',
+                    hintText: '••••••',
                     hintStyle: const TextStyle(
-                      letterSpacing: 8,
+                      letterSpacing: 6,
                       color: Color(0xFFCBD5E1),
                     ),
                     filled: true,
@@ -1389,21 +1535,6 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
             ),
           ],
           const SizedBox(height: 10),
-          Center(
-            child: TextButton(
-              onPressed: () {
-                _pinController.text = _generatedPin;
-              },
-              child: Text(
-                'คลิกเพื่อใส่รหัสทดสอบ ($_generatedPin)',
-                style: const TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 12,
-                  color: AppColors.primaryColor,
-                ),
-              ),
-            ),
-          ),
           const SizedBox(height: 14),
           SizedBox(
             height: 48,
@@ -1515,15 +1646,14 @@ class _RentalHandoverModalState extends State<RentalHandoverModal> {
   }
 }
 
-/// Dialog สแกน QR Code ของผู้เช่าสำหรับผู้ปล่อยเช่า (Camera Scanner Simulation)
 /// Dialog สแกน QR Code ของผู้เช่าสำหรับผู้ปล่อยเช่า ด้วยกล้องจริง (MobileScanner)
 class _OwnerQrScannerDialog extends StatefulWidget {
-  final String expectedPin;
-  final VoidCallback onSuccess;
+  final int expectedBookingId;
+  final ValueChanged<String> onCodeScanned;
 
   const _OwnerQrScannerDialog({
-    required this.expectedPin,
-    required this.onSuccess,
+    required this.expectedBookingId,
+    required this.onCodeScanned,
   });
 
   @override
@@ -1569,34 +1699,37 @@ class _OwnerQrScannerDialogState extends State<_OwnerQrScannerDialog>
       final raw = barcode.rawValue ?? barcode.displayValue;
       if (raw != null && raw.isNotEmpty) {
         final pin = _extractPin(raw);
-        if (pin == widget.expectedPin || raw.contains(widget.expectedPin)) {
+        if (pin != null) {
           _hasScanned = true;
           HapticFeedback.mediumImpact();
-          widget.onSuccess();
+          widget.onCodeScanned(pin);
           return;
         } else {
           setState(() {
-            _errorMessage = 'QR Code นี้ไม่ใช่รหัสส่งมอบที่ถูกต้อง (พบ: $pin)';
+            _errorMessage = 'QR Code นี้ไม่ใช่รหัสส่งมอบของรายการเช่านี้';
           });
         }
       }
     }
   }
 
-  String _extractPin(String raw) {
+  String? _extractPin(String raw) {
     final trimmed = raw.trim();
-    if (trimmed == widget.expectedPin) return trimmed;
     try {
       final uri = Uri.tryParse(trimmed);
-      if (uri != null && uri.queryParameters.containsKey('pin')) {
-        final p = uri.queryParameters['pin'];
-        if (p != null && p.isNotEmpty) return p;
+      if (uri != null && uri.scheme == 'yuemnoi' && uri.host == 'handover') {
+        final bookingId = int.tryParse(uri.queryParameters['bookingId'] ?? '');
+        final code = uri.queryParameters['pin'];
+        if (bookingId == widget.expectedBookingId &&
+            code != null &&
+            RegExp(r'^\d{6}$').hasMatch(code)) {
+          return code;
+        }
+        return null;
       }
     } catch (_) {}
-    if (trimmed.contains(widget.expectedPin)) return widget.expectedPin;
-    final match = RegExp(r'\b\d{4}\b').firstMatch(trimmed);
-    if (match != null) return match.group(0)!;
-    return trimmed;
+    if (RegExp(r'^\d{6}$').hasMatch(trimmed)) return trimmed;
+    return null;
   }
 
   @override
@@ -1793,34 +1926,6 @@ class _OwnerQrScannerDialogState extends State<_OwnerQrScannerDialog>
             ),
           ),
           const SizedBox(height: 20),
-
-          // ปุ่มจำลอง/สำรองกรณีทดสอบบน Emulator หรือไม่สามารถใช้กล้องได้
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: OutlinedButton.icon(
-              onPressed: () {
-                _hasScanned = true;
-                widget.onSuccess();
-              },
-              icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-              label: Text(
-                'จำลองสแกนสำเร็จ (PIN: ${widget.expectedPin})',
-                style: const TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFC084FC),
-                side: const BorderSide(color: Color(0xFFC084FC), width: 1.2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );

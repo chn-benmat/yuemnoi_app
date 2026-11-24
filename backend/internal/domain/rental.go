@@ -7,12 +7,15 @@ import (
 )
 
 var (
-	ErrRentalNotFound         = errors.New("rental not found")
-	ErrRentalUnavailable      = errors.New("rental period is unavailable")
-	ErrInvalidRental          = errors.New("invalid rental")
-	ErrRentalForbidden        = errors.New("forbidden to update this rental")
-	ErrRentalStatusTransition = errors.New("invalid rental status transition")
-	ErrRentalReturnToken      = errors.New("invalid or expired return token")
+	ErrRentalNotFound           = errors.New("rental not found")
+	ErrRentalUnavailable        = errors.New("rental period is unavailable")
+	ErrInvalidRental            = errors.New("invalid rental")
+	ErrRentalForbidden          = errors.New("forbidden to update this rental")
+	ErrRentalStatusTransition   = errors.New("invalid rental status transition")
+	ErrRentalReturnToken        = errors.New("invalid or expired return token")
+	ErrRentalHandoverCode       = errors.New("invalid or expired handover code")
+	ErrRentalHandoverCodeActive = errors.New("handover code is already active")
+	ErrRentalNotStarted         = errors.New("rental has not started yet")
 )
 
 // CreateRentalRequest accepts only user-selected values. Pricing is calculated
@@ -28,8 +31,8 @@ type CreateRentalRequest struct {
 }
 
 type RentalOrder struct {
-	PickupAddress string  `json:"pickup_address"`
-	PickupNote    string  `json:"pickup_note"`
+	PickupAddress string `json:"pickup_address"`
+	PickupNote    string `json:"pickup_note"`
 
 	ID             int64     `json:"id"`
 	UserID         string    `json:"user_id"`
@@ -51,6 +54,11 @@ type RentalRepository interface {
 	InspectRentalReturn(ctx context.Context, userID string, rentalID int64) (*RentalReturnChallenge, error)
 	CompleteRentalReturn(ctx context.Context, userID string, rentalID int64, token string) (*RentalOrder, error)
 	CancelRental(ctx context.Context, userID string, rentalID int64, reason, note string, images []ItemImage) (*RentalOrder, error)
+}
+
+type RentalHandoverRepository interface {
+	CreateHandoverCode(ctx context.Context, userID string, rentalID int64) (string, time.Time, error)
+	CompleteHandover(ctx context.Context, userID string, rentalID int64, code string) (*RentalOrder, error)
 }
 
 type RentalReturnChallenge struct {

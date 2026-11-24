@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -62,6 +63,45 @@ func (r *operationsRepository) RPC(ctx context.Context, name string, args map[st
 	}
 	data, _, err := r.request(ctx, "POST", "/rest/v1/rpc/"+url.PathEscape(name), body, "application/json")
 	return data, err
+}
+func (r *operationsRepository) ReadItemImages(ctx context.Context, itemIDs []int64) (map[int64][]string, error) {
+	images := make(map[int64][]string, len(itemIDs))
+	if len(itemIDs) == 0 {
+		return images, nil
+	}
+	ids := make([]string, 0, len(itemIDs))
+	seen := make(map[int64]struct{}, len(itemIDs))
+	for _, id := range itemIDs {
+		if id <= 0 {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, strconv.FormatInt(id, 10))
+	}
+	if len(ids) == 0 {
+		return images, nil
+	}
+	query := url.Values{}
+	query.Set("select", "id,item_image_url")
+	query.Set("id", "in.("+strings.Join(ids, ",")+")")
+	data, _, err := r.request(ctx, http.MethodGet, "/rest/v1/item_tb?"+query.Encode(), nil, "application/json")
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ID           int64    `json:"id"`
+		ItemImageURL []string `json:"item_image_url"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		images[row.ID] = row.ItemImageURL
+	}
+	return images, nil
 }
 func (r *operationsRepository) UploadEvidence(ctx context.Context, path string, data []byte, content string) error {
 	_, _, err := r.request(ctx, "POST", "/storage/v1/object/identity-private/"+path, data, content)
