@@ -45,24 +45,6 @@ class FcmService {
     if (callback != null) unawaited(flushPendingTap());
   }
 
-  Future<NotificationSettings?> requestNotificationPermission() async {
-    if (kIsWeb) return null;
-    try {
-      await initialize();
-      final settings = await _messaging?.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      final userId = _userId;
-      if (userId != null) unawaited(syncUserToken(userId));
-      return settings;
-    } catch (_) {
-      debugPrint('FCM: notification permission unavailable');
-      return null;
-    }
-  }
-
   Future<void> initialize() {
     if (kIsWeb || _isInitialized) return Future.value();
     return _initializing ??= _initialize().whenComplete(

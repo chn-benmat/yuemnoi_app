@@ -14,6 +14,9 @@ void main() {
         'price': 120.9,
         'is_verified': 'true',
         'tags': ['tag', 1, null],
+        'distance_km': 4.2,
+        'pickup_latitude': 13.7,
+        'pickup_longitude': 100.5,
       });
       expect(item.id, '7');
       expect(item.title, 'Camera');
@@ -24,6 +27,8 @@ void main() {
       expect(item.isVerified, false);
       expect(item.tags, ['tag', '1', 'null']);
       expect(item.distanceKm, isNull);
+      expect(item.pickupLatitude, 13.7);
+      expect(item.pickupLongitude, 100.5);
       expect(
         item.toJson().keys,
         unorderedEquals([
@@ -36,7 +41,6 @@ void main() {
           'price_unit',
           'rating',
           'review_count',
-          'distance_km',
           'is_verified',
           'owner_name',
           'is_owner',
@@ -46,6 +50,8 @@ void main() {
           'is_favorite',
           'tags',
           'location_name',
+          'pickup_latitude',
+          'pickup_longitude',
         ]),
       );
       expect(FeedItemModel.fromJson(item.toJson()), item);

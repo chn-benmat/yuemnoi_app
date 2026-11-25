@@ -29,7 +29,13 @@ class FeedItemModel extends FeedItem {
     super.isFavorite = false,
     super.tags = const [],
     super.locationName = 'ไม่ระบุตำแหน่ง',
+    super.pickupLatitude,
+    super.pickupLongitude,
   });
+
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  double? get distanceKm => super.distanceKm;
 
   // ตัวสร้างโค้ดอ่าน converter จาก getter แต่ไม่อ่านจาก super parameter
   @override
@@ -105,6 +111,8 @@ class FeedItemModel extends FeedItem {
       isFavorite: isFavorite ?? this.isFavorite,
       tags: tags ?? this.tags,
       locationName: locationName ?? this.locationName,
+      pickupLatitude: pickupLatitude,
+      pickupLongitude: pickupLongitude,
     );
   }
 
@@ -128,5 +136,7 @@ class FeedItemModel extends FeedItem {
     isFavorite: isFavorite,
     tags: tags,
     locationName: locationName,
+    pickupLatitude: pickupLatitude,
+    pickupLongitude: pickupLongitude,
   );
 }

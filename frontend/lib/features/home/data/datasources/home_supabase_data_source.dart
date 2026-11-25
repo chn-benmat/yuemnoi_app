@@ -11,20 +11,17 @@ import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/favorite_service.dart';
 import '../models/feed_category_model.dart';
 import '../models/feed_item_model.dart';
-import 'home_mock_data_source.dart';
 
 /// Data Source สำหรับดึงข้อมูลล่าสุดจาก Supabase หรือ Go Backend REST API (`/api/items`)
-/// เก็บ snapshot ไว้ในเครื่องได้ แต่ไม่ใช้ snapshot แสดงผลเมื่อดึงข้อมูลสดไม่ได้
+/// ใช้แคชจากข้อมูลจริงของฟีดเมื่อโหลดข้อมูลสดไม่ได้
 class HomeSupabaseDataSource {
   HomeSupabaseDataSource({
     SupabaseClient? supabaseClient,
     ApiClient? apiClient,
-    HomeMockDataSource? fallbackDataSource,
     CacheDatabase? cacheDatabase,
   }) : _cacheDatabase = cacheDatabase ?? AppCache.database,
        _supabaseClient = supabaseClient,
-       _apiClient = apiClient ?? DioApiClient(),
-       _fallbackDataSource = fallbackDataSource ?? HomeMockDataSource();
+       _apiClient = apiClient ?? DioApiClient();
 
   final CacheDatabase _cacheDatabase;
   String get _cacheOwner =>
@@ -32,21 +29,64 @@ class HomeSupabaseDataSource {
 
   final SupabaseClient? _supabaseClient;
   final ApiClient _apiClient;
-  final HomeMockDataSource _fallbackDataSource;
 
-  /// ชื่อหมวดหมู่ภาษาไทยที่เป็นทางการ
-  static const Map<String, String> categoryThaiNames = {
-    'camera': 'กล้องและอุปกรณ์ถ่ายภาพ',
-    'audio': 'เครื่องเสียงและอุปกรณ์จัดงาน',
-    'computer': 'คอมพิวเตอร์และอุปกรณ์ไอที',
-    'phone': 'โทรศัพท์และอุปกรณ์สื่อสาร',
-    'tools': 'เครื่องมือช่างและงานก่อสร้าง',
-    'appliances': 'เครื่องใช้ไฟฟ้าและอุปกรณ์ภายในบ้าน',
-    'camping': 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
-    'sports': 'กีฬาและออกกำลังกาย',
-    'gaming': 'เกมและความบันเทิง',
-    'music': 'ดนตรีและเครื่องดนตรี',
-    'other': 'อื่น ๆ',
+  static const _categories = [
+    FeedCategoryModel(id: 'all', name: 'ทั้งหมด', iconName: 'apps'),
+    FeedCategoryModel(
+      id: 'camera',
+      name: 'กล้องและอุปกรณ์ถ่ายภาพ',
+      iconName: 'photo_camera',
+    ),
+    FeedCategoryModel(
+      id: 'audio',
+      name: 'เครื่องเสียงและอุปกรณ์จัดงาน',
+      iconName: 'headphones',
+    ),
+    FeedCategoryModel(
+      id: 'computer',
+      name: 'คอมพิวเตอร์และอุปกรณ์ไอที',
+      iconName: 'laptop',
+    ),
+    FeedCategoryModel(
+      id: 'phone',
+      name: 'โทรศัพท์และอุปกรณ์สื่อสาร',
+      iconName: 'smartphone',
+    ),
+    FeedCategoryModel(
+      id: 'tools',
+      name: 'เครื่องมือช่างและงานก่อสร้าง',
+      iconName: 'construction',
+    ),
+    FeedCategoryModel(
+      id: 'appliances',
+      name: 'เครื่องใช้ไฟฟ้าและอุปกรณ์ภายในบ้าน',
+      iconName: 'kitchen',
+    ),
+    FeedCategoryModel(
+      id: 'camping',
+      name: 'แคมป์ปิงและกิจกรรมกลางแจ้ง',
+      iconName: 'forest',
+    ),
+    FeedCategoryModel(
+      id: 'sports',
+      name: 'กีฬาและออกกำลังกาย',
+      iconName: 'fitness_center',
+    ),
+    FeedCategoryModel(
+      id: 'gaming',
+      name: 'เกมและความบันเทิง',
+      iconName: 'sports_esports',
+    ),
+    FeedCategoryModel(
+      id: 'music',
+      name: 'ดนตรีและเครื่องดนตรี',
+      iconName: 'music_note',
+    ),
+    FeedCategoryModel(id: 'other', name: 'อื่น ๆ', iconName: 'category'),
+  ];
+
+  static final Map<String, String> _categoryNames = {
+    for (final category in _categories) category.id: category.name,
   };
 
   /// คำค้นหายอดนิยมและคำพ้องความหมาย (Synonyms) ภาษาไทยและภาษาอังกฤษประจำหมวดหมู่
@@ -228,8 +268,8 @@ class HomeSupabaseDataSource {
     } catch (_) {
       // Keep the feed available even if local preference storage is unavailable.
     }
-    final persistedHistory = prefs?.getStringList(_recentItemsKey(ownerId)) ??
-        const <String>[];
+    final persistedHistory =
+        prefs?.getStringList(_recentItemsKey(ownerId)) ?? const <String>[];
     final history = _deferPreviouslyShownIds.isNotEmpty
         ? [..._deferPreviouslyShownIds, ...persistedHistory]
         : persistedHistory;
@@ -238,9 +278,7 @@ class HomeSupabaseDataSource {
     final unseenItems = items
         .where((item) => !deferredIds.contains(item.id))
         .toList();
-    final featured = <FeedItemModel>[
-      ...unseenItems.take(_curatedItemCount),
-    ];
+    final featured = <FeedItemModel>[...unseenItems.take(_curatedItemCount)];
     // If the candidate pool is smaller than the recent-history window, cycle
     // from the least recently featured items instead of repeating its first row.
     final repeatOrder = unseenItems.isEmpty ? history.reversed : history;
@@ -266,10 +304,7 @@ class HomeSupabaseDataSource {
         ...diversified.take(_curatedItemCount).map((item) => item.id),
         ...history,
       ].toSet().take(_recentRecommendationWindow).toList();
-      await prefs?.setStringList(
-        _recentItemsKey(ownerId),
-        updatedHistory,
-      );
+      await prefs?.setStringList(_recentItemsKey(ownerId), updatedHistory);
     } catch (_) {
       // Rotation still works for this app session without persistent storage.
     }
@@ -306,9 +341,7 @@ class HomeSupabaseDataSource {
   }
 
   /// ดึงหมวดหมู่มาตรฐาน 11 หมวดหมู่
-  Future<List<FeedCategoryModel>> fetchCategories() async {
-    return _fallbackDataSource.fetchCategories();
-  }
+  Future<List<FeedCategoryModel>> fetchCategories() async => _categories;
 
   /// แปลงชื่อหมวดหมู่จากฐานข้อมูล Supabase เป็น categoryId มาตรฐานของ UI
   static String mapDbCategoryToId(String? rawCategory) {
@@ -438,6 +471,7 @@ class HomeSupabaseDataSource {
   List<FeedItemModel> _mapRawListToFeedItems(
     List rawItems, {
     Map<String, Map<String, dynamic>>? profilesMap,
+    Map<String, Map<String, dynamic>>? pickupDetails,
   }) {
     final List<FeedItemModel> items = [];
     final currentUserId = _activeSupabaseClient?.auth.currentUser?.id;
@@ -490,7 +524,8 @@ class HomeSupabaseDataSource {
         ownerAvatar ??= profile?['user_image_url']?.toString();
       }
 
-      final rawLocationName = item['pickup_location']?.toString().trim();
+      final pickup = pickupDetails?[id] ?? item;
+      final rawLocationName = pickup['pickup_location']?.toString().trim();
       final locationName = rawLocationName == null || rawLocationName.isEmpty
           ? 'ไม่ระบุตำแหน่ง'
           : rawLocationName;
@@ -514,10 +549,6 @@ class HomeSupabaseDataSource {
       final reviewCount = item['review_count'] is num
           ? (item['review_count'] as num).toInt()
           : int.tryParse(item['review_count']?.toString() ?? '') ?? 0;
-      final distanceKm = item['distance_km'] is num
-          ? (item['distance_km'] as num).toDouble()
-          : double.tryParse(item['distance_km']?.toString() ?? '');
-
       items.add(
         FeedItemModel(
           id: id,
@@ -529,7 +560,6 @@ class HomeSupabaseDataSource {
           priceUnit: priceUnit,
           rating: double.parse(rating.toStringAsFixed(1)),
           reviewCount: reviewCount,
-          distanceKm: distanceKm,
           isVerified:
               item['is_verified'] == true ||
               profilesMap?[item['user_id']?.toString()]?['is_verified'] == true,
@@ -545,6 +575,8 @@ class HomeSupabaseDataSource {
           ),
           tags: tags,
           locationName: locationName,
+          pickupLatitude: double.tryParse('${pickup['pickup_latitude']}'),
+          pickupLongitude: double.tryParse('${pickup['pickup_longitude']}'),
         ),
       );
     }
@@ -579,7 +611,7 @@ class HomeSupabaseDataSource {
     List<dynamic>? rawItems;
     try {
       rawItems = await client
-          .from('home_feed_ranked_with_user_location_v')
+          .from('home_feed_ranked_v')
           .select('*')
           .order('rank_position', ascending: true);
     } catch (e) {
@@ -634,7 +666,48 @@ class HomeSupabaseDataSource {
       }
     }
 
-    return _mapRawListToFeedItems(rawList, profilesMap: profilesMap);
+    return _mapRawListToFeedItems(
+      rawList,
+      profilesMap: profilesMap,
+      pickupDetails: await _fetchPickupDetails(rawList),
+    );
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _fetchPickupDetails(
+    List<dynamic> items,
+  ) async {
+    final client = _activeSupabaseClient;
+    if (client == null) return {};
+
+    final ids = <int>{};
+    for (final item in items.cast<Map>()) {
+      if (item['pickup_latitude'] != null && item['pickup_longitude'] != null) {
+        continue;
+      }
+      final id = int.tryParse('${item['id']}');
+      if (id != null) ids.add(id);
+    }
+
+    final result = <String, Map<String, dynamic>>{};
+    final listingIds = ids.toList();
+    for (var offset = 0; offset < listingIds.length; offset += 100) {
+      try {
+        final rows = await client
+            .from('item_tb')
+            .select('id,pickup_location,pickup_latitude,pickup_longitude')
+            .inFilter('id', listingIds.skip(offset).take(100).toList())
+            .eq('owner_hidden', false)
+            .eq('moderation_hidden', false)
+            .inFilter('status', ['available', 'พร้อมใช้งาน']);
+        for (final row in rows) {
+          result['${row['id']}'] = row;
+        }
+      } catch (_) {
+        // ฟีดยังแสดงรายการได้เมื่ออ่านพิกัดจุดรับสินค้าไม่ได้
+        break;
+      }
+    }
+    return result;
   }
 
   /// ดึงรายการสดก่อน และใช้ cache เป็น fallback เฉพาะฟีดที่ไม่ได้ค้นหา
@@ -677,7 +750,11 @@ class HomeSupabaseDataSource {
       try {
         final response = await _apiClient.get('/api/items');
         if (response.statusCode == 200 && response.data is List) {
-          freshItems = _mapRawListToFeedItems(response.data as List);
+          final rawItems = response.data as List;
+          freshItems = _mapRawListToFeedItems(
+            rawItems,
+            pickupDetails: await _fetchPickupDetails(rawItems),
+          );
         }
       } catch (_) {
         // ลองแหล่งข้อมูลถัดไปและแจ้ง error หากเชื่อมต่อไม่ได้ทั้งหมด
@@ -717,25 +794,17 @@ class HomeSupabaseDataSource {
         _lastFetchTime = DateTime.now();
         return _withCurrentFavoriteState(rotated);
       }
-
-      final fallbackItems = await _fallbackDataSource.fetchNearbyItems();
-      if (fallbackItems.isNotEmpty) {
-        return _withCurrentFavoriteState(fallbackItems);
-      }
     }
 
-    throw const FormatException(
-      'ไม่มีการเชื่อมต่ออินเทอร์เน็ต กรุณาลองใหม่',
-    );
+    throw const FormatException('ไม่มีการเชื่อมต่ออินเทอร์เน็ต กรุณาลองใหม่');
   }
 
   Future<List<FeedItemModel>> fetchCuratedItems() async {
     final allItems = await _fetchAllSupabaseItems();
     final curated = allItems.where((i) => i.isCurated).toList();
-    if (curated.isEmpty && allItems.isNotEmpty) {
-      return allItems.take(4).toList();
-    }
-    return curated;
+    return curated.isEmpty
+        ? allItems.take(_curatedItemCount).toList()
+        : curated;
   }
 
   /// ตรวจสอบว่าอุปกรณ์ตรงกับคำค้นหาหรือไม่ (รองรับภาษาไทย, ชื่ออุปกรณ์, คำอธิบาย, หมวดหมู่ และคำพ้อง)
@@ -748,7 +817,7 @@ class HomeSupabaseDataSource {
     final description = item.description.toLowerCase();
     final catId = item.categoryId.toLowerCase();
     final rawCat = item.rawCategory.toLowerCase();
-    final thaiCat = categoryThaiNames[item.categoryId]?.toLowerCase() ?? '';
+    final thaiCat = _categoryNames[item.categoryId]?.toLowerCase() ?? '';
     final location = item.locationName.toLowerCase();
     final owner = item.ownerName.toLowerCase();
     final tags = item.tags.map((t) => t.toLowerCase()).toList();

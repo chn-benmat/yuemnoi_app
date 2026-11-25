@@ -5,7 +5,6 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/utils/app_form_validators.dart';
-import '../../../../core/services/app_permission_service.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_form_field.dart';
@@ -47,13 +46,6 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
-
-    // แสดง Dialog ขออนุญาตรับการแจ้งเตือนเมื่อเข้าสู่หน้า Login
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        AppPermissionService.checkAndPromptNotificationPermission(context);
-      }
-    });
   }
 
   void _loginWithGoogle() {

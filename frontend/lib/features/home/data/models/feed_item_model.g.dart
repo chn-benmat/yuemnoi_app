@@ -20,7 +20,6 @@ FeedItemModel _$FeedItemModelFromJson(Map<String, dynamic> json) =>
       priceUnit: json['price_unit'] as String? ?? '/ วัน',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
-      distanceKm: (json['distance_km'] as num?)?.toDouble(),
       isVerified: FeedItemModel._isTrue(json['is_verified']),
       ownerName: json['owner_name'] as String? ?? 'ผู้ใช้งาน',
       isOwner: json['is_owner'] as bool? ?? false,
@@ -30,6 +29,8 @@ FeedItemModel _$FeedItemModelFromJson(Map<String, dynamic> json) =>
       isFavorite: json['is_favorite'] as bool? ?? false,
       tags: json['tags'] == null ? const [] : FeedItemModel._tags(json['tags']),
       locationName: json['location_name'] as String? ?? 'ไม่ระบุตำแหน่ง',
+      pickupLatitude: (json['pickup_latitude'] as num?)?.toDouble(),
+      pickupLongitude: (json['pickup_longitude'] as num?)?.toDouble(),
     );
 
 Map<String, dynamic> _$FeedItemModelToJson(FeedItemModel instance) =>
@@ -42,7 +43,6 @@ Map<String, dynamic> _$FeedItemModelToJson(FeedItemModel instance) =>
       'price_unit': instance.priceUnit,
       'rating': instance.rating,
       'review_count': instance.reviewCount,
-      'distance_km': instance.distanceKm,
       'owner_name': instance.ownerName,
       'is_owner': instance.isOwner,
       'owner_avatar_url': instance.ownerAvatarUrl,
@@ -50,6 +50,8 @@ Map<String, dynamic> _$FeedItemModelToJson(FeedItemModel instance) =>
       'is_curated': instance.isCurated,
       'is_favorite': instance.isFavorite,
       'location_name': instance.locationName,
+      'pickup_latitude': instance.pickupLatitude,
+      'pickup_longitude': instance.pickupLongitude,
       'id': instance.id,
       'is_verified': instance.isVerified,
       'tags': instance.tags,

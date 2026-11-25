@@ -22,6 +22,8 @@ class FeedItem extends Equatable {
     this.isFavorite = false,
     this.tags = const [],
     this.locationName = 'กรุงเทพฯ',
+    this.pickupLatitude,
+    this.pickupLongitude,
   });
 
   /// รหัสประจำตัวอุปกรณ์
@@ -80,6 +82,8 @@ class FeedItem extends Equatable {
 
   /// ชื่อสถานที่หรือพื้นที่
   final String locationName;
+  final double? pickupLatitude;
+  final double? pickupLongitude;
 
   FeedItem copyWith({
     String? id,
@@ -122,6 +126,8 @@ class FeedItem extends Equatable {
       isFavorite: isFavorite ?? this.isFavorite,
       tags: tags ?? this.tags,
       locationName: locationName ?? this.locationName,
+      pickupLatitude: pickupLatitude,
+      pickupLongitude: pickupLongitude,
     );
   }
 
@@ -146,5 +152,7 @@ class FeedItem extends Equatable {
     isFavorite,
     tags,
     locationName,
+    pickupLatitude,
+    pickupLongitude,
   ];
 }

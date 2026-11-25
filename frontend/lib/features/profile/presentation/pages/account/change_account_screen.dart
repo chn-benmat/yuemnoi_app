@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
+import '../../../../../core/services/recommendation_location_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../widgets/account/change_account_widgets.dart';
 
@@ -21,6 +22,11 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
   bool _muteNotifications = false;
   bool _securityAlerts = true;
   bool _profileSearchable = true;
+  bool _deletingSavedLocation = false;
+
+  final _locationService = RecommendationLocationService.instance;
+  late Future<String?> _savedLocationOwner = _locationService
+      .findSavedAccountLocationOwner();
 
   List<String> _blockedUsers = ['User_Demo99'];
   List<String> _hiddenUsers = ['Shop_Discount24'];
@@ -560,6 +566,40 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
     );
   }
 
+  Future<void> _deleteSavedLocation(String userId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ลบตำแหน่งที่เคยบันทึกไว้?'),
+        content: const Text('ระบบจะลบพิกัดที่เคยบันทึกไว้ในบัญชีคุณ'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ยกเลิก'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ลบตำแหน่ง'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() => _deletingSavedLocation = true);
+    try {
+      await _locationService.deleteSavedAccountLocation(userId);
+      if (!mounted) return;
+      setState(() => _savedLocationOwner = Future.value(null));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ลบตำแหน่งไม่สำเร็จ กรุณาลองใหม่')),
+      );
+    } finally {
+      if (mounted) setState(() => _deletingSavedLocation = false);
+    }
+  }
+
   // ─── Build ───────────────────────────────────────────────────────────────────
 
   @override
@@ -650,6 +690,29 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                   onChanged: (val) {
                     setState(() => _profileSearchable = val);
                     _saveBool('sec_profile_search', val);
+                  },
+                ),
+                FutureBuilder<String?>(
+                  future: _savedLocationOwner,
+                  builder: (context, snapshot) {
+                    final userId = snapshot.data;
+                    if (userId == null) return const SizedBox.shrink();
+                    return Column(
+                      children: [
+                        _buildDivider(),
+                        AccountSecurityItem(
+                          icon: Icons.location_off_outlined,
+                          iconBgColor: const Color(0xFFFEE2E2),
+                          iconColor: Colors.red.shade700,
+                          title: 'ลบตำแหน่งเดิมออกจากบัญชี',
+                          subtitle: 'ลบพิกัดที่เคยบันทึกไว้ในบัญชี',
+                          isDanger: true,
+                          onTap: _deletingSavedLocation
+                              ? null
+                              : () => _deleteSavedLocation(userId),
+                        ),
+                      ],
+                    );
                   },
                 ),
               ]),
