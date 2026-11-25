@@ -75,7 +75,5 @@ Future<void> main() async {
     }
   }
 
-  runApp(
-    YuemnoiApp(initialRoute: AppRoutes.home),
-  );
+  runApp(YuemnoiApp(initialRoute: AppRoutes.home));
 }

@@ -6,6 +6,7 @@ abstract class RentalRequestRepository {
   Future<RentalRequestResult> confirm({
     required int rentalId,
     required String offerMessageId,
+    required String paymentMethod,
   });
 
   void close();

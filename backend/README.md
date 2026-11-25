@@ -37,7 +37,9 @@ Go Backend เป็น REST API หลักของ **Yuemnoi** เชื่�
 
 การสร้างคำขอเช่าเรียก RPC `create_rental_request` และส่งมอบเป็น `active` ขั้นตอนคืนใช้ `return-evidence` (ผู้เช่าส่งรูป 3 รูปและ checklist) -> `return-inspection` (เจ้าของตรวจและสร้าง QR/OTP) -> `return` (ผู้เช่าส่ง `token_or_otp` ให้ server ตรวจ) สถานะผ่าน `awaiting_return` และ `return_ready` ก่อน `completed`; รหัสหมดอายุใน 5 นาที จำกัด 5 ครั้งและใช้ซ้ำไม่ได้ การยกเลิกก่อนส่งมอบใช้ `cancel` พร้อมเหตุผลและหลักฐาน ไม่มีการหัก Wallet หรือคืนเงินจริงใน flow นี้
 
-การส่งมอบใช้ PIN 6 หลักที่ backend สุ่มให้ผู้เช่าผ่าน `POST /api/rentals/:id/handover-code`; PIN หมดอายุใน 10 นาที เก็บ HMAC digest และ PIN แบบเข้ารหัส โดยคำขอซ้ำขณะยังใช้งานจะได้ PIN เดิมกลับมา เจ้าของอุปกรณ์ยืนยันผ่าน `POST /api/rentals/:id/handover` โดยส่ง `{ "code": "......" }` ผิดได้สูงสุด 5 ครั้งและใช้ได้ครั้งเดียว ต้องติดตั้ง migration `supabase/migrations/20261123142535_rental_handover_pin.sql`, `supabase/migrations/20261123144440_prevent_handover_pin_replacement.sql` และ `supabase/migrations/20261123144814_replay_active_handover_pin_safely.sql` ก่อนเปิดใช้ flow นี้
+ใช้ migrations พร้อมเพย์ตามลำดับ `20261124165600_rental_handover_payment.sql`, `20261124165607_rental_promptpay_qr.sql`, `20261124171624_rental_promptpay_national_id.sql` และ `20261125012154_start_rental_after_payment.sql` ใน `supabase/migrations/` คู่เช่าอ่านสถานะด้วย `GET /api/rentals/:id/handover-payment` ผู้ปล่อยเช่าใช้ `PUT` ที่เส้นทางเดียวกันเพื่อบันทึกเบอร์มือถือหรือเลขบัตรประชาชนสำหรับสร้าง QR พร้อมเพย์ตามยอดจอง เมื่อถึงเวลานัดและได้รับเงินสดหรือพร้อมเพย์แล้ว ผู้ปล่อยเช่าใช้ `POST` ที่เส้นทางเดียวกันเพื่อบันทึกการรับเงินและเปลี่ยนสถานะเป็น `active` ในธุรกรรมเดียวกัน
+
+การบันทึกเลขบัตรพร้อมเพย์ต้องตั้ง `IDENTITY_ENCRYPTION_KEY` เป็น base64 ของคีย์ 32 ไบต์ และใช้ค่าเดียวกันในทุก instance ของ Go แม้ปิด `OPERATIONS_ENABLED` เซิร์ฟเวอร์ใช้คีย์ที่แยกตามบัญชีและวัตถุประสงค์ก่อนเข้ารหัสเลขบัตรลงฐานข้อมูล หากเปลี่ยนคีย์ เลขบัตรพร้อมเพย์ที่เข้ารหัสด้วยคีย์เดิมจะอ่านไม่ได้
 
 แจ้งเตือนแชต การเช่า และระบบเก็บใน `notification_tb` พร้อม outbox จาก transaction ของเหตุการณ์ Worker ส่ง FCM ไปยังทุกอุปกรณ์ใน `notification_device_tb`; ไม่ใช้ `profile_tb.fcm_token` เป็นแหล่งส่งอีกแล้ว API ประวัติ/อ่าน/ลงทะเบียนเครื่องอยู่ที่ `/api/notifications` รายละเอียดและ SQL tests อยู่ใน [ข้อตกลงระบบแจ้งเตือน](../docs/notifications.md)
 
@@ -264,7 +266,7 @@ Base path คือ `/api` เส้นทางทั้งหมดอยู�
 | `GET /items/:id/auto-reply`, `PUT /items/:id/auto-reply` | อ่าน / บันทึกข้อความตอบกลับอัตโนมัติ | ต้องมี; ตรวจเจ้าของ                   |
 | `POST /rentals`                                           | สร้างคำขอเช่า                      | ต้องมี                                |
 | `POST /rentals/:id/confirm`                               | ผู้เช่ายืนยันข้อเสนอเป็น confirmed | ต้องมี; ตรวจผู้เช่าและข้อความข้อเสนอ  |
-| `POST /rentals/:id/handover`, `POST /rentals/:id/return`  | เปลี่ยนสถานะ                       | ต้องมี; ตรวจผู้มีสิทธิ์               |
+| `POST /rentals/:id/handover-payment`, `POST /rentals/:id/return`  | เปลี่ยนสถานะ                       | ต้องมี; ตรวจผู้มีสิทธิ์               |
 | `POST /chat/contact`, `POST /push/chat`                   | Contact / push                     | ต้องมี                                |
 | `POST /chat-ai`, `POST /chat-ai/stream`                   | AI JSON / SSE                      | handler ปัจจุบันไม่บังคับ user Bearer |
 

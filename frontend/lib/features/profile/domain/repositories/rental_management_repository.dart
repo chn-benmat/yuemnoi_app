@@ -1,5 +1,5 @@
 import '../entities/rental_booking.dart';
-import '../entities/rental_handover_code.dart';
+import '../entities/rental_handover_payment.dart';
 import '../entities/rental_income.dart';
 
 // คำอธิบาย: สัญญา (Contract) การทำงานเกี่ยวกับการจัดการสถานะการเช่า, ส่งมอบ, คืนของ, ประวัติ และรายได้
@@ -15,9 +15,10 @@ abstract class RentalManagementRepository {
 }
 
 abstract interface class RentalHandoverRepository {
-  Future<RentalHandoverCode> createHandoverCode({required int bookingId});
-  Future<void> completeHandover({
+  Future<RentalHandoverPayment> handoverPayment({
     required int bookingId,
-    required String code,
+    required bool confirm,
+    String? promptPayPhone,
+    String? promptPayNationalId,
   });
 }

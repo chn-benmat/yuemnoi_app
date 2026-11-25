@@ -2,11 +2,14 @@ import 'package:go_router/go_router.dart';
 import 'package:frontend/core/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/core/services/booking_confirmation_tracker.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
 import 'package:frontend/features/chat/presentation/widgets/booking_request_bubble_card.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -26,6 +29,7 @@ void main() {
     String? initialStatus,
     bool isOwner = false,
     bool isHandoverCompleted = false,
+    String? bookingStatus,
     void Function(String)? onRoute,
   }) async {
     final tomorrow = DateTime.now().add(const Duration(days: 1));
@@ -45,6 +49,9 @@ void main() {
       startTime: const TimeOfDay(hour: 10, minute: 0),
       endTime: const TimeOfDay(hour: 10, minute: 0),
       location: 'Pickup point',
+      latitude: 13.7466,
+      longitude: 100.5393,
+      status: bookingStatus,
     );
     final message = ChatMessage(
       id: 'merge-regression-message',
@@ -166,6 +173,49 @@ void main() {
     );
     expect(tester.takeException(), isNull);
 
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('opens the pickup map for an offer without a booking ID', (
+    tester,
+  ) async {
+    AuthSession.saveAccessToken('test-token');
+    addTearDown(AuthSession.clear);
+    await pumpCard(tester, bookingStatus: 'pending', isOwner: true);
+
+    final pickup = find.text('จุดนัดพบ');
+    await tester.ensureVisible(pickup);
+    await tester.tap(pickup);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(
+      find.text('ไม่พบรายการเช่านี้ กรุณาเปิดหน้าจากรายการเช่าของคุณ'),
+      findsNothing,
+    );
+    final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+    expect(map.options.initialCenter, const LatLng(13.7466, 100.5393));
+    expect(find.byTooltip('นำทางด้วย Google Maps'), findsOneWidget);
+    expect(find.text('โทรหาผู้เช่า'), findsNothing);
+    expect(find.text('ส่งมอบอุปกรณ์'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('a previous handover does not confirm a new pending offer', (
+    tester,
+  ) async {
+    await pumpCard(
+      tester,
+      bookingStatus: 'pending',
+      isOwner: true,
+      isHandoverCompleted: true,
+    );
+
+    expect(find.text('แก้ไขรายละเอียด'), findsOneWidget);
+    expect(find.text('รายละเอียดนัดรับ'), findsNothing);
+    expect(find.text('ดูสถานะปล่อยเช่า'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

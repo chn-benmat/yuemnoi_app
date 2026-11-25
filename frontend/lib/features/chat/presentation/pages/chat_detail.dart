@@ -50,12 +50,14 @@ class ChatDetailScreen extends StatelessWidget {
   const ChatDetailScreen({
     super.key,
     required this.conversation,
+    this.initialMessageId,
     this.chatDetailBloc,
     this.getContactPhone,
     this.phoneCallService = const UrlPhoneCallService(),
   });
 
   final ChatConversation conversation;
+  final String? initialMessageId;
   final ChatDetailBloc? chatDetailBloc;
   final GetConversationContactPhoneUseCase? getContactPhone;
   final PhoneCallService phoneCallService;
@@ -71,6 +73,7 @@ class ChatDetailScreen extends StatelessWidget {
       conversation: conversation,
       getContactPhone: contactPhoneUseCase,
       phoneCallService: phoneCallService,
+      initialMessageId: initialMessageId,
     );
 
     if (chatDetailBloc != null) {
@@ -97,11 +100,13 @@ class _ChatDetailView extends StatefulWidget {
     required this.conversation,
     required this.getContactPhone,
     required this.phoneCallService,
+    this.initialMessageId,
   });
 
   final ChatConversation conversation;
   final GetConversationContactPhoneUseCase getContactPhone;
   final PhoneCallService phoneCallService;
+  final String? initialMessageId;
 
   @override
   State<_ChatDetailView> createState() => _ChatDetailViewState();
@@ -801,7 +806,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                         state.messages.isNotEmpty) {
                       if (state.messages.length > _lastMessageCount) {
                         final lastMsg = state.messages.last;
-                        if (lastMsg.isMine || _isNearBottom()) {
+                        final openingAtInquiry =
+                            _lastMessageCount == 0 &&
+                            widget.initialMessageId != null;
+                        if (!openingAtInquiry &&
+                            (lastMsg.isMine || _isNearBottom())) {
                           _scrollToBottom(animate: true);
                         }
                       }
@@ -834,6 +843,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                       key: const ValueKey('chat-message-list'),
                       reversed: true,
                       scrollController: _scrollController,
+                      initialMessageId: widget.initialMessageId,
                       entries: [
                         for (final item in renderItems)
                           PackageChatEntry(

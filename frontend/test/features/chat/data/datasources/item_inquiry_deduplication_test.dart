@@ -64,6 +64,12 @@ class _ChatFixture {
               )
               .skip(offset)
               .take(limit)
+              .map(
+                (message) => {
+                  for (final column in query['select']!.split(','))
+                    column: message[column],
+                },
+              )
               .toList();
         } else if (request.method == 'GET' &&
             request.url.path.endsWith('/booking_tb')) {
@@ -111,7 +117,7 @@ class _ChatFixture {
     );
   }
 
-  Future<void> openItemChat({int itemId = 1}) =>
+  Future<String?> openItemChat({int itemId = 1}) =>
       ChatRemoteDataSource(client: authenticated).sendItemInquiryIfNeeded(
         conversationId: 'room',
         inquiry: ItemInquiryData(itemId: itemId, itemName: 'Canon EOS R50'),
@@ -185,17 +191,14 @@ void main() {
     );
   }
 
-  test(
-    'different items in the same conversation have separate inquiries',
-    () async {
-      final fixture = _ChatFixture();
-      addTearDown(fixture.client.dispose);
-      await fixture.openItemChat();
-      await fixture.openItemChat(itemId: 2);
-      await fixture.openItemChat();
-      expect(fixture.messages, hasLength(2));
-    },
-  );
+  test('reopening a different item returns its own existing inquiry', () async {
+    final fixture = _ChatFixture();
+    addTearDown(fixture.client.dispose);
+    expect(await fixture.openItemChat(), isNull);
+    expect(await fixture.openItemChat(itemId: 2), isNull);
+    expect(await fixture.openItemChat(), 'message-1');
+    expect(fixture.messages, hasLength(2));
+  });
 
   test(
     'simultaneous entry through separate datasource instances sends once',

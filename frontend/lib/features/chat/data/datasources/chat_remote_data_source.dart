@@ -39,7 +39,7 @@ class ChatRemoteDataSource {
         ({DateTime expiresAt, Future<String> url, String? resolved})
       >{};
   static final _pendingInquiries =
-      <(SupabaseClient, String, String, int), Future<void>>{};
+      <(SupabaseClient, String, String, int), Future<String?>>{};
 
   ApiClient get _backendClient => _apiClient ??= DioApiClient();
 
@@ -879,7 +879,8 @@ class ChatRemoteDataSource {
     }
   }
 
-  Future<void> sendItemInquiryIfNeeded({
+  /// คืน ID ของการ์ดเดิมเมื่อมีอยู่แล้วและไม่ต้องส่งซ้ำ
+  Future<String?> sendItemInquiryIfNeeded({
     required String conversationId,
     required ItemInquiryData inquiry,
     String? imageUrl,
@@ -901,7 +902,7 @@ class ChatRemoteDataSource {
     );
     _pendingInquiries[key] = operation;
     try {
-      await operation;
+      return await operation;
     } on ChatRemoteException {
       rethrow;
     } catch (_) {
@@ -914,7 +915,7 @@ class ChatRemoteDataSource {
     }
   }
 
-  Future<void> _sendItemInquiryIfNeeded({
+  Future<String?> _sendItemInquiryIfNeeded({
     required String conversationId,
     required String userId,
     required ItemInquiryData inquiry,
@@ -940,24 +941,27 @@ class ChatRemoteDataSource {
       userId: userId,
       itemId: inquiry.itemId!,
     );
-    if (!const ShouldSendItemInquiryUseCase()(
-      latestInquiry: latestInquiry,
-      latestBookingId: bookingId,
-      latestBookingStatus: latestBooking?['status']?.toString(),
-    ))
-      return;
-
     if (_currentUserId != userId) {
       throw const ChatRemoteException('บัญชีผู้ใช้เปลี่ยน กรุณาเปิดแชตใหม่');
     }
+    if (!const ShouldSendItemInquiryUseCase()(
+      latestInquiry: latestInquiry?.inquiry,
+      latestBookingId: bookingId,
+      latestBookingStatus: latestBooking?['status']?.toString(),
+    )) {
+      return latestInquiry?.messageId;
+    }
+
     await sendMessage(
       conversationId: conversationId,
       message: inquiry.withPreviousBookingId(bookingId).toChatMessagePayload(),
       imageUrl: imageUrl,
     );
+    return null;
   }
 
-  Future<ItemInquiryData?> _findLatestItemInquiry({
+  Future<({String messageId, ItemInquiryData inquiry})?>
+  _findLatestItemInquiry({
     required String conversationId,
     required String userId,
     required int itemId,
@@ -967,7 +971,7 @@ class ChatRemoteDataSource {
       final rows = await _supabaseClient
           .schema('messaging')
           .from('chat_message_tb')
-          .select('message')
+          .select('id,message')
           .eq('conversation_id', conversationId)
           .eq('sender_id', userId)
           .or('message.like.%[ITEM_INQUIRY:%,message.like.ฉันสนใจ%')
@@ -978,7 +982,9 @@ class ChatRemoteDataSource {
         final inquiry = ItemInquiryData.fromChatMessage(
           row['message']?.toString() ?? '',
         );
-        if (inquiry?.itemId == itemId) return inquiry;
+        if (inquiry != null && inquiry.itemId == itemId) {
+          return (messageId: row['id'].toString(), inquiry: inquiry);
+        }
       }
       if (rows.length < pageSize) return null;
     }

@@ -134,8 +134,9 @@ func SetupRouterWithOperations(
 		{
 			rentals.Post("", rentalController.CreateRentalOrder)
 			rentals.Post("/:id/confirm", rentalController.ConfirmRentalOrder)
-			rentals.Post("/:id/handover-code", rentalController.CreateHandoverCode)
-			rentals.Post("/:id/handover", rentalController.HandoverRental)
+			rentals.Get("/:id/handover-payment", rentalController.GetHandoverPayment)
+			rentals.Post("/:id/handover-payment", rentalController.ConfirmHandoverPayment)
+			rentals.Put("/:id/handover-payment", rentalController.SavePromptPayAccount)
 			rentals.Post("/:id/return", rentalController.ReturnRental)
 			rentals.Get("/:id/return-session", rentalController.GetRentalReturnSession)
 			rentals.Post("/:id/return-evidence", rentalController.SubmitRentalReturnEvidence)

@@ -373,6 +373,70 @@ void main() {
       ChatMessagesCache.clear();
     });
 
+    testWidgets('opens the existing inquiry for the selected item', (
+      tester,
+    ) async {
+      final bloc = ChatDetailBloc(
+        streamMessages: mockStreamMessages,
+        sendMessage: mockSendMessage,
+      );
+      addTearDown(bloc.close);
+
+      ChatMessage message(String id, String text, int minute) => ChatMessage(
+        id: id,
+        conversationId: 'conv-1',
+        senderId: 'me',
+        message: text,
+        createdAt: DateTime(2026, 11, 24, 10, minute),
+        isMine: true,
+        isRead: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatDetailScreen(
+            conversation: sampleConversation1,
+            chatDetailBloc: bloc,
+            initialMessageId: 'canon-inquiry',
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final messages = [
+        message(
+          'canon-inquiry',
+          const ItemInquiryData(
+            itemId: 76,
+            itemName: 'Canon EOS R50',
+          ).toChatMessagePayload(),
+          0,
+        ),
+        for (var minute = 1; minute <= 16; minute++)
+          message('message-$minute', 'ข้อความเดิม $minute', minute),
+        message(
+          'samsung-inquiry',
+          const ItemInquiryData(
+            itemId: 102,
+            itemName: 'Samsung Galaxy S26',
+          ).toChatMessagePayload(),
+          17,
+        ),
+      ];
+      streamController.add(messages.sublist(8));
+      await tester.pumpAndSettle();
+      expect(find.text('Samsung Galaxy S26').hitTestable(), findsOneWidget);
+
+      streamController.add(messages);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Canon EOS R50').hitTestable(), findsOneWidget);
+      expect(
+        find.text(ItemInquiryData.inquiryPrefix).hitTestable(),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('opens phone dialer from the right-side call button', (
       tester,
     ) async {

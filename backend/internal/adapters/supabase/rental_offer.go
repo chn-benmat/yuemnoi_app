@@ -14,7 +14,7 @@ import (
 
 const bookingMetaTag = "[BOOKING_DATA:"
 
-func (r *supabaseRentalRepository) ConfirmRental(ctx context.Context, userID string, rentalID int64, offerMessageID string) (*domain.RentalOrder, error) {
+func (r *supabaseRentalRepository) ConfirmRental(ctx context.Context, userID string, rentalID int64, offerMessageID, paymentMethod string) (*domain.RentalOrder, error) {
 	if rentalID <= 0 || strings.TrimSpace(offerMessageID) == "" {
 		return nil, domain.ErrInvalidRental
 	}
@@ -41,10 +41,10 @@ func (r *supabaseRentalRepository) ConfirmRental(ctx context.Context, userID str
 		ItemID: rental.ItemID, StartAt: rental.StartAt, EndAt: rental.EndAt,
 		RentalType: rentalType, PickupLocation: rental.PickupLocation,
 		OfferMessageID: strings.TrimSpace(offerMessageID), BookingID: rentalID,
-	}, true)
+	}, true, paymentMethod)
 }
 
-func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID string, request domain.CreateRentalRequest, confirm bool) (*domain.RentalOrder, error) {
+func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID string, request domain.CreateRentalRequest, confirm bool, paymentMethod string) (*domain.RentalOrder, error) {
 	if id, err := strconv.ParseInt(request.OfferMessageID, 10, 64); err != nil || id <= 0 {
 		return nil, domain.ErrInvalidRental
 	}
@@ -111,11 +111,15 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 	if err != nil {
 		return nil, domain.ErrInvalidRental
 	}
-	endHour, endMinute := offer.EndHour, offer.EndMinute
-	if offer.RentalType == "daily" {
+	endDate, endHour, endMinute := offer.EndDate, offer.EndHour, offer.EndMinute
+	switch offer.RentalType {
+	case "daily":
 		endHour, endMinute = offer.StartHour, offer.StartMinute
+	case "hourly":
+		// การเช่ารายชั่วโมงจบในวันนัดรับ แม้ข้อเสนอเดิมจะมีวันสิ้นสุดจากการเช่ารายวันค้างอยู่
+		endDate = offer.StartDate
 	}
-	endAt, err := offerTime(offer.EndDate, endHour, endMinute)
+	endAt, err := offerTime(endDate, endHour, endMinute)
 	if err != nil || !startAt.Equal(request.StartAt) || !endAt.Equal(request.EndAt) || request.RentalType != offer.RentalType || strings.TrimSpace(request.PickupLocation) != strings.TrimSpace(offer.Location) {
 		return nil, domain.ErrInvalidRental
 	}
@@ -155,7 +159,7 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 		meta["bookingId"] = json.RawMessage(strconv.FormatInt(rental.ID, 10))
 		meta["status"] = json.RawMessage(`"pending"`)
 		// ผูกเลขรายการก่อนเปลี่ยนสถานะ เพื่อให้ retry กลับมาทำรายการเดิมได้
-		updatedMessage, publishErr := r.saveOfferMetadata(ctx, request.OfferMessageID, message.Message, meta)
+		updatedMessage, publishErr := r.saveOfferMetadata(ctx, request.OfferMessageID, message.Message, meta, "")
 		if publishErr != nil {
 			var deleted []domain.RentalOrder
 			_ = r.client.DB.From("booking_tb").Delete().Eq("id", strconv.FormatInt(rental.ID, 10)).Eq("status", "pending").ExecuteWithContext(ctx, &deleted)
@@ -165,7 +169,12 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 	}
 	if confirm && rental.Status == "pending" {
 		var updated []domain.RentalOrder
-		if err := r.client.DB.From("booking_tb").Update(map[string]any{"status": "confirmed", "updated_at": time.Now().UTC(), "notification_actor_id": userID}).Eq("id", strconv.FormatInt(rental.ID, 10)).Eq("status", "pending").ExecuteWithContext(ctx, &updated); err != nil {
+		changes := map[string]any{"status": "confirmed", "updated_at": time.Now().UTC(), "notification_actor_id": userID}
+		// แอปรุ่นเดิมอาจไม่ส่งวิธีชำระเงิน ให้ใช้ค่าที่รายการมีอยู่
+		if paymentMethod != "" {
+			changes["payment_method"] = paymentMethod
+		}
+		if err := r.client.DB.From("booking_tb").Update(changes).Eq("id", strconv.FormatInt(rental.ID, 10)).Eq("status", "pending").ExecuteWithContext(ctx, &updated); err != nil {
 			return nil, mapRentalRepositoryError("confirm accepted offer", err)
 		}
 		if len(updated) != 1 {
@@ -178,19 +187,39 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 	}
 	meta["bookingId"] = json.RawMessage(strconv.FormatInt(rental.ID, 10))
 	meta["status"], _ = json.Marshal(rental.Status)
-	if _, err := r.saveOfferMetadata(ctx, request.OfferMessageID, message.Message, meta); err != nil {
+	paymentLabel := ""
+	if rental.Status != "pending" {
+		switch rental.PaymentMethod {
+		case "cash":
+			paymentLabel = "เงินสด"
+		case "promptpay":
+			paymentLabel = "PromptPay"
+		}
+	}
+	if paymentLabel != "" {
+		meta["paymentMethod"], _ = json.Marshal(rental.PaymentMethod)
+	}
+	if _, err := r.saveOfferMetadata(ctx, request.OfferMessageID, message.Message, meta, paymentLabel); err != nil {
 		return nil, err
 	}
 	return rental, nil
 }
 
-func (r *supabaseRentalRepository) saveOfferMetadata(ctx context.Context, messageID, original string, meta map[string]json.RawMessage) (string, error) {
+func (r *supabaseRentalRepository) saveOfferMetadata(ctx context.Context, messageID, original string, meta map[string]json.RawMessage, paymentLabel string) (string, error) {
 	start, end := strings.Index(original, bookingMetaTag), strings.LastIndex(original, "]")
 	payload, err := json.Marshal(meta)
 	if err != nil {
 		return "", err
 	}
-	text := original[:start+len(bookingMetaTag)] + string(payload) + original[end:]
+	prefix := original[:start]
+	const paymentLine = "\nวิธีชำระเงิน: "
+	if line := strings.LastIndex(prefix, paymentLine); paymentLabel != "" && line >= 0 {
+		valueStart := line + len(paymentLine)
+		if _, rest, ok := strings.Cut(prefix[valueStart:], "\n"); ok && strings.HasPrefix(rest, "ยอดรวม: ") {
+			prefix = prefix[:valueStart] + paymentLabel + "\n" + rest
+		}
+	}
+	text := prefix + bookingMetaTag + string(payload) + original[end:]
 	var updated []map[string]any
 	// หยุดถ้าเจ้าของแก้ข้อเสนอไปแล้วระหว่างยืนยัน ไม่เขียนทับข้อเสนอใหม่
 	// SDK รุ่นนี้ถอด URL encoding ก่อนส่ง จึงต้องเข้ารหัส filter ข้อความไว้เองอีกชั้น

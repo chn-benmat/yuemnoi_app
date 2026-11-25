@@ -24,6 +24,7 @@ class PackageChatList extends StatefulWidget {
     required this.entries,
     required this.itemBuilder,
     required this.scrollController,
+    this.initialMessageId,
     this.currentUserId = 'user',
     this.reversed = false,
     this.padding = EdgeInsets.zero,
@@ -32,6 +33,7 @@ class PackageChatList extends StatefulWidget {
   final List<PackageChatEntry> entries;
   final IndexedWidgetBuilder itemBuilder;
   final ScrollController scrollController;
+  final String? initialMessageId;
   final String currentUserId;
   final bool reversed;
   final EdgeInsets padding;
@@ -43,6 +45,7 @@ class PackageChatList extends StatefulWidget {
 class _PackageChatListState extends State<PackageChatList> {
   late final chat.InMemoryChatController _controller;
   Map<String, int> _indices = {};
+  bool _didScrollToInitialMessage = false;
 
   List<chat.Message> _messages() {
     _indices = {
@@ -63,12 +66,35 @@ class _PackageChatListState extends State<PackageChatList> {
   void initState() {
     super.initState();
     _controller = chat.InMemoryChatController(messages: _messages());
+    _scrollToInitialMessage();
   }
 
   @override
   void didUpdateWidget(covariant PackageChatList oldWidget) {
     super.didUpdateWidget(oldWidget);
     unawaited(_controller.setMessages(_messages()));
+    _scrollToInitialMessage();
+  }
+
+  void _scrollToInitialMessage() {
+    final id = widget.initialMessageId;
+    if (id == null || _didScrollToInitialMessage || !_indices.containsKey(id)) {
+      return;
+    }
+    _didScrollToInitialMessage = true;
+    // ตัวเลื่อนของแพ็กเกจจะพร้อมหลังเฟรมที่สร้างรายการเสร็จ
+    WidgetsBinding.instance.scheduleFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(
+          _controller.scrollToMessage(
+            id,
+            duration: Duration.zero,
+            alignment: 0.5,
+          ),
+        );
+      });
+    });
   }
 
   @override

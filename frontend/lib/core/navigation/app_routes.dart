@@ -70,7 +70,6 @@ import '../../features/profile/presentation/pages/rentals/rental_history_screen.
 import '../../features/profile/presentation/pages/rentals/rental_income_screen.dart';
 import '../../features/profile/presentation/pages/rentals/rental_status_screen.dart';
 import '../../features/profile/presentation/pages/rentals/rental_tracking_map_page.dart';
-import '../../features/profile/presentation/pages/rentals/rental_payment_success_screen.dart';
 import '../../features/profile/presentation/pages/support/contact_screen.dart';
 import '../../features/profile/presentation/pages/support/faq_screen.dart';
 import '../../features/wallet/presentation/pages/wallet.dart';
@@ -127,7 +126,6 @@ abstract final class AppRoutes {
   static const paymentReturn = '/payments/:rentalId';
   static const rentalReturn = '/rental/return/:rentalId';
   static const rentalReturnDemo = '/rental/return';
-  static const rentalPaymentSuccess = '/rentals/payment-success';
   static const review = '/review';
   static const notification = '/notifications';
 
@@ -250,6 +248,10 @@ abstract final class AppRoutes {
             key: state.pageKey,
             child: ChatDetailScreen(
               conversation: _requiredConversationExtra(state),
+              initialMessageId: switch (state.extra) {
+                {'initialMessageId': final String id} => id,
+                _ => null,
+              },
             ),
           ),
         ),
@@ -645,11 +647,6 @@ abstract final class AppRoutes {
           },
         ),
         GoRoute(
-          path: rentalPaymentSuccess,
-          pageBuilder: (context, state) =>
-              const MaterialPage<void>(child: RentalPaymentSuccessScreen()),
-        ),
-        GoRoute(
           path: review,
           pageBuilder: (context, state) {
             final extra = state.extra;
@@ -735,13 +732,6 @@ abstract final class AppRoutes {
     GoRouter.of(context).go(home, extra: 0);
   }
 
-  static void goToChatAfterHandover(BuildContext context) {
-    GoRouter.of(context).go(
-      home,
-      extra: {'initialIndex': 1, 'message': 'เริ่มเช่าอุปกรณ์เรียบร้อยแล้ว'},
-    );
-  }
-
   static void openNotification(BuildContext context) {
     goToHome(context, initialIndex: 2);
   }
@@ -789,13 +779,17 @@ abstract final class AppRoutes {
   static Future<void> openChatDetail(
     BuildContext? context, {
     required ChatConversation conversation,
+    String? initialMessageId,
   }) {
+    final extra = initialMessageId == null
+        ? conversation
+        : {'conversation': conversation, 'initialMessageId': initialMessageId};
     if (_currentRouter != null) {
-      return _currentRouter!.push<void>(chatDetail, extra: conversation);
+      return _currentRouter!.push<void>(chatDetail, extra: extra);
     }
     final targetContext = navigatorKey.currentContext ?? context;
     if (targetContext != null) {
-      return targetContext.push<void>(chatDetail, extra: conversation);
+      return targetContext.push<void>(chatDetail, extra: extra);
     }
     return Future.value();
   }
@@ -803,8 +797,13 @@ abstract final class AppRoutes {
   static Future<void> openConversation(
     BuildContext? context, {
     required ChatConversation conversation,
+    String? initialMessageId,
   }) {
-    return openChatDetail(context, conversation: conversation);
+    return openChatDetail(
+      context,
+      conversation: conversation,
+      initialMessageId: initialMessageId,
+    );
   }
 
   static Future<void> openBooking(
@@ -948,6 +947,7 @@ abstract final class AppRoutes {
     Map<String, dynamic>? trackingArgs,
     bool? isOwner,
     DateTime? startDate,
+    bool pickupOnly = false,
   }) {
     final rawStartDate = trackingArgs?['startDate'];
     final parsedStartDate = rawStartDate is DateTime
@@ -973,6 +973,7 @@ abstract final class AppRoutes {
       startDate: startDate ?? parsedStartDate,
       isOwner: isOwner ?? (trackingArgs?['isOwner'] as bool?),
       requireBookingId: true,
+      pickupOnly: pickupOnly,
     );
 
     return Navigator.of(context).push<void>(
@@ -1166,15 +1167,6 @@ abstract final class AppRoutes {
         ? '/rental/return/$rentalId'
         : rentalReturnDemo;
     return context.push<void>(route, extra: isLender);
-  }
-
-  static Future<void> openRentalPaymentSuccess(BuildContext context) {
-    return Navigator.of(context, rootNavigator: true).push<void>(
-      MaterialPageRoute<void>(
-        settings: const RouteSettings(name: rentalPaymentSuccess),
-        builder: (_) => const RentalPaymentSuccessScreen(),
-      ),
-    );
   }
 
   static void pop<T extends Object?>(BuildContext context, [T? result]) {

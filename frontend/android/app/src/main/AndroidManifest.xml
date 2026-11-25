@@ -84,6 +84,17 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- รายการแอปชำระเงินสำหรับหน้าส่งมอบอุปกรณ์ -->
+        <package android:name="com.kasikorn.retail.mbanking.wap" />
+        <package android:name="com.scb.phone" />
+        <package android:name="ktbcs.netbank" />
+        <package android:name="com.bbl.mobilebanking" />
+        <package android:name="com.krungsri.kma" />
+        <package android:name="com.TMBTOUCH.PRODUCTION" />
+        <package android:name="com.mobilife.gsb.mymo" />
+        <package android:name="com.kasikornbank.makebykbank" />
+        <package android:name="th.co.truemoney.wallet" />
+        <package android:name="com.ktb.customer.qr" />
         <!-- Package visibility for dialer / phone call -->
         <intent>
             <action android:name="android.intent.action.DIAL" />
