@@ -6,29 +6,23 @@ import '../../domain/entities/rental_return_session.dart';
 
 class ReturnCompletedDialog extends StatelessWidget {
   final RentalReturnSession session;
-  final VoidCallback onDismiss;
+  final bool canRate;
 
   const ReturnCompletedDialog({
     super.key,
     required this.session,
-    required this.onDismiss,
+    required this.canRate,
   });
 
-  static Future<void> show({
+  static Future<int?> show({
     required BuildContext context,
     required RentalReturnSession session,
-    required VoidCallback onDismiss,
+    required bool canRate,
   }) {
-    return showDialog<void>(
+    return showDialog<int>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => ReturnCompletedDialog(
-        session: session,
-        onDismiss: () {
-          Navigator.pop(ctx);
-          onDismiss();
-        },
-      ),
+      builder: (_) => ReturnCompletedDialog(session: session, canRate: canRate),
     );
   }
 
@@ -38,7 +32,7 @@ class ReturnCompletedDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       backgroundColor: Colors.white,
       elevation: 16,
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -180,23 +174,51 @@ class ReturnCompletedDialog extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 24),
+            if (canRate) ...[
+              const SizedBox(height: 20),
+              const Text(
+                'ให้คะแนนผู้ปล่อยเช่า',
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E2022),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              Row(
+                children: [
+                  for (var rating = 1; rating <= 5; rating++)
+                    Expanded(
+                      child: IconButton(
+                        tooltip: '$rating ดาว',
+                        onPressed: () => Navigator.pop(context, rating),
+                        icon: const Icon(Icons.star_border_rounded),
+                        iconSize: 30,
+                        color: AppColors.primaryColor,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+
+            SizedBox(height: canRate ? 12 : 24),
 
             // ปุ่มกลับหน้าหลัก
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: onDismiss,
+                onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryColor,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
                   ),
                 ),
-                child: const Text(
-                  'เสร็จสิ้น',
-                  style: TextStyle(
+                child: Text(
+                  canRate ? 'ไว้ทีหลัง' : 'เสร็จสิ้น',
+                  style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 15,
                     fontWeight: FontWeight.bold,

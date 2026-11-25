@@ -651,6 +651,7 @@ abstract final class AppRoutes {
           pageBuilder: (context, state) {
             final extra = state.extra;
             final args = extra is Map ? extra : const <String, dynamic>{};
+            final initialRating = args['initialRating'];
             return MaterialPage<void>(
               child: RentalReviewScreen(
                 bookingId: args['bookingId'] is num
@@ -664,6 +665,7 @@ abstract final class AppRoutes {
                 ownerId: args['ownerId'] as String?,
                 ownerAvatarUrl: args['ownerAvatarUrl'] as String?,
                 itemImageUrl: args['itemImageUrl'] as String?,
+                initialRating: initialRating is int ? initialRating : 0,
               ),
             );
           },
@@ -761,6 +763,7 @@ abstract final class AppRoutes {
     String? ownerId,
     String? ownerAvatarUrl,
     String? itemImageUrl,
+    int? initialRating,
   }) {
     return context.push<void>(
       review,
@@ -772,6 +775,7 @@ abstract final class AppRoutes {
         if (ownerId != null) 'ownerId': ownerId,
         if (ownerAvatarUrl != null) 'ownerAvatarUrl': ownerAvatarUrl,
         if (itemImageUrl != null) 'itemImageUrl': itemImageUrl,
+        'initialRating': ?initialRating,
       },
     );
   }

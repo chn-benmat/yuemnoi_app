@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/navigation/app_routes.dart';
 import 'package:frontend/features/profile/data/datasources/profile_storefront_remote_data_source.dart';
 import 'package:frontend/features/review/presentation/pages/rental_review_screen.dart';
 
@@ -16,6 +17,24 @@ class OwnerProfileSource extends ProfileStorefrontRemoteDataSource {
 }
 
 void main() {
+  testWidgets('the review route prefills the rating and it remains editable', (
+    tester,
+  ) async {
+    final router = AppRoutes.createRouter(
+      initialLocation: AppRoutes.review,
+      initialExtra: {'initialRating': 4},
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    expect(find.text('เป็นประสบการณ์ที่ดีมาก ประทับใจ 😊'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.star_rounded).first);
+    await tester.pumpAndSettle();
+    expect(find.text('เป็นประสบการณ์ที่ไม่น่าประทับใจ 😞'), findsOneWidget);
+  });
+
   testWidgets('loads the lender avatar using the lender ID', (tester) async {
     final source = OwnerProfileSource();
     await tester.pumpWidget(

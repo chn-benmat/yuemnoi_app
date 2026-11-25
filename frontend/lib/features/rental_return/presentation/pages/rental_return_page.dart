@@ -197,27 +197,27 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
     }
 
     final session = state.session;
-    if (state.isRenter && session.itemId != null) {
+    final itemId = session.itemId;
+    final rating = await ReturnCompletedDialog.show(
+      context: context,
+      session: session,
+      canRate: state.isRenter && itemId != null && itemId > 0,
+    );
+    if (!mounted) return;
+
+    if (rating != null) {
       await AppRoutes.openReview(
         context,
         bookingId: session.rentalId,
-        itemId: session.itemId,
+        itemId: itemId,
         itemName: session.itemName,
         ownerName: session.lenderName,
         ownerId: session.lenderId,
         itemImageUrl: session.itemImageUrl,
-      );
-      _leaveReturnFlow();
-    } else {
-      await ReturnCompletedDialog.show(
-        context: context,
-        session: session,
-        onDismiss: _leaveReturnFlow,
+        initialRating: rating,
       );
     }
-  }
 
-  void _leaveReturnFlow() {
     if (mounted) AppRoutes.goToHomeAfterRental(context);
   }
 }

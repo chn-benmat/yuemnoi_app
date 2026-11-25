@@ -18,6 +18,7 @@ class RentalReviewScreen extends StatefulWidget {
   final String? itemImageUrl;
   final String? ownerAvatarUrl;
   final String? ownerId;
+  final int initialRating;
   final ProfileStorefrontRemoteDataSource? profileSource;
 
   const RentalReviewScreen({
@@ -30,6 +31,7 @@ class RentalReviewScreen extends StatefulWidget {
     this.itemImageUrl,
     this.ownerAvatarUrl,
     this.ownerId,
+    this.initialRating = 0,
     this.profileSource,
   });
 
@@ -39,7 +41,7 @@ class RentalReviewScreen extends StatefulWidget {
 
 class _RentalReviewScreenState extends State<RentalReviewScreen> {
   String? _ownerAvatarUrl;
-  int _selectedRating = 0;
+  late int _selectedRating;
   bool _isSubmitting = false;
   late final TextEditingController _reviewController;
   final Set<String> _selectedTags = {};
@@ -56,6 +58,8 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
   void initState() {
     super.initState();
     _reviewController = TextEditingController();
+    final rating = widget.initialRating;
+    _selectedRating = rating >= 1 && rating <= 5 ? rating : 0;
     _ownerAvatarUrl = widget.ownerAvatarUrl;
     _loadOwnerAvatar();
   }

@@ -13,12 +13,13 @@ class _Repository extends Mock implements RentalReturnRepository {}
 void main() {
   setUpAll(() => initializeDateFormatting('th'));
 
-  for (final (scenario, startsCompleted, showsAlarm) in [
-    ('when the return becomes confirmed', false, false),
-    ('when the return is already confirmed', true, false),
-    ('when the return is confirmed while the reminder is open', false, true),
+  for (final (scenario, startsCompleted, showsAlarm, rating) in [
+    ('when the return becomes confirmed', false, false, 1),
+    ('when the return is already confirmed', true, false, 5),
+    ('when the return is confirmed while the reminder is open', false, true, 3),
+    ('when the renter chooses to review later', true, false, null),
   ]) {
-    testWidgets('renter opens the review $scenario', (tester) async {
+    testWidgets('renter sees the rating popup $scenario', (tester) async {
       Future<void> pumpRoute() async {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 500));
@@ -72,17 +73,34 @@ void main() {
           expect(find.text('นำสินค้าไปส่งที่จุดคืนตามนัด'), findsOneWidget);
         }
         expect(find.text('หน้ารีวิวทดสอบ'), findsNothing);
+        expect(find.byTooltip('1 ดาว'), findsNothing);
         session = session.copyWith(step: RentalReturnStep.completed);
         await tester.pump(const Duration(seconds: 10));
         await pumpRoute();
       }
 
-      expect(find.text('หน้ารีวิวทดสอบ'), findsOneWidget);
-      expect(find.text('คืนอุปกรณ์สำเร็จ!'), findsNothing);
+      expect(find.text('หน้ารีวิวทดสอบ'), findsNothing);
+      expect(find.text('คืนอุปกรณ์สำเร็จ!'), findsOneWidget);
+      for (var stars = 1; stars <= 5; stars++) {
+        expect(find.byTooltip('$stars ดาว'), findsOneWidget);
+      }
       expect(
         find.text('ใกล้ถึงเวลาคืนอุปกรณ์แล้ว!', skipOffstage: false),
         findsNothing,
       );
+
+      if (rating == null) {
+        await tester.tap(find.text('ไว้ทีหลัง'));
+        await pumpRoute();
+        expect(find.text('หน้าหลักทดสอบ'), findsOneWidget);
+        expect(reviewArguments, isNull);
+        return;
+      }
+
+      await tester.tap(find.byTooltip('$rating ดาว'));
+      await pumpRoute();
+      expect(find.text('คืนอุปกรณ์สำเร็จ!'), findsNothing);
+      expect(find.text('หน้ารีวิวทดสอบ'), findsOneWidget);
       expect(reviewArguments, {
         'bookingId': 25,
         'itemId': 7,
@@ -90,6 +108,7 @@ void main() {
         'itemImageUrl': 'https://example.test/camera.png',
         'ownerId': 'lender',
         'ownerName': 'ร้านทดสอบ',
+        'initialRating': rating,
       });
 
       await tester.pump(const Duration(seconds: 20));
@@ -141,6 +160,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
         await tester.pump(const Duration(milliseconds: 500));
         expect(find.text('คืนอุปกรณ์สำเร็จ!'), findsOneWidget);
+        expect(find.byTooltip('1 ดาว'), findsNothing);
         await tester.tap(find.text('เสร็จสิ้น'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 500));
