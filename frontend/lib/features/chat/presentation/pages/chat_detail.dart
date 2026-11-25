@@ -35,7 +35,6 @@ import '../../domain/usecases/upload_chat_image_usecase.dart';
 import '../bloc/chat_detail_bloc.dart';
 import '../bloc/chat_detail_event.dart';
 import '../bloc/chat_detail_state.dart';
-import '../widgets/active_rental_header_banner.dart';
 import '../widgets/chat_detail_header.dart';
 import '../widgets/chat_empty_view.dart';
 import '../widgets/chat_message_bubble.dart';
@@ -526,94 +525,72 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     }
   }
 
-  bool _hasOpenOffer(int itemId) {
-    for (final message
-        in context.read<ChatDetailBloc>().state.messages.reversed) {
+  bool _canCreateOffer(ItemInquiryData inquiry) {
+    final state = context.read<ChatDetailBloc>().state;
+    if (!state.ownedItemIds.contains(inquiry.itemId)) return false;
+
+    var isLatestOffer = true;
+    var matchesPreviousBooking = false;
+    for (final message in state.messages.reversed) {
+      if (state.failedMessageIds.contains(message.id)) continue;
       final booking = BookingRequestData.fromChatMessage(message.message);
-      if (booking?.item.id == itemId &&
-          !context.read<ChatDetailBloc>().state.failedMessageIds.contains(
-            message.id,
-          )) {
-        return !{
-          'completed',
-          'cancelled',
-          'rejected',
-          'expired',
-        }.contains(booking!.status);
-      }
+      if (booking == null || booking.item.id != inquiry.itemId) continue;
+
+      final status = booking.status;
+      final isCompleted = status == 'completed' || status == 'finished';
+      final canRetry = const {
+        'cancelled',
+        'rejected',
+        'expired',
+      }.contains(status);
+      if (isLatestOffer && !isCompleted && !canRetry) return false;
+      isLatestOffer = false;
+      if (!isCompleted && !canRetry) continue;
+
+      final bookingId =
+          booking.bookingId ??
+          BookingConfirmationTracker.getCachedBookingId(message.id);
+      matchesPreviousBooking =
+          matchesPreviousBooking ||
+          (bookingId != null && inquiry.previousBookingId == bookingId);
+      // การยกเลิกรอบถัดไปไม่ควรเปิดให้ใช้คำถามก่อนรอบที่เช่าเสร็จแล้ว
+      if (isCompleted) return matchesPreviousBooking;
     }
-    return false;
+    return true;
   }
 
-  Future<void> _openBookingRequest([ItemInquiryData? activeInquiry]) async {
-    final latestInquiry =
-        activeInquiry ??
-        _getLatestItemInquiry(context.read<ChatDetailBloc>().state.messages);
+  Future<void> _openBookingRequest(ItemInquiryData inquiry) async {
+    final itemId = inquiry.itemId;
+    if (itemId == null || !_canCreateOffer(inquiry)) return;
 
-    final requestedItemId = latestInquiry?.itemId ?? _conversation.itemId;
-    if (requestedItemId == null ||
-        _hasOpenOffer(requestedItemId) ||
-        !context.read<ChatDetailBloc>().state.ownedItemIds.contains(
-          requestedItemId,
-        )) {
-      return;
-    }
-
-    final int itemId;
-    final String title;
-    final String imageUrl;
-    final double price;
+    final title = inquiry.itemName.isNotEmpty
+        ? inquiry.itemName
+        : (_conversation.itemName?.isNotEmpty == true
+              ? _conversation.itemName!
+              : (_conversation.name.isNotEmpty
+                    ? 'อุปกรณ์จาก ${_conversation.name}'
+                    : 'อุปกรณ์เช่า'));
+    final imageUrl = (inquiry.imageUrl?.isNotEmpty == true)
+        ? inquiry.imageUrl!
+        : (_conversation.itemImageUrl?.isNotEmpty == true
+              ? _conversation.itemImageUrl!
+              : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop');
+    final price = (inquiry.price != null && inquiry.price! > 0)
+        ? inquiry.price!
+        : (_conversation.itemPrice ?? 100).toDouble();
     final BookingRentalType rentalType;
-
-    if (latestInquiry != null) {
-      itemId = latestInquiry.itemId ?? _conversation.itemId ?? 1;
-      title = latestInquiry.itemName.isNotEmpty
-          ? latestInquiry.itemName
-          : (_conversation.itemName?.isNotEmpty == true
-                ? _conversation.itemName!
-                : (_conversation.name.isNotEmpty
-                      ? 'อุปกรณ์จาก ${_conversation.name}'
-                      : 'อุปกรณ์เช่า'));
-      imageUrl = (latestInquiry.imageUrl?.isNotEmpty == true)
-          ? latestInquiry.imageUrl!
-          : (_conversation.itemImageUrl?.isNotEmpty == true
-                ? _conversation.itemImageUrl!
-                : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop');
-
-      final unit = (latestInquiry.unitLabel ?? '').toLowerCase();
-      if (unit.contains('ชั่วโมง') || unit.contains('hour')) {
-        rentalType = BookingRentalType.hourly;
-      } else if (unit.contains('วัน') || unit.contains('day')) {
-        rentalType = BookingRentalType.daily;
-      } else {
-        rentalType =
-            (_conversation.itemRentalType == 'hourly' ||
-                _conversation.itemRentalType == 'hour' ||
-                _conversation.itemRentalType == 'รายชั่วโมง')
-            ? BookingRentalType.hourly
-            : BookingRentalType.daily;
-      }
-
-      price = (latestInquiry.price != null && latestInquiry.price! > 0)
-          ? latestInquiry.price!
-          : (_conversation.itemPrice ?? 100).toDouble();
+    final unit = (inquiry.unitLabel ?? '').toLowerCase();
+    if (unit.contains('ชั่วโมง') || unit.contains('hour')) {
+      rentalType = BookingRentalType.hourly;
+    } else if (unit.contains('วัน') || unit.contains('day')) {
+      rentalType = BookingRentalType.daily;
     } else {
-      itemId = _conversation.itemId ?? 1;
-      title = _conversation.itemName?.isNotEmpty == true
-          ? _conversation.itemName!
-          : (_conversation.name.isNotEmpty
-                ? 'อุปกรณ์จาก ${_conversation.name}'
-                : 'อุปกรณ์เช่า');
-      imageUrl = _conversation.itemImageUrl?.isNotEmpty == true
-          ? _conversation.itemImageUrl!
-          : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop';
       rentalType =
           (_conversation.itemRentalType == 'hourly' ||
               _conversation.itemRentalType == 'hour' ||
               _conversation.itemRentalType == 'รายชั่วโมง')
           ? BookingRentalType.hourly
           : BookingRentalType.daily;
-      price = (_conversation.itemPrice ?? 100).toDouble();
     }
 
     final itemSource = ItemDetailRemoteDataSource();
@@ -647,7 +624,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       return;
     }
     final reviewStats = await ItemReviewService.fetchStats(itemId);
-    if (!mounted) return;
+    if (!mounted || !_canCreateOffer(inquiry)) return;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -658,12 +635,16 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       imageUrl: imageUrl,
       rating: reviewStats.rating,
       reviewCount: reviewStats.reviewCount,
-      hourlyRate: rentalType == BookingRentalType.hourly
-          ? price
-          : (price / 8).roundToDouble(),
-      dailyRate: rentalType == BookingRentalType.daily
-          ? price
-          : (price * 8).roundToDouble(),
+      hourlyRate: itemDetail.additionalDailyPrice != null
+          ? itemDetail.price.toDouble()
+          : (rentalType == BookingRentalType.hourly
+                ? price
+                : (price / 8).roundToDouble()),
+      dailyRate:
+          itemDetail.additionalDailyPrice?.toDouble() ??
+          (rentalType == BookingRentalType.daily
+              ? price
+              : (price * 8).roundToDouble()),
       defaultLocation: pickup.name,
       latitude: pickup.latitude,
       longitude: pickup.longitude,
@@ -693,6 +674,14 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       context,
       initialData: bookingData,
       onSendRequest: (data) {
+        if (!mounted) return;
+        if (!_canCreateOffer(inquiry)) {
+          showAppPopup(
+            context,
+            content: const Text('ไม่สามารถส่งข้อเสนอจากคำถามเช่านี้ได้'),
+          );
+          return;
+        }
         bloc.add(
           ChatMessageSent(
             conversationId: _conversation.id,
@@ -705,22 +694,6 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     );
   }
 
-  ItemInquiryData? _getLatestItemInquiry(List<ChatMessage> messages) {
-    for (int i = messages.length - 1; i >= 0; i--) {
-      final msg = messages[i];
-      if (ItemInquiryData.isInquiry(msg.message)) {
-        final inquiry = ItemInquiryData.fromChatMessage(
-          msg.message,
-          imageUrl: msg.imageUrl,
-        );
-        if (inquiry != null) {
-          return inquiry;
-        }
-      }
-    }
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -731,68 +704,6 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
             conversation: _conversation,
             onPhoneCallPressed: _startPhoneCall,
             isPhoneCallLoading: _isStartingPhoneCall,
-          ),
-          BlocBuilder<ChatDetailBloc, ChatDetailState>(
-            buildWhen: (prev, curr) =>
-                prev.messages != curr.messages || prev.status != curr.status,
-            builder: (context, state) {
-              final hasHandover = state.messages.any(
-                (m) =>
-                    m.message.contains('ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว') ||
-                    m.message.contains('เริ่มต้นช่วงเวลาเช่า') ||
-                    m.message.contains('ส่งมอบอุปกรณ์สำเร็จ'),
-              );
-              final hasReturn = state.messages.any(
-                (m) =>
-                    m.message.contains('ส่งคืนอุปกรณ์เรียบร้อย') ||
-                    m.message.contains('ตรวจรับคืนอุปกรณ์เรียบร้อย') ||
-                    m.message.contains('คืนของสำเร็จ'),
-              );
-
-              BookingRequestData? activeBooking;
-              ChatMessage? activeMessage;
-              int? activeBookingId;
-              for (final m in state.messages.reversed) {
-                final data = BookingRequestData.fromChatMessage(
-                  m.message,
-                  imageUrl: m.imageUrl,
-                  messageId: m.id,
-                );
-                if (data != null) {
-                  activeBooking = data;
-                  activeMessage = m;
-                  activeBookingId =
-                      BookingConfirmationTracker.getCachedBookingId(m.id);
-                  break;
-                }
-              }
-
-              if (activeBooking == null) return const SizedBox.shrink();
-              final status = activeBooking.status;
-              final isCompleted =
-                  status == 'completed' ||
-                  status == 'finished' ||
-                  (status == null && hasReturn);
-              final isActive =
-                  const {
-                    'active',
-                    'awaiting_return',
-                    'return_ready',
-                  }.contains(status) ||
-                  (status == null && hasHandover);
-              if (!isCompleted && !isActive) return const SizedBox.shrink();
-
-              return ActiveRentalHeaderBanner(
-                bookingData: activeBooking,
-                bookingMessage: activeMessage,
-                bookingId: activeBooking.bookingId ?? activeBookingId,
-                isCompleted: isCompleted,
-                isOwner: activeMessage?.isMine == true,
-                onTap: activeMessage != null
-                    ? () => _scrollToMessage(activeMessage!.id)
-                    : null,
-              );
-            },
           ),
           Expanded(
             child: Stack(
@@ -980,9 +891,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                       m.message.contains('คืนของสำเร็จ'),
                                 ),
                                 onSendBookingRequest:
-                                    ownsInquiryItem &&
-                                        inquiry?.itemId != null &&
-                                        !_hasOpenOffer(inquiry!.itemId!)
+                                    inquiry != null && _canCreateOffer(inquiry)
                                     ? _openBookingRequest
                                     : null,
                                 defaultItemId: _conversation.itemId,

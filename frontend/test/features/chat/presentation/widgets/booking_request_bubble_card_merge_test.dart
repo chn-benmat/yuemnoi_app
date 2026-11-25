@@ -106,7 +106,7 @@ void main() {
 
   for (final owner in [true, false]) {
     testWidgets(
-      'completed rental stays completed after handover for owner=$owner',
+      'completed rental status in the card is read-only for owner=$owner',
       (tester) async {
         await pumpCard(
           tester,
@@ -114,19 +114,17 @@ void main() {
           isOwner: owner,
           isHandoverCompleted: true,
         );
-        expect(find.text('การเช่าเสร็จสิ้น'), findsOneWidget);
+        final completedStatus = find.text('การเช่าเสร็จสิ้น');
+        expect(completedStatus, findsOneWidget);
         expect(
           find.byKey(const ValueKey('chat-booking-return-button')),
           findsNothing,
         );
-        final completedButton = find.byKey(
-          const ValueKey('chat-booking-rental-status-button'),
-        );
-        await tester.ensureVisible(completedButton);
-        await tester.tap(completedButton);
+        await tester.ensureVisible(completedStatus);
+        await tester.tap(completedStatus);
         await tester.pumpAndSettle();
-        expect(find.text('รายละเอียดสถานะการเช่า'), findsOneWidget);
-        expect(find.text('เสร็จสิ้น'), findsWidgets);
+        expect(find.byType(BottomSheet), findsNothing);
+        expect(find.text('รายละเอียดสถานะการเช่า'), findsNothing);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
       },
