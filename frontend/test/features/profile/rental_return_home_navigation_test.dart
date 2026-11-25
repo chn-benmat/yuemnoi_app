@@ -69,7 +69,7 @@ void main() {
         if (showsAlarm) {
           expect(find.text('ใกล้ถึงเวลาคืนอุปกรณ์แล้ว!'), findsOneWidget);
         } else {
-          expect(find.text('รอร้านค้ายืนยันรับอุปกรณ์คืน'), findsOneWidget);
+          expect(find.text('นำสินค้าไปส่งที่จุดคืนตามนัด'), findsOneWidget);
         }
         expect(find.text('หน้ารีวิวทดสอบ'), findsNothing);
         session = session.copyWith(step: RentalReturnStep.completed);

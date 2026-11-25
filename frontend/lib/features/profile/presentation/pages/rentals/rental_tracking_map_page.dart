@@ -40,6 +40,7 @@ class RentalTrackingMapPage extends StatefulWidget {
   final bool requireBookingId;
   final bool pickupOnly;
   final PickupLocation? returnPoint;
+  final Widget? returnDetails;
   final LocationService? locationService;
   final RentalContactRemoteDataSource? contactDataSource;
   final PhoneCallService phoneCallService;
@@ -65,6 +66,7 @@ class RentalTrackingMapPage extends StatefulWidget {
     this.requireBookingId = false,
     this.pickupOnly = false,
     this.returnPoint,
+    this.returnDetails,
     this.locationService,
     this.contactDataSource,
     this.phoneCallService = const UrlPhoneCallService(),
@@ -104,7 +106,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   late bool _isOwner;
   int _renterPaymentStep = 0;
 
-  bool get _isReturn => widget.returnPoint != null;
+  bool get _isReturn =>
+      widget.returnPoint != null || widget.returnDetails != null;
   bool get _showRentalActions => !_isReturn && !widget.pickupOnly;
 
   // หน้าจากแชทส่ง ID ใน bookingData ส่วนหน้าสถานะส่ง ID แยก
@@ -236,13 +239,14 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
+    );
 
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.45).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
     _resolveInitialData();
+    if (_hasDestinationCoordinates) _pulseController.repeat(reverse: true);
     WidgetsBinding.instance.addObserver(this);
     _routeCubit = RentalRouteCubit(
       destination: _destinationLocation,
@@ -299,16 +303,12 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     _currentStatusCode = widget.statusCode ?? 'confirmed';
     _isOwner = widget.isOwner ?? false;
 
-    final destLat =
-        returnPoint?.latitude ??
-        b?.latitude ??
-        b?.item.latitude ??
-        widget.destinationLat;
-    final destLng =
-        returnPoint?.longitude ??
-        b?.longitude ??
-        b?.item.longitude ??
-        widget.destinationLng;
+    final destLat = _isReturn
+        ? returnPoint?.latitude
+        : b?.latitude ?? b?.item.latitude ?? widget.destinationLat;
+    final destLng = _isReturn
+        ? returnPoint?.longitude
+        : b?.longitude ?? b?.item.longitude ?? widget.destinationLng;
     _hasDestinationCoordinates =
         destLat != null &&
         destLng != null &&
@@ -425,7 +425,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
         CameraFit.bounds(
           bounds: bounds,
           padding: _isReturn
-              ? const EdgeInsets.fromLTRB(44, 32, 44, 72)
+              ? const EdgeInsets.fromLTRB(44, 80, 64, 54)
               : const EdgeInsets.fromLTRB(48, 100, 48, 300),
         ),
       );
@@ -448,10 +448,15 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   }
 
   Future<void> _openExternalNavigation() async {
-    await LocationService.openInExternalMaps(
+    final opened = await LocationService.openInExternalMaps(
       _destinationLocation.latitude,
       _destinationLocation.longitude,
     );
+    if (!opened && _isReturn && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('เปิดแอปแผนที่ไม่สำเร็จ')));
+    }
   }
 
   bool _calling = false;
@@ -542,24 +547,45 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     if (!_hasDestinationCoordinates) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(_isReturn ? 'จุดคืนสินค้า' : 'จุดนัดรับสินค้า'),
+          title: Text(_isReturn ? 'คืนสินค้า' : 'จุดนัดรับสินค้า'),
         ),
-        body: Center(
-          child: Text(
-            _isReturn
-                ? 'การจองนี้ยังไม่มีพิกัดจุดคืนสินค้า กรุณาติดต่อคู่เช่า'
-                : 'การจองนี้ยังไม่มีพิกัดจุดนัดรับ กรุณาติดต่อคู่เช่า',
-          ),
-        ),
+        body: _isReturn
+            ? _buildTrackingBottomCard()
+            : const Center(
+                child: Text(
+                  'การจองนี้ยังไม่มีพิกัดจุดนัดรับ กรุณาติดต่อคู่เช่า',
+                ),
+              ),
       );
     }
 
-    final map = _buildMap(context);
-    return _isReturn ? map : Scaffold(backgroundColor: Colors.white, body: map);
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: _isReturn
+          ? LayoutBuilder(
+              builder: (context, constraints) {
+                final sheetHeight = constraints.maxHeight * 0.62;
+                return Column(
+                  children: [
+                    Expanded(
+                      child: _buildMap(
+                        context,
+                        horizontalControls: constraints.maxHeight < 600,
+                      ),
+                    ),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxHeight: sheetHeight),
+                      child: _buildTrackingBottomCard(),
+                    ),
+                  ],
+                );
+              },
+            )
+          : _buildMap(context),
+    );
   }
 
-  Widget _buildMap(BuildContext context) {
-    final returnMapStatus = _isReturn ? _buildReturnMapStatus() : null;
+  Widget _buildMap(BuildContext context, {bool horizontalControls = false}) {
     return Stack(
       children: [
         // ─── 1. แผนที่ Interactive (FlutterMap) ───
@@ -638,84 +664,84 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
         ),
 
         // ─── 2. Floating Top AppBar ───
-        if (!_isReturn)
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  // ปุ่มย้อนกลับ
-                  _buildGlassIconButton(
-                    icon: Icons.arrow_back_ios_new_rounded,
-                    onTap: () => Navigator.of(context).pop(),
-                  ),
-                  const SizedBox(width: 12),
-                  // แถบหัวข้อสถานะ
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                // ปุ่มย้อนกลับ
+                _buildGlassIconButton(
+                  icon: Icons.arrow_back_ios_new_rounded,
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                const SizedBox(width: 12),
+                // แถบหัวข้อสถานะ
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF10B981),
+                            shape: BoxShape.circle,
                           ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF10B981),
-                              shape: BoxShape.circle,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _isReturn
+                                ? 'เส้นทางคืนสินค้า'
+                                : 'เส้นทางนัดรับอุปกรณ์',
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E2022),
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(width: 8),
-                          const Expanded(
-                            child: Text(
-                              'เส้นทางนัดรับอุปกรณ์',
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.fontFamily,
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1E2022),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
+        ),
 
-        // ─── 3. Floating Action Controls (ฝั่งขวา) ───
         Positioned(
-          right: _isReturn ? 12 : 16,
-          bottom: _isReturn ? 12 : 310,
+          right: 16,
+          bottom: _isReturn ? 14 : 310,
           child: Flex(
-            direction: _isReturn ? Axis.horizontal : Axis.vertical,
+            direction: horizontalControls ? Axis.horizontal : Axis.vertical,
             mainAxisSize: MainAxisSize.min,
             spacing: 10,
             children: [
-              // ปุ่ม Fit Bounds (ดูภาพรวมทั้งสองจุด)
               _buildMapFloatingButton(
                 icon: Icons.crop_free_rounded,
                 tooltip: 'ดูภาพรวมเส้นทาง',
-                onTap: _fitBoundsToRoute,
+                onTap: _isReturn && _userLocation == null
+                    ? _centerToDestination
+                    : _fitBoundsToRoute,
               ),
-              // ปุ่มนำทาง Google Maps ภายนอก
               _buildMapFloatingButton(
                 icon: Icons.near_me_rounded,
                 tooltip: 'นำทางด้วย Google Maps',
@@ -723,7 +749,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                 iconColor: Colors.white,
                 onTap: _openExternalNavigation,
               ),
-              // ปุ่มพิกัดตัวเรา
               _buildMapFloatingButton(
                 icon: Icons.my_location_rounded,
                 tooltip: _isAutoFollow
@@ -738,36 +763,14 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
             ],
           ),
         ),
-
         // ─── 4. แผงข้อมูลด้านล่าง (Bolt / Grab Tracking Card) ───
         if (!_isReturn)
           Align(
             alignment: Alignment.bottomCenter,
-            child: _buildTrackingBottomCard(context),
+            child: _buildTrackingBottomCard(),
           ),
-        if (returnMapStatus != null)
-          Positioned(top: 8, right: 12, child: returnMapStatus),
       ],
     );
-  }
-
-  Widget? _buildReturnMapStatus() {
-    final route = _routeResult;
-    if (route != null) {
-      return Chip(
-        avatar: const Icon(Icons.directions_car_outlined, size: 16),
-        label: Text(route.formattedDistance),
-        backgroundColor: Colors.white,
-      );
-    }
-    if (!_isLoadingRoute && _userLocation == null) {
-      return FilledButton.tonalIcon(
-        onPressed: _initLocationsAndRoute,
-        icon: const Icon(Icons.location_searching_rounded, size: 18),
-        label: const Text('ลองระบุตำแหน่งอีกครั้ง'),
-      );
-    }
-    return null;
   }
 
   // ─── หมุดตัวเรา (User Location Pin) ───
@@ -791,6 +794,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
           ),
           child: Text(
             'ตัวคุณ',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 10.5,
@@ -959,7 +964,400 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   }
 
   // ─── แผงข้อมูลลอยด้านล่าง (Bottom Tracking Card) ───
-  Widget _buildTrackingBottomCard(BuildContext context) {
+  Widget _buildTrackingBottomCard() {
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ขีดจับลาก
+          Center(
+            child: Container(
+              width: 38,
+              height: 4.5,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+
+          // 1. หัวแถว: ระยะทาง (อยู่ฝั่งขวา)
+          if (_hasDestinationCoordinates && _isLoadingRoute) ...[
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    'กำลังคำนวณเส้นทาง...',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 12,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ] else if (_routeResult != null) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.directions_car_rounded,
+                        size: 14,
+                        color: Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        _routeResult!.formattedDistance,
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ] else if (_hasDestinationCoordinates && _userLocation == null) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'ยังระบุตำแหน่ง GPS ของเครื่องไม่ได้ จึงยังคำนวณเส้นทางไม่ได้',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 12,
+                        color: Color(0xFF92400E),
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _initLocationsAndRoute,
+                    child: const Text('ลองอีกครั้ง'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // แบนเนอร์แจ้งเตือนกรณี "ยังไม่ถึงวันนัดเช่า"
+          if (_isBeforeMeetupDate) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today_outlined,
+                    color: Color(0xFF64748B),
+                    size: 16,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'นัดรับอีก $_daysUntilMeetup วัน (${_startDate != null ? DateFormat('d MMM', 'th').format(_startDate!) : ''}) • ชำระเงินเมื่อตรวจรับของจริง',
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // 2. ข้อมูลอุปกรณ์ & จุดนัดรับ
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+            ),
+            child: Column(
+              children: [
+                // แถวอุปกรณ์
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        color: const Color(0xFFF1F5F9),
+                        child:
+                            _resolvedImageUrl != null &&
+                                _resolvedImageUrl!.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: _resolvedImageUrl!,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, _, _) => const Icon(
+                                  Icons.camera_alt_outlined,
+                                  color: Colors.grey,
+                                  size: 24,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.camera_alt_outlined,
+                                color: Colors.grey,
+                                size: 24,
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _resolvedTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _isReturn
+                                ? widget.periodText ?? _resolvedPeriod
+                                : _resolvedPeriod,
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_resolvedPrice > 0) ...[
+                      Text(
+                        '${_resolvedPrice.toStringAsFixed(0)} ฿',
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryColor,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+                ),
+
+                // แถวจุดนัดรับ
+                InkWell(
+                  onTap: _hasDestinationCoordinates
+                      ? _centerToDestination
+                      : null,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _resolvedLocation,
+                              style: const TextStyle(
+                                fontFamily: AppTextStyles.fontFamily,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF0F172A),
+                              ),
+                              maxLines: _isReturn ? null : 1,
+                              overflow: _isReturn
+                                  ? null
+                                  : TextOverflow.ellipsis,
+                            ),
+                            if (_resolvedLocationNote != null &&
+                                _resolvedLocationNote!.isNotEmpty) ...[
+                              const SizedBox(height: 1),
+                              Text(
+                                _resolvedLocationNote!,
+                                style: const TextStyle(
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontSize: 11.5,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                                maxLines: _isReturn ? null : 1,
+                                overflow: _isReturn
+                                    ? null
+                                    : TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (_hasDestinationCoordinates)
+                        const Icon(
+                          Icons.center_focus_strong_rounded,
+                          size: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 4. ปุ่ม Action (โทร / แชท / นำทาง)
+          if (_showRentalActions) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                // ปุ่มโทรหาผู้ปล่อยเช่า
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0F172A),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: _callOwner,
+                    icon: const Icon(Icons.phone_outlined, size: 18),
+                    label: Text(
+                      _isOwner ? 'โทรหาผู้เช่า' : 'โทรหาเจ้าของ',
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // ปุ่มชำระเงินหรือแสดงสถานะการเช่า
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _currentStatusCode == 'active'
+                          ? const Color(0xFF0F172A)
+                          : (_currentStatusCode == 'cancelled'
+                                ? const Color(0xFF94A3B8)
+                                : AppColors.primaryColor),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: _currentStatusCode == 'active'
+                        ? null
+                        : (_currentStatusCode == 'cancelled'
+                              ? null
+                              : _openPayment),
+                    icon: Icon(
+                      _currentStatusCode == 'active'
+                          ? Icons.check_circle_rounded
+                          : (_currentStatusCode == 'cancelled'
+                                ? Icons.cancel_outlined
+                                : (_isOwner || _renterPaymentStep == 1
+                                      ? Icons.payments_rounded
+                                      : Icons.checklist_rounded)),
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      _currentStatusCode == 'active'
+                          ? (_isOwner ? 'กำลังปล่อยเช่า' : 'กำลังเช่าอุปกรณ์')
+                          : (_currentStatusCode == 'cancelled'
+                                ? 'ยกเลิกการเช่าแล้ว'
+                                : (_isOwner
+                                      ? 'ยืนยันการรับเงิน'
+                                      : (_renterPaymentStep == 1
+                                            ? 'ชำระเงิน'
+                                            : 'ตรวจรับ & ชำระเงิน'))),
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (widget.returnDetails case final details?) ...[
+            const SizedBox(height: 12),
+            details,
+          ],
+        ],
+      ),
+    );
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -975,394 +1373,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ขีดจับลาก
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4.5,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-              ),
-
-              // 1. หัวแถว: ระยะทาง (อยู่ฝั่งขวา)
-              if (_isLoadingRoute) ...[
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 6),
-                    Text(
-                      'กำลังคำนวณเส้นทาง...',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-              ] else if (_routeResult != null) ...[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4.5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.directions_car_rounded,
-                            size: 14,
-                            color: Color(0xFF64748B),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            _routeResult!.formattedDistance,
-                            style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-              ] else if (_userLocation == null) ...[
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFFBEB),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFDE68A)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'ยังระบุตำแหน่ง GPS ของเครื่องไม่ได้ จึงยังคำนวณเส้นทางไม่ได้',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 12,
-                            color: Color(0xFF92400E),
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _initLocationsAndRoute,
-                        child: const Text('ลองอีกครั้ง'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              // แบนเนอร์แจ้งเตือนกรณี "ยังไม่ถึงวันนัดเช่า"
-              if (_isBeforeMeetupDate) ...[
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.calendar_today_outlined,
-                        color: Color(0xFF64748B),
-                        size: 16,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'นัดรับอีก $_daysUntilMeetup วัน (${_startDate != null ? DateFormat('d MMM', 'th').format(_startDate!) : ''}) • ชำระเงินเมื่อตรวจรับของจริง',
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF334155),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              // 2. ข้อมูลอุปกรณ์ & จุดนัดรับ
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: const Color(0xFFE2E8F0),
-                    width: 0.8,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    // แถวอุปกรณ์
-                    Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Container(
-                            width: 52,
-                            height: 52,
-                            color: const Color(0xFFF1F5F9),
-                            child:
-                                _resolvedImageUrl != null &&
-                                    _resolvedImageUrl!.isNotEmpty
-                                ? CachedNetworkImage(
-                                    imageUrl: _resolvedImageUrl!,
-                                    fit: BoxFit.cover,
-                                    errorWidget: (_, _, _) => const Icon(
-                                      Icons.camera_alt_outlined,
-                                      color: Colors.grey,
-                                      size: 24,
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.camera_alt_outlined,
-                                    color: Colors.grey,
-                                    size: 24,
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _resolvedTitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF0F172A),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _resolvedPeriod,
-                                style: const TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 12,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (_resolvedPrice > 0) ...[
-                          Text(
-                            '${_resolvedPrice.toStringAsFixed(0)} ฿',
-                            style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primaryColor,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Divider(height: 1, color: Color(0xFFE2E8F0)),
-                    ),
-
-                    // แถวจุดนัดรับ
-                    InkWell(
-                      onTap: _centerToDestination,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.location_on_outlined,
-                              size: 16,
-                              color: Color(0xFF475569),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _resolvedLocation,
-                                  style: const TextStyle(
-                                    fontFamily: AppTextStyles.fontFamily,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF0F172A),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (_resolvedLocationNote != null &&
-                                    _resolvedLocationNote!.isNotEmpty) ...[
-                                  const SizedBox(height: 1),
-                                  Text(
-                                    _resolvedLocationNote!,
-                                    style: const TextStyle(
-                                      fontFamily: AppTextStyles.fontFamily,
-                                      fontSize: 11.5,
-                                      color: Color(0xFF94A3B8),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          const Icon(
-                            Icons.center_focus_strong_rounded,
-                            size: 16,
-                            color: Color(0xFF64748B),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 4. ปุ่ม Action (โทร / แชท / นำทาง)
-              if (_showRentalActions) ...[
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    // ปุ่มโทรหาผู้ปล่อยเช่า
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF0F172A),
-                          side: const BorderSide(color: Color(0xFFE2E8F0)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: _callOwner,
-                        icon: const Icon(Icons.phone_outlined, size: 18),
-                        label: Text(
-                          _isOwner ? 'โทรหาผู้เช่า' : 'โทรหาเจ้าของ',
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    // ปุ่มชำระเงินหรือแสดงสถานะการเช่า
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _currentStatusCode == 'active'
-                              ? const Color(0xFF0F172A)
-                              : (_currentStatusCode == 'cancelled'
-                                    ? const Color(0xFF94A3B8)
-                                    : AppColors.primaryColor),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: _currentStatusCode == 'active'
-                            ? null
-                            : (_currentStatusCode == 'cancelled'
-                                  ? null
-                                  : _openPayment),
-                        icon: Icon(
-                          _currentStatusCode == 'active'
-                              ? Icons.check_circle_rounded
-                              : (_currentStatusCode == 'cancelled'
-                                    ? Icons.cancel_outlined
-                                    : (_isOwner || _renterPaymentStep == 1
-                                          ? Icons.payments_rounded
-                                          : Icons.checklist_rounded)),
-                          size: 18,
-                          color: Colors.white,
-                        ),
-                        label: Text(
-                          _currentStatusCode == 'active'
-                              ? (_isOwner
-                                    ? 'กำลังปล่อยเช่า'
-                                    : 'กำลังเช่าอุปกรณ์')
-                              : (_currentStatusCode == 'cancelled'
-                                    ? 'ยกเลิกการเช่าแล้ว'
-                                    : (_isOwner
-                                          ? 'ยืนยันการรับเงิน'
-                                          : (_renterPaymentStep == 1
-                                                ? 'ชำระเงิน'
-                                                : 'ตรวจรับ & ชำระเงิน'))),
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
+        child: _isReturn ? SingleChildScrollView(child: content) : content,
       ),
     );
   }
