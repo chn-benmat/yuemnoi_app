@@ -16,7 +16,8 @@ class _Api extends Mock implements ApiClient {}
 
 const _initialPosition = LatLng(13.753, 100.481);
 const _returnPoint = LatLng(13.7115884, 100.4341077);
-const _openMapLabel = 'ดูเส้นทางไปจุดคืนสินค้า';
+const _navigationTooltip = 'นำทางด้วย Google Maps';
+const _confirmLabel = 'ยืนยันรับคืนสินค้า';
 const _returnLocation = {
   'pickup_location': 'ซีคอน บางแค',
   'pickup_note': 'หน้าทางเข้าชั้น G',
@@ -84,25 +85,28 @@ void main() {
         addTearDown(tester.view.resetDevicePixelRatio);
         addTearDown(tester.view.resetPhysicalSize);
 
+        var bookingStatus = 'active';
         await _showReturnPage(
           tester,
           isLender: isLender,
           bookingLocation: _returnLocation,
+          bookingStatus: () => bookingStatus,
         );
 
-        expect(find.text('จุดคืนสินค้า: ซีคอน บางแค'), findsOneWidget);
+        expect(find.text('เส้นทางคืนสินค้า'), findsOneWidget);
         expect(find.text('หน้าทางเข้าชั้น G'), findsOneWidget);
-        expect(find.text(_openMapLabel), findsNothing);
+        expect(find.byTooltip(_navigationTooltip), findsOneWidget);
         expect(find.byType(FlutterMap), findsOneWidget);
+        final mapBounds = tester.getRect(find.byType(FlutterMap));
+        expect(mapBounds.left, 0);
+        expect(mapBounds.width, 390);
         expect(
-          find.text(isLender ? 'รับมอบอุปกรณ์คืน' : 'การคืนอุปกรณ์'),
-          findsOneWidget,
+          mapBounds.contains(tester.getCenter(find.text('เส้นทางคืนสินค้า'))),
+          isTrue,
         );
         expect(
-          tester.getBottomLeft(find.byType(FlutterMap)).dy,
-          lessThan(
-            tester.getTopLeft(find.text('จุดคืนสินค้า: ซีคอน บางแค')).dy,
-          ),
+          tester.getTopLeft(find.textContaining('กำหนดคืน')).dy,
+          greaterThan(mapBounds.bottom),
         );
         expect(find.text('ตัวคุณ'), findsOneWidget);
         expect(find.text('ซีคอน บางแค'), findsWidgets);
@@ -117,6 +121,7 @@ void main() {
           isTrue,
         );
         expect(find.text('ชำระเงิน'), findsNothing);
+        expect(find.text('ตรวจรับ & ชำระเงิน'), findsNothing);
 
         const moved = LatLng(13.754, 100.482);
         location.positions.add(location.toPosition(moved));
@@ -126,21 +131,27 @@ void main() {
 
         if (isLender) {
           final checkbox = find.byType(Checkbox);
-          await tester.ensureVisible(checkbox);
+          final confirm = find.widgetWithText(ElevatedButton, _confirmLabel);
+          expect(checkbox.hitTestable(), findsOneWidget);
+          expect(confirm.hitTestable(), findsOneWidget);
+          expect(tester.widget<ElevatedButton>(confirm).onPressed, isNull);
+          await tester.tap(find.text('ได้รับสินค้าคืนและตรวจสภาพแล้ว'));
           await tester.pump();
-          await tester.tap(checkbox);
-          await tester.pump();
-
           expect(tester.widget<Checkbox>(checkbox).value, isTrue);
-          final confirm = find.widgetWithText(
-            ElevatedButton,
-            'ยืนยันรับเครื่อง',
-          );
-          await tester.ensureVisible(confirm);
           expect(tester.widget<ElevatedButton>(confirm).onPressed, isNotNull);
           expect(_pins(tester), containsAll([moved, _returnPoint]));
         } else {
-          expect(find.text('รอร้านค้ายืนยันรับอุปกรณ์คืน'), findsOneWidget);
+          expect(find.text('ส่งคืนสินค้า').hitTestable(), findsOneWidget);
+          expect(find.text('นำสินค้าไปส่งที่จุดคืนตามนัด'), findsOneWidget);
+          expect(find.byType(Checkbox), findsNothing);
+          expect(find.text(_confirmLabel), findsNothing);
+
+          bookingStatus = 'return_ready';
+          await tester.pump(const Duration(seconds: 10));
+          await tester.pump();
+          expect(find.text('รอร้านค้ายืนยันรับสินค้าคืน'), findsOneWidget);
+          expect(find.text('นำสินค้าไปส่งที่จุดคืนตามนัด'), findsNothing);
+          expect(_pins(tester), containsAll([moved, _returnPoint]));
         }
       },
     );
@@ -169,10 +180,42 @@ void main() {
       },
     );
 
-    expect(find.text('จุดคืนสินค้า: ซีคอน บางแค'), findsOneWidget);
+    expect(find.text('คืนสินค้า'), findsOneWidget);
+    expect(find.text('ซีคอน บางแค'), findsOneWidget);
     expect(find.byType(FlutterMap), findsNothing);
-    expect(find.text(_openMapLabel), findsNothing);
+    expect(find.byTooltip(_navigationTooltip), findsNothing);
   });
+
+  testWidgets(
+    'the inspection stays reachable with large text on a short screen',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 440);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await _showReturnPage(
+        tester,
+        isLender: true,
+        bookingLocation: _returnLocation,
+        textScaler: TextScaler.linear(2),
+      );
+
+      final checkbox = find.byType(Checkbox);
+      await tester.ensureVisible(checkbox);
+      await tester.pump();
+      expect(checkbox.hitTestable(), findsOneWidget);
+      await tester.tap(checkbox);
+      await tester.pump();
+
+      final confirm = find.widgetWithText(ElevatedButton, _confirmLabel);
+      await tester.ensureVisible(confirm);
+      await tester.pump();
+      expect(confirm.hitTestable(), findsOneWidget);
+      expect(tester.widget<ElevatedButton>(confirm).onPressed, isNotNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('the return map closes when the completed status arrives', (
     tester,
@@ -206,6 +249,7 @@ Future<void> _showReturnPage(
   bool isLender = false,
   required Map<String, Object> bookingLocation,
   String Function()? bookingStatus,
+  TextScaler? textScaler,
 }) async {
   final api = _Api();
   final now = DateTime.now().toUtc();
@@ -245,6 +289,12 @@ Future<void> _showReturnPage(
 
   await tester.pumpWidget(
     MaterialApp(
+      builder: textScaler == null
+          ? null
+          : (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+              child: child!,
+            ),
       home: RentalReturnPage(
         rentalId: 73,
         isLender: isLender,

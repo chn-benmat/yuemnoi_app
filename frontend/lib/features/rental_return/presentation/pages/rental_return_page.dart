@@ -1,21 +1,22 @@
-import 'package:frontend/core/widgets/app_popup.dart';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_popup.dart';
 import '../../../profile/presentation/pages/rentals/rental_tracking_map_page.dart';
 import '../../data/repositories/rental_return_repository_impl.dart';
 import '../../domain/entities/rental_return_session.dart';
+import '../../domain/repositories/rental_return_repository.dart';
 import '../cubit/rental_return_cubit.dart';
 import '../cubit/rental_return_state.dart';
 import '../widgets/lender_inspection_view.dart';
 import '../widgets/rental_time_card.dart';
 import '../widgets/return_completed_dialog.dart';
 import '../widgets/return_evidence_gallery.dart';
-import '../../domain/repositories/rental_return_repository.dart';
 import '../widgets/urgent_return_alarm_dialog.dart';
 
 class RentalReturnPage extends StatelessWidget {
@@ -51,6 +52,7 @@ class _RentalReturnView extends StatefulWidget {
 class _RentalReturnViewState extends State<_RentalReturnView> {
   bool _didShowAlarm = false;
   bool _didShowSuccess = false;
+  int? _checkedRentalId;
   Timer? _refreshTimer;
   DialogRoute<void>? _alarmRoute;
 
@@ -115,7 +117,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
         }
         if (state.status == RentalReturnStatus.error) {
           return Scaffold(
-            appBar: AppBar(title: const Text('การคืนอุปกรณ์')),
+            appBar: AppBar(title: const Text('คืนสินค้า')),
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -133,78 +135,49 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
           });
         }
         final session = state.session;
-        final isRenter = state.isRenter;
         final isCompleted = session.step == RentalReturnStep.completed;
-        final returnPoint = session.returnPoint;
+        final returnPoint = isCompleted ? null : session.returnPoint;
+        final location = session.pickupLocation.trim();
 
-        return Scaffold(
-          backgroundColor: const Color(0xFFF8FAFC),
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            foregroundColor: const Color(0xFF1E293B),
-            elevation: 0,
-            leading: const BackButton(color: Color(0xFF1E293B)),
-            centerTitle: true,
-            title: Text(
-              isRenter ? 'การคืนอุปกรณ์' : 'รับมอบอุปกรณ์คืน',
-              style: const TextStyle(
-                fontFamily: AppTextStyles.fontFamily,
-                fontWeight: FontWeight.bold,
-                fontSize: 17,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1),
-              child: Container(color: const Color(0xFFF1F5F9), height: 1),
-            ),
-          ),
-          body: Column(
-            children: [
-              if (!isCompleted && returnPoint != null)
-                Expanded(
-                  flex: 5,
-                  child: RentalTrackingMapPage(
-                    key: ValueKey(returnPoint),
-                    returnPoint: returnPoint,
-                  ),
+        return RentalTrackingMapPage(
+          key: ValueKey((session.rentalId, returnPoint, location)),
+          itemTitle: session.itemName,
+          itemImageUrl: session.itemImageUrl,
+          pickupLocation: location.isEmpty
+              ? 'ยังไม่มีข้อมูลจุดคืนสินค้า'
+              : location,
+          pickupNote: session.returnPoint?.note,
+          periodText: isCompleted
+              ? 'คืนสินค้าเรียบร้อยแล้ว'
+              : 'กำหนดคืน ${session.endAtFormatted}',
+          returnPoint: returnPoint,
+          returnDetails: isCompleted
+              ? const SizedBox.shrink()
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: 12,
+                  children: [
+                    RentalTimeCard(session: session),
+                    if (session.photos.any((photo) => photo.hasPhoto))
+                      ReturnEvidenceGallery(photos: session.photos),
+                    if (state.isRenter)
+                      _RenterReturnStatus(
+                        awaitingConfirmation:
+                            session.step == RentalReturnStep.lenderInspecting,
+                      )
+                    else
+                      LenderInspectionView(
+                        isChecked: _checkedRentalId == session.rentalId,
+                        isSubmitting: state.isSubmitting,
+                        onChecked: (checked) => setState(() {
+                          _checkedRentalId = checked ? session.rentalId : null;
+                        }),
+                        onConfirm: context
+                            .read<RentalReturnCubit>()
+                            .confirmMerchantReceipt,
+                      ),
+                  ],
                 ),
-              Expanded(
-                flex: 6,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      RentalTimeCard(session: session),
-                      _ReturnProgress(session: session),
-                      if (!isCompleted && isRenter) ...[
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(24, 12, 24, 12),
-                          child: Text(
-                            'รอร้านค้ายืนยันรับอุปกรณ์คืน',
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              color: Color(0xFF475569),
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        if (session.photos.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-                            child: ReturnEvidenceGallery(
-                              photos: session.photos,
-                            ),
-                          ),
-                      ] else if (!isCompleted)
-                        const LenderInspectionView(),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
         );
       },
     );
@@ -249,80 +222,77 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
   }
 }
 
-class _ReturnProgress extends StatelessWidget {
-  const _ReturnProgress({required this.session});
-  final RentalReturnSession session;
+class _RenterReturnStatus extends StatelessWidget {
+  const _RenterReturnStatus({required this.awaitingConfirmation});
+
+  final bool awaitingConfirmation;
 
   @override
   Widget build(BuildContext context) {
-    final step = switch (session.step) {
-      RentalReturnStep.completed => 1,
-      _ => 0,
-    };
-    const labels = ['ตรวจรับคืน', 'ยืนยันคืน'];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i++) ...[
-            if (i > 0)
-              Expanded(
-                child: Container(
-                  height: 1.5,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  color: i <= step
-                      ? const Color(0xFF0F172A)
-                      : const Color(0xFFE2E8F0),
-                ),
-              ),
-            Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'ส่งคืนสินค้า',
+          style: TextStyle(
+            fontFamily: AppTextStyles.fontFamily,
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 8),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 22,
-                  height: 22,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: i == step
-                        ? AppColors.primaryColor
-                        : i < step
-                        ? const Color(0xFF0F172A)
-                        : const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: i < step
-                      ? const Icon(
-                          Icons.check_rounded,
-                          size: 13,
-                          color: Colors.white,
-                        )
-                      : Text(
-                          '${i + 1}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: i == step
-                                ? Colors.white
-                                : const Color(0xFF94A3B8),
-                          ),
-                        ),
+                Icon(
+                  awaitingConfirmation
+                      ? Icons.hourglass_top_rounded
+                      : Icons.place_outlined,
+                  size: 20,
+                  color: AppColors.primaryColor,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  labels[i],
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 11,
-                    fontWeight: i == step ? FontWeight.w700 : FontWeight.w500,
-                    color: i == step
-                        ? AppColors.primaryColor
-                        : const Color(0xFF64748B),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        awaitingConfirmation
+                            ? 'รอร้านค้ายืนยันรับสินค้าคืน'
+                            : 'นำสินค้าไปส่งที่จุดคืนตามนัด',
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      const Text(
+                        'ร้านค้าจะตรวจสภาพและยืนยันเมื่อได้รับสินค้า',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 12,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ],
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }

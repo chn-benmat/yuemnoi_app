@@ -65,15 +65,13 @@ void main() {
         expect(find.text('ผู้เช่า (Customer)'), findsNothing);
         expect(find.text('ร้านค้า (Lender)'), findsNothing);
 
-        // 2. AppBar title should be for Renter
-        expect(find.text('การคืนอุปกรณ์'), findsOneWidget);
-        expect(find.text('รับมอบอุปกรณ์คืน'), findsNothing);
+        expect(find.text('คืนสินค้า'), findsOneWidget);
 
         // 3. ผู้เช่ารอให้ร้านค้าตรวจรับ
         expect(find.text('ส่งภาพยืนยันให้ร้านค้า'), findsNothing);
         expect(find.byIcon(Icons.qr_code_scanner_rounded), findsNothing);
         expect(find.byType(TextField), findsNothing);
-        expect(find.text('รอร้านค้ายืนยันรับอุปกรณ์คืน'), findsOneWidget);
+        expect(find.text('นำสินค้าไปส่งที่จุดคืนตามนัด'), findsOneWidget);
         expect(find.byType(LenderInspectionView), findsNothing);
 
         // 4. Test popup actions should not exist
@@ -95,9 +93,8 @@ void main() {
         // 1. Role switcher tab bar MUST NOT be present
         expect(find.byType(RoleSwitcherBar), findsNothing);
 
-        // 2. AppBar title should be for Lender
-        expect(find.text('รับมอบอุปกรณ์คืน'), findsOneWidget);
-        expect(find.text('การคืนอุปกรณ์'), findsNothing);
+        expect(find.text('คืนสินค้า'), findsOneWidget);
+        expect(find.text('ส่งคืนสินค้า'), findsNothing);
 
         // 3. Should display LenderInspectionView for Lender
         expect(find.byType(LenderInspectionView), findsOneWidget);
@@ -120,7 +117,7 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('รอร้านค้ายืนยันรับอุปกรณ์คืน'), findsOneWidget);
+      expect(find.text('นำสินค้าไปส่งที่จุดคืนตามนัด'), findsOneWidget);
       expect(find.byType(TextField), findsNothing);
 
       session = session.copyWith(step: RentalReturnStep.completed);
@@ -149,7 +146,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       final inspectionButton = find.widgetWithText(
         ElevatedButton,
-        'ยืนยันรับเครื่อง',
+        'ยืนยันรับคืนสินค้า',
       );
       expect(tester.widget<ElevatedButton>(inspectionButton).onPressed, isNull);
       await tester.tap(find.byType(Checkbox));
