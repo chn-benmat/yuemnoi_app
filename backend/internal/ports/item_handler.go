@@ -44,7 +44,8 @@ type createItemRequest struct {
 	ItemImageURL []string `json:"item_image_url" form:"item_image_url" validate:"omitempty,dive,max=2048"`
 	Description  string   `json:"description" form:"description" validate:"required,min=1,max=2000"`
 	Category     string   `json:"category" form:"category" validate:"required,min=1,max=100"`
-	Price        int      `json:"price" form:"price" validate:"required,gt=0"`
+	Price        int      `json:"price" form:"price" validate:"required,gt=0,lte=2147483647"`
+	DailyPrice   *int     `json:"daily_price" form:"daily_price" validate:"omitempty,gt=0,lte=2147483647"`
 	Type         string   `json:"type" form:"type" validate:"required,oneof=รายวัน รายชั่วโมง day hour daily hourly"`
 }
 
@@ -59,7 +60,8 @@ type updateItemRequest struct {
 	ItemImageURL *[]string `json:"item_image_url" validate:"omitempty,dive,max=2048"`
 	Description  *string   `json:"description" validate:"omitempty,min=1,max=2000"`
 	Category     *string   `json:"category" validate:"omitempty,max=100"`
-	Price        *int      `json:"price" validate:"omitempty,gt=0"`
+	Price        *int      `json:"price" validate:"omitempty,gt=0,lte=2147483647"`
+	DailyPrice   *int      `json:"daily_price" validate:"omitempty,gte=0,lte=2147483647"`
 	Type         *string   `json:"type" validate:"omitempty,max=100"`
 	OwnerHidden  *bool     `json:"owner_hidden"`
 }
@@ -72,6 +74,10 @@ func parseItemID(c fiber.Ctx) (int64, bool) {
 	}
 
 	return id, true
+}
+
+func isHourlyItemType(rentalType string) bool {
+	return rentalType == "รายชั่วโมง" || rentalType == "hourly" || rentalType == "hour"
 }
 
 func writeItemError(c fiber.Ctx, err error) error {
@@ -174,6 +180,9 @@ func (h *ItemHandler) CreateItem(c fiber.Ctx) error {
 	if strings.TrimSpace(req.ItemName) == "" || strings.TrimSpace(req.Description) == "" || strings.TrimSpace(req.Category) == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุชื่อ รายละเอียด และหมวดหมู่อุปกรณ์"})
 	}
+	if req.DailyPrice != nil && !isHourlyItemType(req.Type) {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุราคาต่อชั่วโมงเมื่อเพิ่มราคาต่อวัน"})
+	}
 
 	if !validPickupLocation(req.PickupLocation, req.PickupLatitude, req.PickupLongitude) {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกจุดนัดรับสินค้าบนแผนที่"})
@@ -195,6 +204,7 @@ func (h *ItemHandler) CreateItem(c fiber.Ctx) error {
 		Description:     strings.TrimSpace(req.Description),
 		Category:        strings.TrimSpace(req.Category),
 		Price:           req.Price,
+		DailyPrice:      req.DailyPrice,
 		Status:          "pending_review",
 		Type:            req.Type,
 	}, images)
@@ -286,8 +296,15 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ชื่อและรายละเอียดอุปกรณ์ต้องไม่เป็นข้อความว่าง"})
 	}
 
+	setsDailyPrice := req.DailyPrice != nil && *req.DailyPrice > 0
+	if setsDailyPrice && (req.Price == nil || req.Type == nil || !isHourlyItemType(*req.Type)) {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุราคาต่อชั่วโมงเมื่อเพิ่มราคาต่อวัน"})
+	}
+
 	fields := make(map[string]interface{})
-	listingContentChanged := req.ItemName != nil || req.ItemImageURL != nil || req.Description != nil || req.Category != nil || req.Price != nil || req.Type != nil || req.PickupLocation != "" || req.PickupLatitude != nil || req.PickupLongitude != nil
+	listingContentChanged := req.ItemName != nil || req.ItemImageURL != nil || req.Description != nil ||
+		req.Category != nil || req.Price != nil || req.DailyPrice != nil || req.Type != nil ||
+		req.PickupLocation != "" || req.PickupLatitude != nil || req.PickupLongitude != nil
 	if listingContentChanged {
 		if !validPickupLocation(req.PickupLocation, req.PickupLatitude, req.PickupLongitude) {
 			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกจุดนัดรับสินค้าบนแผนที่"})
@@ -315,6 +332,11 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 	}
 	if req.Type != nil {
 		fields["type"] = *req.Type
+	}
+	if setsDailyPrice {
+		fields["daily_price"] = *req.DailyPrice
+	} else if req.DailyPrice != nil || (req.Type != nil && !isHourlyItemType(*req.Type)) {
+		fields["daily_price"] = nil
 	}
 	if req.OwnerHidden != nil {
 		fields["owner_hidden"] = *req.OwnerHidden

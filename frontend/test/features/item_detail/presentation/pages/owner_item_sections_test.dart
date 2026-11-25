@@ -113,7 +113,7 @@ void main() {
     expect(find.byKey(const Key('edit-item-name')), findsOneWidget);
     expect(find.byKey(const Key('edit-item-category')), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.byKey(const Key('edit-item-price')),
+      find.byKey(const Key('edit-item-hourly-price')),
       250,
       scrollable: find
           .descendant(
@@ -122,8 +122,8 @@ void main() {
           )
           .first,
     );
-    expect(find.byKey(const Key('edit-item-rental-type')), findsOneWidget);
-    expect(find.byKey(const Key('edit-item-price')), findsOneWidget);
+    expect(find.byKey(const Key('edit-item-hourly-price')), findsOneWidget);
+    expect(find.byKey(const Key('edit-item-daily-price')), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('บันทึกการแก้ไข'),
       150,

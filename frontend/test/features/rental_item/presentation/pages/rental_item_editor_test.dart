@@ -22,8 +22,7 @@ final _initial = RentalItemFormValue(
   name: 'Canon EOS R50',
   category: 'กล้องและอุปกรณ์ถ่ายภาพ',
   description: 'กล้องพร้อมเลนส์และแบตเตอรี่',
-  rentalType: 'รายวัน',
-  price: '350',
+  dailyPrice: '350',
   photos: [_first, _second],
   pickupLocation: const PickupLocation(
     name: 'จุดนัดรับ',
@@ -48,6 +47,32 @@ void main() {
     await tester.tap(find.byKey(const Key('rental-confirm-submit')));
     await tester.pump();
   }
+
+  testWidgets('submits a separate hourly and daily rental price', (
+    tester,
+  ) async {
+    await phoneSize(tester);
+    final submitted = <RentalItemFormValue>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RentalItemEditor(initialValue: _initial, onSubmit: submitted.add),
+      ),
+    );
+
+    final hourlyPrice = find.byKey(const Key('rental-item-hourly-price'));
+    final dailyPrice = find.byKey(const Key('rental-item-daily-price'));
+    expect(hourlyPrice, findsOneWidget);
+    expect(dailyPrice, findsOneWidget);
+    await tester.ensureVisible(hourlyPrice);
+    await tester.enterText(hourlyPrice, '75');
+    await tester.ensureVisible(dailyPrice);
+    await tester.enterText(dailyPrice, '410');
+    await confirmAdd(tester);
+
+    expect(submitted.single.rentalType, 'รายชั่วโมง');
+    expect(submitted.single.price, 75);
+    expect(submitted.single.additionalDailyPrice, 410);
+  });
 
   testWidgets('adding requires confirmation and cancel keeps the draft', (
     tester,
@@ -158,8 +183,7 @@ void main() {
         name: _initial.name,
         category: _initial.category,
         description: _initial.description,
-        rentalType: _initial.rentalType,
-        price: _initial.price,
+        dailyPrice: _initial.dailyPrice,
         pickupLocation: _initial.pickupLocation,
         photos: [_first, _second, third],
       );
@@ -346,28 +370,26 @@ void main() {
     'currency and rental unit stay visible when an empty price loses focus',
     (tester) async {
       await phoneSize(tester);
-      for (final entry in {'รายวัน': 'วัน', 'รายชั่วโมง': 'ชั่วโมง'}.entries) {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: RentalItemEditor(
-              key: ValueKey(entry.key),
-              initialValue: RentalItemFormValue(rentalType: entry.key),
-              onSubmit: (_) {},
-            ),
-          ),
-        );
-        final price = find.byKey(const Key('rental-item-price'));
+      await tester.pumpWidget(
+        MaterialApp(home: RentalItemEditor(onSubmit: (_) {})),
+      );
+      for (final entry in {
+        'hourly-price': 'ชั่วโมง',
+        'daily-price': 'วัน',
+      }.entries) {
+        final price = find.byKey(ValueKey('rental-item-${entry.key}'));
+        final currency = find.descendant(of: price, matching: find.text('฿'));
         await tester.ensureVisible(price);
         await tester.pumpAndSettle();
-        expect(find.textContaining('฿').hitTestable(), findsOneWidget);
+        expect(currency.hitTestable(), findsOneWidget);
         expect(find.text('บาท / ${entry.value}').hitTestable(), findsOneWidget);
         await tester.enterText(price, '250');
-        await tester.testTextInput.receiveAction(TextInputAction.done);
+        FocusManager.instance.primaryFocus?.unfocus();
         await tester.pumpAndSettle();
         await tester.enterText(price, '');
-        await tester.testTextInput.receiveAction(TextInputAction.done);
+        FocusManager.instance.primaryFocus?.unfocus();
         await tester.pumpAndSettle();
-        expect(find.textContaining('฿').hitTestable(), findsOneWidget);
+        expect(currency.hitTestable(), findsOneWidget);
         expect(find.text('บาท / ${entry.value}').hitTestable(), findsOneWidget);
       }
     },

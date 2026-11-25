@@ -46,6 +46,7 @@ class ItemDetail extends Equatable {
     required this.description,
     required this.category,
     required this.price,
+    this.additionalDailyPrice,
     required this.status,
     required this.rentalType,
     required this.reviews,
@@ -61,6 +62,7 @@ class ItemDetail extends Equatable {
   final String description;
   final String category;
   final int price;
+  final int? additionalDailyPrice;
   final String status;
   final String rentalType;
   final List<ItemReview> reviews;
@@ -68,7 +70,10 @@ class ItemDetail extends Equatable {
   final bool ownerHidden;
   final PickupLocation? pickupLocation;
 
-  String get unitLabel => rentalType == 'รายชั่วโมง' ? 'ชั่วโมง' : 'วัน';
+  bool get _isHourly => rentalType == 'รายชั่วโมง';
+  String get unitLabel => _isHourly ? 'ชั่วโมง' : 'วัน';
+  int? get hourlyPrice => _isHourly ? price : null;
+  int? get dailyPrice => _isHourly ? additionalDailyPrice : price;
 
   ItemDetail withVisibility({required bool hidden}) => ItemDetail(
     id: id,
@@ -78,6 +83,7 @@ class ItemDetail extends Equatable {
     description: description,
     category: category,
     price: price,
+    additionalDailyPrice: additionalDailyPrice,
     status: status,
     rentalType: rentalType,
     reviews: reviews,
@@ -101,6 +107,7 @@ class ItemDetail extends Equatable {
     description,
     category,
     price,
+    additionalDailyPrice,
     status,
     rentalType,
     reviews,
@@ -118,6 +125,7 @@ class ItemEditDraft extends Equatable {
     required this.description,
     required this.rentalType,
     required this.price,
+    this.additionalDailyPrice,
     required this.retainedImageUrls,
     required this.newImages,
     this.imageOrder,
@@ -130,6 +138,7 @@ class ItemEditDraft extends Equatable {
   final String description;
   final String rentalType;
   final int price;
+  final int? additionalDailyPrice;
   final List<String> retainedImageUrls;
   final List<RentalItemImage> newImages;
   final List<RentalItemPhoto>? imageOrder;
@@ -172,6 +181,7 @@ class ItemEditDraft extends Equatable {
     description,
     rentalType,
     price,
+    additionalDailyPrice,
     retainedImageUrls,
     newImages,
     imageOrder,

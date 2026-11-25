@@ -29,6 +29,7 @@ void main() {
     bool ownerVerified = false,
     List<ItemReview> reviews = const [],
     bool longContent = false,
+    bool dualPricing = false,
   }) => ItemDetail(
     id: 7,
     owner: ItemOwner(
@@ -43,9 +44,10 @@ void main() {
     imageUrls: imageUrls,
     description: description,
     category: 'กล้องและอุปกรณ์ถ่ายภาพ',
-    price: longContent ? 1250000 : 1000,
+    price: dualPricing ? 75 : (longContent ? 1250000 : 1000),
+    additionalDailyPrice: dualPricing ? 410 : null,
     status: status,
-    rentalType: 'รายวัน',
+    rentalType: dualPricing ? 'รายชั่วโมง' : 'รายวัน',
     reviews: reviews,
     isOwner: isOwner,
     pickupLocation: longContent
@@ -69,6 +71,7 @@ void main() {
     bool longContent = false,
     double textScale = 1,
     bool preview = false,
+    bool dualPricing = false,
   }) async {
     final repository = _MockItemDetailRepository();
     final bloc = ItemDetailBloc(
@@ -81,6 +84,7 @@ void main() {
         status: status,
         ownerVerified: ownerVerified,
         longContent: longContent,
+        dualPricing: dualPricing,
         reviews: reviews,
       ),
     );
@@ -101,6 +105,20 @@ void main() {
     );
     await tester.pump();
   }
+
+  testWidgets('shows hourly and daily rental prices on the item detail', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 720);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    await pumpDetail(tester, isOwner: false, dualPricing: true, textScale: 1.3);
+    expect(find.text('ค่าเช่า / ชั่วโมง'), findsOneWidget);
+    expect(find.text('฿75'), findsOneWidget);
+    expect(find.text('฿410 / วัน'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('review content stays readable at narrow width and large text', (
     tester,

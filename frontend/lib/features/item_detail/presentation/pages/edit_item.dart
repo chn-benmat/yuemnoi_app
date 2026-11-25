@@ -30,8 +30,8 @@ class _EditItemScreenState extends State<EditItemScreen> {
       name: item.name,
       description: item.description,
       category: item.category,
-      rentalType: item.rentalType,
-      price: item.price.toString(),
+      hourlyPrice: item.hourlyPrice?.toString() ?? '',
+      dailyPrice: item.dailyPrice?.toString() ?? '',
       photos: item.imageUrls
           .map(RentalItemPhoto.remote)
           .toList(growable: false),
@@ -67,9 +67,10 @@ class _EditItemScreenState extends State<EditItemScreen> {
                   .toList(),
               description: value.description,
               category: value.category ?? '',
-              price: int.tryParse(value.price) ?? 0,
+              price: value.price ?? 0,
+              additionalDailyPrice: value.additionalDailyPrice,
               status: widget.item.status,
-              rentalType: value.rentalType ?? '',
+              rentalType: value.rentalType,
               reviews: widget.item.reviews,
               isOwner: true,
               ownerHidden: widget.item.ownerHidden,
@@ -91,8 +92,9 @@ class _EditItemScreenState extends State<EditItemScreen> {
                   name: value.name,
                   category: value.category!,
                   description: value.description,
-                  rentalType: value.rentalType!,
-                  price: int.parse(value.price),
+                  rentalType: value.rentalType,
+                  price: value.price!,
+                  additionalDailyPrice: value.additionalDailyPrice,
                   retainedImageUrls: value.photos
                       .where((photo) => photo.remoteUrl != null)
                       .map((photo) => photo.remoteUrl!)

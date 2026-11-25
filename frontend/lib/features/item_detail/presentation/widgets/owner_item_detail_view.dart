@@ -70,26 +70,32 @@ class OwnerItemDetailView extends StatelessWidget {
                           runSpacing: 8,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Text.rich(
-                              TextSpan(
-                                text:
-                                    '฿${NumberFormat('#,##0.##', 'th').format(item.price)}',
-                                children: [
-                                  TextSpan(
-                                    text: ' / ${item.unitLabel}',
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w400,
-                                      color: Color(0xFF817A91),
+                            for (final (price, unit) in [
+                              (item.price, item.unitLabel),
+                              if (item.additionalDailyPrice
+                                  case final dailyPrice?)
+                                (dailyPrice, 'วัน'),
+                            ])
+                              Text.rich(
+                                TextSpan(
+                                  text:
+                                      '฿${NumberFormat('#,##0.##', 'th').format(price)}',
+                                  children: [
+                                    TextSpan(
+                                      text: ' / $unit',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w400,
+                                        color: Color(0xFF817A91),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                              style: const TextStyle(
-                                fontSize: 21,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
                           ],
                         ),
                       ],

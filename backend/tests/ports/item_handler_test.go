@@ -1,8 +1,11 @@
 package ports_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -27,6 +30,85 @@ type itemManagementRepository struct {
 	deleted bool
 	err     error
 	hidden  bool
+}
+
+func (r *itemManagementRepository) Insert(_ context.Context, item *domain.Item, _ []domain.ItemImage) (*domain.Item, error) {
+	return item, nil
+}
+
+func TestCreateItemWithHourlyAndDailyPrice(t *testing.T) {
+	app := ports.NewHTTPApp()
+	defer app.Shutdown()
+	app.Post("/api/items", ports.NewItemHandler(&itemManagementRepository{}, itemManagementVerifier{}).CreateItem)
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	for name, value := range map[string]string{
+		"item_name": "Camera", "description": "Includes lens", "category": "Camera",
+		"price": "75", "daily_price": "410", "type": "รายชั่วโมง",
+		"pickup_location": "Station", "pickup_latitude": "13.75", "pickup_longitude": "100.5",
+	} {
+		if err := form.WriteField(name, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := form.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "/api/items", &body)
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer owner")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var item struct {
+		Price      int `json:"price"`
+		DailyPrice int `json:"daily_price"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&item); err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != 201 || item.Price != 75 || item.DailyPrice != 410 {
+		t.Fatalf("status=%d, price=%d, daily_price=%d", res.StatusCode, item.Price, item.DailyPrice)
+	}
+}
+
+func TestUpdateItemDailyPrice(t *testing.T) {
+	for _, tc := range []struct {
+		name, pricing string
+		want          interface{}
+		status        int
+	}{
+		{"sets daily rate", `"type":"รายชั่วโมง","price":75,"daily_price":410`, 410, 200},
+		{"removes daily rate", `"type":"รายชั่วโมง","price":75,"daily_price":0`, nil, 200},
+		{"clears additional rate on legacy daily-only edits", `"type":"รายวัน","price":410`, nil, 200},
+		{"rejects negative daily rate", `"type":"รายชั่วโมง","price":75,"daily_price":-1`, nil, 400},
+		{"requires an hourly rate when adding the daily rate", `"type":"รายชั่วโมง","daily_price":410`, nil, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &itemManagementRepository{}
+			app := ports.NewHTTPApp()
+			defer app.Shutdown()
+			app.Put("/api/items/:id", ports.NewItemHandler(repo, itemManagementVerifier{}).UpdateItem)
+			req := httptest.NewRequest("PUT", "/api/items/7", strings.NewReader(`{`+tc.pricing+`,"pickup_location":"Station","pickup_latitude":13.75,"pickup_longitude":100.5}`))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer owner")
+			res, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+			if res.StatusCode != tc.status {
+				t.Fatalf("status=%d want %d", res.StatusCode, tc.status)
+			}
+			if tc.status == 200 {
+				if price, ok := repo.fields["daily_price"]; !ok || price != tc.want {
+					t.Fatalf("fields=%v, want daily_price=%v", repo.fields, tc.want)
+				}
+			}
+		})
+	}
 }
 
 func (r *itemManagementRepository) FindByID(_ context.Context, id int64) (*domain.Item, error) {

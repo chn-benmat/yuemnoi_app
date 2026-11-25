@@ -21,7 +21,7 @@ void main() {
   setUp(() => AuthSession.saveAccessToken('test-token'));
   tearDown(AuthSession.clear);
 
-  testWidgets('searches categories and selects an explicit rental unit', (
+  testWidgets('searches categories and displays both rental units', (
     tester,
   ) async {
     final bloc = RentalItemBloc(
@@ -58,12 +58,10 @@ void main() {
     await tester.tap(find.text('ดนตรีและเครื่องดนตรี'));
     await tester.pumpAndSettle();
     expect(find.text('ดนตรีและเครื่องดนตรี'), findsOneWidget);
-    await tester.ensureVisible(find.byKey(const Key('rental-type-field')));
-    await tester.pumpAndSettle();
-    expect(find.text('ประเภทการให้เช่า'), findsOneWidget);
-    await tester.tap(find.text('รายชั่วโมง'));
-    await tester.pumpAndSettle();
+    expect(find.text('ราคาต่อชั่วโมง'), findsOneWidget);
+    expect(find.text('ราคาต่อวัน'), findsOneWidget);
     expect(find.text('บาท / ชั่วโมง'), findsOneWidget);
+    expect(find.text('บาท / วัน'), findsOneWidget);
   });
 
   testWidgets('shows an error when submitting without an image', (

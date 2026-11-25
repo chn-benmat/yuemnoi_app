@@ -30,8 +30,8 @@ class _FakeHomeRepository implements HomeRepository {
       id: '$i',
       title: 'อุปกรณ์ทดสอบ $i',
       categoryId: 'camera',
-      price: 200 + i * 50,
-      priceUnit: '/วัน',
+      price: i == 0 ? 75 : 200 + i * 50,
+      priceUnit: i == 0 ? '/ ชั่วโมง' : '/วัน',
       rating: 4.8,
       reviewCount: 12,
       distanceKm: 1.5,
@@ -55,64 +55,68 @@ class _FakeHomeRepository implements HomeRepository {
 }
 
 void main() {
-  testWidgets('search bar and category chips stay fixed while products scroll', (
-    tester,
-  ) async {
-    final repository = _FakeHomeRepository();
-    final bloc = HomeBloc(
-      getHomeFeed: GetHomeFeedUseCase(repository),
-      homeRepository: repository,
-    )..add(const LoadHomeFeedStarted());
-    addTearDown(bloc.close);
+  testWidgets(
+    'search bar and category chips stay fixed while products scroll',
+    (tester) async {
+      final repository = _FakeHomeRepository();
+      final bloc = HomeBloc(
+        getHomeFeed: GetHomeFeedUseCase(repository),
+        homeRepository: repository,
+      )..add(const LoadHomeFeedStarted());
+      addTearDown(bloc.close);
 
-    tester.view.physicalSize = const Size(400, 700);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+      tester.view.physicalSize = const Size(400, 700);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: BlocProvider<HomeBloc>.value(
-          value: bloc,
-          child: const HomeFeedView(),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BlocProvider<HomeBloc>.value(
+            value: bloc,
+            child: const HomeFeedView(),
+          ),
         ),
-      ),
-    );
+      );
 
-    // Initial load
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
+      // Initial load
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
-    // Both search bar and chips are visible
-    expect(find.byType(HomeSearchBar), findsOneWidget);
-    expect(find.byType(CategoryFilterChips), findsOneWidget);
+      // Both search bar and chips are visible
+      expect(find.byType(HomeSearchBar), findsOneWidget);
+      expect(find.byType(CategoryFilterChips), findsOneWidget);
+      expect(find.text('เริ่มต้น '), findsOneWidget);
+      expect(find.text('75'), findsOneWidget);
+      expect(find.text(' / ชั่วโมง'), findsOneWidget);
 
-    final initialSearchBarPosition = tester.getTopLeft(
-      find.byType(HomeSearchBar),
-    );
-    final initialChipPosition = tester.getTopLeft(
-      find.byType(CategoryFilterChips),
-    );
+      final initialSearchBarPosition = tester.getTopLeft(
+        find.byType(HomeSearchBar),
+      );
+      final initialChipPosition = tester.getTopLeft(
+        find.byType(CategoryFilterChips),
+      );
 
-    // Scroll down by 40px
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -40));
-    await tester.pumpAndSettle();
+      // Scroll down by 40px
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -40));
+      await tester.pumpAndSettle();
 
-    // 1. Search bar stays fixed at the exact same position (does not scroll)
-    final afterScrollSearchBarPosition = tester.getTopLeft(
-      find.byType(HomeSearchBar),
-    );
-    expect(
-      afterScrollSearchBarPosition.dy,
-      equals(initialSearchBarPosition.dy),
-    );
+      // 1. Search bar stays fixed at the exact same position (does not scroll)
+      final afterScrollSearchBarPosition = tester.getTopLeft(
+        find.byType(HomeSearchBar),
+      );
+      expect(
+        afterScrollSearchBarPosition.dy,
+        equals(initialSearchBarPosition.dy),
+      );
 
-    // 2. Category chips stay pinned with the search bar.
-    final afterScrollChipPosition = tester.getTopLeft(
-      find.byType(CategoryFilterChips),
-    );
-    expect(afterScrollChipPosition.dy, equals(initialChipPosition.dy));
-  });
+      // 2. Category chips stay pinned with the search bar.
+      final afterScrollChipPosition = tester.getTopLeft(
+        find.byType(CategoryFilterChips),
+      );
+      expect(afterScrollChipPosition.dy, equals(initialChipPosition.dy));
+    },
+  );
 
   testWidgets(
     'tapping category chip opens search and keeps home feed normal on return',

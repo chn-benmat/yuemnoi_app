@@ -32,6 +32,8 @@ class RentalItemRemoteDataSource {
           'description': draft.description.trim(),
           'type': draft.rentalType,
           'price': draft.price.toString(),
+          if (draft.additionalDailyPrice case final price?)
+            'daily_price': price.toString(),
           ...?draft.pickupLocation?.toJson().map(
             (key, value) => MapEntry(key, value.toString()),
           ),
