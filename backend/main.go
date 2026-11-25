@@ -46,7 +46,16 @@ func main() {
 	itemRepo := supabase.NewSupabaseItemRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
 	authGateway := supabase.NewSupabaseUserRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
 	contactRepository := supabase.NewSupabaseConversationContactRepository(supabaseClient)
-	rentalRepository := supabase.NewSupabaseRentalRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
+	identityEncryption, identityKeyErr := base64.StdEncoding.DecodeString(cfg.IdentityEncryptionKey)
+	if identityKeyErr != nil || len(identityEncryption) != 32 {
+		if cfg.OperationsEnabled {
+			log.Fatal("IDENTITY_ENCRYPTION_KEY must be base64 of 32 random bytes")
+		}
+		identityEncryption = nil
+	}
+	rentalRepository := supabase.NewSupabaseRentalRepository(supabaseClient, supabase.RentalRepositoryKeys{
+		ServiceRole: cfg.SupabaseServiceRoleKey, PromptPayEncryption: identityEncryption,
+	})
 	notificationRepository := supabase.NewSupabaseNotificationRepository(supabaseClient)
 
 	// สร้าง FCM Notification Adapter
@@ -68,15 +77,11 @@ func main() {
 	// ตั้งค่า Router และฉีด Dependencies ทั้งหมดผ่าน DI
 	var ops domain.OperationsOptions
 	if cfg.OperationsEnabled {
-		encryption, decodeErr := base64.StdEncoding.DecodeString(cfg.IdentityEncryptionKey)
-		if decodeErr != nil || len(encryption) != 32 {
-			log.Fatal("IDENTITY_ENCRYPTION_KEY must be base64 of 32 random bytes")
-		}
 		hmacKey, decodeErr := base64.StdEncoding.DecodeString(cfg.IdentityHMACKey)
 		if decodeErr != nil || len(hmacKey) < 32 {
 			log.Fatal("IDENTITY_HMAC_KEY must be base64 of at least 32 random bytes")
 		}
-		ops = domain.OperationsOptions{Store: supabase.NewOperationsRepository(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey), EncryptionKey: encryption, HMACKey: hmacKey, CleanupInterval: cfg.IdentityCleanupInterval}
+		ops = domain.OperationsOptions{Store: supabase.NewOperationsRepository(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey), EncryptionKey: identityEncryption, HMACKey: hmacKey, CleanupInterval: cfg.IdentityCleanupInterval}
 	}
 	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
 	defer stopCleanup()

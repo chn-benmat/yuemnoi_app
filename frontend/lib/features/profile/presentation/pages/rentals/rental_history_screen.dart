@@ -108,7 +108,9 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
           RentalHistoryItemData(
             bookingId: b.bookingId,
             itemId: b.itemId,
+            imageUrl: b.imageUrl,
             title: b.title,
+            ownerId: b.partnerId,
             ownerName: b.partnerName,
             duration: b.duration,
             date: dateStr,
@@ -133,7 +135,8 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _loadError = 'โหลดประวัติการเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';
+          _loadError =
+              'โหลดประวัติการเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';
         });
       }
     }
@@ -151,7 +154,9 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
       bookingId: item.bookingId,
       itemId: item.itemId,
       itemName: item.title,
+      ownerId: item.ownerId,
       ownerName: item.ownerName,
+      itemImageUrl: item.imageUrl,
     );
     if (mounted) await _loadRentalHistory();
   }

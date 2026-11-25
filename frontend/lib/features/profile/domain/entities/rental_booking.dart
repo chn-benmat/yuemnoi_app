@@ -3,6 +3,7 @@ class RentalBooking {
   final int? bookingId;
   final int? itemId;
   final String title;
+  final String? partnerId;
   final String partnerName;
   final String? partnerPhone;
   final String partnerRole;
@@ -24,6 +25,7 @@ class RentalBooking {
     this.bookingId,
     this.itemId,
     required this.title,
+    this.partnerId,
     required this.partnerName,
     this.partnerPhone,
     required this.partnerRole,

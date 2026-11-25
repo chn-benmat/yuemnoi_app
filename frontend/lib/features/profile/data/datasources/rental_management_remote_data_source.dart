@@ -2,7 +2,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../domain/entities/rental_handover_code.dart';
+import '../../domain/entities/rental_handover_payment.dart';
 import '../../domain/entities/rental_income.dart';
 import '../models/rental_booking_model.dart';
 
@@ -21,7 +21,9 @@ class RentalManagementRemoteDataSource {
   ApiClient get _backendClient => _apiClient ??= DioApiClient();
   Future<List<RentalBookingModel>> getRentingBookings(String userId) async {
     if ((_client == null && !SupabaseConfig.isInitialized) || userId.isEmpty) {
-      throw StateError('ไม่สามารถเชื่อมต่อหรือยืนยันบัญชีเพื่อโหลดประวัติการเช่าได้');
+      throw StateError(
+        'ไม่สามารถเชื่อมต่อหรือยืนยันบัญชีเพื่อโหลดประวัติการเช่าได้',
+      );
     }
 
     try {
@@ -80,13 +82,17 @@ class RentalManagementRemoteDataSource {
       }
       return result;
     } catch (_) {
-      throw StateError('โหลดประวัติการเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่');
+      throw StateError(
+        'โหลดประวัติการเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
+      );
     }
   }
 
   Future<List<RentalBookingModel>> getLendingBookings(String userId) async {
     if ((_client == null && !SupabaseConfig.isInitialized) || userId.isEmpty) {
-      throw StateError('ไม่สามารถเชื่อมต่อหรือยืนยันบัญชีเพื่อโหลดรายการปล่อยเช่าได้');
+      throw StateError(
+        'ไม่สามารถเชื่อมต่อหรือยืนยันบัญชีเพื่อโหลดรายการปล่อยเช่าได้',
+      );
     }
 
     try {
@@ -157,7 +163,9 @@ class RentalManagementRemoteDataSource {
       }
       return result;
     } catch (_) {
-      throw StateError('โหลดรายการปล่อยเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่');
+      throw StateError(
+        'โหลดรายการปล่อยเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
+      );
     }
   }
 
@@ -165,33 +173,51 @@ class RentalManagementRemoteDataSource {
     return getRentingBookings(userId);
   }
 
-  Future<RentalHandoverCode> createHandoverCode({required int bookingId}) async {
+  Future<RentalHandoverPayment> handoverPayment({
+    required int bookingId,
+    required bool confirm,
+    String? promptPayPhone,
+    String? promptPayNationalId,
+  }) async {
     final token = AuthSession.accessToken;
     if (token == null || token.isEmpty) {
       throw StateError('กรุณาเข้าสู่ระบบก่อนดำเนินการ');
     }
-    final response = await _backendClient.post(
-      '/api/rentals/$bookingId/handover-code',
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    if (response.statusCode != 200 || response.data is! Map) {
-      final data = response.data;
-      throw StateError(
-        data is Map
-            ? data['error']?.toString() ?? 'สร้างรหัสส่งมอบไม่สำเร็จ'
-            : 'สร้างรหัสส่งมอบไม่สำเร็จ',
+    final path = '/api/rentals/$bookingId/handover-payment';
+    final headers = {'Authorization': 'Bearer $token'};
+    final response = promptPayPhone != null || promptPayNationalId != null
+        ? await _backendClient.put(
+            path,
+            headers: headers,
+            data: {
+              'promptpay_phone': ?promptPayPhone,
+              'promptpay_national_id': ?promptPayNationalId,
+            },
+          )
+        : confirm
+        ? await _backendClient.post(path, headers: headers)
+        : await _backendClient.get(path, headers: headers);
+    final data = response.data;
+    if (data case {
+      'status': final String status,
+      'payment_method': final String paymentMethod,
+      'payment_confirmed': final bool paymentConfirmed,
+    } when response.statusCode == 200) {
+      return RentalHandoverPayment(
+        status: status,
+        paymentMethod: paymentMethod,
+        paymentConfirmed: paymentConfirmed,
+        totalSatang: data['total_satang'] as int?,
+        canCollectPayment: data['can_collect_payment'] == true,
+        promptPayPhone: data['promptpay_phone'] as String?,
+        promptPayIdType: data['promptpay_id_type'] as String?,
+        promptPayQr: data['promptpay_qr'] as String?,
       );
     }
-    final code = (response.data as Map)['code']?.toString() ?? '';
-    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
-      throw StateError('เซิร์ฟเวอร์ส่งรหัสส่งมอบไม่ถูกต้อง');
-    }
-    final expiresAtValue = (response.data as Map)['expires_at']?.toString();
-    final expiresAt = expiresAtValue == null ? null : DateTime.tryParse(expiresAtValue);
-    if (expiresAt == null) {
-      throw StateError('เซิร์ฟเวอร์ไม่ส่งเวลาหมดอายุของรหัสส่งมอบ');
-    }
-    return RentalHandoverCode(code: code, expiresAt: expiresAt.toLocal());
+    throw StateError(
+      (data is Map ? data['error']?.toString() : null) ??
+          'ตรวจสอบการชำระเงินไม่สำเร็จ',
+    );
   }
 
   Future<void> updateBookingStatus({
@@ -199,35 +225,11 @@ class RentalManagementRemoteDataSource {
     required String status,
   }) async {
     if (status == 'active') {
-      throw StateError('กรุณายืนยันรหัสส่งมอบจากผู้เช่าก่อน');
-    }
-    throw StateError('กรุณาดำเนินการผ่านขั้นตอนตรวจสภาพและยืนยันการคืน');
-  }
-
-  Future<void> completeHandover({
-    required int bookingId,
-    required String code,
-  }) async {
-    final token = AuthSession.accessToken;
-    if (token == null || token.isEmpty) {
-      throw StateError('กรุณาเข้าสู่ระบบก่อนดำเนินการ');
-    }
-    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
-      throw StateError('กรุณากรอกรหัสส่งมอบ 6 หลักจากผู้เช่า');
-    }
-    final response = await _backendClient.post(
-      '/api/rentals/$bookingId/handover',
-      headers: {'Authorization': 'Bearer $token'},
-      data: {'code': code},
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final data = response.data;
       throw StateError(
-        data is Map
-            ? data['error']?.toString() ?? 'ยืนยันรหัสส่งมอบไม่สำเร็จ'
-            : 'ยืนยันรหัสส่งมอบไม่สำเร็จ',
+        'กรุณาให้ผู้ปล่อยเช่ายืนยันว่าได้รับเงินผ่านหน้าชำระเงิน',
       );
     }
+    throw StateError('กรุณาดำเนินการผ่านขั้นตอนตรวจสภาพและยืนยันการคืน');
   }
 
   Future<RentalIncomeSummary> getRentalIncome(String userId) async {

@@ -85,6 +85,7 @@ func parseRentalID(c fiber.Ctx) (int64, bool) {
 
 type confirmRentalRequest struct {
 	OfferMessageID string `json:"offer_message_id" validate:"required,max=100"`
+	PaymentMethod  string `json:"payment_method"`
 }
 
 // ConfirmRentalOrder เปลี่ยนจาก pending หลังผู้เช่ากดปุ่มยืนยันขั้นสุดท้ายเท่านั้น
@@ -101,48 +102,29 @@ func (h *RentalHandler) ConfirmRentalOrder(c fiber.Ctx) error {
 	if err := c.Bind().JSON(&req); err != nil || strings.TrimSpace(req.OfferMessageID) == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุข้อความข้อเสนอที่ต้องการยืนยัน"})
 	}
-	rental, err := h.rentalRepository.ConfirmRental(c.Context(), userID, id, strings.TrimSpace(req.OfferMessageID))
+	if req.PaymentMethod != "" && req.PaymentMethod != "cash" && req.PaymentMethod != "promptpay" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกชำระด้วยเงินสดหรือ PromptPay"})
+	}
+	rental, err := h.rentalRepository.ConfirmRental(c.Context(), userID, id, strings.TrimSpace(req.OfferMessageID), req.PaymentMethod)
 	if err != nil {
 		return writeRentalError(c, err)
 	}
 	return c.Status(http.StatusOK).JSON(rental)
 }
 
-// [POST] /api/rentals/:id/handover - ยืนยันการส่งมอบอุปกรณ์ (เปลี่ยนสถานะเป็น active)
-func (h *RentalHandler) HandoverRental(c fiber.Ctx) error {
-	userID, ok := authenticatedUserID(c, h.tokenVerifier)
-	if !ok {
-		return nil
-	}
-	id, ok := parseRentalID(c)
-	if !ok {
-		return nil
-	}
-	var req struct {
-		Code string `json:"code"`
-	}
-	if err := c.Bind().JSON(&req); err != nil || len(req.Code) != 6 || strings.Trim(req.Code, "0123456789") != "" {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณากรอกรหัสส่งมอบ 6 หลักจากผู้เช่า"})
-	}
-
-	handoverRepo, ok := h.rentalRepository.(domain.RentalHandoverRepository)
-	if !ok {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ระบบยืนยันส่งมอบยังไม่พร้อมใช้งาน"})
-	}
-	order, err := handoverRepo.CompleteHandover(c.Context(), userID, id, req.Code)
-	if err != nil {
-		return writeRentalStatusError(c, err)
-	}
-
-	return c.Status(http.StatusOK).JSON(fiber.Map{
-		"status":  http.StatusOK,
-		"message": "ยืนยันการส่งมอบอุปกรณ์เรียบร้อยแล้ว",
-		"rental":  order,
-	})
+func (h *RentalHandler) GetHandoverPayment(c fiber.Ctx) error {
+	return h.handoverPayment(c, false)
 }
 
-// CreateHandoverCode สร้าง PIN ส่งมอบให้ผู้เช่าของรายการนี้เท่านั้น
-func (h *RentalHandler) CreateHandoverCode(c fiber.Ctx) error {
+func (h *RentalHandler) ConfirmHandoverPayment(c fiber.Ctx) error {
+	return h.handoverPayment(c, true)
+}
+
+func (h *RentalHandler) SavePromptPayAccount(c fiber.Ctx) error {
+	return h.handoverPayment(c, false)
+}
+
+func (h *RentalHandler) handoverPayment(c fiber.Ctx, confirm bool) error {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
 		return nil
@@ -151,16 +133,49 @@ func (h *RentalHandler) CreateHandoverCode(c fiber.Ctx) error {
 	if !ok {
 		return nil
 	}
-	handoverRepo, ok := h.rentalRepository.(domain.RentalHandoverRepository)
+	repo, ok := h.rentalRepository.(domain.RentalHandoverRepository)
 	if !ok {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ระบบสร้างรหัสส่งมอบยังไม่พร้อมใช้งาน"})
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ระบบตรวจสอบการชำระเงินยังไม่พร้อมใช้งาน"})
 	}
-	code, expiresAt, err := handoverRepo.CreateHandoverCode(c.Context(), userID, id)
+	var payment domain.RentalHandoverPayment
+	var err error
+	if c.Method() == http.MethodPut {
+		var req struct {
+			Phone      string `json:"promptpay_phone" validate:"max=32"`
+			NationalID string `json:"promptpay_national_id" validate:"max=32"`
+		}
+		if err := c.Bind().JSON(&req); err != nil {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลพร้อมเพย์ไม่ถูกต้อง"})
+		}
+		phone, nationalID := strings.TrimSpace(req.Phone), strings.TrimSpace(req.NationalID)
+		switch {
+		case (phone == "") == (nationalID == ""):
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกเบอร์มือถือหรือเลขบัตรประชาชนอย่างใดอย่างหนึ่ง"})
+		case phone != "" && !domain.IsPromptPayMobile(phone):
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณากรอกเบอร์มือถือพร้อมเพย์ 10 หลัก"})
+		case nationalID != "" && !domain.IsPromptPayNationalID(nationalID):
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "เลขบัตรประชาชนไม่ถูกต้อง กรุณาตรวจสอบทั้ง 13 หลัก"})
+		}
+		payment, err = repo.SavePromptPayAccount(c.Context(), userID, id, phone, nationalID)
+	} else {
+		payment, err = repo.HandoverPayment(c.Context(), userID, id, confirm)
+	}
 	if err != nil {
 		return writeRentalStatusError(c, err)
 	}
+	if payment.CanCollectPayment {
+		payment.PromptPayQR = domain.PromptPayQR(payment.PromptPayPhone, payment.PromptPayNationalID, payment.TotalSatang)
+		if payment.PromptPayQR != "" {
+			payment.PromptPayIDType = "phone"
+			if payment.PromptPayNationalID != "" {
+				payment.PromptPayIDType = "national_id"
+			}
+		}
+	} else {
+		payment.PromptPayPhone = ""
+	}
 	c.Set("Cache-Control", "private, no-store")
-	return c.JSON(fiber.Map{"code": code, "expires_at": expiresAt})
+	return c.JSON(payment)
 }
 
 // [POST] /api/rentals/:id/return - ยืนยันการรับคืนอุปกรณ์ (เปลี่ยนสถานะเป็น completed)
@@ -198,10 +213,6 @@ func writeRentalStatusError(c fiber.Ctx, err error) error {
 		return c.Status(400).JSON(fiber.Map{"error": "ข้อมูลหรือหลักฐานการเช่าไม่ครบถ้วน"})
 	case errors.Is(err, domain.ErrRentalReturnToken):
 		return c.Status(400).JSON(fiber.Map{"error": "รหัสยืนยันไม่ถูกต้องหรือหมดอายุ กรุณาขอรหัสใหม่จากเจ้าของอุปกรณ์", "code": "invalid_return_token"})
-	case errors.Is(err, domain.ErrRentalHandoverCode):
-		return c.Status(400).JSON(fiber.Map{"error": "รหัสส่งมอบไม่ถูกต้อง หมดอายุ หรือกรอกผิดครบจำนวนครั้งแล้ว กรุณาขอรหัสใหม่จากผู้เช่า", "code": "invalid_handover_pin"})
-	case errors.Is(err, domain.ErrRentalHandoverCodeActive):
-		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "มีรหัสส่งมอบที่ยังใช้งานอยู่ กรุณาใช้รหัสจากหน้าจอที่ขอครั้งแรก หรือรอให้รหัสหมดอายุแล้วขอใหม่", "code": "handover_code_already_active"})
 	case errors.Is(err, domain.ErrRentalNotStarted):
 		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "ยังไม่ถึงเวลาเริ่มเช่าตามที่นัดไว้"})
 	case errors.Is(err, domain.ErrRentalNotFound):

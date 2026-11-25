@@ -9,6 +9,7 @@ class ConfirmRentalRequestUseCase {
   Future<RentalRequestResult> execute({
     required int rentalId,
     required String offerMessageId,
+    required String paymentMethod,
   }) async {
     if (rentalId <= 0 || offerMessageId.trim().isEmpty) {
       throw const RentalRequestException('ไม่พบข้อเสนอที่ต้องการยืนยัน');
@@ -16,6 +17,7 @@ class ConfirmRentalRequestUseCase {
     final result = await repository.confirm(
       rentalId: rentalId,
       offerMessageId: offerMessageId,
+      paymentMethod: paymentMethod,
     );
     if (result.id != rentalId ||
         !const ['confirmed', 'active', 'completed'].contains(result.status)) {

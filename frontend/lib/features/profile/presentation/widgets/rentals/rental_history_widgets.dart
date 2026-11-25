@@ -71,7 +71,9 @@ class _RentalHistorySkeletonCard extends StatelessWidget {
 class RentalHistoryItemData {
   final int? bookingId;
   final int? itemId;
+  final String? imageUrl;
   final String title;
+  final String? ownerId;
   final String ownerName;
   final String duration;
   final String date;
@@ -85,7 +87,9 @@ class RentalHistoryItemData {
   RentalHistoryItemData({
     this.bookingId,
     this.itemId,
+    this.imageUrl,
     required this.title,
+    this.ownerId,
     required this.ownerName,
     required this.duration,
     required this.date,
@@ -111,7 +115,9 @@ class RentalHistoryItemData {
     return RentalHistoryItemData(
       bookingId: entity.bookingId,
       itemId: entity.itemId,
+      imageUrl: entity.imageUrl,
       title: entity.title,
+      ownerId: entity.partnerId,
       ownerName: entity.partnerName,
       duration: entity.duration,
       date: dateStr,
@@ -139,178 +145,189 @@ class RentalHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imageUrl = item.imageUrl?.trim();
+    final fallback = Icon(
+      item.iconData,
+      color: AppColors.primaryColor,
+      size: 28,
+    );
     return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: item.itemId != null
-                  ? () => AppRoutes.openItemDetail(context, itemId: item.itemId!)
-                  : null,
-              borderRadius: BorderRadius.circular(12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-            // ── Icon Box ──
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3E8FF),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                item.iconData,
-                color: AppColors.primaryColor,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            // ── Details ──
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A2E),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: item.itemId != null
+                ? () => AppRoutes.openItemDetail(context, itemId: item.itemId!)
+                : null,
+            borderRadius: BorderRadius.circular(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3E8FF),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'เช่าจาก: ${item.ownerName}',
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 12,
-                      color: AppColors.labelColor,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
+                  clipBehavior: Clip.antiAlias,
+                  child: imageUrl == null || imageUrl.isEmpty
+                      ? fallback
+                      : Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => fallback,
+                        ),
+                ),
+                const SizedBox(width: 16),
+                // ── Details ──
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (item.date.isNotEmpty) ...[
-                        Text(
-                          item.date,
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 11,
-                            color: AppColors.hintTextColor,
-                          ),
-                        ),
-                        const Text(
-                          ' • ',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.hintTextColor,
-                          ),
-                        ),
-                      ],
                       Text(
-                        item.duration,
+                        item.title,
                         style: const TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 11,
-                          color: AppColors.hintTextColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A1A2E),
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'เช่าจาก: ${item.ownerName}',
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 12,
+                          color: AppColors.labelColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          if (item.date.isNotEmpty) ...[
+                            Text(
+                              item.date,
+                              style: const TextStyle(
+                                fontFamily: AppTextStyles.fontFamily,
+                                fontSize: 11,
+                                color: AppColors.hintTextColor,
+                              ),
+                            ),
+                            const Text(
+                              ' • ',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.hintTextColor,
+                              ),
+                            ),
+                          ],
+                          Text(
+                            item.duration,
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 11,
+                              color: AppColors.hintTextColor,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            // ── Status Badge ──
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: item.statusBgColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                item.status,
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: item.statusColor,
                 ),
-              ),
-            ),
-                ],
-              ),
-            ),
-            if (item.isCompleted) ...[
-              const SizedBox(height: 14),
-              const Divider(height: 1, color: Color(0xFFF0EAF5)),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.star_rounded,
-                    color: Color(0xFFF59E0B),
-                    size: 18,
+                const SizedBox(width: 12),
+                // ── Status Badge ──
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      item.alreadyReviewed
-                          ? 'รีวิวอุปกรณ์นี้แล้ว'
-                          : 'คืนอุปกรณ์เรียบร้อยแล้ว',
-                      style: const TextStyle(
+                  decoration: BoxDecoration(
+                    color: item.statusBgColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    item.status,
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: item.statusColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (item.isCompleted) ...[
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: Color(0xFFF0EAF5)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(
+                  Icons.star_rounded,
+                  color: Color(0xFFF59E0B),
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    item.alreadyReviewed
+                        ? 'รีวิวอุปกรณ์นี้แล้ว'
+                        : 'คืนอุปกรณ์เรียบร้อยแล้ว',
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 12,
+                      color: Color(0xFF5B5265),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (!item.alreadyReviewed && onReview != null)
+                  OutlinedButton.icon(
+                    onPressed: onReview,
+                    icon: const Icon(Icons.rate_review_outlined, size: 16),
+                    label: const Text('ให้คะแนน'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryColor,
+                      side: const BorderSide(color: Color(0xFFE3D2F2)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      textStyle: const TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
                         fontSize: 12,
-                        color: Color(0xFF5B5265),
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  if (!item.alreadyReviewed && onReview != null)
-                    OutlinedButton.icon(
-                      onPressed: onReview,
-                      icon: const Icon(Icons.rate_review_outlined, size: 16),
-                      label: const Text('ให้คะแนน'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primaryColor,
-                        side: const BorderSide(color: Color(0xFFE3D2F2)),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        textStyle: const TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ],
-        ),
-      );
+        ],
+      ),
+    );
   }
 }

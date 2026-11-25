@@ -5,27 +5,27 @@ import '../../domain/entities/rental_return_session.dart';
 
 class UrgentReturnAlarmDialog extends StatefulWidget {
   final RentalReturnSession session;
-  final VoidCallback onProceedToVerification;
+  final VoidCallback onDismiss;
 
   const UrgentReturnAlarmDialog({
     super.key,
     required this.session,
-    required this.onProceedToVerification,
+    required this.onDismiss,
   });
 
-  static Future<void> show({
+  static DialogRoute<void> createRoute({
     required BuildContext context,
     required RentalReturnSession session,
-    required VoidCallback onProceedToVerification,
+    required VoidCallback onDismiss,
   }) {
-    return showDialog<void>(
+    return DialogRoute<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => UrgentReturnAlarmDialog(
         session: session,
-        onProceedToVerification: () {
+        onDismiss: () {
           Navigator.of(ctx).pop();
-          onProceedToVerification();
+          onDismiss();
         },
       ),
     );
@@ -150,7 +150,7 @@ class _UrgentReturnAlarmDialogState extends State<UrgentReturnAlarmDialog>
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'เพื่อความปลอดภัยของท่านและป้องกันข้อพิพาท กรุณาใช้กล้องสดถ่ายภาพสภาพอุปกรณ์ ณ ปัจจุบัน เพื่อส่งยืนยันไปยังผู้ให้เช่า',
+                        'นำอุปกรณ์ไปคืนที่จุดนัดหมาย แล้วให้ร้านค้าตรวจรับอุปกรณ์',
                         style: TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 12,
@@ -165,31 +165,25 @@ class _UrgentReturnAlarmDialogState extends State<UrgentReturnAlarmDialog>
 
               const SizedBox(height: 24),
 
-              // ปุ่มบังคับกดเพื่อถ่ายรูป
               SizedBox(
                 width: double.infinity,
                 height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: widget.onProceedToVerification,
-                  icon: const Icon(
-                    Icons.camera_alt_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                  label: const Text(
-                    'ถ่ายรูปยืนยันสภาพเครื่องตอนนี้',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                child: ElevatedButton(
+                  onPressed: widget.onDismiss,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFD97706),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(26),
+                    ),
+                  ),
+                  child: const Text(
+                    'รับทราบ',
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
                   ),
                 ),

@@ -1,5 +1,5 @@
 import '../../domain/entities/rental_booking.dart';
-import '../../domain/entities/rental_handover_code.dart';
+import '../../domain/entities/rental_handover_payment.dart';
 import '../../domain/entities/rental_income.dart';
 import '../../domain/repositories/rental_management_repository.dart';
 import '../datasources/rental_management_remote_data_source.dart';
@@ -33,16 +33,18 @@ class RentalManagementRepositoryImpl
   }
 
   @override
-  Future<RentalHandoverCode> createHandoverCode({required int bookingId}) {
-    return remoteDataSource.createHandoverCode(bookingId: bookingId);
-  }
-
-  @override
-  Future<void> completeHandover({
+  Future<RentalHandoverPayment> handoverPayment({
     required int bookingId,
-    required String code,
+    required bool confirm,
+    String? promptPayPhone,
+    String? promptPayNationalId,
   }) {
-    return remoteDataSource.completeHandover(bookingId: bookingId, code: code);
+    return remoteDataSource.handoverPayment(
+      bookingId: bookingId,
+      confirm: confirm,
+      promptPayPhone: promptPayPhone,
+      promptPayNationalId: promptPayNationalId,
+    );
   }
 
   @override

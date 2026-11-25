@@ -7,6 +7,7 @@ class RentalBookingModel {
   final int? bookingId;
   final int? itemId;
   final String title;
+  final String? partnerId;
   final String partnerName;
   final String? partnerPhone;
   final String partnerRole;
@@ -28,6 +29,7 @@ class RentalBookingModel {
     this.bookingId,
     this.itemId,
     required this.title,
+    this.partnerId,
     required this.partnerName,
     this.partnerPhone,
     required this.partnerRole,
@@ -74,6 +76,8 @@ class RentalBookingModel {
       bookingId: (booking['id'] as num?)?.toInt(),
       itemId: itemId,
       title: title,
+      partnerId: (isOwner ? booking['user_id'] : itemData?['user_id'])
+          ?.toString(),
       partnerName: partnerName ?? (isOwner ? 'ผู้เช่า' : 'เจ้าของอุปกรณ์'),
       partnerPhone: partnerPhone,
       partnerRole: isOwner ? 'ผู้เช่า' : 'เจ้าของอุปกรณ์',
@@ -99,6 +103,7 @@ class RentalBookingModel {
       bookingId: bookingId,
       itemId: itemId,
       title: title,
+      partnerId: partnerId,
       partnerName: partnerName,
       partnerPhone: partnerPhone,
       partnerRole: partnerRole,

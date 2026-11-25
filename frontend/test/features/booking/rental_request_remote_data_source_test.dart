@@ -65,13 +65,17 @@ void main() {
         ),
       );
       expect(
-        await source.confirm(rentalId: 25, offerMessageId: '11'),
+        await source.confirm(
+          rentalId: 25,
+          offerMessageId: '11',
+          paymentMethod: 'cash',
+        ),
         const RentalRequestResult(id: 25, status: 'confirmed'),
       );
       verify(
         () => client.post(
           '/api/rentals/25/confirm',
-          data: {'offer_message_id': '11'},
+          data: {'offer_message_id': '11', 'payment_method': 'cash'},
           headers: {'Authorization': 'Bearer test-token'},
         ),
       ).called(1);
@@ -83,7 +87,11 @@ void main() {
     () async {
       AuthSession.clear();
       await expectLater(
-        source.confirm(rentalId: 25, offerMessageId: '11'),
+        source.confirm(
+          rentalId: 25,
+          offerMessageId: '11',
+          paymentMethod: 'cash',
+        ),
         throwsA(isA<RentalRequestRemoteException>()),
       );
       verifyZeroInteractions(client);
@@ -101,7 +109,11 @@ void main() {
         ),
       );
       await expectLater(
-        source.confirm(rentalId: 25, offerMessageId: '11'),
+        source.confirm(
+          rentalId: 25,
+          offerMessageId: '11',
+          paymentMethod: 'cash',
+        ),
         throwsA(
           isA<RentalRequestRemoteException>().having(
             (e) => e.message,

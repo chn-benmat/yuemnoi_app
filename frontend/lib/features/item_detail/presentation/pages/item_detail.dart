@@ -217,8 +217,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
       // เปิดแชตซ้ำโดยไม่ส่งความสนใจเพิ่ม จนกว่ารายการเช่ารอบเดิมจะปิด
       final chatDataSource = ChatRemoteDataSource();
+      String? initialMessageId;
       try {
-        await chatDataSource.sendItemInquiryIfNeeded(
+        initialMessageId = await chatDataSource.sendItemInquiryIfNeeded(
           conversationId: conversation.id,
           inquiry: inquiryData,
           imageUrl: firstImageUrl.isNotEmpty ? firstImageUrl : null,
@@ -227,7 +228,11 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
       if (mounted) {
         setState(() => _isChatLoading = false);
-        await AppRoutes.openConversation(context, conversation: conversation);
+        await AppRoutes.openConversation(
+          context,
+          conversation: conversation,
+          initialMessageId: initialMessageId,
+        );
       }
     } catch (e) {
       if (mounted) {

@@ -70,6 +70,35 @@ void main() {
     },
   );
 
+  test('restores each cached chat message ID once in history order', () async {
+    AppCache.useDatabase(database);
+    await database.writeSnapshot('chat', 'room', 'alice', [
+      {'id': 'first', 'message': 'first message'},
+      {'id': 'second', 'message': 'same text'},
+      {'id': 'second', 'message': 'duplicate copy'},
+      {'id': 'third', 'message': 'same text'},
+    ]);
+
+    final restored = await ChatMessagesCache.loadFromDisk(
+      'room',
+      currentUserId: 'alice',
+    );
+    final reopened = ChatMessagesCache.peek('room', currentUserId: 'alice');
+
+    for (final messages in [restored!, reopened!]) {
+      expect(messages.map((message) => message.id), [
+        'first',
+        'second',
+        'third',
+      ]);
+      expect(messages.map((message) => message.message), [
+        'first message',
+        'same text',
+        'same text',
+      ]);
+    }
+  });
+
   test('separates accounts, conversations and cache namespaces', () async {
     await database.writeSnapshot('chat', 'room', 'alice', [
       {'id': 'private'},

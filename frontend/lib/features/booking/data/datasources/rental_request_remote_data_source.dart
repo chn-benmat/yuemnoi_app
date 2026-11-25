@@ -66,6 +66,7 @@ class RentalRequestRemoteDataSource {
   Future<RentalRequestResult> confirm({
     required int rentalId,
     required String offerMessageId,
+    required String paymentMethod,
   }) async {
     final token = AuthSession.accessToken;
     if (token == null || token.isEmpty) {
@@ -76,7 +77,10 @@ class RentalRequestRemoteDataSource {
     try {
       final response = await _client.post(
         '/api/rentals/$rentalId/confirm',
-        data: {'offer_message_id': offerMessageId},
+        data: {
+          'offer_message_id': offerMessageId,
+          'payment_method': paymentMethod,
+        },
         headers: {'Authorization': 'Bearer $token'},
       );
       if (response.statusCode != 200) {

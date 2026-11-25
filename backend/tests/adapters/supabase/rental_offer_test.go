@@ -13,15 +13,34 @@ import (
 
 	supabase "github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
 	supabaseclient "github.com/nedpals/supabase-go"
 )
 
+type offerConfirmationVerifier struct{}
+
+func (offerConfirmationVerifier) UserIDFromToken(context.Context, string) (string, error) {
+	return "renter", nil
+}
+
 func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
+	checkOwnerOfferConfirmation(t, "daily", "รายวัน", "promptpay", time.Date(2026, 10, 19, 2, 0, 0, 0, time.UTC))
+}
+
+func TestHourlyOwnerOfferUsesStartDayWhenEndDateIsLeftover(t *testing.T) {
+	checkOwnerOfferConfirmation(t, "hourly", "รายชั่วโมง", "cash", time.Date(2026, 10, 18, 10, 0, 0, 0, time.UTC))
+}
+
+func checkOwnerOfferConfirmation(t *testing.T, rentalType, storedType, paymentMethod string, endAt time.Time) {
+	t.Helper()
 	var sharedMessage string
 	createCalls := 0
 	persistedStatus := "pending"
-	originalMessage := `รายละเอียดคำขอเช่า
-[BOOKING_DATA:{"itemId":7,"rentalType":"daily","startDate":"2026-10-18T00:00:00.000","endDate":"2026-10-19T00:00:00.000","startHour":9,"startMinute":0,"endHour":17,"endMinute":0,"location":"Pickup"}]`
+	persistedPaymentMethod := "cash"
+	originalMessage := fmt.Sprintf(`รายละเอียดคำขอเช่า
+วิธีชำระเงิน: เงินสด
+ยอดรวม: 500 ฿
+[BOOKING_DATA:{"itemId":7,"rentalType":%q,"startDate":"2026-10-18T00:00:00.000","endDate":"2026-10-19T00:00:00.000","startHour":9,"startMinute":0,"endHour":17,"endMinute":0,"location":"Pickup","paymentMethod":"cash"}]`, rentalType)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		wantSchema := "public"
@@ -40,6 +59,9 @@ func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request["p_offer_message_id"] != "11" {
 				t.Errorf("missing authoritative offer snapshot: %v (%v)", request, err)
 			}
+			if request["p_end_at"] != endAt.Format(time.RFC3339) {
+				t.Errorf("create end time = %v, want %s", request["p_end_at"], endAt.Format(time.RFC3339))
+			}
 			fmt.Fprint(w, `{"id":25,"user_id":"renter","item_id":7,"status":"pending"}`)
 		case r.URL.Path == "/rest/v1/chat_message_tb" && r.Method == http.MethodGet:
 			payload := originalMessage
@@ -57,8 +79,14 @@ func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
 			if data["status"] != "confirmed" {
 				t.Errorf("persisted status = %v", data["status"])
 			}
+			if data["payment_method"] != paymentMethod {
+				t.Errorf("payment_method in confirmation update = %v, want %q", data["payment_method"], paymentMethod)
+			}
 			persistedStatus = "confirmed"
-			fmt.Fprint(w, `[{"id":25,"user_id":"renter","item_id":7,"status":"confirmed"}]`)
+			if method, ok := data["payment_method"].(string); ok {
+				persistedPaymentMethod = method
+			}
+			fmt.Fprintf(w, `[{"id":25,"user_id":"renter","item_id":7,"status":"confirmed","payment_method":%q}]`, persistedPaymentMethod)
 		case r.URL.Path == "/rest/v1/chat_message_tb" && r.Method == http.MethodPatch:
 			currentMessage := sharedMessage
 			if currentMessage == "" {
@@ -76,7 +104,7 @@ func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
 			sharedMessage += " "
 			json.NewEncoder(w).Encode([]any{map[string]any{"id": 11, "message": sharedMessage}})
 		case r.URL.Path == "/rest/v1/booking_tb" && r.Method == http.MethodGet:
-			fmt.Fprintf(w, `[{"id":25,"user_id":"renter","item_id":7,"status":%q,"type":"รายวัน","start_at":"2026-10-18T02:00:00Z","end_at":"2026-10-19T02:00:00Z","pickup_location":"Pickup"}]`, persistedStatus)
+			fmt.Fprintf(w, `[{"id":25,"user_id":"renter","item_id":7,"status":%q,"payment_method":%q,"type":%q,"start_at":"2026-10-18T02:00:00Z","end_at":%q,"pickup_location":"Pickup"}]`, persistedStatus, persistedPaymentMethod, storedType, endAt.Format(time.RFC3339))
 		case r.URL.Path == "/rest/v1/booking_tb" && r.Method == http.MethodDelete:
 			fmt.Fprint(w, `[]`)
 		default:
@@ -86,10 +114,14 @@ func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
 	}))
 	defer server.Close()
 	repository := supabase.NewSupabaseRentalRepository(supabaseclient.CreateClient(server.URL, "test-key"))
-	var request domain.CreateRentalRequest
-	json.Unmarshal([]byte(`{"item_id":7,"rental_type":"daily","pickup_location":"Pickup","offer_message_id":"11"}`), &request)
-	request.StartAt = time.Date(2026, 10, 18, 2, 0, 0, 0, time.UTC)
-	request.EndAt = time.Date(2026, 10, 19, 2, 0, 0, 0, time.UTC)
+	request := domain.CreateRentalRequest{
+		ItemID:         7,
+		StartAt:        time.Date(2026, 10, 18, 2, 0, 0, 0, time.UTC),
+		EndAt:          endAt,
+		RentalType:     rentalType,
+		PickupLocation: "Pickup",
+		OfferMessageID: "11",
+	}
 	result, err := repository.CreateRental(context.Background(), "renter", request)
 	if err != nil {
 		t.Fatal(err)
@@ -107,13 +139,36 @@ func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
 	if result.Status != "pending" {
 		t.Fatalf("reopening the summary confirmed the booking: %s", result.Status)
 	}
-	for range 2 {
-		result, err = repository.ConfirmRental(context.Background(), "renter", 25, "11")
-		if err != nil || result.Status != "confirmed" || persistedStatus != "confirmed" || createCalls != 1 {
-			t.Fatalf("explicit confirmation/retry: result=%v err=%v status=%s creates=%d", result, err, persistedStatus, createCalls)
+	app := ports.NewHTTPApp()
+	defer app.Shutdown()
+	app.Post("/api/rentals/:id/confirm", ports.NewRentalHandler(repository, offerConfirmationVerifier{}).ConfirmRentalOrder)
+	retryMethod := "cash"
+	paymentLabel := "PromptPay"
+	if paymentMethod == "cash" {
+		retryMethod = "promptpay"
+		paymentLabel = "เงินสด"
+	}
+	for _, method := range []string{paymentMethod, retryMethod} {
+		request := httptest.NewRequest(http.MethodPost, "/api/rentals/25/confirm", strings.NewReader(fmt.Sprintf(`{"offer_message_id":"11","payment_method":%q}`, method)))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer renter-token")
+		response, err := app.Test(request)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if !strings.Contains(sharedMessage, `"status":"confirmed"`) {
-			t.Fatalf("owner did not receive confirmed status: %q", sharedMessage)
+		var confirmed struct {
+			Status        string `json:"status"`
+			PaymentMethod string `json:"payment_method"`
+		}
+		err = json.NewDecoder(response.Body).Decode(&confirmed)
+		response.Body.Close()
+		if err != nil || response.StatusCode != http.StatusOK || confirmed.Status != "confirmed" || persistedStatus != "confirmed" || createCalls != 1 {
+			t.Fatalf("explicit confirmation/retry: HTTP=%d result=%v err=%v status=%s creates=%d", response.StatusCode, confirmed, err, persistedStatus, createCalls)
+		}
+		if confirmed.PaymentMethod != paymentMethod || persistedPaymentMethod != paymentMethod ||
+			!strings.Contains(sharedMessage, `"status":"confirmed"`) || !strings.Contains(sharedMessage, fmt.Sprintf(`"paymentMethod":%q`, paymentMethod)) ||
+			!strings.Contains(sharedMessage, "\nวิธีชำระเงิน: "+paymentLabel+"\n") {
+			t.Fatalf("confirmed payment: API=%q database=%q chat=%q, want %q", confirmed.PaymentMethod, persistedPaymentMethod, sharedMessage, paymentMethod)
 		}
 	}
 	sharedMessage, persistedStatus = "", "pending"
@@ -203,7 +258,7 @@ func TestConfirmRentalRejectsWrongParticipantOfferOrStatus(t *testing.T) {
 			}))
 			defer server.Close()
 			repository := supabase.NewSupabaseRentalRepository(supabaseclient.CreateClient(server.URL, "test-key"))
-			_, err := repository.ConfirmRental(context.Background(), tc.caller, 25, "11")
+			_, err := repository.ConfirmRental(context.Background(), tc.caller, 25, "11", "promptpay")
 			if !errors.Is(err, tc.want) || mutated {
 				t.Fatalf("error=%v want=%v mutated=%v", err, tc.want, mutated)
 			}

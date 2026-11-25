@@ -155,6 +155,9 @@ class BookingRequestData {
   bool get isPromptPay => paymentMethod == 'promptpay';
   String get paymentMethodLabel => isPromptPay ? 'PromptPay' : 'เงินสด';
 
+  DateTime get _rentalEndDate =>
+      rentalType == BookingRentalType.hourly ? startDate : endDate;
+
   /// แปลงข้อมูลคำขอเช่าเป็น Payload ข้อความสำหรับส่งในแชท
   String toChatMessagePayload() {
     final periodText = rentalType == BookingRentalType.daily
@@ -173,7 +176,7 @@ class BookingRequestData {
       'ownerName': item.ownerName,
       'rentalType': rentalType.name,
       'startDate': startDate.toIso8601String(),
-      'endDate': endDate.toIso8601String(),
+      'endDate': _rentalEndDate.toIso8601String(),
       'startHour': startTime.hour,
       'startMinute': startTime.minute,
       'endHour': endTime.hour,
@@ -313,21 +316,11 @@ $metaStartTag$jsonString$metaEndTag''';
     startTime.minute,
   );
 
-  DateTime get endDateTime => rentalType == BookingRentalType.daily
-      ? DateTime(
-          endDate.year,
-          endDate.month,
-          endDate.day,
-          startTime.hour,
-          startTime.minute,
-        )
-      : DateTime(
-          startDate.year,
-          startDate.month,
-          startDate.day,
-          endTime.hour,
-          endTime.minute,
-        );
+  DateTime get endDateTime {
+    final date = _rentalEndDate;
+    final time = rentalType == BookingRentalType.hourly ? endTime : startTime;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
 
   /// ราคาต่อหน่วยตามประเภทการเช่า
   double get unitRate =>

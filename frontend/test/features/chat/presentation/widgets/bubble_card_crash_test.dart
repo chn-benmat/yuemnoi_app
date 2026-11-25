@@ -3,8 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/services/booking_confirmation_tracker.dart';
 import 'package:frontend/core/widgets/rental_countdown_timer_widget.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
+import 'package:frontend/features/booking/presentation/widgets/booking_payment_method_card.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
 import 'package:frontend/features/chat/presentation/widgets/booking_request_bubble_card.dart';
+import 'package:frontend/features/profile/presentation/pages/rentals/rental_tracking_map_page.dart';
 import 'package:frontend/features/rental_return/presentation/pages/rental_return_page.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +22,83 @@ void main() {
 
   tearDown(() {
     BookingConfirmationTracker.clearMemoryCache();
+  });
+
+  testWidgets('confirmed rental opens pickup details and then the route', (
+    tester,
+  ) async {
+    final start = DateTime(2026, 11, 24);
+    final bookingData = BookingRequestData(
+      item: const BookingItemInfo(
+        id: 1,
+        title: 'กล้องทดสอบ',
+        imageUrl: '',
+        rating: 5,
+        reviewCount: 1,
+        hourlyRate: 150,
+        dailyRate: 700,
+        defaultLocation: 'เซ็นทรัลเวิลด์',
+      ),
+      rentalType: BookingRentalType.hourly,
+      startDate: start,
+      endDate: start,
+      startTime: const TimeOfDay(hour: 9, minute: 0),
+      endTime: const TimeOfDay(hour: 17, minute: 0),
+      location: 'เซ็นทรัลเวิลด์',
+      bookingId: 2072,
+      status: 'confirmed',
+      paymentMethod: 'promptpay',
+    );
+    final message = ChatMessage(
+      id: '71',
+      conversationId: 'conv-1',
+      senderId: 'owner-1',
+      message: bookingData.toChatMessagePayload(),
+      createdAt: start,
+      isMine: false,
+      isRead: true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: BookingRequestBubbleCard(
+              message: message,
+              bookingData: bookingData,
+              isOwner: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    final pickupDetails = find.text('รายละเอียดนัดรับ');
+    await tester.ensureVisible(pickupDetails);
+    await tester.tap(pickupDetails);
+    await tester.pumpAndSettle();
+
+    expect(find.text('รายละเอียดที่นัดรับ'), findsOneWidget);
+    expect(find.text('เซ็นทรัลเวิลด์'), findsOneWidget);
+    expect(find.text('ยืนยันวิธีชำระและดูเส้นทางนัดรับ'), findsNothing);
+    final paymentCard = find.byType(BookingPaymentMethodCard);
+    await tester.ensureVisible(paymentCard);
+    await tester.pumpAndSettle();
+    expect(find.text('PromptPay'), findsOneWidget);
+    expect(find.text('เงินสด'), findsNothing);
+
+    await tester.tap(find.text('ดูเส้นทางนัดรับบนแผนที่'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final map = tester.widget<RentalTrackingMapPage>(
+      find.byType(RentalTrackingMapPage),
+    );
+    expect(map.bookingData?.bookingId, 2072);
+    expect(map.bookingData?.paymentMethod, 'promptpay');
+
+    Navigator.of(tester.element(find.byType(RentalTrackingMapPage))).pop();
+    await tester.pumpAndSettle();
+    expect(find.text('รายละเอียดที่นัดรับ'), findsOneWidget);
   });
 
   testWidgets(

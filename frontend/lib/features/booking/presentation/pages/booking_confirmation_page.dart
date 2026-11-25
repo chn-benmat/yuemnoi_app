@@ -10,7 +10,6 @@ import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../chat/data/datasources/chat_remote_data_source.dart';
 import '../../domain/entities/booking_request_model.dart';
 import '../../domain/entities/rental_request.dart';
 import '../bloc/rental_request_cubit.dart';
@@ -39,9 +38,7 @@ class BookingConfirmationPage extends StatefulWidget {
 
 class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
   late BookingRequestData _bookingData;
-  String _selectedPaymentMethod = 'cash';
   bool _isConfirmationSheetOpen = false;
-  bool _isSavingPaymentMethod = false;
 
   @override
   void initState() {
@@ -62,7 +59,6 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
           latitude: 13.7115884,
           longitude: 100.4341077,
         );
-    _selectedPaymentMethod = _bookingData.paymentMethod;
     final destination = LocationService.resolveCoordinates(
       locationName: _bookingData.location,
       latitude: _bookingData.latitude ?? _bookingData.item.latitude,
@@ -93,91 +89,6 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
       offerMessageId: _bookingData.originalMessageId,
       bookingId: _bookingData.bookingId,
     );
-  }
-
-  Future<void> _savePaymentMethodAndOpenRoute() async {
-    if (_isSavingPaymentMethod || !mounted) return;
-    final bookingId = _bookingData.bookingId;
-    final messageId = _bookingData.originalMessageId;
-    final conversationId = _bookingData.conversationId;
-    if (bookingId == null || bookingId <= 0) {
-      showAppPopup(
-        context,
-        content: const Text('ไม่พบรายการเช่าสำหรับบันทึกวิธีชำระเงิน'),
-      );
-      return;
-    }
-    if (messageId == null || int.tryParse(messageId) == null) {
-      showAppPopup(
-        context,
-        content: const Text(
-          'ไม่พบข้อความคำขอเช่า กรุณากลับไปเปิดจากหน้าแชทอีกครั้ง',
-        ),
-      );
-      return;
-    }
-    if (!SupabaseConfig.isInitialized ||
-        SupabaseConfig.client.auth.currentUser == null) {
-      showAppPopup(
-        context,
-        content: const Text('กรุณาเข้าสู่ระบบอีกครั้งก่อนยืนยันวิธีชำระเงิน'),
-      );
-      return;
-    }
-
-    setState(() => _isSavingPaymentMethod = true);
-    final updatedBookingData = _bookingData.copyWith(
-      paymentMethod: _selectedPaymentMethod,
-      bookingId: bookingId,
-      status: 'confirmed',
-    );
-    try {
-      await SupabaseConfig.client.rpc(
-        'set_booking_payment_method',
-        params: {
-          'p_booking_id': bookingId,
-          'p_payment_method': _selectedPaymentMethod,
-        },
-      );
-    } catch (_) {
-      if (mounted) {
-        showAppPopup(
-          context,
-          content: const Text(
-            'บันทึกวิธีชำระเงินไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
-          ),
-        );
-      }
-      if (mounted) setState(() => _isSavingPaymentMethod = false);
-      return;
-    }
-
-    try {
-      await ChatRemoteDataSource().editMessage(
-        messageId: messageId,
-        newMessage: updatedBookingData.toChatMessagePayload(),
-        conversationId: conversationId,
-      );
-    } catch (_) {
-      if (mounted) {
-        showAppPopup(
-          context,
-          content: const Text(
-            'บันทึกวิธีชำระเงินแล้ว แต่ปรับปรุงข้อมูลในการสนทนาไม่สำเร็จ กรุณาลองอีกครั้ง',
-          ),
-        );
-      }
-      if (mounted) setState(() => _isSavingPaymentMethod = false);
-      return;
-    } finally {
-      if (mounted && _isSavingPaymentMethod) {
-        setState(() => _isSavingPaymentMethod = false);
-      }
-    }
-
-    if (!mounted) return;
-    setState(() => _bookingData = updatedBookingData);
-    await AppRoutes.openRentalTrackingMap(context, bookingData: _bookingData);
   }
 
   Future<void> _showConfirmation([int? pendingBookingId]) async {
@@ -322,7 +233,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'คุณเลือกชำระด้วย ${_selectedPaymentMethod == 'promptpay' ? 'พร้อมเพย์ (PromptPay)' : 'เงินสด (Cash)'} โดยจะชำระเงินในวันนัดรับของจริง หลังตรวจเช็กสภาพอุปกรณ์เรียบร้อยแล้วเท่านั้น',
+                      'คุณเลือกชำระด้วย ${_bookingData.isPromptPay ? 'พร้อมเพย์ (PromptPay)' : 'เงินสด (Cash)'} โดยจะชำระเงินในวันนัดรับของจริง หลังตรวจเช็กสภาพอุปกรณ์เรียบร้อยแล้วเท่านั้น',
                       style: const TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
                         fontSize: 12,
@@ -404,11 +315,6 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     _buildStepRow('01', 'นัดรับและตรวจสอบอุปกรณ์ตามที่ระบุ'),
                     const SizedBox(height: 8),
                     _buildStepRow('02', 'ชำระเงิน'),
-                    const SizedBox(height: 8),
-                    _buildStepRow(
-                      '03',
-                      'สแกน QR Code หรือใส่รหัส PIN เพื่อเริ่มการเช่า',
-                    ),
                   ],
                 ),
               ),
@@ -479,6 +385,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                           }
                           final confirmed = await cubit.confirm(
                             offerMessageId: messageId,
+                            paymentMethod: _bookingData.paymentMethod,
                           );
                           if (!confirmed) return;
                           // บันทึกในเครื่องหลัง server ยืนยันสำเร็จเท่านั้น การเปิดหรือปิดสรุปยังคง pending
@@ -581,28 +488,14 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                             ),
                             SizedBox(width: 12),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'ตรวจสอบรายละเอียดก่อนนัดรับ',
-                                    style: TextStyle(
-                                      fontFamily: AppTextStyles.fontFamily,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF065F46),
-                                    ),
-                                  ),
-                                  SizedBox(height: 2),
-                                  Text(
-                                    'ตรวจสอบวันเวลา สถานที่ ราคา และวิธีชำระเงินก่อนดูเส้นทาง',
-                                    style: TextStyle(
-                                      fontFamily: AppTextStyles.fontFamily,
-                                      fontSize: 12,
-                                      color: Color(0xFF047857),
-                                    ),
-                                  ),
-                                ],
+                              child: Text(
+                                'ยืนยันการนัดรับเรียบร้อยแล้ว',
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF065F46),
+                                ),
                               ),
                             ),
                           ],
@@ -635,19 +528,22 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     BookingPriceSummaryCard(bookingData: _bookingData),
                     const SizedBox(height: 18),
                     BookingPaymentMethodCard(
-                      selectedMethod: _selectedPaymentMethod,
-                      isEditable: !_isSavingPaymentMethod,
-                      onMethodChanged: (method) {
-                        setState(() {
-                          _selectedPaymentMethod = method;
-                          _bookingData = _bookingData.copyWith(
-                            paymentMethod: method,
-                          );
-                        });
-                      },
+                      selectedMethod: _bookingData.paymentMethod,
+                      isEditable: !widget.isDetailView,
+                      onMethodChanged: widget.isDetailView
+                          ? null
+                          : (method) {
+                              setState(() {
+                                _bookingData = _bookingData.copyWith(
+                                  paymentMethod: method,
+                                );
+                              });
+                            },
                     ),
-                    const SizedBox(height: 20),
-                    const BookingSecurityBadge(),
+                    if (!widget.isDetailView) ...[
+                      const SizedBox(height: 20),
+                      const BookingSecurityBadge(),
+                    ],
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -669,14 +565,13 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                             borderRadius: BorderRadius.circular(26),
                           ),
                         ),
-                        onPressed: _isSavingPaymentMethod
-                            ? null
-                            : _savePaymentMethodAndOpenRoute,
+                        onPressed: () => AppRoutes.openRentalTrackingMap(
+                          context,
+                          bookingData: _bookingData,
+                        ),
                         icon: const Icon(Icons.near_me_rounded, size: 20),
-                        label: Text(
-                          _isSavingPaymentMethod
-                              ? 'กำลังบันทึกวิธีชำระเงิน...'
-                              : 'ยืนยันวิธีชำระและดูเส้นทางนัดรับ',
+                        label: const Text(
+                          'ดูเส้นทางนัดรับบนแผนที่',
                           style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 15,

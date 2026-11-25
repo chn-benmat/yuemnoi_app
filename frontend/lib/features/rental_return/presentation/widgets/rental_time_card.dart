@@ -22,6 +22,9 @@ class RentalTimeCard extends StatelessWidget {
     final isNear = session.isNearDeadline;
     final isOverdue = session.isOverdue;
     final isCompleted = session.step == RentalReturnStep.completed;
+    final returnPoint = session.returnPoint;
+    final location = session.pickupLocation.trim();
+    final note = returnPoint?.note.trim() ?? '';
 
     Color badgeBgColor;
     Color badgeTextColor;
@@ -97,38 +100,44 @@ class RentalTimeCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: badgeBgColor,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              statusText,
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.fontFamily,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: badgeTextColor,
+                      SizedBox(
+                        width: double.infinity,
+                        child: Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: badgeBgColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                statusText,
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: badgeTextColor,
+                                ),
                               ),
                             ),
-                          ),
-                          Text(
-                            '#${session.orderNumber}',
-                            style: const TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 11,
-                              color: Color(0xFF94A3B8),
-                              fontWeight: FontWeight.w600,
+                            Text(
+                              '#${session.orderNumber}',
+                              style: const TextStyle(
+                                fontFamily: AppTextStyles.fontFamily,
+                                fontSize: 11,
+                                color: Color(0xFF94A3B8),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 5),
                       Text(
@@ -160,7 +169,7 @@ class RentalTimeCard extends StatelessWidget {
 
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
 
-          // ── กำหนดเวลาคืนและจุดส่งมอบ ──
+          // ── กำหนดเวลาคืนและจุดคืนสินค้า ──
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: const BoxDecoration(
@@ -171,6 +180,7 @@ class RentalTimeCard extends StatelessWidget {
               children: [
                 // แถวเวลาและ Countdown
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
                       isNear ? Icons.alarm_rounded : Icons.schedule_rounded,
@@ -181,51 +191,59 @@ class RentalTimeCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: RichText(
-                        text: TextSpan(
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 12.5,
-                            color: Color(0xFF475569),
-                          ),
-                          children: [
-                            const TextSpan(text: 'กำหนดคืน: '),
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          Text.rich(
                             TextSpan(
-                              text: session.endAtFormatted,
-                              style: const TextStyle(
+                              text: 'กำหนดคืน: ',
+                              children: [
+                                TextSpan(
+                                  text: session.endAtFormatted,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            style: const TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontSize: 12.5,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isNear
+                                  ? const Color(0xFFFEF3C7)
+                                  : isOverdue
+                                  ? const Color(0xFFFEE2E2)
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              session.remainingDurationText,
+                              style: TextStyle(
+                                fontFamily: AppTextStyles.fontFamily,
+                                fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A),
+                                color: isNear
+                                    ? const Color(0xFFB45309)
+                                    : isOverdue
+                                    ? const Color(0xFFDC2626)
+                                    : const Color(0xFF475569),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isNear
-                            ? const Color(0xFFFEF3C7)
-                            : isOverdue
-                            ? const Color(0xFFFEE2E2)
-                            : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        session.remainingDurationText,
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: isNear
-                              ? const Color(0xFFB45309)
-                              : isOverdue
-                              ? const Color(0xFFDC2626)
-                              : const Color(0xFF475569),
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -233,8 +251,8 @@ class RentalTimeCard extends StatelessWidget {
 
                 const SizedBox(height: 8),
 
-                // แถวจุดนัดส่งมอบ
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Icon(
                       Icons.place_outlined,
@@ -243,15 +261,23 @@ class RentalTimeCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        'จุดส่งมอบ: ${session.pickupLocation}',
+                      child: DefaultTextStyle(
                         style: const TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 12,
                           color: Color(0xFF64748B),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              location.isEmpty
+                                  ? 'ยังไม่มีข้อมูลจุดคืนสินค้า'
+                                  : 'จุดคืนสินค้า: $location',
+                            ),
+                            if (note.isNotEmpty) Text(note),
+                          ],
+                        ),
                       ),
                     ),
                   ],

@@ -10,7 +10,7 @@ import '../../widgets/support/contact_widgets.dart';
 class ContactScreen extends StatefulWidget {
   const ContactScreen({super.key});
 
-  static const String supportEmail = 'support@yuemnoi.co';
+  static const String supportEmail = 'yuemnoi.app@gmail.com';
   static const String supportPhone = '021234567';
   static const String supportPhoneDisplay = '02-123-4567';
 

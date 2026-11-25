@@ -18,6 +18,7 @@ class BookingPaymentMethodCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPromptPay = selectedMethod == 'promptpay';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -47,34 +48,31 @@ class BookingPaymentMethodCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ตัวเลือกที่ 1: เงินสด
-              _buildPaymentOption(
-                key: 'cash',
-                title: 'เงินสด',
-                subtitle: 'ชำระเป็นเงินสดโดยตรงเมื่อรับของ',
-                icon: Icons.payments_rounded,
-                iconColor: const Color(0xFF059669),
-                iconBgColor: const Color(0xFFECFDF5),
-                isSelected: selectedMethod == 'cash',
-                onTap: isEditable && onMethodChanged != null
-                    ? () => onMethodChanged!('cash')
-                    : null,
-              ),
-              const SizedBox(height: 12),
-
-              // ตัวเลือกที่ 2: PromptPay
-              _buildPaymentOption(
-                key: 'promptpay',
-                title: 'PromptPay',
-                subtitle: 'สแกน QR Code เพื่อโอนเงินเมื่อรับของ',
-                icon: Icons.qr_code_2_rounded,
-                iconColor: const Color(0xFF2563EB),
-                iconBgColor: const Color(0xFFEFF6FF),
-                isSelected: selectedMethod == 'promptpay',
-                onTap: isEditable && onMethodChanged != null
-                    ? () => onMethodChanged!('promptpay')
-                    : null,
-              ),
+              if (isEditable || !isPromptPay)
+                _buildPaymentOption(
+                  title: 'เงินสด',
+                  subtitle: 'ชำระเป็นเงินสดโดยตรงเมื่อรับของ',
+                  icon: Icons.payments_rounded,
+                  iconColor: const Color(0xFF059669),
+                  iconBgColor: const Color(0xFFECFDF5),
+                  isSelected: !isPromptPay,
+                  onTap: isEditable && onMethodChanged != null
+                      ? () => onMethodChanged!('cash')
+                      : null,
+                ),
+              if (isEditable) const SizedBox(height: 12),
+              if (isEditable || isPromptPay)
+                _buildPaymentOption(
+                  title: 'PromptPay',
+                  subtitle: 'สแกน QR Code เพื่อโอนเงินเมื่อรับของ',
+                  icon: Icons.qr_code_2_rounded,
+                  iconColor: const Color(0xFF2563EB),
+                  iconBgColor: const Color(0xFFEFF6FF),
+                  isSelected: isPromptPay,
+                  onTap: isEditable && onMethodChanged != null
+                      ? () => onMethodChanged!('promptpay')
+                      : null,
+                ),
               const SizedBox(height: 14),
 
               // คำแนะนำเสริมตามตัวเลือก
@@ -132,7 +130,6 @@ class BookingPaymentMethodCard extends StatelessWidget {
   }
 
   Widget _buildPaymentOption({
-    required String key,
     required String title,
     required String subtitle,
     required IconData icon,
@@ -197,24 +194,24 @@ class BookingPaymentMethodCard extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-
-            // ปุ่ม Radio Indicator
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected
-                      ? AppColors.primaryColor
-                      : const Color(0xFFCBD5E1),
-                  width: isSelected ? 6.5 : 1.8,
+            if (isEditable) ...[
+              const SizedBox(width: 8),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.primaryColor
+                        : const Color(0xFFCBD5E1),
+                    width: isSelected ? 6.5 : 1.8,
+                  ),
+                  color: Colors.white,
                 ),
-                color: Colors.white,
               ),
-            ),
+            ],
           ],
         ),
       ),

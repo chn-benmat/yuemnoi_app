@@ -18,6 +18,7 @@ import (
 type lifecycleRepository struct {
 	domain.RentalRepository
 	completeCalls int
+	receiptCalls  int
 	evidence      []domain.ItemImage
 }
 
@@ -29,6 +30,41 @@ func (r *lifecycleRepository) SubmitRentalEvidence(_ context.Context, _ string, 
 func (r *lifecycleRepository) CompleteRentalReturn(_ context.Context, user string, id int64, token string) (*domain.RentalOrder, error) {
 	r.completeCalls++
 	return nil, domain.ErrRentalReturnToken
+}
+
+func (r *lifecycleRepository) ConfirmRentalReceipt(_ context.Context, user string, id int64) (*domain.RentalOrder, error) {
+	r.receiptCalls++
+	if user != "renter" || id != 25 {
+		return nil, domain.ErrInvalidRental
+	}
+	return nil, domain.ErrRentalForbidden
+}
+
+func TestRentalReceiptRequiresCheckAndDelegatesAuthorization(t *testing.T) {
+	repo := &lifecycleRepository{}
+	app := ports.NewHTTPApp()
+	defer app.Shutdown()
+	app.Post("/rentals/:id/return-confirmation", ports.NewRentalHandler(repo, rentalConfirmationVerifier{}).ConfirmRentalReceipt)
+	for _, tc := range []struct {
+		body   string
+		status int
+		calls  int
+	}{
+		{body: `{"checked":false}`, status: 400, calls: 0},
+		{body: `{"checked":true,"user_id":"owner"}`, status: 403, calls: 1},
+	} {
+		request := httptest.NewRequest("POST", "/rentals/25/return-confirmation", strings.NewReader(tc.body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer renter-token")
+		response, err := app.Test(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != tc.status || repo.receiptCalls != tc.calls {
+			t.Fatalf("body=%s status=%d calls=%d", tc.body, response.StatusCode, repo.receiptCalls)
+		}
+	}
 }
 
 func TestLegacyReturnCannotCompleteWithoutServerIssuedCode(t *testing.T) {

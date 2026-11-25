@@ -55,7 +55,10 @@ class RentalRequestCubit extends Cubit<RentalRequestState> {
     }
   }
 
-  Future<bool> confirm({required String offerMessageId}) async {
+  Future<bool> confirm({
+    required String offerMessageId,
+    required String paymentMethod,
+  }) async {
     final id = state.rentalId;
     if (id == null ||
         state.status == RentalRequestStatus.confirming ||
@@ -73,6 +76,7 @@ class RentalRequestCubit extends Cubit<RentalRequestState> {
       final result = await _confirmRentalRequest.execute(
         rentalId: id,
         offerMessageId: offerMessageId,
+        paymentMethod: paymentMethod,
       );
       if (isClosed) return false;
       emit(

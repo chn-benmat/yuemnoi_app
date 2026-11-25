@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/auth/presentation/bloc/auth_bloc.dart';
@@ -8,7 +9,6 @@ import 'package:frontend/features/rental_return/domain/entities/rental_return_se
 import 'package:frontend/features/rental_return/domain/repositories/rental_return_repository.dart';
 import 'package:frontend/features/rental_return/presentation/pages/rental_return_page.dart';
 import 'package:frontend/features/rental_return/presentation/widgets/lender_inspection_view.dart';
-import 'package:frontend/features/rental_return/presentation/widgets/live_camera_capture_sheet.dart';
 import 'package:frontend/features/rental_return/presentation/widgets/role_switcher_bar.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:mocktail/mocktail.dart';
@@ -20,8 +20,14 @@ class _MockRentalReturnRepository extends Mock
 class _MockAuthBloc extends Mock implements AuthBloc {}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUpAll(() async {
     await initializeDateFormatting('th', null);
+    await (FontLoader('Prompt')
+          ..addFont(rootBundle.load('assets/fonts/Prompt-Regular.ttf'))
+          ..addFont(rootBundle.load('assets/fonts/Prompt-Bold.ttf')))
+        .load();
   });
 
   setUp(() {
@@ -63,8 +69,11 @@ void main() {
         expect(find.text('การคืนอุปกรณ์'), findsOneWidget);
         expect(find.text('รับมอบอุปกรณ์คืน'), findsNothing);
 
-        // 3. Should display LiveCameraCaptureSheet for Renter
-        expect(find.byType(LiveCameraCaptureSheet), findsOneWidget);
+        // 3. ผู้เช่ารอให้ร้านค้าตรวจรับ
+        expect(find.text('ส่งภาพยืนยันให้ร้านค้า'), findsNothing);
+        expect(find.byIcon(Icons.qr_code_scanner_rounded), findsNothing);
+        expect(find.byType(TextField), findsNothing);
+        expect(find.text('รอร้านค้ายืนยันรับอุปกรณ์คืน'), findsOneWidget);
         expect(find.byType(LenderInspectionView), findsNothing);
 
         // 4. Test popup actions should not exist
@@ -92,19 +101,18 @@ void main() {
 
         // 3. Should display LenderInspectionView for Lender
         expect(find.byType(LenderInspectionView), findsOneWidget);
-        expect(find.byType(LiveCameraCaptureSheet), findsNothing);
+        expect(find.text('ส่งภาพยืนยันให้ร้านค้า'), findsNothing);
+        expect(find.text('ยืนยันการตรวจสภาพด้านบนก่อน'), findsNothing);
       },
     );
 
-    testWidgets('submitted evidence cannot be sent again after reload', (
+    testWidgets('renter sees completion after the lender confirms receipt', (
       tester,
     ) async {
-      final submitted = RentalReturnSession.createMockSession().copyWith(
-        step: RentalReturnStep.lenderInspecting,
-      );
+      var session = RentalReturnSession.createMockSession();
       when(
         () => mockRepository.getReturnSession(any()),
-      ).thenAnswer((_) async => submitted);
+      ).thenAnswer((_) async => session);
       await tester.pumpWidget(
         MaterialApp(
           home: RentalReturnPage(isLender: false, repository: mockRepository),
@@ -112,29 +120,26 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
-      final button = tester.widget<ElevatedButton>(
-        find.ancestor(
-          of: find.text('ส่งภาพเรียบร้อยแล้ว'),
-          matching: find.byType(ElevatedButton),
-        ),
-      );
-      expect(button.onPressed, isNull);
+      expect(find.text('รอร้านค้ายืนยันรับอุปกรณ์คืน'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
+
+      session = session.copyWith(step: RentalReturnStep.completed);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('คืนอุปกรณ์สำเร็จ!'), findsOneWidget);
     });
 
-    testWidgets('lender sees completion after polling while QR is open', (
+    testWidgets('lender completes the return directly after checking receipt', (
       tester,
     ) async {
-      final initial = RentalReturnSession.createMockSession().copyWith(
-        step: RentalReturnStep.merchantQrReady,
-        merchantQrToken: 'return-token',
-        merchantOtp: '123456',
-      );
-      var completed = false;
-      when(() => mockRepository.getReturnSession(any())).thenAnswer(
-        (_) async => completed
-            ? initial.copyWith(step: RentalReturnStep.completed)
-            : initial,
-      );
+      final rental = RentalReturnSession.createMockSession();
+      when(
+        () => mockRepository.getReturnSession(any()),
+      ).thenAnswer((_) async => rental);
+      when(
+        () => mockRepository.confirmMerchantReceipt(rentalId: rental.rentalId),
+      ).thenAnswer((_) async {});
       await tester.pumpWidget(
         MaterialApp(
           home: RentalReturnPage(isLender: true, repository: mockRepository),
@@ -142,16 +147,18 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
-      await tester.tap(find.text('เปิดแสดง QR Code ให้ลูกค้าสแกน'));
+      final inspectionButton = find.widgetWithText(
+        ElevatedButton,
+        'ยืนยันรับเครื่อง',
+      );
+      expect(tester.widget<ElevatedButton>(inspectionButton).onPressed, isNull);
+      await tester.tap(find.byType(Checkbox));
+      await tester.pump();
+      await tester.tap(inspectionButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('QR Code คืนอุปกรณ์'), findsOneWidget);
-      completed = true;
-      await tester.pump(const Duration(seconds: 10));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('QR Code คืนอุปกรณ์'), findsNothing);
-      expect(find.text('คืนอุปกรณ์สำเร็จเรียบร้อย!'), findsOneWidget);
+      expect(find.text('คืนอุปกรณ์สำเร็จ!'), findsOneWidget);
+      expect(find.text('รหัสยืนยันการคืน'), findsNothing);
     });
 
     testWidgets(

@@ -187,12 +187,20 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     final cachedStatus = await BookingConfirmationTracker.getStatus(
       messageId: widget.message.id,
     );
+    final targetBookingId =
+        widget.bookingData.bookingId ?? cachedBookingId ?? _bookingId;
+    final hasSharedStatus =
+        widget.bookingData.status != null || widget.initialStatus != null;
+    // ข้อความส่งมอบหรือคืนของเก่าในห้องแชตใช้กับคำขอที่ยังไม่มีเลขรายการไม่ได้
+    final useLegacyStatus =
+        !hasSharedStatus && targetBookingId != null && targetBookingId > 0;
 
     if (mounted) {
       setState(() {
-        if (isLocallyConfirmed ||
-            widget.isHandoverCompleted ||
-            widget.isReturnCompleted) {
+        if (useLegacyStatus &&
+            (isLocallyConfirmed ||
+                widget.isHandoverCompleted ||
+                widget.isReturnCompleted)) {
           _isConfirmed = true;
         }
         if (widget.bookingData.bookingId == null &&
@@ -200,20 +208,15 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             cachedBookingId > 0) {
           _bookingId = cachedBookingId;
         }
-        final hasSharedStatus =
-            widget.bookingData.status != null || widget.initialStatus != null;
         if (_rentalStatus == 'completed' ||
-            (!hasSharedStatus &&
+            (useLegacyStatus &&
                 (cachedStatus == 'completed' || widget.isReturnCompleted))) {
           _rentalStatus = 'completed';
           _countdownTimer?.cancel();
-        } else if (widget.isHandoverCompleted &&
-            widget.bookingData.status == null &&
-            widget.initialStatus == null) {
+        } else if (useLegacyStatus && widget.isHandoverCompleted) {
           _rentalStatus = 'active';
           _startCountdownTimer();
-        } else if (widget.bookingData.status == null &&
-            widget.initialStatus == null &&
+        } else if (useLegacyStatus &&
             cachedStatus != null &&
             cachedStatus.isNotEmpty) {
           _rentalStatus = cachedStatus;
@@ -240,9 +243,6 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
       final client = SupabaseConfig.client;
       final currentUserId = client.auth.currentUser?.id;
       if (currentUserId == null) return;
-
-      final targetBookingId =
-          widget.bookingData.bookingId ?? cachedBookingId ?? _bookingId;
 
       if (targetBookingId != null && targetBookingId > 0) {
         final exactBooking = await client
@@ -284,7 +284,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
           } else if (rawDbStatus == 'cancelled') {
             resolvedStatus = 'cancelled';
           } else if (rawDbStatus == 'confirmed') {
-            resolvedStatus = widget.isHandoverCompleted
+            resolvedStatus = useLegacyStatus && widget.isHandoverCompleted
                 ? 'active'
                 : 'confirmed';
           } else {
@@ -360,9 +360,11 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   void _openMeetupLocation(BuildContext context) {
     final bookingData = widget.bookingData;
     final isOwner = _checkIsOwner();
+    final bookingId = _bookingId ?? bookingData.bookingId;
     AppRoutes.openRentalTrackingMap(
       context,
       isOwner: isOwner,
+      pickupOnly: bookingId == null || bookingId <= 0,
       trackingArgs: {
         'itemTitle': bookingData.item.title,
         'itemImageUrl': bookingData.item.imageUrl,
@@ -377,7 +379,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
         'periodText': bookingData.formattedPeriodSummary,
         'totalPrice': bookingData.totalPrice,
         'statusCode': _rentalStatus,
-        'bookingId': _bookingId ?? bookingData.bookingId,
+        'bookingId': bookingId,
         'conversationId':
             bookingData.conversationId ?? widget.message.conversationId,
         'isOwner': isOwner,
@@ -398,10 +400,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
           widget.bookingData.conversationId ?? widget.message.conversationId,
     );
 
-    // ผู้เช่าตรวจสอบสรุปและวิธีชำระก่อน ส่วนผู้ปล่อยเช่าหรือรายการที่เริ่มเช่าแล้วเปิดแผนที่ได้เลย
+    // ผู้เช่าดูรายละเอียดนัดรับก่อน ส่วนผู้ปล่อยเช่าหรือรายการที่เริ่มเช่าแล้วเปิดแผนที่ได้เลย
     if (_isConfirmed) {
       if (!isOwner && _rentalStatus == 'confirmed') {
-        // ให้ผู้เช่าตรวจสอบวันเวลา สถานที่ ราคา และเลือกวิธีชำระก่อนเปิดแผนที่
         await AppRoutes.openBookingConfirmation(
           context,
           bookingData: attachedData,
@@ -670,10 +671,8 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                 ),
-                onPressed: () => AppRoutes.openItemDetail(
-                  context,
-                  itemId: item.id,
-                ),
+                onPressed: () =>
+                    AppRoutes.openItemDetail(context, itemId: item.id),
                 icon: const Icon(Icons.open_in_new_rounded, size: 15),
                 label: const Text(
                   'ดูรายละเอียดสินค้า',

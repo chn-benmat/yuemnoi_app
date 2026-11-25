@@ -132,6 +132,41 @@ void main() {
     expect(find.text('ไม่พบข้อมูลติดต่อของรายการเช่านี้'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+  for (final bookingId in <int?>[null, 25]) {
+    testWidgets(
+      'does not load a route before the map can open (ID: $bookingId)',
+      (tester) async {
+        final service = FakeLocationService();
+        addTearDown(service.updates.close);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RentalTrackingMapPage(
+              requireBookingId: true,
+              bookingId: bookingId,
+              destinationLat: 13.71,
+              destinationLng: 100.43,
+              locationService: service,
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.text(
+            bookingId == null
+                ? 'ไม่พบรายการเช่านี้ กรุณาเปิดหน้าจากรายการเช่าของคุณ'
+                : 'กรุณาเข้าสู่ระบบเพื่อดูรายละเอียดนัดรับ',
+          ),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        expect(service.routeCalls, 0);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
   Future<void> open(WidgetTester tester, FakeLocationService service) async {
     await tester.pumpWidget(
       MaterialApp(

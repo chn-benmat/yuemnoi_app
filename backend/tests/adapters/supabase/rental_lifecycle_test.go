@@ -17,6 +17,69 @@ import (
 	sb "github.com/nedpals/supabase-go"
 )
 
+func TestConfirmRentalPaymentRequiresActiveBooking(t *testing.T) {
+	for _, status := range []string{"confirmed", "active"} {
+		t.Run(status, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var args map[string]any
+				if r.URL.Path != "/rest/v1/rpc/rental_handover_payment" ||
+					json.NewDecoder(r.Body).Decode(&args) != nil ||
+					args["p_confirm"] != true || args["p_actor"] != "owner" || args["p_booking"] != float64(25) {
+					t.Error("payment confirmation must use the authenticated owner and one database RPC")
+				}
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintf(w, `{"payment_method":"cash","status":%q,"payment_confirmed":true}`, status)
+			}))
+			defer server.Close()
+			repo := supabase.NewSupabaseRentalRepository(sb.CreateClient(server.URL, "test-key")).(domain.RentalHandoverRepository)
+			payment, err := repo.HandoverPayment(context.Background(), "owner", 25, true)
+			if status == "confirmed" && err == nil {
+				t.Fatal("payment confirmation must only succeed once the rental is active")
+			}
+			if status == "active" && (err != nil || payment.Status != "active" || !payment.PaymentConfirmed) {
+				t.Fatalf("active rental was not returned: payment=%+v err=%v", payment, err)
+			}
+		})
+	}
+}
+
+func TestPromptPayNationalIDEncryptedBeforeDatabaseWrite(t *testing.T) {
+	const nationalID = "1234567890121"
+	var ciphertext string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var args map[string]any
+		if r.URL.Path != "/rest/v1/rpc/rental_handover_payment" || json.NewDecoder(r.Body).Decode(&args) != nil {
+			t.Error("unexpected handover payment RPC")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if value, supplied := args["p_national_id_ciphertext"]; supplied {
+			ciphertext, _ = value.(string)
+			if ciphertext == "" || strings.Contains(ciphertext, nationalID) || args["p_promptpay_phone"] != nil {
+				t.Error("request must carry only encrypted account data")
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"status":"confirmed","payment_method":"promptpay","can_collect_payment":true,"national_id_ciphertext":%q}`, ciphertext)
+	}))
+	defer server.Close()
+
+	keys := supabase.RentalRepositoryKeys{PromptPayEncryption: []byte(strings.Repeat("x", 32))}
+	repo := supabase.NewSupabaseRentalRepository(sb.CreateClient(server.URL, "test-key"), keys).(domain.RentalHandoverRepository)
+	ctx := context.Background()
+	saved, err := repo.SavePromptPayAccount(ctx, "owner", 25, "", nationalID)
+	if err != nil || saved.PromptPayNationalID != nationalID {
+		t.Fatalf("saving encrypted account failed: %v", err)
+	}
+	saved, err = repo.HandoverPayment(ctx, "owner", 26, false)
+	if err != nil || saved.PromptPayNationalID != nationalID {
+		t.Fatalf("reading encrypted account failed: %v", err)
+	}
+	if _, err := repo.HandoverPayment(ctx, "different-owner", 27, false); err == nil {
+		t.Fatal("a different account must not be able to decrypt the saved national ID")
+	}
+}
+
 func TestRentalReturnUsesServerChallengeAndNeverLeaksRawSecretsToDatabase(t *testing.T) {
 	var tokenHash, otpHash string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

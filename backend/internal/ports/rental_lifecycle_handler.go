@@ -108,7 +108,7 @@ func (h *RentalHandler) InspectRentalReturn(c fiber.Ctx) error {
 		Checked bool `json:"checked"`
 	}
 	if c.Bind().JSON(&req) != nil || !req.Checked {
-		return c.Status(400).JSON(fiber.Map{"error": "กรุณายืนยันว่าตรวจอุปกรณ์และหลักฐานครบแล้ว"})
+		return c.Status(400).JSON(fiber.Map{"error": "กรุณายืนยันว่าตรวจรับอุปกรณ์แล้ว"})
 	}
 	result, err := h.rentalRepository.InspectRentalReturn(c.Context(), user, id)
 	if err != nil {
@@ -116,6 +116,28 @@ func (h *RentalHandler) InspectRentalReturn(c fiber.Ctx) error {
 	}
 	c.Set("Cache-Control", "private, no-store")
 	return c.JSON(result)
+}
+
+func (h *RentalHandler) ConfirmRentalReceipt(c fiber.Ctx) error {
+	user, ok := authenticatedUserID(c, h.tokenVerifier)
+	if !ok {
+		return nil
+	}
+	id, ok := parseRentalID(c)
+	if !ok {
+		return nil
+	}
+	var req struct {
+		Checked bool `json:"checked"`
+	}
+	if c.Bind().JSON(&req) != nil || !req.Checked {
+		return c.Status(400).JSON(fiber.Map{"error": "กรุณายืนยันว่าตรวจรับอุปกรณ์แล้ว"})
+	}
+	order, err := h.rentalRepository.ConfirmRentalReceipt(c.Context(), user, id)
+	if err != nil {
+		return writeRentalStatusError(c, err)
+	}
+	return c.JSON(order)
 }
 
 func (h *RentalHandler) CancelRental(c fiber.Ctx) error {

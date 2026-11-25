@@ -33,7 +33,9 @@ class ChatMessagesCache {
   }) {
     final userId = ownerId ?? _userId;
     if (userId.isEmpty || userId != _userId) return;
-    final confirmed = messages.where((m) => !m.id.startsWith('temp_')).toList();
+    final confirmed = _uniqueMessages(
+      messages.where((m) => !m.id.startsWith('temp_')),
+    );
     final recent = confirmed.length > 50
         ? confirmed.sublist(confirmed.length - 50)
         : confirmed;
@@ -52,9 +54,10 @@ class ChatMessagesCache {
   }) {
     final userId = currentUserId ?? _userId;
     if (userId.isEmpty) return null;
-    return AppCache.readMemorySnapshot('chat', conversationId, userId)
-        ?.map((row) => ChatMessageModel.fromJson(row, currentUserId: userId))
-        .toList();
+    return _decodeSnapshot(
+      AppCache.readMemorySnapshot('chat', conversationId, userId),
+      userId,
+    );
   }
 
   static Future<void> _persist(
@@ -91,15 +94,29 @@ class ChatMessagesCache {
       if (revision != AppCache.scopeRevision(currentUserId)) return null;
       if (rows != null)
         AppCache.rememberSnapshot('chat', conversationId, currentUserId, rows);
-      return rows
-          ?.map(
-            (row) =>
-                ChatMessageModel.fromJson(row, currentUserId: currentUserId),
-          )
-          .toList();
+      return _decodeSnapshot(rows, currentUserId);
     } catch (_) {
       return null;
     }
+  }
+
+  static List<ChatMessage>? _decodeSnapshot(
+    List<Map<String, dynamic>>? rows,
+    String userId,
+  ) {
+    if (rows == null) return null;
+    // แคชจากเวอร์ชันก่อนอาจมีข้อความ ID ซ้ำจาก realtime
+    return _uniqueMessages(
+      rows.map((row) => ChatMessageModel.fromJson(row, currentUserId: userId)),
+    );
+  }
+
+  static List<ChatMessage> _uniqueMessages(Iterable<ChatMessage> messages) {
+    final seenIds = <String>{};
+    return [
+      for (final message in messages)
+        if (seenIds.add(message.id)) message,
+    ];
   }
 
   static void clear() {

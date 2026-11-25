@@ -4,6 +4,10 @@ import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/network/api_client.dart';
+import 'package:frontend/core/network/auth_session.dart';
+import 'package:frontend/features/booking/data/datasources/rental_request_remote_data_source.dart';
+import 'package:frontend/features/booking/data/repositories/rental_request_repository_impl.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/booking/domain/entities/rental_request.dart';
 import 'package:frontend/features/booking/domain/repositories/rental_request_repository.dart';
@@ -14,7 +18,10 @@ import 'package:frontend/features/booking/presentation/pages/booking_confirmatio
 import 'package:frontend/core/navigation/app_routes.dart';
 import 'package:frontend/core/services/booking_confirmation_tracker.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class MockRentalApiClient extends Mock implements ApiClient {}
 
 class FakeRentalRequestRepository implements RentalRequestRepository {
   RentalRequestResult? result;
@@ -31,6 +38,7 @@ class FakeRentalRequestRepository implements RentalRequestRepository {
   Future<RentalRequestResult> confirm({
     required int rentalId,
     required String offerMessageId,
+    required String paymentMethod,
   }) async {
     confirmCalls++;
     confirmedRentalId = rentalId;
@@ -62,7 +70,7 @@ final draft = RentalRequestDraft(
   pickupLocation: 'บางแค',
 );
 
-RentalRequestCubit buildCubit(FakeRentalRequestRepository repository) {
+RentalRequestCubit buildCubit(RentalRequestRepository repository) {
   return RentalRequestCubit(
     submitRentalRequest: SubmitRentalRequestUseCase(repository),
     repository: repository,
@@ -103,14 +111,23 @@ void main() {
       await cubit.submit(draft);
       expect(cubit.state.status, RentalRequestStatus.success);
       expect(repository.confirmCalls, 0);
-      expect(await cubit.confirm(offerMessageId: '11'), isFalse);
+      expect(
+        await cubit.confirm(offerMessageId: '11', paymentMethod: 'cash'),
+        isFalse,
+      );
       expect(cubit.state.rentalId, 21);
       expect(cubit.state.status, RentalRequestStatus.failure);
       repository.confirmError = null;
-      expect(await cubit.confirm(offerMessageId: '11'), isTrue);
+      expect(
+        await cubit.confirm(offerMessageId: '11', paymentMethod: 'cash'),
+        isTrue,
+      );
       expect(cubit.state.status, RentalRequestStatus.confirmed);
       expect(cubit.state.rentalStatus, 'confirmed');
-      expect(await cubit.confirm(offerMessageId: '11'), isFalse);
+      expect(
+        await cubit.confirm(offerMessageId: '11', paymentMethod: 'cash'),
+        isFalse,
+      );
       expect(repository.submitCalls, 1);
       expect(repository.confirmCalls, 2);
       expect(repository.confirmedRentalId, 21);
@@ -127,9 +144,12 @@ void main() {
       final cubit = buildCubit(repository);
       addTearDown(cubit.close);
       await cubit.submit(draft);
-      final first = cubit.confirm(offerMessageId: '11');
+      final first = cubit.confirm(offerMessageId: '11', paymentMethod: 'cash');
       expect(cubit.state.status, RentalRequestStatus.confirming);
-      expect(await cubit.confirm(offerMessageId: '11'), isFalse);
+      expect(
+        await cubit.confirm(offerMessageId: '11', paymentMethod: 'cash'),
+        isFalse,
+      );
       expect(repository.confirmCalls, 1);
       repository.confirmation!.complete(
         const RentalRequestResult(id: 21, status: 'pending'),
@@ -261,12 +281,41 @@ void main() {
     },
   );
 
-  testWidgets('success sheet opens status once without locking the navigator', (
+  testWidgets('confirming PromptPay sends it before returning to chat', (
     tester,
   ) async {
-    final repository = FakeRentalRequestRepository()
-      ..result = const RentalRequestResult(id: 21, status: 'pending');
-    final cubit = buildCubit(repository);
+    final client = MockRentalApiClient();
+    AuthSession.saveAccessToken('test-token');
+    addTearDown(AuthSession.clear);
+    when(
+      () => client.post(
+        '/api/rentals',
+        data: any(named: 'data'),
+        headers: any(named: 'headers'),
+      ),
+    ).thenAnswer(
+      (_) async => const ApiResponse(
+        statusCode: 201,
+        data: {'id': 21, 'status': 'pending'},
+      ),
+    );
+    when(
+      () => client.post(
+        '/api/rentals/21/confirm',
+        data: any(named: 'data'),
+        headers: any(named: 'headers'),
+      ),
+    ).thenAnswer(
+      (_) async => const ApiResponse(
+        statusCode: 200,
+        data: {'id': 21, 'status': 'confirmed', 'payment_method': 'promptpay'},
+      ),
+    );
+    final cubit = buildCubit(
+      RentalRequestRepositoryImpl(
+        RentalRequestRemoteDataSource(client: client),
+      ),
+    );
     addTearDown(cubit.close);
     final booking = BookingRequestData(
       item: const BookingItemInfo(
@@ -286,16 +335,19 @@ void main() {
       location: 'Pickup',
       originalMessageId: '11',
     );
+    bool? confirmed;
     final router = GoRouter(
       routes: [
         GoRoute(
           path: '/',
           builder: (context, state) => Scaffold(
             body: TextButton(
-              onPressed: () => AppRoutes.openBookingConfirmation(
-                context,
-                bookingData: booking,
-              ),
+              onPressed: () async {
+                confirmed = await AppRoutes.openBookingConfirmation(
+                  context,
+                  bookingData: booking,
+                );
+              },
               child: const Text('open confirmation'),
             ),
           ),
@@ -309,16 +361,14 @@ void main() {
             ),
           ),
         ),
-        GoRoute(
-          path: AppRoutes.rentalStatus,
-          builder: (_, state) =>
-              const Scaffold(body: Text('rental status destination')),
-        ),
       ],
     );
     addTearDown(router.dispose);
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     await tester.tap(find.text('open confirmation'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('PromptPay'));
+    await tester.tap(find.text('PromptPay'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(
       find.byKey(const ValueKey('submit-rental-request-button')),
@@ -327,7 +377,13 @@ void main() {
       find.byKey(const ValueKey('submit-rental-request-button')),
     );
     await tester.pumpAndSettle();
-    expect(repository.confirmCalls, 0);
+    verifyNever(
+      () => client.post(
+        '/api/rentals/21/confirm',
+        data: any(named: 'data'),
+        headers: any(named: 'headers'),
+      ),
+    );
     expect(
       await BookingConfirmationTracker.isConfirmed(messageId: '11'),
       isFalse,
@@ -338,17 +394,24 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('confirm-rental-button')));
     await tester.pumpAndSettle();
+    final confirmationBody = verify(
+      () => client.post(
+        '/api/rentals/21/confirm',
+        data: captureAny(named: 'data'),
+        headers: {'Authorization': 'Bearer test-token'},
+      ),
+    ).captured.single;
+    expect(confirmationBody, {
+      'offer_message_id': '11',
+      'payment_method': 'promptpay',
+    });
     expect(tester.takeException(), isNull);
-    expect(find.text('rental status destination'), findsOneWidget);
-    expect(repository.confirmCalls, 1);
+    expect(confirmed, isTrue);
+    expect(find.text('open confirmation'), findsOneWidget);
     expect(
       await BookingConfirmationTracker.isConfirmed(messageId: '11'),
       isTrue,
     );
-    router.pop();
-    await tester.pumpAndSettle();
-    expect(find.text('open confirmation'), findsOneWidget);
-    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

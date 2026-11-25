@@ -8,13 +8,14 @@ import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../../core/constants/colors.dart';
+import '../../../../../core/models/pickup_location.dart';
 import '../../../../../core/network/auth_session.dart';
 import '../../../../../core/utils/auth_guard.dart';
 import '../../../../../core/services/location_service.dart';
 import '../../../../../core/services/phone_call_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../booking/domain/entities/booking_request_model.dart';
-import '../../widgets/rentals/rental_handover_modal.dart';
+import '../../widgets/rentals/rental_pickup_payment_modal.dart';
 import '../../bloc/rental_route_cubit.dart';
 import '../../../data/datasources/rental_contact_remote_data_source.dart';
 import '../../../../chat/data/datasources/chat_remote_data_source.dart';
@@ -37,6 +38,8 @@ class RentalTrackingMapPage extends StatefulWidget {
   final DateTime? startDate;
   final bool? isOwner;
   final bool requireBookingId;
+  final bool pickupOnly;
+  final PickupLocation? returnPoint;
   final LocationService? locationService;
   final RentalContactRemoteDataSource? contactDataSource;
   final PhoneCallService phoneCallService;
@@ -60,6 +63,8 @@ class RentalTrackingMapPage extends StatefulWidget {
     this.startDate,
     this.isOwner,
     this.requireBookingId = false,
+    this.pickupOnly = false,
+    this.returnPoint,
     this.locationService,
     this.contactDataSource,
     this.phoneCallService = const UrlPhoneCallService(),
@@ -79,6 +84,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
 
   LatLng? _userLocation;
   late LatLng _destinationLocation;
+  late final bool _hasDestinationCoordinates;
   DrivingRouteResult? _routeResult;
 
   bool _isLoadingRoute = true;
@@ -92,16 +98,16 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   late String? _resolvedImageUrl;
   late String _resolvedLocation;
   late String? _resolvedLocationNote;
-  late String _resolvedOwnerName;
   late String _resolvedPeriod;
   late double _resolvedPrice;
   late String _currentStatusCode;
   late bool _isOwner;
-  int _renterHandoverStep = 0;
+  int _renterPaymentStep = 0;
 
-  // Routes opened from a chat bubble carry the booking ID in BookingRequestData,
-  // while routes opened from rental status pass it as a separate argument.
-  // Resolve one canonical ID so both participants generate the same PIN.
+  bool get _isReturn => widget.returnPoint != null;
+  bool get _showRentalActions => !_isReturn && !widget.pickupOnly;
+
+  // หน้าจากแชทส่ง ID ใน bookingData ส่วนหน้าสถานะส่ง ID แยก
   int? get _resolvedBookingId =>
       widget.bookingId ?? widget.bookingData?.bookingId;
 
@@ -124,7 +130,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     return startDay.difference(today).inDays;
   }
 
-  void _openPaymentOrHandover() {
+  void _openPayment() async {
     if (_currentStatusCode != 'confirmed') {
       showAppPopup(
         context,
@@ -162,7 +168,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
               ),
               const SizedBox(width: 8),
               Text(
-                _isOwner ? 'ยังไม่ถึงเวลานัดส่งมอบ' : 'ยังไม่ถึงเวลาเริ่มเช่า',
+                'ยังไม่ถึงเวลาเริ่มเช่า',
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontWeight: FontWeight.bold,
@@ -172,7 +178,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
             ],
           ),
           content: Text(
-            'กำหนดเริ่มเช่า ${_startDate != null ? DateFormat('d MMMM yyyy เวลา HH:mm', 'th').format(_startDate!.toLocal()) : 'ตามที่ตกลง'} น.\n\nระบบจะเปิดให้ยืนยันส่งมอบเมื่อถึงเวลานัด เพื่อความปลอดภัยของทั้งสองฝ่าย',
+            'กำหนดเริ่มเช่า ${_startDate != null ? DateFormat('d MMMM yyyy เวลา HH:mm', 'th').format(_startDate!.toLocal()) : 'ตามที่ตกลง'} น.\n\nระบบจะเปิดให้ดำเนินการชำระเงินเมื่อถึงเวลานัด',
             style: const TextStyle(
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 13.5,
@@ -196,39 +202,30 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       return;
     }
 
-    _showHandoverModal();
-  }
-
-  void _showHandoverModal() {
-    RentalHandoverModal.show(
+    final status = await RentalPickupPaymentModal.show(
       context,
       bookingId: _resolvedBookingId,
       conversationId:
           widget.conversationId ?? widget.bookingData?.conversationId,
       itemId: widget.bookingData?.item.id,
       itemTitle: _resolvedTitle,
-      itemImageUrl: _resolvedImageUrl,
-      ownerName: _resolvedOwnerName,
-      renterName: 'ผู้เช่า',
       totalPrice: _resolvedPrice,
       paymentMethod: widget.bookingData?.paymentMethod ?? 'promptpay',
       initialIsOwner: _isOwner,
-      initialStep: _renterHandoverStep,
+      initialStep: _renterPaymentStep,
       onStepChanged: (step) {
         if (mounted) {
           setState(() {
-            _renterHandoverStep = step;
+            _renterPaymentStep = step;
           });
         }
       },
-      onHandoverSuccess: (newStatus) {
-        if (!mounted) return;
-        setState(() {
-          _currentStatusCode = newStatus;
-          _renterHandoverStep = 0;
-        });
-      },
     );
+    if (!mounted || status == null) return;
+    setState(() {
+      _currentStatusCode = status;
+      _renterPaymentStep = 0;
+    });
   }
 
   @override
@@ -265,7 +262,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
           if (mounted) _fitBoundsToRoute();
         });
     });
-    if (_hasDestinationCoordinates) _initLocationsAndRoute();
   }
 
   @override
@@ -286,12 +282,16 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
 
   void _resolveInitialData() {
     final b = widget.bookingData;
+    final returnPoint = widget.returnPoint;
     _resolvedTitle = b?.item.title ?? widget.itemTitle ?? 'อุปกรณ์เช่า';
     _resolvedImageUrl = b?.item.imageUrl ?? widget.itemImageUrl;
-    _resolvedLocation = b?.location ?? widget.pickupLocation ?? 'สยามพารากอน';
-    _resolvedLocationNote = b?.locationNote ?? widget.pickupNote;
-    _resolvedOwnerName =
-        b?.item.ownerName ?? widget.ownerName ?? 'ผู้ปล่อยเช่า';
+    _resolvedLocation =
+        returnPoint?.name ??
+        b?.location ??
+        widget.pickupLocation ??
+        'สยามพารากอน';
+    _resolvedLocationNote =
+        returnPoint?.note ?? b?.locationNote ?? widget.pickupNote;
     _resolvedPeriod = b != null
         ? b.formattedPeriodSummary
         : (widget.periodText ?? '1 วัน');
@@ -299,10 +299,23 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     _currentStatusCode = widget.statusCode ?? 'confirmed';
     _isOwner = widget.isOwner ?? false;
 
-    // Resolve Destination Coordinates
-    // พิกัดจุดรับเป็นของประกาศอุปกรณ์ เลือกโดยเจ้าของตอนเพิ่มอุปกรณ์
-    final destLat = b?.latitude ?? b?.item.latitude ?? widget.destinationLat;
-    final destLng = b?.longitude ?? b?.item.longitude ?? widget.destinationLng;
+    final destLat =
+        returnPoint?.latitude ??
+        b?.latitude ??
+        b?.item.latitude ??
+        widget.destinationLat;
+    final destLng =
+        returnPoint?.longitude ??
+        b?.longitude ??
+        b?.item.longitude ??
+        widget.destinationLng;
+    _hasDestinationCoordinates =
+        destLat != null &&
+        destLng != null &&
+        destLat.isFinite &&
+        destLng.isFinite &&
+        destLat.abs() <= 90 &&
+        destLng.abs() <= 180;
 
     if (_hasDestinationCoordinates) {
       _destinationLocation = LatLng(destLat!, destLng!);
@@ -313,11 +326,11 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       _destinationLocation = LatLng(fallback.latitude, fallback.longitude);
     }
 
-    _loadSavedHandoverStep();
+    if (_showRentalActions) _loadSavedPaymentStep();
   }
 
-  Future<void> _loadSavedHandoverStep() async {
-    final step = await RentalHandoverModal.getSavedStep(
+  Future<void> _loadSavedPaymentStep() async {
+    final step = await RentalPickupPaymentModal.getSavedStep(
       bookingId: _resolvedBookingId,
       conversationId:
           widget.conversationId ?? widget.bookingData?.conversationId,
@@ -326,7 +339,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     );
     if (mounted) {
       setState(() {
-        _renterHandoverStep = step;
+        _renterPaymentStep = step;
       });
     }
   }
@@ -343,11 +356,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       lastKnown = await _locationService.getLastKnownPosition();
     } catch (_) {}
     if (!mounted) return;
-    if (lastKnown != null) {
-      final point = LatLng(lastKnown.latitude, lastKnown.longitude);
-      setState(() => _userLocation = point);
-      _routeCubit.updatePosition(point);
-    }
+    if (lastKnown != null) _updateUserPosition(lastKnown);
 
     // ใช้พิกัดจากอุปกรณ์จริงโดยไม่อนุมานจากระยะห่างจากจุดนัดรับ
     Position? position;
@@ -356,13 +365,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     } catch (_) {}
 
     if (!mounted) return;
-    if (position != null) {
-      final userPos = LatLng(position.latitude, position.longitude);
-      setState(() {
-        _userLocation = userPos;
-      });
-      _routeCubit.updatePosition(userPos);
-    }
+    if (position != null) _updateUserPosition(position);
 
     _startLiveLocationTracking();
     if (position == null && _userLocation == null && mounted) {
@@ -380,9 +383,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       );
       if (stream != null) {
         _positionStreamSubscription = stream.listen(
-          (Position pos) {
-            _onRealtimePositionUpdated(pos);
-          },
+          _updateUserPosition,
           onError: (e) {
             debugPrint('Live position stream error: $e');
           },
@@ -393,9 +394,9 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     }
   }
 
-  /// เมื่อได้รับพิกัดใหม่จากการเคลื่อนที่จริงหรือ Emulator
-  void _onRealtimePositionUpdated(Position pos) {
+  void _updateUserPosition(Position pos) {
     if (!mounted) return;
+    final shouldFitReturn = _isReturn && _userLocation == null;
     final newGps = LatLng(pos.latitude, pos.longitude);
 
     // อัปเดตตำแหน่งหมุดทันทีแบบ Real-time
@@ -404,6 +405,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     // หากเปิดโหมดติดตามตำแหน่งอัตโนมัติ ให้เลื่อนกล้องตามหมุด
     if (_isAutoFollow) {
       _mapController.move(newGps, _mapController.camera.zoom);
+    } else if (shouldFitReturn) {
+      _fitBoundsToRoute();
     }
 
     _routeCubit.updatePosition(newGps);
@@ -421,7 +424,9 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       _mapController.fitCamera(
         CameraFit.bounds(
           bounds: bounds,
-          padding: const EdgeInsets.fromLTRB(48, 100, 48, 300),
+          padding: _isReturn
+              ? const EdgeInsets.fromLTRB(44, 32, 44, 72)
+              : const EdgeInsets.fromLTRB(48, 100, 48, 300),
         ),
       );
     } catch (_) {
@@ -485,23 +490,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     }
   }
 
-  bool get _hasDestinationCoordinates {
-    final lat =
-        widget.bookingData?.latitude ??
-        widget.bookingData?.item.latitude ??
-        widget.destinationLat;
-    final lng =
-        widget.bookingData?.longitude ??
-        widget.bookingData?.item.longitude ??
-        widget.destinationLng;
-    return lat != null &&
-        lng != null &&
-        lat.isFinite &&
-        lng.isFinite &&
-        lat.abs() <= 90 &&
-        lng.abs() <= 180;
-  }
-
   Widget _buildUnavailableState(String message, {bool showLogin = false}) {
     return Scaffold(
       appBar: AppBar(
@@ -539,6 +527,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   @override
   Widget build(BuildContext context) {
     if (widget.requireBookingId &&
+        _showRentalActions &&
         (_resolvedBookingId == null || _resolvedBookingId! <= 0)) {
       return _buildUnavailableState(
         'ไม่พบรายการเช่านี้ กรุณาเปิดหน้าจากรายการเช่าของคุณ',
@@ -550,93 +539,106 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
         showLogin: true,
       );
     }
-    if (!_hasDestinationCoordinates)
+    if (!_hasDestinationCoordinates) {
       return Scaffold(
-        appBar: AppBar(title: const Text('จุดนัดรับสินค้า')),
-        body: const Center(
-          child: Text('การจองนี้ยังไม่มีพิกัดจุดนัดรับ กรุณาติดต่อคู่เช่า'),
+        appBar: AppBar(
+          title: Text(_isReturn ? 'จุดคืนสินค้า' : 'จุดนัดรับสินค้า'),
+        ),
+        body: Center(
+          child: Text(
+            _isReturn
+                ? 'การจองนี้ยังไม่มีพิกัดจุดคืนสินค้า กรุณาติดต่อคู่เช่า'
+                : 'การจองนี้ยังไม่มีพิกัดจุดนัดรับ กรุณาติดต่อคู่เช่า',
+          ),
         ),
       );
+    }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          // ─── 1. แผนที่ Interactive (FlutterMap) ───
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _destinationLocation,
-              initialZoom: 14.5,
-              minZoom: 4,
+    final map = _buildMap(context);
+    return _isReturn ? map : Scaffold(backgroundColor: Colors.white, body: map);
+  }
+
+  Widget _buildMap(BuildContext context) {
+    final returnMapStatus = _isReturn ? _buildReturnMapStatus() : null;
+    return Stack(
+      children: [
+        // ─── 1. แผนที่ Interactive (FlutterMap) ───
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            onMapReady: _initLocationsAndRoute,
+            initialCenter: _destinationLocation,
+            initialZoom: 14.5,
+            minZoom: _isReturn ? 1 : 4,
+            maxZoom: 19,
+            onPositionChanged: (camera, hasGesture) {
+              if (hasGesture && _isAutoFollow) {
+                setState(() {
+                  _isAutoFollow = false;
+                });
+              }
+            },
+          ),
+          children: [
+            // TileLayer Google Maps Clean Style
+            TileLayer(
+              urlTemplate:
+                  'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+              subdomains: const ['0', '1', '2', '3'],
+              userAgentPackageName: 'com.example.frontend',
               maxZoom: 19,
-              onPositionChanged: (camera, hasGesture) {
-                if (hasGesture && _isAutoFollow) {
-                  setState(() {
-                    _isAutoFollow = false;
-                  });
-                }
-              },
             ),
-            children: [
-              // TileLayer Google Maps Clean Style
-              TileLayer(
-                urlTemplate:
-                    'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-                subdomains: const ['0', '1', '2', '3'],
-                userAgentPackageName: 'com.example.frontend',
-                maxZoom: 19,
+
+            // Polyline เส้นทางถนนจริง (OSRM Route)
+            if (_routeResult != null && _routeResult!.points.isNotEmpty) ...[
+              // เงา/ขอบเส้นทางด้านล่าง
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: _routeResult!.points,
+                    color: const Color(0xFF4C1D95).withValues(alpha: 0.35),
+                    strokeWidth: 8.5,
+                  ),
+                ],
               ),
-
-              // Polyline เส้นทางถนนจริง (OSRM Route)
-              if (_routeResult != null && _routeResult!.points.isNotEmpty) ...[
-                // เงา/ขอบเส้นทางด้านล่าง
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _routeResult!.points,
-                      color: const Color(0xFF4C1D95).withValues(alpha: 0.35),
-                      strokeWidth: 8.5,
-                    ),
-                  ],
-                ),
-                // เส้นทางสีม่วงหลัก
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _routeResult!.points,
-                      color: AppColors.primaryColor,
-                      strokeWidth: 5.0,
-                    ),
-                  ],
-                ),
-              ],
-
-              // หมุด Marker บนแผนที่
-              MarkerLayer(
-                markers: [
-                  // 1) หมุดตัวเรา (User Location)
-                  if (_userLocation != null)
-                    Marker(
-                      point: _userLocation!,
-                      width: 90,
-                      height: 90,
-                      child: _buildUserMarker(),
-                    ),
-
-                  // 2) หมุดจุดนัดรับ (Destination Location)
-                  Marker(
-                    point: _destinationLocation,
-                    width: 140,
-                    height: 100,
-                    child: _buildDestinationMarker(),
+              // เส้นทางสีม่วงหลัก
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: _routeResult!.points,
+                    color: AppColors.primaryColor,
+                    strokeWidth: 5.0,
                   ),
                 ],
               ),
             ],
-          ),
 
-          // ─── 2. Floating Top AppBar ───
+            // หมุด Marker บนแผนที่
+            MarkerLayer(
+              markers: [
+                // 1) หมุดตัวเรา (User Location)
+                if (_userLocation != null)
+                  Marker(
+                    point: _userLocation!,
+                    width: 90,
+                    height: 90,
+                    child: _buildUserMarker(),
+                  ),
+
+                // 2) หมุดจุดนัดรับ (Destination Location)
+                Marker(
+                  point: _destinationLocation,
+                  width: 140,
+                  height: 100,
+                  child: _buildDestinationMarker(),
+                ),
+              ],
+            ),
+          ],
+        ),
+
+        // ─── 2. Floating Top AppBar ───
+        if (!_isReturn)
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -698,52 +700,74 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
             ),
           ),
 
-          // ─── 3. Floating Action Controls (ฝั่งขวา) ───
-          Positioned(
-            right: 16,
-            bottom: 310,
-            child: Column(
-              children: [
-                // ปุ่ม Fit Bounds (ดูภาพรวมทั้งสองจุด)
-                _buildMapFloatingButton(
-                  icon: Icons.crop_free_rounded,
-                  tooltip: 'ดูภาพรวมเส้นทาง',
-                  onTap: _fitBoundsToRoute,
-                ),
-                const SizedBox(height: 10),
-                // ปุ่มนำทาง Google Maps ภายนอก
-                _buildMapFloatingButton(
-                  icon: Icons.near_me_rounded,
-                  tooltip: 'นำทางด้วย Google Maps',
-                  color: const Color(0xFF10B981),
-                  iconColor: Colors.white,
-                  onTap: _openExternalNavigation,
-                ),
-                const SizedBox(height: 10),
-                // ปุ่มพิกัดตัวเรา
-                _buildMapFloatingButton(
-                  icon: Icons.my_location_rounded,
-                  tooltip: _isAutoFollow
-                      ? 'กำลังติดตามตำแหน่ง (Real-time)'
-                      : 'ตำแหน่งของฉัน',
-                  color: _isAutoFollow ? AppColors.primaryColor : Colors.white,
-                  iconColor: _isAutoFollow
-                      ? Colors.white
-                      : const Color(0xFF1E2022),
-                  onTap: _centerToUser,
-                ),
-              ],
-            ),
+        // ─── 3. Floating Action Controls (ฝั่งขวา) ───
+        Positioned(
+          right: _isReturn ? 12 : 16,
+          bottom: _isReturn ? 12 : 310,
+          child: Flex(
+            direction: _isReturn ? Axis.horizontal : Axis.vertical,
+            mainAxisSize: MainAxisSize.min,
+            spacing: 10,
+            children: [
+              // ปุ่ม Fit Bounds (ดูภาพรวมทั้งสองจุด)
+              _buildMapFloatingButton(
+                icon: Icons.crop_free_rounded,
+                tooltip: 'ดูภาพรวมเส้นทาง',
+                onTap: _fitBoundsToRoute,
+              ),
+              // ปุ่มนำทาง Google Maps ภายนอก
+              _buildMapFloatingButton(
+                icon: Icons.near_me_rounded,
+                tooltip: 'นำทางด้วย Google Maps',
+                color: const Color(0xFF10B981),
+                iconColor: Colors.white,
+                onTap: _openExternalNavigation,
+              ),
+              // ปุ่มพิกัดตัวเรา
+              _buildMapFloatingButton(
+                icon: Icons.my_location_rounded,
+                tooltip: _isAutoFollow
+                    ? 'กำลังติดตามตำแหน่ง (Real-time)'
+                    : 'ตำแหน่งของฉัน',
+                color: _isAutoFollow ? AppColors.primaryColor : Colors.white,
+                iconColor: _isAutoFollow
+                    ? Colors.white
+                    : const Color(0xFF1E2022),
+                onTap: _centerToUser,
+              ),
+            ],
           ),
+        ),
 
-          // ─── 4. แผงข้อมูลด้านล่าง (Bolt / Grab Tracking Card) ───
+        // ─── 4. แผงข้อมูลด้านล่าง (Bolt / Grab Tracking Card) ───
+        if (!_isReturn)
           Align(
             alignment: Alignment.bottomCenter,
             child: _buildTrackingBottomCard(context),
           ),
-        ],
-      ),
+        if (returnMapStatus != null)
+          Positioned(top: 8, right: 12, child: returnMapStatus),
+      ],
     );
+  }
+
+  Widget? _buildReturnMapStatus() {
+    final route = _routeResult;
+    if (route != null) {
+      return Chip(
+        avatar: const Icon(Icons.directions_car_outlined, size: 16),
+        label: Text(route.formattedDistance),
+        backgroundColor: Colors.white,
+      );
+    }
+    if (!_isLoadingRoute && _userLocation == null) {
+      return FilledButton.tonalIcon(
+        onPressed: _initLocationsAndRoute,
+        icon: const Icon(Icons.location_searching_rounded, size: 18),
+        label: const Text('ลองระบุตำแหน่งอีกครั้ง'),
+      );
+    }
+    return null;
   }
 
   // ─── หมุดตัวเรา (User Location Pin) ───
@@ -1251,95 +1275,91 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                 ),
               ),
 
-              const SizedBox(height: 14),
-
               // 4. ปุ่ม Action (โทร / แชท / นำทาง)
-              Row(
-                children: [
-                  // ปุ่มโทรหาผู้ปล่อยเช่า
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF0F172A),
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+              if (_showRentalActions) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    // ปุ่มโทรหาผู้ปล่อยเช่า
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF0F172A),
+                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onPressed: _callOwner,
-                      icon: const Icon(Icons.phone_outlined, size: 18),
-                      label: Text(
-                        _isOwner ? 'โทรหาผู้เช่า' : 'โทรหาเจ้าของ',
-                        style: const TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  // ปุ่มชำระเงิน หรือ ส่งมอบอุปกรณ์ หรือ สถานะกำลังเช่า
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _currentStatusCode == 'active'
-                            ? const Color(0xFF0F172A)
-                            : (_currentStatusCode == 'cancelled'
-                                  ? const Color(0xFF94A3B8)
-                                  : AppColors.primaryColor),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onPressed: _currentStatusCode == 'active'
-                          ? null
-                          : (_currentStatusCode == 'cancelled'
-                                ? null
-                                : _openPaymentOrHandover),
-                      icon: Icon(
-                        _currentStatusCode == 'active'
-                            ? Icons.check_circle_rounded
-                            : (_currentStatusCode == 'cancelled'
-                                  ? Icons.cancel_outlined
-                                  : (_isOwner
-                                        ? Icons.inventory_2_rounded
-                                        : (_renterHandoverStep == 2
-                                              ? Icons.qr_code_rounded
-                                              : (_renterHandoverStep == 1
-                                                    ? Icons.payments_rounded
-                                                    : Icons
-                                                          .checklist_rounded)))),
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                      label: Text(
-                        _currentStatusCode == 'active'
-                            ? (_isOwner ? 'กำลังปล่อยเช่า' : 'กำลังเช่าอุปกรณ์')
-                            : (_currentStatusCode == 'cancelled'
-                                  ? 'ยกเลิกการเช่าแล้ว'
-                                  : (_isOwner
-                                        ? 'ส่งมอบอุปกรณ์'
-                                        : (_renterHandoverStep == 2
-                                              ? 'รหัสส่งมอบ'
-                                              : (_renterHandoverStep == 1
-                                                    ? 'ชำระเงิน'
-                                                    : 'ตรวจรับ & ชำระเงิน')))),
-                        style: const TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
+                        onPressed: _callOwner,
+                        icon: const Icon(Icons.phone_outlined, size: 18),
+                        label: Text(
+                          _isOwner ? 'โทรหาผู้เช่า' : 'โทรหาเจ้าของ',
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 10),
+                    // ปุ่มชำระเงินหรือแสดงสถานะการเช่า
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _currentStatusCode == 'active'
+                              ? const Color(0xFF0F172A)
+                              : (_currentStatusCode == 'cancelled'
+                                    ? const Color(0xFF94A3B8)
+                                    : AppColors.primaryColor),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: _currentStatusCode == 'active'
+                            ? null
+                            : (_currentStatusCode == 'cancelled'
+                                  ? null
+                                  : _openPayment),
+                        icon: Icon(
+                          _currentStatusCode == 'active'
+                              ? Icons.check_circle_rounded
+                              : (_currentStatusCode == 'cancelled'
+                                    ? Icons.cancel_outlined
+                                    : (_isOwner || _renterPaymentStep == 1
+                                          ? Icons.payments_rounded
+                                          : Icons.checklist_rounded)),
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                        label: Text(
+                          _currentStatusCode == 'active'
+                              ? (_isOwner
+                                    ? 'กำลังปล่อยเช่า'
+                                    : 'กำลังเช่าอุปกรณ์')
+                              : (_currentStatusCode == 'cancelled'
+                                    ? 'ยกเลิกการเช่าแล้ว'
+                                    : (_isOwner
+                                          ? 'ยืนยันการรับเงิน'
+                                          : (_renterPaymentStep == 1
+                                                ? 'ชำระเงิน'
+                                                : 'ตรวจรับ & ชำระเงิน'))),
+                          style: const TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

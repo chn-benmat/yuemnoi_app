@@ -1,32 +1,28 @@
-import '../entities/rental_handover_code.dart';
+import '../entities/rental_handover_payment.dart';
 import '../repositories/rental_management_repository.dart';
 
-// คำอธิบาย: UseCase สำหรับอัปเดตสถานะการเช่าและยืนยันการส่งมอบ
+// คำอธิบาย: UseCase สำหรับอัปเดตสถานะการเช่าและยืนยันการรับเงิน
 class UpdateBookingStatusUseCase {
   final RentalManagementRepository repository;
 
   const UpdateBookingStatusUseCase(this.repository);
 
-  Future<RentalHandoverCode> createHandoverCode({required int bookingId}) {
-    if (repository is RentalHandoverRepository) {
-      return (repository as RentalHandoverRepository).createHandoverCode(
-        bookingId: bookingId,
-      );
-    }
-    throw StateError('ระบบสร้างรหัสส่งมอบยังไม่พร้อมใช้งาน');
-  }
-
-  Future<void> completeHandover({
+  Future<RentalHandoverPayment> handoverPayment({
     required int bookingId,
-    required String code,
+    bool confirm = false,
+    String? promptPayPhone,
+    String? promptPayNationalId,
   }) {
-    if (repository is RentalHandoverRepository) {
-      return (repository as RentalHandoverRepository).completeHandover(
+    final repo = repository;
+    if (repo is RentalHandoverRepository) {
+      return (repo as RentalHandoverRepository).handoverPayment(
         bookingId: bookingId,
-        code: code,
+        confirm: confirm,
+        promptPayPhone: promptPayPhone,
+        promptPayNationalId: promptPayNationalId,
       );
     }
-    throw StateError('ระบบยืนยันส่งมอบยังไม่พร้อมใช้งาน');
+    throw StateError('ระบบตรวจสอบการชำระเงินยังไม่พร้อมใช้งาน');
   }
 
   Future<void> execute({required int bookingId, required String status}) {

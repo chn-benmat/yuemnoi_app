@@ -36,6 +36,30 @@ void main() {
     expect(booking.originalMessageId, 'message');
   });
 
+  for (final type in BookingRentalType.values) {
+    test('chat offer uses the correct end date for ${type.name}', () {
+      final pickupDay = DateTime(2026, 11, 24);
+      final nextDay = DateTime(2026, 11, 25);
+      final offer = BookingRequestData(
+        item: BookingItemInfo.defaultMockItem,
+        rentalType: type,
+        startDate: pickupDay,
+        endDate: nextDay,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 17, minute: 0),
+        location: 'ซีคอน บางแค',
+      );
+      final expectedEndDate = type == BookingRentalType.hourly
+          ? pickupDay
+          : nextDay;
+
+      expect(
+        offer.toChatMessagePayload(),
+        contains('"endDate":"${expectedEndDate.toIso8601String()}"'),
+      );
+    });
+  }
+
   test('offer retains selected coordinates and uses actual message id', () {
     final data = BookingRequestData(
       item: BookingItemInfo.defaultMockItem,

@@ -20,11 +20,13 @@ class RentalRequestRepositoryImpl implements RentalRequestRepository {
   Future<RentalRequestResult> confirm({
     required int rentalId,
     required String offerMessageId,
+    required String paymentMethod,
   }) async {
     try {
       return await remoteDataSource.confirm(
         rentalId: rentalId,
         offerMessageId: offerMessageId,
+        paymentMethod: paymentMethod,
       );
     } on RentalRequestRemoteException catch (error) {
       throw RentalRequestException(error.message);
