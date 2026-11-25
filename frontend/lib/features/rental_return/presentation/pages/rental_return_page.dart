@@ -6,16 +6,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../profile/presentation/pages/rentals/rental_tracking_map_page.dart';
 import '../../data/repositories/rental_return_repository_impl.dart';
 import '../../domain/entities/rental_return_session.dart';
 import '../cubit/rental_return_cubit.dart';
 import '../cubit/rental_return_state.dart';
 import '../widgets/lender_inspection_view.dart';
-import '../widgets/live_camera_capture_sheet.dart';
-import '../widgets/merchant_qr_dialog.dart';
 import '../widgets/rental_time_card.dart';
 import '../widgets/return_completed_dialog.dart';
-import '../widgets/renter_qr_scanner_sheet.dart';
+import '../widgets/return_evidence_gallery.dart';
 import '../../domain/repositories/rental_return_repository.dart';
 import '../widgets/urgent_return_alarm_dialog.dart';
 
@@ -53,7 +52,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
   bool _didShowAlarm = false;
   bool _didShowSuccess = false;
   Timer? _refreshTimer;
-  bool _qrOpen = false;
+  DialogRoute<void>? _alarmRoute;
 
   @override
   void initState() {
@@ -69,41 +68,13 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
     super.dispose();
   }
 
-  void _openQrScanner(BuildContext context) {
-    RenterQrScannerSheet.show(
-      context: context,
-      onCodeScanned: (code) {
-        context.read<RentalReturnCubit>().completeReturnWithQr(code);
-      },
-    );
-  }
-
-  void _openMerchantQrModal(BuildContext context, RentalReturnState state) {
-    if (state.session.merchantQrToken == null) return;
-    _qrOpen = true;
-    MerchantQrDialog.show(
-      context: context,
-      qrData: state.session.merchantQrToken!,
-      otp: state.session.merchantOtp,
-      expiryTime: state.merchantQrExpiry,
-      onRefresh: () async {
-        final cubit = context.read<RentalReturnCubit>();
-        await cubit.confirmLenderInspection();
-        if (context.mounted && cubit.state.errorMessage == null) {
-          _openMerchantQrModal(context, cubit.state);
-        }
-      },
-    ).whenComplete(() => _qrOpen = false);
-  }
-
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<RentalReturnCubit, RentalReturnState>(
       listenWhen: (prev, current) =>
           prev.isAlarmActive != current.isAlarmActive ||
           prev.session.step != current.session.step ||
-          prev.errorMessage != current.errorMessage ||
-          prev.successMessage != current.successMessage,
+          prev.errorMessage != current.errorMessage,
       listener: (context, state) {
         if (state.errorMessage != null && state.errorMessage!.isNotEmpty) {
           showAppPopup(
@@ -115,21 +86,22 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
           );
         }
 
-        if (state.isAlarmActive && !_didShowAlarm && state.isRenter) {
+        if (state.session.step == RentalReturnStep.completed) {
+          unawaited(_showCompletion(state));
+        } else if (state.isAlarmActive && !_didShowAlarm && state.isRenter) {
           _didShowAlarm = true;
-          UrgentReturnAlarmDialog.show(
+          final navigator = Navigator.of(context, rootNavigator: true);
+          final alarmRoute = UrgentReturnAlarmDialog.createRoute(
             context: context,
             session: state.session,
-            onProceedToVerification: () {
-              context
-                  .read<RentalReturnCubit>()
-                  .dismissAlarmAndStartVerification();
-            },
+            onDismiss: context.read<RentalReturnCubit>().dismissAlarm,
           );
-        }
-
-        if (state.session.step == RentalReturnStep.completed) {
-          _showCompletion(state);
+          _alarmRoute = alarmRoute;
+          unawaited(
+            navigator.push(alarmRoute).whenComplete(() {
+              _alarmRoute = null;
+            }),
+          );
         }
       },
       builder: (context, state) {
@@ -157,12 +129,13 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
             state.session.step == RentalReturnStep.completed &&
             !_didShowSuccess) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _showCompletion(state);
+            if (mounted) unawaited(_showCompletion(state));
           });
         }
         final session = state.session;
         final isRenter = state.isRenter;
         final isCompleted = session.step == RentalReturnStep.completed;
+        final returnPoint = session.returnPoint;
 
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAFC),
@@ -186,153 +159,92 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
               child: Container(color: const Color(0xFFF1F5F9), height: 1),
             ),
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 110),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ข้อมูลอุปกรณ์และกำหนดเวลาคืน (อ่านง่าย)
-                RentalTimeCard(session: session),
-
-                _ReturnProgress(session: session),
-
-                // มุมมองตามบทบาท
-                if (isRenter) ...[
-                  if (!isCompleted) const LiveCameraCaptureSheet(),
-                ] else ...[
-                  if (!isCompleted) const LenderInspectionView(),
-                ],
-
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
-
-          // ปุ่ม Action ลอยด้านล่าง
-          bottomSheet: isCompleted
-              ? null
-              : Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 16,
-                        offset: const Offset(0, -4),
-                      ),
-                    ],
-                    border: const Border(
-                      top: BorderSide(color: Color(0xFFF1F5F9)),
-                    ),
-                  ),
-                  child: SafeArea(
-                    child: isRenter
-                        ? SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: ElevatedButton.icon(
-                              onPressed:
-                                  state.isSubmitting ||
-                                      session.step !=
-                                          RentalReturnStep.merchantQrReady
-                                  ? null
-                                  : () => _openQrScanner(context),
-                              icon: const Icon(
-                                Icons.qr_code_scanner_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              label: const Text(
-                                'สแกน QR Code ร้านค้าเพื่อจบการคืน',
-                                style: TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryColor,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                            ),
-                          )
-                        : SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: ElevatedButton.icon(
-                              onPressed: session.merchantQrToken == null
-                                  ? null
-                                  : () => _openMerchantQrModal(context, state),
-                              icon: const Icon(
-                                Icons.qr_code_2_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              label: Text(
-                                session.merchantQrToken == null
-                                    ? 'ยืนยันการตรวจสภาพด้านบนก่อน'
-                                    : 'เปิดแสดง QR Code ให้ลูกค้าสแกน',
-                                style: const TextStyle(
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                            ),
-                          ),
+          body: Column(
+            children: [
+              if (!isCompleted && returnPoint != null)
+                Expanded(
+                  flex: 5,
+                  child: RentalTrackingMapPage(
+                    key: ValueKey(returnPoint),
+                    returnPoint: returnPoint,
                   ),
                 ),
+              Expanded(
+                flex: 6,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RentalTimeCard(session: session),
+                      _ReturnProgress(session: session),
+                      if (!isCompleted && isRenter) ...[
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(24, 12, 24, 12),
+                          child: Text(
+                            'รอร้านค้ายืนยันรับอุปกรณ์คืน',
+                            style: TextStyle(
+                              fontFamily: AppTextStyles.fontFamily,
+                              color: Color(0xFF475569),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        if (session.photos.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                            child: ReturnEvidenceGallery(
+                              photos: session.photos,
+                            ),
+                          ),
+                      ] else if (!isCompleted)
+                        const LenderInspectionView(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
-  void _showCompletion(RentalReturnState state) {
+  Future<void> _showCompletion(RentalReturnState state) async {
     if (_didShowSuccess) return;
     _didShowSuccess = true;
-    if (!state.isRenter && _qrOpen) {
-      Navigator.of(context, rootNavigator: true).pop();
-      _qrOpen = false;
+    _refreshTimer?.cancel();
+
+    final alarmRoute = _alarmRoute;
+    if (alarmRoute != null && alarmRoute.isActive) {
+      alarmRoute.navigator?.removeRoute(alarmRoute);
     }
-    unawaited(
-      ReturnCompletedDialog.show(
+    if (state.isAlarmActive) {
+      unawaited(context.read<RentalReturnCubit>().dismissAlarm());
+    }
+
+    final session = state.session;
+    if (state.isRenter && session.itemId != null) {
+      await AppRoutes.openReview(
+        context,
+        bookingId: session.rentalId,
+        itemId: session.itemId,
+        itemName: session.itemName,
+        ownerName: session.lenderName,
+        ownerId: session.lenderId,
+        itemImageUrl: session.itemImageUrl,
+      );
+      _leaveReturnFlow();
+    } else {
+      await ReturnCompletedDialog.show(
         context: context,
-        session: state.session,
-        onReview: state.isRenter && state.session.itemId != null
-            ? () async {
-                final session = state.session;
-                await AppRoutes.openReview(
-                  context,
-                  bookingId: session.rentalId,
-                  itemId: session.itemId,
-                  itemName: session.itemName,
-                  ownerName: session.lenderName,
-                  ownerId: session.lenderId,
-                  itemImageUrl: session.itemImageUrl,
-                );
-                if (mounted) _leaveReturnFlow();
-              }
-            : null,
+        session: session,
         onDismiss: _leaveReturnFlow,
-      ),
-    );
+      );
+    }
   }
 
   void _leaveReturnFlow() {
-    _refreshTimer?.cancel();
     if (mounted) AppRoutes.goToHomeAfterRental(context);
   }
 }
@@ -344,12 +256,10 @@ class _ReturnProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final step = switch (session.step) {
-      RentalReturnStep.awaitingHandover ||
-      RentalReturnStep.lenderInspecting => 1,
-      RentalReturnStep.merchantQrReady || RentalReturnStep.completed => 2,
+      RentalReturnStep.completed => 1,
       _ => 0,
     };
-    const labels = ['ตรวจสภาพ', 'ตรวจรับคืน', 'ยืนยันคืน'];
+    const labels = ['ตรวจรับคืน', 'ยืนยันคืน'];
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
       child: Row(

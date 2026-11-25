@@ -1186,15 +1186,15 @@ class RentalStatusCard extends StatelessWidget {
                               },
                               icon: Icon(
                                 item.isOwner
-                                    ? Icons.qr_code_2_rounded
+                                    ? Icons.check_circle_outline_rounded
                                     : Icons.assignment_turned_in_outlined,
                                 size: 16,
                                 color: Colors.white,
                               ),
                               label: Text(
                                 item.isOwner
-                                    ? 'ตรวจรับของคืน & สแกน QR'
-                                    : 'ส่งคืนอุปกรณ์ (ถ่ายภาพ)',
+                                    ? 'ตรวจรับของคืน'
+                                    : 'ส่งคืนอุปกรณ์',
                                 style: const TextStyle(
                                   fontFamily: AppTextStyles.fontFamily,
                                   fontSize: 13,
@@ -1628,13 +1628,11 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                     },
                     icon: Icon(
                       item.isOwner
-                          ? Icons.qr_code_2_rounded
+                          ? Icons.check_circle_outline_rounded
                           : Icons.assignment_turned_in_outlined,
                     ),
                     label: Text(
-                      item.isOwner
-                          ? 'ตรวจรับของคืน & สแกน QR'
-                          : 'ดำเนินการส่งคืนอุปกรณ์',
+                      item.isOwner ? 'ตรวจรับของคืน' : 'ดำเนินการส่งคืนอุปกรณ์',
                     ),
                   ),
                 ),

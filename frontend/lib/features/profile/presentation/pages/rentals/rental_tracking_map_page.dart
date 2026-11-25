@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../../core/constants/colors.dart';
+import '../../../../../core/models/pickup_location.dart';
 import '../../../../../core/network/auth_session.dart';
 import '../../../../../core/utils/auth_guard.dart';
 import '../../../../../core/services/location_service.dart';
@@ -38,6 +39,7 @@ class RentalTrackingMapPage extends StatefulWidget {
   final bool? isOwner;
   final bool requireBookingId;
   final bool pickupOnly;
+  final PickupLocation? returnPoint;
   final LocationService? locationService;
   final RentalContactRemoteDataSource? contactDataSource;
   final PhoneCallService phoneCallService;
@@ -62,6 +64,7 @@ class RentalTrackingMapPage extends StatefulWidget {
     this.isOwner,
     this.requireBookingId = false,
     this.pickupOnly = false,
+    this.returnPoint,
     this.locationService,
     this.contactDataSource,
     this.phoneCallService = const UrlPhoneCallService(),
@@ -81,6 +84,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
 
   LatLng? _userLocation;
   late LatLng _destinationLocation;
+  late final bool _hasDestinationCoordinates;
   DrivingRouteResult? _routeResult;
 
   bool _isLoadingRoute = true;
@@ -99,6 +103,9 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   late String _currentStatusCode;
   late bool _isOwner;
   int _renterPaymentStep = 0;
+
+  bool get _isReturn => widget.returnPoint != null;
+  bool get _showRentalActions => !_isReturn && !widget.pickupOnly;
 
   // หน้าจากแชทส่ง ID ใน bookingData ส่วนหน้าสถานะส่ง ID แยก
   int? get _resolvedBookingId =>
@@ -206,7 +213,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       paymentMethod: widget.bookingData?.paymentMethod ?? 'promptpay',
       initialIsOwner: _isOwner,
       initialStep: _renterPaymentStep,
-      openPaymentAppOnShow: !_isOwner && _renterPaymentStep == 1,
       onStepChanged: (step) {
         if (mounted) {
           setState(() {
@@ -276,10 +282,16 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
 
   void _resolveInitialData() {
     final b = widget.bookingData;
+    final returnPoint = widget.returnPoint;
     _resolvedTitle = b?.item.title ?? widget.itemTitle ?? 'อุปกรณ์เช่า';
     _resolvedImageUrl = b?.item.imageUrl ?? widget.itemImageUrl;
-    _resolvedLocation = b?.location ?? widget.pickupLocation ?? 'สยามพารากอน';
-    _resolvedLocationNote = b?.locationNote ?? widget.pickupNote;
+    _resolvedLocation =
+        returnPoint?.name ??
+        b?.location ??
+        widget.pickupLocation ??
+        'สยามพารากอน';
+    _resolvedLocationNote =
+        returnPoint?.note ?? b?.locationNote ?? widget.pickupNote;
     _resolvedPeriod = b != null
         ? b.formattedPeriodSummary
         : (widget.periodText ?? '1 วัน');
@@ -287,10 +299,23 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     _currentStatusCode = widget.statusCode ?? 'confirmed';
     _isOwner = widget.isOwner ?? false;
 
-    // Resolve Destination Coordinates
-    // พิกัดจุดรับเป็นของประกาศอุปกรณ์ เลือกโดยเจ้าของตอนเพิ่มอุปกรณ์
-    final destLat = b?.latitude ?? b?.item.latitude ?? widget.destinationLat;
-    final destLng = b?.longitude ?? b?.item.longitude ?? widget.destinationLng;
+    final destLat =
+        returnPoint?.latitude ??
+        b?.latitude ??
+        b?.item.latitude ??
+        widget.destinationLat;
+    final destLng =
+        returnPoint?.longitude ??
+        b?.longitude ??
+        b?.item.longitude ??
+        widget.destinationLng;
+    _hasDestinationCoordinates =
+        destLat != null &&
+        destLng != null &&
+        destLat.isFinite &&
+        destLng.isFinite &&
+        destLat.abs() <= 90 &&
+        destLng.abs() <= 180;
 
     if (_hasDestinationCoordinates) {
       _destinationLocation = LatLng(destLat!, destLng!);
@@ -301,7 +326,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       _destinationLocation = LatLng(fallback.latitude, fallback.longitude);
     }
 
-    if (!widget.pickupOnly) _loadSavedPaymentStep();
+    if (_showRentalActions) _loadSavedPaymentStep();
   }
 
   Future<void> _loadSavedPaymentStep() async {
@@ -331,11 +356,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       lastKnown = await _locationService.getLastKnownPosition();
     } catch (_) {}
     if (!mounted) return;
-    if (lastKnown != null) {
-      final point = LatLng(lastKnown.latitude, lastKnown.longitude);
-      setState(() => _userLocation = point);
-      _routeCubit.updatePosition(point);
-    }
+    if (lastKnown != null) _updateUserPosition(lastKnown);
 
     // ใช้พิกัดจากอุปกรณ์จริงโดยไม่อนุมานจากระยะห่างจากจุดนัดรับ
     Position? position;
@@ -344,13 +365,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     } catch (_) {}
 
     if (!mounted) return;
-    if (position != null) {
-      final userPos = LatLng(position.latitude, position.longitude);
-      setState(() {
-        _userLocation = userPos;
-      });
-      _routeCubit.updatePosition(userPos);
-    }
+    if (position != null) _updateUserPosition(position);
 
     _startLiveLocationTracking();
     if (position == null && _userLocation == null && mounted) {
@@ -368,9 +383,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       );
       if (stream != null) {
         _positionStreamSubscription = stream.listen(
-          (Position pos) {
-            _onRealtimePositionUpdated(pos);
-          },
+          _updateUserPosition,
           onError: (e) {
             debugPrint('Live position stream error: $e');
           },
@@ -381,9 +394,9 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     }
   }
 
-  /// เมื่อได้รับพิกัดใหม่จากการเคลื่อนที่จริงหรือ Emulator
-  void _onRealtimePositionUpdated(Position pos) {
+  void _updateUserPosition(Position pos) {
     if (!mounted) return;
+    final shouldFitReturn = _isReturn && _userLocation == null;
     final newGps = LatLng(pos.latitude, pos.longitude);
 
     // อัปเดตตำแหน่งหมุดทันทีแบบ Real-time
@@ -392,6 +405,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     // หากเปิดโหมดติดตามตำแหน่งอัตโนมัติ ให้เลื่อนกล้องตามหมุด
     if (_isAutoFollow) {
       _mapController.move(newGps, _mapController.camera.zoom);
+    } else if (shouldFitReturn) {
+      _fitBoundsToRoute();
     }
 
     _routeCubit.updatePosition(newGps);
@@ -409,7 +424,9 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       _mapController.fitCamera(
         CameraFit.bounds(
           bounds: bounds,
-          padding: const EdgeInsets.fromLTRB(48, 100, 48, 300),
+          padding: _isReturn
+              ? const EdgeInsets.fromLTRB(44, 32, 44, 72)
+              : const EdgeInsets.fromLTRB(48, 100, 48, 300),
         ),
       );
     } catch (_) {
@@ -473,23 +490,6 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     }
   }
 
-  bool get _hasDestinationCoordinates {
-    final lat =
-        widget.bookingData?.latitude ??
-        widget.bookingData?.item.latitude ??
-        widget.destinationLat;
-    final lng =
-        widget.bookingData?.longitude ??
-        widget.bookingData?.item.longitude ??
-        widget.destinationLng;
-    return lat != null &&
-        lng != null &&
-        lat.isFinite &&
-        lng.isFinite &&
-        lat.abs() <= 90 &&
-        lng.abs() <= 180;
-  }
-
   Widget _buildUnavailableState(String message, {bool showLogin = false}) {
     return Scaffold(
       appBar: AppBar(
@@ -527,7 +527,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   @override
   Widget build(BuildContext context) {
     if (widget.requireBookingId &&
-        !widget.pickupOnly &&
+        _showRentalActions &&
         (_resolvedBookingId == null || _resolvedBookingId! <= 0)) {
       return _buildUnavailableState(
         'ไม่พบรายการเช่านี้ กรุณาเปิดหน้าจากรายการเช่าของคุณ',
@@ -539,94 +539,106 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
         showLogin: true,
       );
     }
-    if (!_hasDestinationCoordinates)
+    if (!_hasDestinationCoordinates) {
       return Scaffold(
-        appBar: AppBar(title: const Text('จุดนัดรับสินค้า')),
-        body: const Center(
-          child: Text('การจองนี้ยังไม่มีพิกัดจุดนัดรับ กรุณาติดต่อคู่เช่า'),
+        appBar: AppBar(
+          title: Text(_isReturn ? 'จุดคืนสินค้า' : 'จุดนัดรับสินค้า'),
+        ),
+        body: Center(
+          child: Text(
+            _isReturn
+                ? 'การจองนี้ยังไม่มีพิกัดจุดคืนสินค้า กรุณาติดต่อคู่เช่า'
+                : 'การจองนี้ยังไม่มีพิกัดจุดนัดรับ กรุณาติดต่อคู่เช่า',
+          ),
         ),
       );
+    }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          // ─── 1. แผนที่ Interactive (FlutterMap) ───
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              onMapReady: _initLocationsAndRoute,
-              initialCenter: _destinationLocation,
-              initialZoom: 14.5,
-              minZoom: 4,
+    final map = _buildMap(context);
+    return _isReturn ? map : Scaffold(backgroundColor: Colors.white, body: map);
+  }
+
+  Widget _buildMap(BuildContext context) {
+    final returnMapStatus = _isReturn ? _buildReturnMapStatus() : null;
+    return Stack(
+      children: [
+        // ─── 1. แผนที่ Interactive (FlutterMap) ───
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            onMapReady: _initLocationsAndRoute,
+            initialCenter: _destinationLocation,
+            initialZoom: 14.5,
+            minZoom: _isReturn ? 1 : 4,
+            maxZoom: 19,
+            onPositionChanged: (camera, hasGesture) {
+              if (hasGesture && _isAutoFollow) {
+                setState(() {
+                  _isAutoFollow = false;
+                });
+              }
+            },
+          ),
+          children: [
+            // TileLayer Google Maps Clean Style
+            TileLayer(
+              urlTemplate:
+                  'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+              subdomains: const ['0', '1', '2', '3'],
+              userAgentPackageName: 'com.example.frontend',
               maxZoom: 19,
-              onPositionChanged: (camera, hasGesture) {
-                if (hasGesture && _isAutoFollow) {
-                  setState(() {
-                    _isAutoFollow = false;
-                  });
-                }
-              },
             ),
-            children: [
-              // TileLayer Google Maps Clean Style
-              TileLayer(
-                urlTemplate:
-                    'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-                subdomains: const ['0', '1', '2', '3'],
-                userAgentPackageName: 'com.example.frontend',
-                maxZoom: 19,
+
+            // Polyline เส้นทางถนนจริง (OSRM Route)
+            if (_routeResult != null && _routeResult!.points.isNotEmpty) ...[
+              // เงา/ขอบเส้นทางด้านล่าง
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: _routeResult!.points,
+                    color: const Color(0xFF4C1D95).withValues(alpha: 0.35),
+                    strokeWidth: 8.5,
+                  ),
+                ],
               ),
-
-              // Polyline เส้นทางถนนจริง (OSRM Route)
-              if (_routeResult != null && _routeResult!.points.isNotEmpty) ...[
-                // เงา/ขอบเส้นทางด้านล่าง
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _routeResult!.points,
-                      color: const Color(0xFF4C1D95).withValues(alpha: 0.35),
-                      strokeWidth: 8.5,
-                    ),
-                  ],
-                ),
-                // เส้นทางสีม่วงหลัก
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _routeResult!.points,
-                      color: AppColors.primaryColor,
-                      strokeWidth: 5.0,
-                    ),
-                  ],
-                ),
-              ],
-
-              // หมุด Marker บนแผนที่
-              MarkerLayer(
-                markers: [
-                  // 1) หมุดตัวเรา (User Location)
-                  if (_userLocation != null)
-                    Marker(
-                      point: _userLocation!,
-                      width: 90,
-                      height: 90,
-                      child: _buildUserMarker(),
-                    ),
-
-                  // 2) หมุดจุดนัดรับ (Destination Location)
-                  Marker(
-                    point: _destinationLocation,
-                    width: 140,
-                    height: 100,
-                    child: _buildDestinationMarker(),
+              // เส้นทางสีม่วงหลัก
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: _routeResult!.points,
+                    color: AppColors.primaryColor,
+                    strokeWidth: 5.0,
                   ),
                 ],
               ),
             ],
-          ),
 
-          // ─── 2. Floating Top AppBar ───
+            // หมุด Marker บนแผนที่
+            MarkerLayer(
+              markers: [
+                // 1) หมุดตัวเรา (User Location)
+                if (_userLocation != null)
+                  Marker(
+                    point: _userLocation!,
+                    width: 90,
+                    height: 90,
+                    child: _buildUserMarker(),
+                  ),
+
+                // 2) หมุดจุดนัดรับ (Destination Location)
+                Marker(
+                  point: _destinationLocation,
+                  width: 140,
+                  height: 100,
+                  child: _buildDestinationMarker(),
+                ),
+              ],
+            ),
+          ],
+        ),
+
+        // ─── 2. Floating Top AppBar ───
+        if (!_isReturn)
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -688,52 +700,74 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
             ),
           ),
 
-          // ─── 3. Floating Action Controls (ฝั่งขวา) ───
-          Positioned(
-            right: 16,
-            bottom: 310,
-            child: Column(
-              children: [
-                // ปุ่ม Fit Bounds (ดูภาพรวมทั้งสองจุด)
-                _buildMapFloatingButton(
-                  icon: Icons.crop_free_rounded,
-                  tooltip: 'ดูภาพรวมเส้นทาง',
-                  onTap: _fitBoundsToRoute,
-                ),
-                const SizedBox(height: 10),
-                // ปุ่มนำทาง Google Maps ภายนอก
-                _buildMapFloatingButton(
-                  icon: Icons.near_me_rounded,
-                  tooltip: 'นำทางด้วย Google Maps',
-                  color: const Color(0xFF10B981),
-                  iconColor: Colors.white,
-                  onTap: _openExternalNavigation,
-                ),
-                const SizedBox(height: 10),
-                // ปุ่มพิกัดตัวเรา
-                _buildMapFloatingButton(
-                  icon: Icons.my_location_rounded,
-                  tooltip: _isAutoFollow
-                      ? 'กำลังติดตามตำแหน่ง (Real-time)'
-                      : 'ตำแหน่งของฉัน',
-                  color: _isAutoFollow ? AppColors.primaryColor : Colors.white,
-                  iconColor: _isAutoFollow
-                      ? Colors.white
-                      : const Color(0xFF1E2022),
-                  onTap: _centerToUser,
-                ),
-              ],
-            ),
+        // ─── 3. Floating Action Controls (ฝั่งขวา) ───
+        Positioned(
+          right: _isReturn ? 12 : 16,
+          bottom: _isReturn ? 12 : 310,
+          child: Flex(
+            direction: _isReturn ? Axis.horizontal : Axis.vertical,
+            mainAxisSize: MainAxisSize.min,
+            spacing: 10,
+            children: [
+              // ปุ่ม Fit Bounds (ดูภาพรวมทั้งสองจุด)
+              _buildMapFloatingButton(
+                icon: Icons.crop_free_rounded,
+                tooltip: 'ดูภาพรวมเส้นทาง',
+                onTap: _fitBoundsToRoute,
+              ),
+              // ปุ่มนำทาง Google Maps ภายนอก
+              _buildMapFloatingButton(
+                icon: Icons.near_me_rounded,
+                tooltip: 'นำทางด้วย Google Maps',
+                color: const Color(0xFF10B981),
+                iconColor: Colors.white,
+                onTap: _openExternalNavigation,
+              ),
+              // ปุ่มพิกัดตัวเรา
+              _buildMapFloatingButton(
+                icon: Icons.my_location_rounded,
+                tooltip: _isAutoFollow
+                    ? 'กำลังติดตามตำแหน่ง (Real-time)'
+                    : 'ตำแหน่งของฉัน',
+                color: _isAutoFollow ? AppColors.primaryColor : Colors.white,
+                iconColor: _isAutoFollow
+                    ? Colors.white
+                    : const Color(0xFF1E2022),
+                onTap: _centerToUser,
+              ),
+            ],
           ),
+        ),
 
-          // ─── 4. แผงข้อมูลด้านล่าง (Bolt / Grab Tracking Card) ───
+        // ─── 4. แผงข้อมูลด้านล่าง (Bolt / Grab Tracking Card) ───
+        if (!_isReturn)
           Align(
             alignment: Alignment.bottomCenter,
             child: _buildTrackingBottomCard(context),
           ),
-        ],
-      ),
+        if (returnMapStatus != null)
+          Positioned(top: 8, right: 12, child: returnMapStatus),
+      ],
     );
+  }
+
+  Widget? _buildReturnMapStatus() {
+    final route = _routeResult;
+    if (route != null) {
+      return Chip(
+        avatar: const Icon(Icons.directions_car_outlined, size: 16),
+        label: Text(route.formattedDistance),
+        backgroundColor: Colors.white,
+      );
+    }
+    if (!_isLoadingRoute && _userLocation == null) {
+      return FilledButton.tonalIcon(
+        onPressed: _initLocationsAndRoute,
+        icon: const Icon(Icons.location_searching_rounded, size: 18),
+        label: const Text('ลองระบุตำแหน่งอีกครั้ง'),
+      );
+    }
+    return null;
   }
 
   // ─── หมุดตัวเรา (User Location Pin) ───
@@ -1241,10 +1275,9 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                 ),
               ),
 
-              if (!widget.pickupOnly) const SizedBox(height: 14),
-
               // 4. ปุ่ม Action (โทร / แชท / นำทาง)
-              if (!widget.pickupOnly)
+              if (_showRentalActions) ...[
+                const SizedBox(height: 14),
                 Row(
                   children: [
                     // ปุ่มโทรหาผู้ปล่อยเช่า
@@ -1326,6 +1359,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                     ),
                   ],
                 ),
+              ],
             ],
           ),
         ),

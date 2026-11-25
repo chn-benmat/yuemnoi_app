@@ -355,7 +355,7 @@ void main() {
           find.text('ยกเลิกการเช่า (สินค้ามีปัญหา / ไม่พร้อมใช้งาน)'),
           findsOneWidget,
         );
-        expect(find.text('ชำระเงิน'), findsOneWidget);
+        expect(find.text('ไปชำระเงิน'), findsOneWidget);
       },
     );
 

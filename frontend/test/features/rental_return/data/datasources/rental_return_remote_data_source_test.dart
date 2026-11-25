@@ -22,61 +22,50 @@ void main() {
   });
 
   test(
-    'completion sends user input to server and propagates invalid challenge',
+    'merchant confirmation sends the inspection checkbox with no code',
     () async {
       when(
         () => api.post(
-          '/api/rentals/73/return',
+          '/api/rentals/73/return-confirmation',
           data: any(named: 'data'),
           headers: any(named: 'headers'),
         ),
       ).thenAnswer(
-        (_) async =>
-            const ApiResponse(statusCode: 400, data: {'error': 'รหัสหมดอายุ'}),
+        (_) async => const ApiResponse(
+          statusCode: 200,
+          data: {'id': 73, 'status': 'completed'},
+        ),
       );
       final repository = RentalReturnRepositoryImpl(remoteDataSource: source);
-      await expectLater(
-        repository.completeReturnWithToken(rentalId: 73, tokenOrOtp: '123456'),
-        throwsStateError,
-      );
+      await repository.confirmMerchantReceipt(rentalId: 73);
       verify(
         () => api.post(
-          '/api/rentals/73/return',
-          data: {'token_or_otp': '123456'},
+          '/api/rentals/73/return-confirmation',
+          data: {'checked': true},
           headers: {'Authorization': 'Bearer session-token'},
         ),
       ).called(1);
     },
   );
 
-  test('owner inspection uses server-issued challenge and expiry', () async {
-    when(
-      () => api.post(
-        '/api/rentals/73/return-inspection',
-        data: any(named: 'data'),
-        headers: any(named: 'headers'),
-      ),
-    ).thenAnswer(
-      (_) async => const ApiResponse(
-        statusCode: 200,
-        data: {
-          'token': 'server-qr',
-          'otp': '654321',
-          'expires_at': '2026-10-19T10:05:00Z',
-        },
-      ),
-    );
-    final challenge = await source.generateMerchantToken(73);
-    expect(challenge['token'], 'server-qr');
-    expect(challenge['otp'], '654321');
-    verify(
-      () => api.post(
-        '/api/rentals/73/return-inspection',
-        data: {'checked': true},
-        headers: {'Authorization': 'Bearer session-token'},
-      ),
-    ).called(1);
-  });
+  test(
+    'merchant confirmation rejects a response without completed status',
+    () async {
+      when(
+        () => api.post(
+          '/api/rentals/73/return-confirmation',
+          data: any(named: 'data'),
+          headers: any(named: 'headers'),
+        ),
+      ).thenAnswer(
+        (_) async => const ApiResponse(
+          statusCode: 200,
+          data: {'id': 73, 'status': 'return_ready'},
+        ),
+      );
+      await expectLater(source.confirmReceipt(73), throwsStateError);
+    },
+  );
 
   test(
     'session uses canonical state and signed evidence without demo deposit',
@@ -118,12 +107,11 @@ void main() {
         ),
       );
       final session = await source.getSession(73);
-      expect(session.step, RentalReturnStep.merchantQrReady);
+      expect(session.step, RentalReturnStep.lenderInspecting);
       expect(
         session.photos.single.imageUrl,
         'https://example.test/signed-evidence',
       );
-      expect(session.merchantOtp, isNull);
       expect(session.depositAmount, 0);
     },
   );

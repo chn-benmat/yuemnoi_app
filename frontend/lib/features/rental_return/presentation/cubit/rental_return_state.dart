@@ -11,8 +11,6 @@ class RentalReturnState extends Equatable {
   final bool isAlarmActive;
   final bool isSubmitting;
   final String? errorMessage;
-  final String? successMessage;
-  final DateTime? merchantQrExpiry;
 
   const RentalReturnState({
     this.status = RentalReturnStatus.initial,
@@ -21,8 +19,6 @@ class RentalReturnState extends Equatable {
     this.isAlarmActive = false,
     this.isSubmitting = false,
     this.errorMessage,
-    this.successMessage,
-    this.merchantQrExpiry,
   });
 
   bool get isRenter => activeRole == RentalUserRole.renter;
@@ -35,8 +31,6 @@ class RentalReturnState extends Equatable {
     bool? isAlarmActive,
     bool? isSubmitting,
     String? errorMessage,
-    String? successMessage,
-    DateTime? merchantQrExpiry,
   }) {
     return RentalReturnState(
       status: status ?? this.status,
@@ -45,8 +39,6 @@ class RentalReturnState extends Equatable {
       isAlarmActive: isAlarmActive ?? this.isAlarmActive,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       errorMessage: errorMessage,
-      successMessage: successMessage,
-      merchantQrExpiry: merchantQrExpiry ?? this.merchantQrExpiry,
     );
   }
 
@@ -58,7 +50,5 @@ class RentalReturnState extends Equatable {
     isAlarmActive,
     isSubmitting,
     errorMessage,
-    successMessage,
-    merchantQrExpiry,
   ];
 }

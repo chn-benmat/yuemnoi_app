@@ -29,7 +29,6 @@ class RentalPickupPaymentModal extends StatefulWidget {
   final String paymentMethod; // 'promptpay' หรือ 'cash'
   final bool initialIsOwner;
   final int? initialStep;
-  final bool openPaymentAppOnShow;
   final ValueChanged<int>? onStepChanged;
   final ValueChanged<String>? onFinished;
   final UpdateBookingStatusUseCase? updateBookingStatusUseCase;
@@ -127,7 +126,6 @@ class RentalPickupPaymentModal extends StatefulWidget {
     this.paymentMethod = 'promptpay',
     this.initialIsOwner = false,
     this.initialStep,
-    this.openPaymentAppOnShow = false,
     this.onStepChanged,
     this.onFinished,
     this.updateBookingStatusUseCase,
@@ -143,7 +141,6 @@ class RentalPickupPaymentModal extends StatefulWidget {
     String paymentMethod = 'promptpay',
     bool initialIsOwner = false,
     int? initialStep,
-    bool openPaymentAppOnShow = false,
     ValueChanged<int>? onStepChanged,
     UpdateBookingStatusUseCase? updateBookingStatusUseCase,
   }) {
@@ -164,7 +161,6 @@ class RentalPickupPaymentModal extends StatefulWidget {
         paymentMethod: paymentMethod,
         initialIsOwner: initialIsOwner,
         initialStep: initialStep,
-        openPaymentAppOnShow: openPaymentAppOnShow,
         onStepChanged: onStepChanged,
         onFinished: (status) => Navigator.of(context).pop(status),
         updateBookingStatusUseCase: updateBookingStatusUseCase,
@@ -258,13 +254,6 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
     }
 
     _initialPaymentLoad = _refreshHandoverPayment();
-    if (widget.openPaymentAppOnShow) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          unawaited(_openPaymentApp());
-        }
-      });
-    }
     if (_hasBooking && !_isOwner) {
       _statusPollTimer = Timer.periodic(
         const Duration(milliseconds: 1500),
@@ -413,23 +402,18 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
         return;
       }
       final app = apps.length == 1 ? apps.single : await _pickPaymentApp(apps);
-      if (!mounted || !_canOpenPaymentApp) return;
-      if (app == null) {
-        _setStep(0);
-        return;
-      }
+      if (!mounted || !_canOpenPaymentApp || app == null) return;
       final didOpen = await PromptPayAppLauncher.open(app);
       if (!didOpen && mounted) {
         setState(() {
-          _paymentAppMessage =
-              'เปิดแอปที่เลือกไม่ได้ ปิดหน้านี้แล้วกดชำระเงินอีกครั้ง';
+          _paymentAppMessage = 'เปิดแอปที่เลือกไม่ได้ กรุณากดชำระเงินอีกครั้ง';
         });
       }
     } on Exception {
       if (mounted) {
         setState(() {
           _paymentAppMessage =
-              'เปิดแอปชำระเงินไม่สำเร็จ ปิดหน้านี้แล้วกดชำระเงินอีกครั้ง';
+              'เปิดแอปชำระเงินไม่สำเร็จ กรุณากดชำระเงินอีกครั้ง';
         });
       }
     } finally {
@@ -798,10 +782,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
           width: double.infinity,
           height: 48,
           child: ElevatedButton(
-            onPressed: () async {
-              _setStep(1);
-              await _openPaymentApp();
-            },
+            onPressed: () => _setStep(1),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryColor,
               foregroundColor: Colors.white,
@@ -811,7 +792,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
               ),
             ),
             child: const Text(
-              'ชำระเงิน',
+              'ไปชำระเงิน',
               style: TextStyle(
                 fontFamily: AppTextStyles.fontFamily,
                 fontWeight: FontWeight.w700,
@@ -982,7 +963,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
                 _ownerPaymentQr != null ||
                 _handoverPayment?.paymentConfirmed == true)) ...[
           const SizedBox(height: 18),
-          _buildOwnerPaymentButton(
+          _buildPaymentButton(
             onPressed: _isConfirmingPayment
                 ? null
                 : () => _refreshHandoverPayment(confirm: true),
@@ -990,6 +971,14 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
             label: _isConfirmingPayment
                 ? 'กำลังยืนยันการรับเงิน...'
                 : 'ยืนยันว่าได้รับเงินครบถ้วนแล้ว [$amount]',
+          ),
+        ],
+        if (_canOpenPaymentApp) ...[
+          const SizedBox(height: 14),
+          _buildPaymentButton(
+            onPressed: _isChoosingPaymentApp ? null : _openPaymentApp,
+            icon: Icons.payments_outlined,
+            label: 'ชำระเงิน',
           ),
         ],
         if (!_isOwner) ...[
@@ -1024,7 +1013,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
     );
   }
 
-  Widget _buildOwnerPaymentButton({
+  Widget _buildPaymentButton({
     required VoidCallback? onPressed,
     required IconData icon,
     required String label,
@@ -1188,7 +1177,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
               child: Text('QR จะมีเลขบัตรประชาชนสำหรับการสแกนโอน'),
             ),
           const SizedBox(height: 8),
-          _buildOwnerPaymentButton(
+          _buildPaymentButton(
             onPressed: _isSavingPromptPayAccount ? null : _savePromptPayAccount,
             icon: Icons.qr_code_rounded,
             label: _isSavingPromptPayAccount

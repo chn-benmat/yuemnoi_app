@@ -51,6 +51,7 @@ type RentalRepository interface {
 	RentalReturnSession(ctx context.Context, userID string, rentalID int64) (map[string]any, error)
 	SubmitRentalEvidence(ctx context.Context, userID string, rentalID int64, images []ItemImage, checklist map[string]bool) (*RentalOrder, error)
 	InspectRentalReturn(ctx context.Context, userID string, rentalID int64) (*RentalReturnChallenge, error)
+	ConfirmRentalReceipt(ctx context.Context, userID string, rentalID int64) (*RentalOrder, error)
 	CompleteRentalReturn(ctx context.Context, userID string, rentalID int64, token string) (*RentalOrder, error)
 	CancelRental(ctx context.Context, userID string, rentalID int64, reason, note string, images []ItemImage) (*RentalOrder, error)
 }

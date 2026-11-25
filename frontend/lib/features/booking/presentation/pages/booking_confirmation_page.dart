@@ -315,11 +315,6 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     _buildStepRow('01', 'นัดรับและตรวจสอบอุปกรณ์ตามที่ระบุ'),
                     const SizedBox(height: 8),
                     _buildStepRow('02', 'ชำระเงิน'),
-                    const SizedBox(height: 8),
-                    _buildStepRow(
-                      '03',
-                      'สแกน QR Code หรือใส่รหัส PIN เพื่อเริ่มการเช่า',
-                    ),
                   ],
                 ),
               ),

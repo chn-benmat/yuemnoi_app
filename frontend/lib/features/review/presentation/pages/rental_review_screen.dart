@@ -159,10 +159,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
           .limit(1);
       if ((existingReview as List).isNotEmpty) {
         if (!mounted) return;
-        showAppPopup(
-          context,
-          content: const Text('คุณรีวิวอุปกรณ์นี้ไปแล้ว'),
-        );
+        showAppPopup(context, content: const Text('คุณรีวิวอุปกรณ์นี้ไปแล้ว'));
         return;
       }
     } catch (error) {
@@ -243,49 +240,6 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryColor.withValues(alpha: 0.09),
-                  borderRadius: BorderRadius.circular(17),
-                ),
-                child: const Icon(
-                  Icons.rate_review_rounded,
-                  color: AppColors.primaryColor,
-                  size: 27,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // ── 1. Headline & Description ──
-              const Text(
-                'ประสบการณ์การเช่า\nของคุณเป็นอย่างไร',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 25,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF25212B),
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'แบ่งปันประสบการณ์จริงของคุณ เพื่อช่วยให้\nผู้เช่าคนต่อไปตัดสินใจได้ง่ายขึ้น',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontFamily,
-                  fontSize: 14,
-                  fontWeight: FontWeight.normal,
-                  color: Color(0xFF595C5D),
-                  height: 1.45,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // ── 2. Rental Item & Owner Card ──
               _buildItemAndOwnerCard(),
 
               const SizedBox(height: 20),
@@ -359,6 +313,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
 
   /// การ์ดข้อมูลสินค้าและผู้ปล่อยเช่า สไตล์โมเดิร์น
   Widget _buildItemAndOwnerCard() {
+    final imageUrl = widget.itemImageUrl?.trim();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -386,18 +341,13 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
               border: Border.all(color: const Color(0xFFE9EAEF)),
             ),
             clipBehavior: Clip.antiAlias,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                widget.itemImageUrl?.isNotEmpty == true
-                    ? Image.network(
-                        widget.itemImageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _buildItemImageFallback(),
-                      )
-                    : _buildItemImageFallback(),
-              ],
-            ),
+            child: imageUrl == null || imageUrl.isEmpty
+                ? _buildItemImageFallback()
+                : Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _buildItemImageFallback(),
+                  ),
           ),
           const SizedBox(width: 16),
 

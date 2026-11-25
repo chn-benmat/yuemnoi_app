@@ -14,46 +14,7 @@ class RentalReturnRepositoryImpl implements RentalReturnRepository {
   }
 
   @override
-  Future<String> uploadInspectionPhoto({
-    required int rentalId,
-    required String photoPath,
-    required String angleKey,
-    required String challengeCode,
-  }) {
-    return _remoteDataSource.uploadPhoto(
-      rentalId: rentalId,
-      photoPath: photoPath,
-      angleKey: angleKey,
-    );
-  }
-
-  @override
-  Future<void> submitConditionVerification({
-    required int rentalId,
-    required List<ReturnInspectionPhoto> photos,
-    required Map<String, bool> checklist,
-  }) {
-    return _remoteDataSource.submitVerification(
-      rentalId: rentalId,
-      photos: photos,
-      checklist: checklist,
-    );
-  }
-
-  @override
-  Future<Map<String, String>> confirmMerchantReceipt({
-    required int rentalId,
-    required String merchantId,
-  }) async {
-    return _remoteDataSource.generateMerchantToken(rentalId);
-  }
-
-  @override
-  Future<bool> completeReturnWithToken({
-    required int rentalId,
-    required String tokenOrOtp,
-  }) async {
-    await _remoteDataSource.markCompleted(rentalId, tokenOrOtp: tokenOrOtp);
-    return true;
+  Future<void> confirmMerchantReceipt({required int rentalId}) {
+    return _remoteDataSource.confirmReceipt(rentalId);
   }
 }

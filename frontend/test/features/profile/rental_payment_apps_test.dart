@@ -13,12 +13,13 @@ void main() {
   late int lookupCount;
   late bool launchSucceeds;
 
-  setUp(() {
+  setUp(() async {
     installed = [];
     opened = [];
     lookupCount = 0;
     launchSucceeds = true;
     SharedPreferences.setMockInitialValues({});
+    await RentalPickupPaymentModal.clearSavedStep(itemId: 930);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           switch (call.method) {
@@ -41,34 +42,45 @@ void main() {
   Future<void> goToPayment(
     WidgetTester tester, {
     String paymentMethod = 'promptpay',
-    bool resumePayment = false,
   }) async {
-    await RentalPickupPaymentModal.clearSavedStep(itemId: 930);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: RentalPickupPaymentModal(
-            key: ValueKey(resumePayment),
-            itemId: 930,
-            itemTitle: 'Sony A7 IV',
-            totalPrice: 1500,
-            paymentMethod: paymentMethod,
-            initialStep: resumePayment ? 1 : null,
-            openPaymentAppOnShow: resumePayment,
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => RentalPickupPaymentModal.show(
+                context,
+                itemId: 930,
+                itemTitle: 'Sony A7 IV',
+                totalPrice: 1500,
+                paymentMethod: paymentMethod,
+              ),
+              child: const Text('Open pickup'),
+            ),
           ),
         ),
       ),
     );
+    await tester.tap(find.text('Open pickup'));
     await tester.pumpAndSettle();
-    if (!resumePayment) {
-      await tester.tap(find.text('ชำระเงิน'));
-      await tester.pumpAndSettle();
-    }
+    await tester.tap(find.text('ไปชำระเงิน'));
+    await tester.pumpAndSettle();
+  }
+
+  final payButton = find.widgetWithText(ElevatedButton, 'ชำระเงิน');
+
+  Future<void> tapPay(WidgetTester tester) async {
+    await tester.tap(payButton);
+    await tester.pumpAndSettle();
   }
 
   testWidgets('opens a single supported payment app directly', (tester) async {
     installed = [wallet, 'com.example.unrelated'];
     await goToPayment(tester);
+    expect(lookupCount, 0);
+    expect(opened, isEmpty);
+
+    await tapPay(tester);
 
     expect(opened, [wallet]);
     expect(find.text('เลือกแอปสำหรับสแกนจ่าย'), findsNothing);
@@ -80,6 +92,7 @@ void main() {
   ) async {
     installed = [bank, wallet, 'com.example.unrelated'];
     await goToPayment(tester);
+    await tapPay(tester);
 
     expect(opened, isEmpty);
     expect(find.text('เลือกแอปสำหรับสแกนจ่าย'), findsOneWidget);
@@ -89,32 +102,38 @@ void main() {
     await tester.tap(find.text('K PLUS'));
     await tester.pumpAndSettle();
     expect(opened, [bank]);
-    expect(find.widgetWithText(ElevatedButton, 'ชำระเงิน'), findsNothing);
+    expect(payButton.hitTestable(), findsOneWidget);
     expect(
       find.textContaining('ระบบจะแสดงรหัสส่งมอบเมื่อผู้ปล่อยเช่ายืนยัน'),
       findsNothing,
     );
     await tester.tap(find.text('ย้อนกลับไปตรวจสภาพ'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(ElevatedButton, 'ชำระเงิน'), findsOneWidget);
+    expect(find.text('ไปชำระเงิน'), findsOneWidget);
   });
 
-  testWidgets('resuming payment opens the only installed app once', (
+  testWidgets('reopening pickup restores payment without launching an app', (
     tester,
   ) async {
     installed = [wallet];
-    await goToPayment(tester, resumePayment: true);
+    await goToPayment(tester);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open pickup'));
+    await tester.pumpAndSettle();
 
-    expect(lookupCount, 1);
-    expect(opened, [wallet]);
+    expect(lookupCount, 0);
+    expect(opened, isEmpty);
+    expect(payButton.hitTestable(), findsOneWidget);
     expect(find.text('เลือกแอปสำหรับสแกนจ่าย'), findsNothing);
   });
 
-  testWidgets('dismissing the resumed app picker returns to inspection', (
+  testWidgets('back closes the app picker and allows payment again', (
     tester,
   ) async {
     installed = [bank, wallet];
-    await goToPayment(tester, resumePayment: true);
+    await goToPayment(tester);
+    await tapPay(tester);
 
     expect(opened, isEmpty);
     expect(find.text('เลือกแอปสำหรับสแกนจ่าย'), findsOneWidget);
@@ -126,42 +145,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(opened, isEmpty);
     expect(find.text('เลือกแอปสำหรับสแกนจ่าย'), findsNothing);
-    expect(find.widgetWithText(ElevatedButton, 'ชำระเงิน'), findsOneWidget);
+    expect(payButton.hitTestable(), findsOneWidget);
+    expect(find.text('ย้อนกลับไปตรวจสภาพ'), findsOneWidget);
+    await tapPay(tester);
+    expect(find.text('เลือกแอปสำหรับสแกนจ่าย'), findsOneWidget);
   });
 
-  testWidgets('tapping outside the app picker returns to inspection', (
+  testWidgets('tapping outside the app picker keeps the payment step', (
     tester,
   ) async {
     installed = [bank, wallet];
     await goToPayment(tester);
+    await tapPay(tester);
 
     await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
     expect(opened, isEmpty);
     expect(find.text('เลือกแอปสำหรับสแกนจ่าย'), findsNothing);
-    expect(find.widgetWithText(ElevatedButton, 'ชำระเงิน'), findsOneWidget);
-    expect(await RentalPickupPaymentModal.getSavedStep(itemId: 930), 0);
+    expect(payButton.hitTestable(), findsOneWidget);
+    expect(await RentalPickupPaymentModal.getSavedStep(itemId: 930), 1);
   });
 
   testWidgets('keeps payment instructions visible without a supported app', (
     tester,
   ) async {
     await goToPayment(tester);
+    await tapPay(tester);
 
     expect(opened, isEmpty);
     expect(find.text('ไม่พบแอปชำระเงินที่รองรับบนเครื่องนี้'), findsOneWidget);
     expect(find.text('ฉันโอนเงินเรียบร้อยแล้ว'), findsNothing);
   });
 
-  testWidgets('reopening payment retries a failed app launch', (tester) async {
+  testWidgets('pay button retries a failed app launch', (tester) async {
     installed = [bank];
     launchSucceeds = false;
     await goToPayment(tester);
+    await tapPay(tester);
     expect(opened, [bank]);
     expect(find.textContaining('เปิดแอปที่เลือกไม่ได้'), findsOneWidget);
 
     launchSucceeds = true;
-    await goToPayment(tester, resumePayment: true);
+    await tapPay(tester);
     expect(opened, [bank, bank]);
     expect(find.textContaining('เปิดแอปที่เลือกไม่ได้'), findsNothing);
   });
@@ -172,6 +197,7 @@ void main() {
 
     expect(lookupCount, 0);
     expect(opened, isEmpty);
+    expect(payButton, findsNothing);
     expect(
       find.text('รอผู้ปล่อยเช่ายืนยันว่าได้รับเงินเพื่อเริ่มการเช่า'),
       findsOneWidget,

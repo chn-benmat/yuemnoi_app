@@ -93,7 +93,7 @@ flowchart LR
 | intl / timezone                         | 0.20.3 / 0.11.1 |
 | audioplayers / gal                      | 6.8.1 / 2.3.3   |
 | share_plus / url_launcher               | 13.3.0 / 6.3.2  |
-| qr_flutter / mobile_scanner             | 4.1.0 / 7.4.2   |
+| qr_flutter                              | 4.1.0           |
 | permission_handler / json_annotation    | 12.0.3 / 4.12.0 |
 | flutter_launcher_icons                  | 0.14.4          |
 | Android Gradle Plugin / Gradle wrapper  | 9.0.1 / 9.1.0   |

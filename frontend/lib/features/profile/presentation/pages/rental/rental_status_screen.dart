@@ -613,15 +613,13 @@ class _StatusCard extends StatelessWidget {
                   ),
                   icon: Icon(
                     item.isLender
-                        ? Icons.qr_code_2_rounded
-                        : Icons.camera_alt_outlined,
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.assignment_turned_in_outlined,
                     size: 16,
                     color: Colors.white,
                   ),
                   label: Text(
-                    item.isLender
-                        ? 'ตรวจรับมอบเครื่อง & สร้าง QR'
-                        : 'ส่งคืนอุปกรณ์ (ถ่ายภาพสด)',
+                    item.isLender ? 'ตรวจรับของคืน' : 'ส่งคืนอุปกรณ์',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13,

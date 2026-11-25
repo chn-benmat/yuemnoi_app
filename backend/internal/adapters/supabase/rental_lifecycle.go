@@ -195,6 +195,10 @@ func (r *supabaseRentalRepository) InspectRentalReturn(ctx context.Context, user
 	return challenge, nil
 }
 
+func (r *supabaseRentalRepository) ConfirmRentalReceipt(ctx context.Context, user string, id int64) (*domain.RentalOrder, error) {
+	return r.rentalAction(ctx, user, id, "confirm_receipt", map[string]any{})
+}
+
 func (r *supabaseRentalRepository) CompleteRentalReturn(ctx context.Context, user string, id int64, token string) (*domain.RentalOrder, error) {
 	if strings.TrimSpace(token) == "" || len(token) > 200 {
 		return nil, domain.ErrInvalidRental
