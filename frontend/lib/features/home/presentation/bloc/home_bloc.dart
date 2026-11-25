@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/services/favorite_service.dart';
 import '../../../../core/services/item_catalog_service.dart';
-import '../../../../core/services/recommendation_location_service.dart';
 import '../../domain/entities/feed_item.dart';
 import '../../domain/repositories/home_repository.dart';
 import '../../domain/usecases/get_home_feed_usecase.dart';
@@ -25,10 +24,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<RefreshHomeFeedRequested>(_onRefreshHomeFeedRequested);
     _favoriteListener = () => add(const FavoriteSetChanged());
     FavoriteService.instance.favoritesNotifier.addListener(_favoriteListener);
-    _locationListener = () => add(const RefreshHomeFeedRequested());
-    RecommendationLocationService.instance.changes.addListener(
-      _locationListener,
-    );
     _catalogSubscription = ItemCatalogService.instance.changes.listen((_) {
       add(const RefreshHomeFeedRequested());
     });
@@ -37,7 +32,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final GetHomeFeedUseCase getHomeFeed;
   final HomeRepository homeRepository;
   late final void Function() _favoriteListener;
-  late final void Function() _locationListener;
   late final StreamSubscription<void> _catalogSubscription;
 
   @override
@@ -45,9 +39,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     await _catalogSubscription.cancel();
     FavoriteService.instance.favoritesNotifier.removeListener(
       _favoriteListener,
-    );
-    RecommendationLocationService.instance.changes.removeListener(
-      _locationListener,
     );
     return super.close();
   }

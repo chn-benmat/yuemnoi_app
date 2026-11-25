@@ -25,7 +25,7 @@ void main() {
   tearDown(AuthSession.clear);
 
   test(
-    'basic info saves photos, description, rental unit and price together',
+    'basic info saves photos, description, and both rental prices together',
     () async {
       final client = _Client();
       final auth = _Auth();
@@ -61,8 +61,9 @@ void main() {
           name: 'Camera',
           category: 'กล้อง',
           description: 'Description',
-          rentalType: 'รายวัน',
-          price: 540,
+          rentalType: 'รายชั่วโมง',
+          price: 75,
+          additionalDailyPrice: 410,
           retainedImageUrls: ['https://example.com/photo.jpg'],
           newImages: [],
         ),
@@ -75,8 +76,9 @@ void main() {
             'item_name': 'Camera',
             'category': 'กล้อง',
             'description': 'Description',
-            'type': 'รายวัน',
-            'price': 540,
+            'type': 'รายชั่วโมง',
+            'price': 75,
+            'daily_price': 410,
             'item_image_url': ['https://example.com/photo.jpg'],
           },
         ),

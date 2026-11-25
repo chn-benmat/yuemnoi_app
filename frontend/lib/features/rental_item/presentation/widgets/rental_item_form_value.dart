@@ -6,8 +6,8 @@ class RentalItemFormValue {
     this.name = '',
     this.category,
     this.description = '',
-    this.rentalType,
-    this.price = '',
+    this.hourlyPrice = '',
+    this.dailyPrice = '',
     this.photos = const [],
     this.pickupLocation,
   });
@@ -15,10 +15,14 @@ class RentalItemFormValue {
   final String name;
   final String? category;
   final String description;
-  final String? rentalType;
-  final String price;
+  final String hourlyPrice;
+  final String dailyPrice;
   final List<RentalItemPhoto> photos;
   final PickupLocation? pickupLocation;
 
-  String get unit => rentalType == 'รายชั่วโมง' ? 'ชั่วโมง' : 'วัน';
+  String get rentalType =>
+      int.tryParse(hourlyPrice) != null ? 'รายชั่วโมง' : 'รายวัน';
+  int? get price => int.tryParse(hourlyPrice) ?? int.tryParse(dailyPrice);
+  int? get additionalDailyPrice =>
+      rentalType == 'รายชั่วโมง' ? int.tryParse(dailyPrice) : null;
 }

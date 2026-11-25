@@ -2,12 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/theme/app_theme.dart';
 import 'package:frontend/features/profile/presentation/pages/account/edit_profile_screen.dart';
+import 'package:frontend/features/profile/presentation/pages/account/setting_account_screen.dart';
 import 'package:frontend/features/profile/presentation/pages/legal/privacy_policy_screen.dart';
 import 'package:frontend/features/profile/presentation/pages/legal/terms_of_service_screen.dart';
 import 'package:frontend/features/profile/presentation/pages/account/edit_contact_screen.dart';
 import 'package:frontend/features/profile/presentation/pages/account/change_password_screen.dart';
 
 void main() {
+  testWidgets('account settings has no location permission entry', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: SettingAccountScreen()));
+    expect(find.text('แก้ไขข้อมูล'), findsOneWidget);
+    expect(find.text('ข้อมูลติดต่อ'), findsOneWidget);
+    expect(find.text('ข้อมูลบัตรประชาชน'), findsOneWidget);
+    expect(find.text('สิทธิ์ตำแหน่ง'), findsNothing);
+  });
+
+  testWidgets('edit profile has no location permission section', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: EditProfileScreen()));
+    expect(find.text('สิทธิ์ตำแหน่ง'), findsNothing);
+  });
+
   testWidgets('contact email cannot accept edits that the API cannot save', (
     tester,
   ) async {

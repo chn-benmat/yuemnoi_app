@@ -50,10 +50,36 @@ void main() {
       expect(item.isOwner, isTrue);
       expect(item.ownerHidden, isTrue);
       expect(item.unitLabel, 'วัน');
+      expect(item.hourlyPrice, isNull);
+      expect(item.dailyPrice, 1000);
       expect(item.reviews.single.reviewer.displayName, 'mark');
       expect(item.averageRating, 4.5);
     },
   );
+
+  test('reads the advertised prices from both item detail sources', () {
+    final row = {
+      'id': 7,
+      'user_id': 'owner-id',
+      'price': 75,
+      'daily_price': 410,
+      'type': 'hourly',
+    };
+    final items = [
+      ItemDetailModel.fromRecords(
+        item: row,
+        profilesByUserId: const {},
+        reviews: const [],
+        currentUserId: null,
+      ),
+      ItemDetailModel.fromApiResponse(item: row, currentUserId: null),
+    ];
+    for (final item in items) {
+      expect(item.hourlyPrice, 75);
+      expect(item.dailyPrice, 410);
+      expect(item.withVisibility(hidden: true).dailyPrice, 410);
+    }
+  });
 
   test('uses safe fallbacks for nullable profile and item values', () {
     final item = ItemDetailModel.fromRecords(

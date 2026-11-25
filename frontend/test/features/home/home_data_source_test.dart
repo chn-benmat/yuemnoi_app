@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mocktail/mocktail.dart';
@@ -8,7 +9,11 @@ import 'package:drift/native.dart';
 import 'package:frontend/core/cache/app_cache.dart';
 import 'package:frontend/core/cache/cache_database.dart';
 import 'package:frontend/core/network/api_client.dart';
+import 'package:frontend/core/services/recommendation_location_service.dart';
 import 'package:frontend/features/home/data/datasources/home_supabase_data_source.dart';
+import 'package:frontend/features/home/data/repositories/home_repository_impl.dart';
+import 'package:frontend/features/home/domain/usecases/rank_items_by_distance.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeApiClient implements ApiClient {
@@ -138,6 +143,98 @@ void main() {
     source.clearMemoryCache();
     expect(await source.fetchNearbyItems(), isEmpty);
   });
+
+  test(
+    'a previous account location does not provide a feed distance',
+    () async {
+      final api = _FakeApiClient(
+        const ApiResponse(
+          statusCode: 200,
+          data: [
+            {'id': 'camera', 'item_name': 'Camera', 'distance_km': 1.8},
+          ],
+        ),
+      );
+      final source = HomeSupabaseDataSource(apiClient: api);
+      expect((await source.fetchNearbyItems()).single.distanceKm, isNull);
+    },
+  );
+
+  test('ranks pickup points from the permitted phone position', () async {
+    const channel = MethodChannel('flutter.baseflow.com/geolocator');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    var permission = LocationPermission.whileInUse;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      return switch (call.method) {
+        'checkPermission' => permission.index,
+        'isLocationServiceEnabled' => true,
+        'getCurrentPosition' => {
+          'latitude': 13.0,
+          'longitude': 100.0,
+          'timestamp': DateTime(2026, 1, 1).millisecondsSinceEpoch,
+          'accuracy': 100.0,
+        },
+        _ => throw StateError('Unexpected location method: ${call.method}'),
+      };
+    });
+    final location = RecommendationLocationService.instance;
+    addTearDown(() async {
+      permission = LocationPermission.denied;
+      await location.refresh();
+      messenger.setMockMethodCallHandler(channel, null);
+    });
+
+    final client = SupabaseClient(
+      'https://example.test',
+      'public-test-key',
+      httpClient: MockClient((request) async {
+        final body = switch (request.url.path) {
+          '/rest/v1/home_feed_ranked_v' =>
+            '[{"id":1,"item_name":"Far"},{"id":2,"item_name":"Near"},{"id":3,"item_name":"Unknown"}]',
+          '/rest/v1/item_tb' =>
+            '[{"id":1,"pickup_latitude":14,"pickup_longitude":100},'
+                '{"id":2,"pickup_latitude":13.01,"pickup_longitude":100}]',
+          _ => throw StateError('Unexpected request: ${request.url.path}'),
+        };
+        return http.Response(
+          body,
+          200,
+          request: request,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+    addTearDown(client.dispose);
+    final repository = HomeRepositoryImpl(
+      dataSource: HomeSupabaseDataSource(supabaseClient: client),
+    );
+    final items = await repository.getNearbyItems();
+
+    await location.refresh();
+    final nearby = rankItemsByDistance(items, location.position.value);
+    expect(nearby.map((item) => item.id), ['2', '1', '3']);
+    expect(nearby.first.distanceKm, closeTo(1.11, 0.02));
+    expect(nearby.last.distanceKm, isNull);
+
+    permission = LocationPermission.denied;
+    await location.refresh();
+    final ordinaryFeed = rankItemsByDistance(items, location.position.value);
+    expect(ordinaryFeed.map((item) => item.id), ['1', '2', '3']);
+    expect(ordinaryFeed.map((item) => item.distanceKm), everyElement(isNull));
+  });
+
+  test(
+    'a cold feed reports a connection failure without sample listings',
+    () async {
+      final api = _FakeApiClient(const ApiResponse(statusCode: 200, data: []))
+        ..failure = const ApiClientException(ApiClientErrorType.connection);
+      final source = HomeSupabaseDataSource(apiClient: api);
+
+      await expectLater(source.fetchCuratedItems(), throwsFormatException);
+      await expectLater(source.fetchNearbyItems(), throwsFormatException);
+    },
+  );
 
   test(
     'a delayed request cannot publish the previous account into the next cache',

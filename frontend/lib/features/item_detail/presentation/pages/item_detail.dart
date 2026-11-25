@@ -251,6 +251,8 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       'ลองดู ${item.name} บน Yuemnoi',
       if (description.isNotEmpty) description,
       'ราคา ฿$price/${item.unitLabel}',
+      if (item.additionalDailyPrice case final dailyPrice?)
+        '฿${NumberFormat.decimalPattern().format(dailyPrice)}/วัน',
       ItemDeepLink.build(item.id).toString(),
     ].join('\n');
 
@@ -1195,6 +1197,14 @@ class _ChatActionBar extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       _RentalPrice(item: item),
+                      if (item.additionalDailyPrice case final dailyPrice?)
+                        Text(
+                          '฿${NumberFormat.decimalPattern().format(dailyPrice)} / วัน',
+                          style: const TextStyle(
+                            color: _DetailStyle.secondary,
+                            fontSize: 13,
+                          ),
+                        ),
                     ],
                   ),
                 ),

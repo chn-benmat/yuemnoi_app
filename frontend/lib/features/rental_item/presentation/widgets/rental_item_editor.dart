@@ -53,13 +53,12 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
   );
   final _nameFocus = FocusNode();
   final _descriptionFocus = FocusNode();
-  final _priceFocus = FocusNode();
   late final TextEditingController _name;
   late final TextEditingController _description;
-  late final TextEditingController _price;
+  late final TextEditingController _hourlyPrice;
+  late final TextEditingController _dailyPrice;
   late final List<RentalItemPhoto> _photos;
   late String? _category;
-  late String? _rentalType;
   PickupLocation? _pickup;
   bool _showErrors = false;
   bool _picking = false;
@@ -76,9 +75,9 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     final initial = widget.initialValue;
     return _name.text != initial.name ||
         _description.text != initial.description ||
-        _price.text != initial.price ||
+        _hourlyPrice.text != initial.hourlyPrice ||
+        _dailyPrice.text != initial.dailyPrice ||
         _category != initial.category ||
-        _rentalType != initial.rentalType ||
         _pickup != initial.pickupLocation ||
         !listEquals(_photos, initial.photos);
   }
@@ -87,8 +86,8 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     name: _name.text.trim(),
     category: _category,
     description: _description.text.trim(),
-    rentalType: _rentalType,
-    price: _price.text.trim(),
+    hourlyPrice: _hourlyPrice.text.trim(),
+    dailyPrice: _dailyPrice.text.trim(),
     photos: List.unmodifiable(_photos),
     pickupLocation: _pickup,
   );
@@ -99,10 +98,10 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     final initial = widget.initialValue;
     _name = TextEditingController(text: initial.name);
     _description = TextEditingController(text: initial.description);
-    _price = TextEditingController(text: initial.price);
+    _hourlyPrice = TextEditingController(text: initial.hourlyPrice);
+    _dailyPrice = TextEditingController(text: initial.dailyPrice);
     _photos = [...initial.photos];
     _category = initial.category;
-    _rentalType = initial.rentalType;
     _pickup = initial.pickupLocation;
   }
 
@@ -116,11 +115,11 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
   void dispose() {
     _name.dispose();
     _description.dispose();
-    _price.dispose();
+    _hourlyPrice.dispose();
+    _dailyPrice.dispose();
     _scrollController.dispose();
     _nameFocus.dispose();
     _descriptionFocus.dispose();
-    _priceFocus.dispose();
     super.dispose();
   }
 
@@ -352,6 +351,62 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     ),
   );
 
+  Widget _priceField({
+    required int index,
+    required String id,
+    required String unit,
+    required TextEditingController controller,
+    TextEditingController? fallbackPrice,
+    required TextInputAction action,
+  }) => KeyedSubtree(
+    key: ValueKey('$_prefix-$id'),
+    child: _label(
+      'ราคาต่อ$unit',
+      TextFormField(
+        key: _fieldKeys[index],
+        controller: controller,
+        style: AppFormFieldStyles.textStyle,
+        keyboardType: TextInputType.number,
+        textInputAction: action,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        onChanged: (_) => setState(() {}),
+        decoration: _decoration('0').copyWith(
+          prefixIcon: const Center(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: Text('฿'),
+          ),
+          suffixIcon: Padding(
+            padding: const EdgeInsetsDirectional.only(start: 12, end: 16),
+            child: Center(
+              widthFactor: 1,
+              heightFactor: 1,
+              child: Text(
+                'บาท / $unit',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppFormFieldStyles.outlinedHintColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+        validator: (value) {
+          final text = value?.trim() ?? '';
+          if (text.isEmpty) {
+            return fallbackPrice?.text.trim().isEmpty == true
+                ? 'กรุณาระบุราคาต่อชั่วโมงหรือราคาต่อวัน'
+                : null;
+          }
+          final price = int.tryParse(text);
+          return price == null || price <= 0 || price > 2147483647
+              ? 'กรุณาระบุราคาตั้งแต่ 1 ถึง 2,147,483,647 บาท'
+              : null;
+        },
+      ),
+    ),
+  );
+
   Widget _section(String title, String subtitle) => Padding(
     padding: const EdgeInsets.only(bottom: 20),
     child: Column(
@@ -467,173 +522,22 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
               lines: 4,
             ),
             _separator,
-            _section(
-              'ราคาและการให้เช่า',
-              'เลือกหน่วยการเช่า แล้วกำหนดราคาต่อรอบ',
+            _section('ราคาและการให้เช่า', 'ระบุราคาอย่างน้อยหนึ่งแบบ'),
+            _priceField(
+              index: 3,
+              id: 'hourly-price',
+              unit: 'ชั่วโมง',
+              controller: _hourlyPrice,
+              fallbackPrice: _dailyPrice,
+              action: TextInputAction.next,
             ),
-            _label(
-              'ประเภทการให้เช่า',
-              FormField<String>(
-                key: _fieldKeys[3],
-                initialValue: _rentalType,
-                validator: (value) => value == null || value.isEmpty
-                    ? 'กรุณาเลือกประเภทการให้เช่า'
-                    : null,
-                builder: (field) => Column(
-                  key: ValueKey(
-                    widget.isEditing
-                        ? 'edit-item-rental-type'
-                        : 'rental-type-field',
-                  ),
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    LayoutBuilder(
-                      builder: (context, constraints) => Wrap(
-                        spacing: 12,
-                        runSpacing: 10,
-                        children: [
-                          for (final type in ['รายวัน', 'รายชั่วโมง'])
-                            SizedBox(
-                              width:
-                                  MediaQuery.textScalerOf(context).scale(14) >
-                                      21
-                                  ? constraints.maxWidth
-                                  : (constraints.maxWidth - 12) / 2,
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  setState(() => _rentalType = type);
-                                  field.didChange(type);
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(0, 44),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 14,
-                                  ),
-                                  foregroundColor: _rentalType == type
-                                      ? AppColors.primaryColor
-                                      : AppFormFieldStyles.outlinedTextColor,
-                                  backgroundColor: _rentalType == type
-                                      ? AppFormFieldStyles.outlinedHoverColor
-                                      : Colors.white,
-                                  side: BorderSide(
-                                    color: _rentalType == type
-                                        ? AppColors.primaryColor
-                                        : AppFormFieldStyles
-                                              .outlinedBorderColor,
-                                    width: _rentalType == type ? 1.5 : 1,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                icon: Icon(
-                                  type == 'รายวัน'
-                                      ? Icons.calendar_today_outlined
-                                      : Icons.schedule_rounded,
-                                  size: 17,
-                                ),
-                                label: Text(
-                                  type,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (field.hasError)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          field.errorText!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            KeyedSubtree(
-              key: ValueKey('$_prefix-price'),
-              child: _label(
-                'ราคาให้เช่า',
-                TextFormField(
-                  key: _fieldKeys[4],
-                  controller: _price,
-                  focusNode: _priceFocus,
-                  style: AppFormFieldStyles.textStyle.copyWith(
-                    fontSize: 18,
-                    height: 1.6,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.done,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) => setState(() {}),
-                  onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                  decoration: _decoration('0').copyWith(
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    prefixIconConstraints: const BoxConstraints(
-                      minWidth: 0,
-                      minHeight: 0,
-                    ),
-                    prefixIcon: const Padding(
-                      padding: EdgeInsetsDirectional.only(start: 16, end: 12),
-                      child: Align(
-                        widthFactor: 1,
-                        heightFactor: 1,
-                        child: Text(
-                          '฿',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: AppFormFieldStyles.outlinedHintColor,
-                          ),
-                        ),
-                      ),
-                    ),
-                    suffixIconConstraints: const BoxConstraints(
-                      minWidth: 0,
-                      minHeight: 0,
-                    ),
-                    suffixIcon: Padding(
-                      padding: const EdgeInsetsDirectional.only(
-                        start: 12,
-                        end: 16,
-                      ),
-                      child: Align(
-                        widthFactor: 1,
-                        heightFactor: 1,
-                        child: Text(
-                          _rentalType == null ? 'บาท' : 'บาท / ${_value.unit}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppFormFieldStyles.outlinedHintColor,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  validator: (value) {
-                    final price = int.tryParse(value?.trim() ?? '');
-                    return price == null || price <= 0
-                        ? 'กรุณาระบุราคาที่มากกว่า 0'
-                        : null;
-                  },
-                ),
-              ),
+            const SizedBox(height: 20),
+            _priceField(
+              index: 4,
+              id: 'daily-price',
+              unit: 'วัน',
+              controller: _dailyPrice,
+              action: TextInputAction.done,
             ),
             _separator,
             _section(

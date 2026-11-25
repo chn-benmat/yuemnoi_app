@@ -38,9 +38,9 @@ class ChatNotificationService {
         '@mipmap/ic_launcher',
       );
       const iosSettings = DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
       );
 
       const initSettings = InitializationSettings(
@@ -58,14 +58,11 @@ class ChatNotificationService {
         },
       );
 
-      // Request notification permissions for Android 13+
       final androidPlatform = _notificationsPlugin
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
       if (androidPlatform != null) {
-        await androidPlatform.requestNotificationsPermission();
-
         // สร้าง Channel ข้อความแชทระดับสูงสุด (Importance.max) เพื่อให้เด้งเป็น Heads-up Banner ด้านบนจอทับแอปอื่น
         final chatChannel = AndroidNotificationChannel(
           'yuemnoi_chat_messages_v3',

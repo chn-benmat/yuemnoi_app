@@ -26,6 +26,7 @@ type Item struct {
 	Description      string    `json:"description"`
 	Category         string    `json:"category"`
 	Price            int       `json:"price"`
+	DailyPrice       *int      `json:"daily_price,omitempty"`
 	Status           string    `json:"status"` // เช่น "pending", "verified", "rejected"
 	ModerationHidden bool      `json:"moderation_hidden"`
 	OwnerHidden      bool      `json:"owner_hidden"`

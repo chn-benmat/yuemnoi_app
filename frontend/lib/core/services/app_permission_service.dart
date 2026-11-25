@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../constants/colors.dart';
-import 'fcm_service.dart';
 
 class AppPermissionService {
   AppPermissionService._();
@@ -53,46 +53,24 @@ class AppPermissionService {
     }
   }
 
-  /// ตรวจสอบและเรียก Popup ขอสิทธิ์การแจ้งเตือนของระบบ OS (Android / iOS Native Dialog) โดยตรง
-  static Future<bool> requestNotificationPermission([
-    BuildContext? context,
-  ]) async {
-    if (kIsWeb) return true;
-
-    try {
-      final status = await Permission.notification.status;
-      if (status.isGranted) {
-        return true;
-      }
-
-      // เรียกขอสิทธิ์ผ่านหน้าต่างของระบบปฏิบัติการ (OS Dialog) โดยตรง
-      final result = await Permission.notification.request();
-      try {
-        await FcmService.instance.requestNotificationPermission();
-      } catch (_) {}
-      return result.isGranted;
-    } catch (e) {
-      debugPrint('Notification permission error: $e');
-      return true;
-    }
-  }
-
-  /// ตรวจสอบและเรียก Popup ขอสิทธิ์การแจ้งเตือนของระบบ OS โดยตรงเมื่อเข้าหน้า Login
-  static Future<void> checkAndPromptNotificationPermission([
-    BuildContext? context,
-  ]) async {
-    if (kIsWeb) return;
-
-    try {
-      final status = await Permission.notification.status;
-      if (!status.isGranted) {
-        await Permission.notification.request();
-        try {
-          await FcmService.instance.requestNotificationPermission();
-        } catch (_) {}
-      }
-    } catch (e) {
-      debugPrint('Check notification permission error: $e');
+  /// ขอสิทธิ์แจ้งเตือนจากระบบโดยตรงเมื่อเปิดแอปครั้งแรก
+  static Future<void> requestNotificationPermission() async {
+    final notifications = FlutterLocalNotificationsPlugin();
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        await notifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()!
+            .requestNotificationsPermission();
+      case TargetPlatform.iOS:
+        await notifications
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >()!
+            .requestPermissions(alert: true, badge: true, sound: true);
+      default:
+        break;
     }
   }
 

@@ -50,6 +50,9 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 	if item.ItemImageURL != nil {
 		payload["item_image_url"] = item.ItemImageURL
 	}
+	if item.DailyPrice != nil {
+		payload["daily_price"] = *item.DailyPrice
+	}
 
 	err := r.client.DB.From("item_tb").Insert(payload).ExecuteWithContext(ctx, &items)
 	if err != nil {

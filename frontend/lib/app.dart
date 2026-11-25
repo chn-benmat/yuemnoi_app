@@ -4,19 +4,18 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'core/services/location_service.dart';
 import 'core/navigation/app_routes.dart';
 import 'core/navigation/item_deep_link.dart';
 import 'core/network/supabase_client.dart';
-import 'core/services/app_orientation_service.dart';
-import 'core/services/chat_notification_service.dart';
 import 'core/services/app_notification_service.dart';
+import 'core/services/app_orientation_service.dart';
+import 'core/services/app_permission_service.dart';
+import 'core/services/chat_notification_service.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/recommendation_location_service.dart';
 import 'core/theme/app_theme.dart';
-import 'core/widgets/app_popup.dart';
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
@@ -34,10 +33,14 @@ class YuemnoiApp extends StatefulWidget {
 }
 
 class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
+  static const _notificationPermissionRequested =
+      'startup_notification_permission_requested_v1';
+  static const _locationPermissionRequested =
+      'startup_location_permission_requested_v1';
+
   late final GoRouter _router;
   StreamSubscription<Uri>? _deepLinkSubscription;
-  StreamSubscription<dynamic>? _authStateSubscription;
-  final Set<String> _promptedLocationUsers = {};
+  bool _startupPermissionsComplete = false;
 
   @override
   void initState() {
@@ -50,24 +53,6 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
         debugPrint('Deep link warning: $error');
       },
     );
-    if (SupabaseConfig.isInitialized) {
-      _authStateSubscription = SupabaseConfig.client.auth.onAuthStateChange
-          .listen((data) {
-            if (data.event.name == 'signedIn' ||
-                data.event.name == 'tokenRefreshed') {
-              unawaited(
-                RecommendationLocationService.instance
-                    .syncPendingForSignedInUser(),
-              );
-            }
-            if (data.event.name == 'signedIn') {
-              final userId = data.session?.user.id;
-              if (userId != null && userId.isNotEmpty) {
-                unawaited(_promptForRecommendationLocation(userId));
-              }
-            }
-          });
-    }
     unawaited(_handleInitialDeepLink());
 
     ChatNotificationService.instance.onNotificationTapped = (conversationId) =>
@@ -75,101 +60,44 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     AppNotificationService.instance.onOpen = _openNotification;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       AppOrientationService.setupOrientation();
       // ผูก callback หลัง navigator พร้อม เพื่อไม่ทำการแตะ Push ตอน cold start หาย
       FcmService.instance.onNotificationOpened = _openPush;
-      final userId = SupabaseConfig.isInitialized
-          ? SupabaseConfig.client.auth.currentUser?.id
-          : null;
-      if (userId != null && userId.isNotEmpty) {
-        unawaited(_promptForRecommendationLocation(userId));
-      }
+      unawaited(_requestFirstLaunchPermissions());
     });
   }
 
-  Future<void> _promptForRecommendationLocation(String userId) async {
-    if (!_promptedLocationUsers.add(userId)) return;
-
-    // Allow the login route to finish its navigation before showing the prompt.
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (!mounted ||
-        SupabaseConfig.client.auth.currentUser?.id != userId) {
+  Future<void> _requestFirstLaunchPermissions() async {
+    if (!RecommendationLocationService.isSupported) {
       return;
     }
 
-    final service = RecommendationLocationService.instance;
     try {
-      if (await service.load() != null) return;
-    } catch (_) {
-      // Do not create a second saved location when the existing one cannot be checked.
-      return;
-    }
-
-    final context = AppRoutes.navigatorKey.currentContext;
-    if (context == null || !context.mounted) return;
-    final shouldUseLocation = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.location_on_rounded),
-        title: const Text('แนะนำอุปกรณ์ใกล้คุณ'),
-        content: const Text(
-          'อนุญาตให้แอปใช้ GPS เพื่อบันทึกตำแหน่งปัจจุบันและแนะนำอุปกรณ์บริเวณใกล้เคียงได้ไหม คุณเปลี่ยนตำแหน่งภายหลังได้ในการตั้งค่าบัญชี',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('ไว้ก่อน'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('อนุญาตใช้ GPS'),
-          ),
-        ],
-      ),
-    );
-    if (shouldUseLocation != true || !mounted) return;
-
-    try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return;
-      }
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        throw const RecommendationLocationServiceException(
-          'กรุณาเปิดบริการตำแหน่งในโทรศัพท์แล้วลองอีกครั้ง',
-        );
-      }
-
-      final position = await LocationService.instance.getCurrentPosition();
-      if (position == null) {
-        throw const RecommendationLocationServiceException(
-          'รับตำแหน่งปัจจุบันไม่ได้ กรุณาลองอีกครั้ง',
-        );
-      }
-      final place = await LocationService.instance.reverseGeocode(
-        position.latitude,
-        position.longitude,
-      );
-      await service.save(
-        latitude: position.latitude,
-        longitude: position.longitude,
-        source: 'gps',
-        label: place?.displayName ?? 'ตำแหน่งปัจจุบัน',
-      );
-    } catch (error) {
+      final prefs = await SharedPreferences.getInstance();
       if (!mounted) return;
-      showAppPopup(
-        context,
-        content: Text(
-          error is RecommendationLocationServiceException
-              ? error.message
-              : 'บันทึกตำแหน่งไม่สำเร็จ กรุณาลองใหม่ในการตั้งค่าบัญชี',
-        ),
+
+      if (prefs.getBool(_notificationPermissionRequested) != true) {
+        try {
+          await AppPermissionService.requestNotificationPermission();
+          await prefs.setBool(_notificationPermissionRequested, true);
+        } catch (_) {
+          debugPrint('ขอสิทธิ์แจ้งเตือนไม่สำเร็จ');
+        }
+      }
+      if (!mounted) return;
+      final requestLocation =
+          prefs.getBool(_locationPermissionRequested) != true;
+      await RecommendationLocationService.instance.refresh(
+        requestPermission: requestLocation,
       );
+      if (requestLocation) {
+        await prefs.setBool(_locationPermissionRequested, true);
+      }
+    } catch (_) {
+      debugPrint('เตรียมสิทธิ์เมื่อเปิดแอปไม่สำเร็จ');
+    } finally {
+      _startupPermissionsComplete = true;
     }
   }
 
@@ -262,6 +190,9 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       AppOrientationService.setupOrientation();
+      if (_startupPermissionsComplete) {
+        unawaited(RecommendationLocationService.instance.refresh());
+      }
       final userId = SupabaseConfig.isInitialized
           ? SupabaseConfig.client.auth.currentUser?.id
           : null;
@@ -273,7 +204,6 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_deepLinkSubscription?.cancel());
-    unawaited(_authStateSubscription?.cancel());
     FcmService.instance.onNotificationOpened = null;
     AppNotificationService.instance.onOpen = null;
     _router.dispose();

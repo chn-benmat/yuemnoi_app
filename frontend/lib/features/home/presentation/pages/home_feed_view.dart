@@ -5,8 +5,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/services/recommendation_location_service.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../domain/entities/feed_item.dart';
+import '../../domain/usecases/rank_items_by_distance.dart';
 import '../bloc/home_bloc.dart';
 import '../bloc/home_event.dart';
 import '../bloc/home_state.dart';
@@ -117,13 +119,22 @@ class _HomeFeedViewState extends State<HomeFeedView> {
               return _buildFeedContent(
                 null,
                 errorMessage: state.message,
-                onRetry: () => context.read<HomeBloc>().add(
-                  const LoadHomeFeedStarted(),
-                ),
+                onRetry: () =>
+                    context.read<HomeBloc>().add(const LoadHomeFeedStarted()),
               );
             }
             if (state is HomeLoaded) {
-              return _buildFeedContent(state);
+              return ValueListenableBuilder(
+                valueListenable:
+                    RecommendationLocationService.instance.position,
+                builder: (context, position, _) => _buildFeedContent(
+                  state,
+                  displayedItems: rankItemsByDistance(
+                    _getDisplayedItems(state),
+                    position,
+                  ),
+                ),
+              );
             }
             return const SizedBox.shrink();
           },
@@ -136,9 +147,8 @@ class _HomeFeedViewState extends State<HomeFeedView> {
     HomeLoaded? state, {
     String? errorMessage,
     VoidCallback? onRetry,
+    List<FeedItem> displayedItems = const [],
   }) {
-    final displayedItems = _getDisplayedItems(state);
-
     return Column(
       children: [
         // ── 1. Top Control Deck: Search Bar + แถบ navbar ของอุปกรณ์ประเภทต่างๆ (PINNED / ตรึงอยู่กับที่ ไม่เลื่อนตาม และไม่ถูกดึงลงเมื่อรีเฟรช) ──
@@ -189,10 +199,7 @@ class _HomeFeedViewState extends State<HomeFeedView> {
         // ── 2. Scrollable Product Feed Layer (Pull to Refresh) ──
         Expanded(
           child: errorMessage != null
-              ? _HomeErrorView(
-                  message: errorMessage,
-                  onRetry: onRetry ?? () {},
-                )
+              ? _HomeErrorView(message: errorMessage, onRetry: onRetry ?? () {})
               : state == null
               ? const _HomeLoadingView()
               : RefreshIndicator(

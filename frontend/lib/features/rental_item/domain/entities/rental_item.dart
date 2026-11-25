@@ -32,6 +32,7 @@ class RentalItemDraft {
     required this.description,
     required this.rentalType,
     required this.price,
+    this.additionalDailyPrice,
     required this.images,
     this.pickupLocation,
   });
@@ -41,6 +42,7 @@ class RentalItemDraft {
   final String description;
   final String rentalType;
   final int price;
+  final int? additionalDailyPrice;
   final List<RentalItemImage> images;
   final PickupLocation? pickupLocation;
 }

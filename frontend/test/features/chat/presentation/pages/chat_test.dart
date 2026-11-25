@@ -2201,7 +2201,7 @@ void main() {
     );
 
     testWidgets(
-      'Displays active rental banner, countdown timer, status button, and return button after handover completed message arrives',
+      'Displays active and completed rental status in the chat card without a banner',
       (tester) async {
         SharedPreferences.setMockInitialValues({});
         final bloc = ChatDetailBloc(
@@ -2235,6 +2235,7 @@ void main() {
           location: 'นัดรับตามตกลง',
           locationNote: '',
           paymentMethod: 'cash',
+          bookingId: 2065,
         );
 
         final bookingMsg = ChatMessage(
@@ -2267,21 +2268,7 @@ void main() {
         bloc.add(ChatMessagesUpdated([bookingMsg, handoverMsg]));
         await tester.pumpAndSettle();
 
-        // 1. Pinned active rental banner should appear at top
-        expect(
-          find.byKey(const ValueKey('chat-active-rental-banner')),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(const ValueKey('chat-banner-status-button')),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(const ValueKey('chat-banner-return-button')),
-          findsOneWidget,
-        );
-
-        // 2. Bubble card should update to active rental
+        expect(find.textContaining('กำลังเช่า:'), findsNothing);
         expect(
           find.byKey(const ValueKey('chat-booking-return-button')),
           findsOneWidget,
@@ -2296,23 +2283,19 @@ void main() {
           conversationId: bookingMsg.conversationId,
           senderId: bookingMsg.senderId,
           message: bookingData
-              .copyWith(status: 'completed', bookingId: 2065)
+              .copyWith(status: 'completed')
               .toChatMessagePayload(),
           createdAt: bookingMsg.createdAt,
           isMine: bookingMsg.isMine,
         );
         bloc.add(ChatMessagesUpdated([completedMessage, handoverMsg]));
         await tester.pumpAndSettle();
-        expect(find.text('การเช่าเสร็จสิ้น'), findsWidgets);
-        expect(find.textContaining('กำลังเช่า:'), findsNothing);
-        expect(
-          find.byKey(const ValueKey('chat-banner-return-button')),
-          findsNothing,
-        );
+        expect(find.text('การเช่าเสร็จสิ้น'), findsOneWidget);
         expect(
           find.byKey(const ValueKey('chat-booking-return-button')),
           findsNothing,
         );
+
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.runAsync(bloc.close);
       },

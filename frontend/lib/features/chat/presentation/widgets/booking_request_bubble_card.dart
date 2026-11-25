@@ -11,7 +11,6 @@ import '../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../domain/entities/chat_message.dart';
-import '../../../profile/presentation/widgets/rentals/rental_status_widgets.dart';
 
 class BookingRequestBubbleCard extends StatefulWidget {
   const BookingRequestBubbleCard({
@@ -875,54 +874,34 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                 ),
               ),
             ] else if (_rentalStatus == 'completed') ...[
-              SizedBox(
+              Container(
                 width: double.infinity,
                 height: 42,
-                child: ElevatedButton.icon(
-                  key: const ValueKey('chat-booking-rental-status-button'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FaIcon(
+                      FontAwesomeIcons.circleCheck,
+                      size: 15,
+                      color: Colors.white,
                     ),
-                  ),
-                  onPressed: () => RentalStatusCard.showDetails(
-                    context,
-                    RentalStatusItemData(
-                      bookingId: _bookingId,
-                      itemId: item.id,
-                      title: item.title,
-                      ownerName: widget.senderName ?? item.ownerName,
-                      partnerRole: isOwnerUser ? 'ผู้เช่า' : 'เจ้าของอุปกรณ์',
-                      status: 'เสร็จสิ้น',
-                      statusCode: 'completed',
-                      statusColor: const Color(0xFF475569),
-                      iconData: Icons.inventory_2_outlined,
-                      imageUrl: displayImageUrl,
-                      startDate: widget.bookingData.startDateTime,
-                      endDate: widget.bookingData.endDateTime,
-                      duration:
-                          '${widget.bookingData.duration} ${widget.bookingData.rentalType.unit}',
-                      totalPrice: widget.bookingData.totalPrice.round(),
-                      pickupLocation: widget.bookingData.location,
-                      isOwner: isOwnerUser,
+                    SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'การเช่าเสร็จสิ้น',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
-                  ),
-                  icon: const FaIcon(
-                    FontAwesomeIcons.circleCheck,
-                    size: 15,
-                    color: Colors.white,
-                  ),
-                  label: Text(
-                    'การเช่าเสร็จสิ้น',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  ],
                 ),
               ),
             ] else if (_isConfirmed) ...[

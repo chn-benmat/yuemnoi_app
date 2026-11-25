@@ -4,11 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/services/recommendation_location_service.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../data/repositories/home_repository_impl.dart';
 import '../../domain/entities/feed_category.dart';
 import '../../domain/entities/feed_item.dart';
 import '../../domain/repositories/home_repository.dart';
+import '../../domain/usecases/rank_items_by_distance.dart';
 import '../widgets/category_filter_sheet.dart';
 import '../widgets/category_filter_chips.dart';
 import '../widgets/shopee_product_card.dart';
@@ -386,9 +388,17 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
 
               // ส่วนเนื้อหาด้านล่าง: สลับระหว่าง Pre-Search กับ Search Results
               Expanded(
-                child: _isSearchSubmitted
-                    ? _buildSearchResultsView()
-                    : _buildPreSearchView(),
+                child: ValueListenableBuilder(
+                  valueListenable:
+                      RecommendationLocationService.instance.position,
+                  builder: (context, position, _) => _isSearchSubmitted
+                      ? _buildSearchResultsView(
+                          rankItemsByDistance(_searchResults, position),
+                        )
+                      : _buildPreSearchView(
+                          rankItemsByDistance(_curatedItems, position),
+                        ),
+                ),
               ),
             ],
           ),
@@ -533,7 +543,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
   // 2. PRE-SEARCH VIEW (คำค้นหาเก่า + สิ่งที่ผู้เช่าสนใจ)
   // ==========================================
 
-  Widget _buildPreSearchView() {
+  Widget _buildPreSearchView(List<FeedItem> curatedItems) {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
@@ -591,7 +601,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
         ),
 
         // รายการสินค้าแนะนำแบบ Item Cards (2-Column Grid)
-        _buildCuratedGridSliver(),
+        _buildCuratedGridSliver(curatedItems),
 
         const SliverToBoxAdapter(child: SizedBox(height: 40)),
       ],
@@ -663,8 +673,8 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     );
   }
 
-  Widget _buildCuratedGridSliver() {
-    if (_isLoadingCurated && _curatedItems.isEmpty) {
+  Widget _buildCuratedGridSliver(List<FeedItem> curatedItems) {
+    if (_isLoadingCurated && curatedItems.isEmpty) {
       return SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         sliver: SliverGrid(
@@ -682,7 +692,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       );
     }
 
-    if (_curatedItems.isEmpty) {
+    if (curatedItems.isEmpty) {
       return const SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.all(32),
@@ -706,9 +716,9 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
           childAspectRatio: 0.61,
         ),
         delegate: SliverChildBuilderDelegate((context, index) {
-          final item = _curatedItems[index];
+          final item = curatedItems[index];
           return ShopeeProductCard(item: item, onTap: () => _onItemTap(item));
-        }, childCount: _curatedItems.length),
+        }, childCount: curatedItems.length),
       ),
     );
   }
@@ -717,7 +727,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
   // 3. SEARCH RESULTS VIEW (แสดงเมื่อกดเสิร์ชแล้ว)
   // ==========================================
 
-  Widget _buildSearchResultsView() {
+  Widget _buildSearchResultsView(List<FeedItem> searchResults) {
     if (_isLoadingResults) {
       return Column(
         children: [
@@ -747,7 +757,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              if (_searchResults.isEmpty)
+              if (searchResults.isEmpty)
                 SliverToBoxAdapter(child: _buildEmptyResultsState())
               else
                 SliverPadding(
@@ -764,12 +774,12 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
                           childAspectRatio: 0.61,
                         ),
                     delegate: SliverChildBuilderDelegate((context, index) {
-                      final item = _searchResults[index];
+                      final item = searchResults[index];
                       return ShopeeProductCard(
                         item: item,
                         onTap: () => _onItemTap(item),
                       );
-                    }, childCount: _searchResults.length),
+                    }, childCount: searchResults.length),
                   ),
                 ),
               const SliverToBoxAdapter(child: SizedBox(height: 50)),
@@ -957,9 +967,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
                 ),
               ),
               child: Text(
-                hasSearchError
-                    ? 'กรุณาลองอีกครั้ง'
-                    : 'กลับไปดูอุปกรณ์แนะนำ',
+                hasSearchError ? 'กรุณาลองอีกครั้ง' : 'กลับไปดูอุปกรณ์แนะนำ',
                 style: const TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,

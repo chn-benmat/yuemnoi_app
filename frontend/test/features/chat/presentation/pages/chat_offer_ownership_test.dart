@@ -25,13 +25,16 @@ class _MockSendMessage extends Mock implements SendChatMessageUseCase {}
 class _MockRepository extends Mock implements ChatRepository {}
 
 void main() {
-  for (final status in ['pending', null, 'completed']) {
+  for (final status in ['pending', null, 'completed', 'finished']) {
     testWidgets('offer availability after previous status=$status', (
       tester,
     ) async {
       await initializeDateFormatting('th');
+      await tester.binding.setSurfaceSize(const Size(800, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       SharedPreferences.setMockInitialValues({});
       BookingConfirmationTracker.clearMemoryCache();
+      ChatMessagesCache.clear();
       final conversation = ChatConversationModel.fromRecords(
         conversation: const {
           'id': 'renewal-room',
@@ -62,10 +65,23 @@ void main() {
         bookingId: 10,
         status: status,
       );
-      const renewed = ItemInquiryData(
-        itemId: 1,
-        itemName: 'Canon EOS R50',
-        previousBookingId: 10,
+      const original = ItemInquiryData(itemId: 1, itemName: 'Canon EOS R50');
+      final renewed = original.withPreviousBookingId(10);
+      final originalMessage = ChatMessage(
+        id: 'original-inquiry',
+        conversationId: conversation.id,
+        senderId: 'customer',
+        message: original.toChatMessagePayload(),
+        createdAt: DateTime(2026, 10, 17),
+        isMine: false,
+      );
+      final renewedMessage = ChatMessage(
+        id: 'renewed-inquiry',
+        conversationId: conversation.id,
+        senderId: 'customer',
+        message: renewed.toChatMessagePayload(),
+        createdAt: DateTime(2026, 10, 20),
+        isMine: false,
       );
       final stream = StreamController<List<ChatMessage>>();
       final streamMessages = _MockStreamMessages();
@@ -83,6 +99,7 @@ void main() {
         await bloc.close();
         await stream.close();
         BookingConfirmationTracker.clearMemoryCache();
+        ChatMessagesCache.clear();
       });
       await tester.pumpWidget(
         MaterialApp(
@@ -93,7 +110,8 @@ void main() {
         ),
       );
       await tester.pump();
-      stream.add([
+      final previousMessages = [
+        originalMessage,
         ChatMessage(
           id: 'previous-offer',
           conversationId: conversation.id,
@@ -102,24 +120,65 @@ void main() {
           createdAt: DateTime(2026, 10, 18),
           isMine: true,
         ),
-        ChatMessage(
-          id: 'renewed-inquiry',
-          conversationId: conversation.id,
-          senderId: 'customer',
-          message: renewed.toChatMessagePayload(),
-          createdAt: DateTime(2026, 10, 20),
-          isMine: false,
-        ),
-      ]);
+      ];
+      stream.add(previousMessages);
       await tester.pumpAndSettle();
+      final originalCard = find.byWidgetPredicate(
+        (widget) =>
+            widget is ItemInquiryBubbleCard &&
+            widget.message.id == originalMessage.id,
+      );
+      final renewedCard = find.byWidgetPredicate(
+        (widget) =>
+            widget is ItemInquiryBubbleCard &&
+            widget.message.id == renewedMessage.id,
+      );
+      final createOffer = find.text('สร้างข้อเสนอการเช่า / นัดรับ');
+      expect(originalCard, findsOneWidget);
+      expect(createOffer, findsNothing);
+
+      stream.add([...previousMessages, renewedMessage]);
+      await tester.pumpAndSettle();
+      expect(originalCard, findsOneWidget);
+      expect(renewedCard, findsOneWidget);
       expect(
-        find.byKey(const ValueKey('inquiry-send-request-1')),
-        status == 'completed' ? findsOneWidget : findsNothing,
+        find.descendant(of: originalCard, matching: createOffer),
+        findsNothing,
       );
       expect(
-        find.text('สร้างข้อเสนอการเช่า / นัดรับ'),
-        status == 'completed' ? findsOneWidget : findsNothing,
+        find.descendant(of: renewedCard, matching: createOffer),
+        status == 'completed' || status == 'finished'
+            ? findsOneWidget
+            : findsNothing,
       );
+
+      if (status == 'completed') {
+        stream.add([
+          ...previousMessages,
+          renewedMessage,
+          ChatMessage(
+            id: 'cancelled-offer',
+            conversationId: conversation.id,
+            senderId: 'owner',
+            message: previous
+                .copyWith(bookingId: 11, status: 'cancelled')
+                .toChatMessagePayload(),
+            createdAt: DateTime(2026, 10, 21),
+            isMine: true,
+          ),
+        ]);
+        await tester.pumpAndSettle();
+        expect(originalCard, findsOneWidget);
+        expect(renewedCard, findsOneWidget);
+        expect(
+          find.descendant(of: originalCard, matching: createOffer),
+          findsNothing,
+        );
+        expect(
+          find.descendant(of: renewedCard, matching: createOffer),
+          findsOneWidget,
+        );
+      }
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }

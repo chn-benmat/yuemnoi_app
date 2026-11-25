@@ -137,36 +137,47 @@ class ShopeeProductCard extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ราคาเช่า สไตล์ Shopee โดดเด่น
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              const Text(
-                                '฿',
-                                style: TextStyle(
-                                  color: AppColors.primaryColor,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                if (item.priceUnit == '/ ชั่วโมง')
+                                  const Text(
+                                    'เริ่มต้น ',
+                                    style: TextStyle(
+                                      color: Color(0xFF7E8388),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                const Text(
+                                  '฿',
+                                  style: TextStyle(
+                                    color: AppColors.primaryColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                _formatPrice(item.price),
-                                style: const TextStyle(
-                                  color: AppColors.primaryColor,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
+                                Text(
+                                  _formatPrice(item.price),
+                                  style: const TextStyle(
+                                    color: AppColors.primaryColor,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                ' ${item.priceUnit}',
-                                style: const TextStyle(
-                                  color: Color(0xFF7E8388),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.normal,
+                                Text(
+                                  ' ${item.priceUnit}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF7E8388),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.normal,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
 
                           const SizedBox(height: 4),
