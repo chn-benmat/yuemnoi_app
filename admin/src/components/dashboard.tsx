@@ -9,7 +9,6 @@ import {
   CalendarDays,
   Star,
   MessageSquareWarning,
-  ChartColumn,
   UserRoundCog,
   Settings,
   Activity,
@@ -37,7 +36,7 @@ import {
 import { api, useAdminData } from "@/lib/api";
 import { toCSV } from "@/lib/export";
 import { groupSeries, type Group } from "@/lib/reports";
-import Overview, { BookingChart, Breakdown } from "./overview";
+import Overview from "./overview";
 import Identity from "./identity";
 import {
   DataTable,
@@ -54,7 +53,6 @@ const icons = [
   CalendarDays,
   Star,
   MessageSquareWarning,
-  ChartColumn,
   UserRoundCog,
   History,
   Settings,
@@ -229,6 +227,7 @@ export default function Dashboard({
   preview?: boolean;
 }) {
   const meta = sections.find((s) => s.id === section)!;
+  const isOverview = section === "overview";
   const [dark, setDark] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [search, setSearch] = useState("");
@@ -266,16 +265,15 @@ export default function Dashboard({
     module + "?" + query.toString(),
     preview,
   );
-  const reportData = result.data
-    ? {
-        ...result.data,
-        series: groupSeries(result.data.series ?? [], group),
-        registrations: groupSeries(result.data.registrations ?? [], group),
-      }
-    : undefined;
-  const hasRange = ["overview", "reports", "bookings", "audit"].includes(
-    section,
-  );
+  const reportData =
+    isOverview && result.data
+      ? {
+          ...result.data,
+          series: groupSeries(result.data.series ?? [], group),
+          registrations: groupSeries(result.data.registrations ?? [], group),
+        }
+      : undefined;
+  const showRangeFilter = section === "bookings" || section === "audit";
   const rows = Array.isArray(result.data?.rows)
     ? (result.data.rows as Row[])
     : [];
@@ -289,7 +287,7 @@ export default function Dashboard({
     const data = result.data;
     if (!data) return;
     const exportRows =
-      section === "overview" || section === "reports"
+      isOverview
         ? [
             {
               report: "summary",
@@ -378,19 +376,6 @@ export default function Dashboard({
             }
           >
             {r.suspended ? "คืนสิทธิ์" : "ระงับ"}
-          </button>
-          <button
-            disabled={preview}
-            onClick={() =>
-              action(
-                r,
-                "pilot",
-                r.pilot ? "นำออกจากกลุ่มทดลอง" : "เชิญเข้าร่วมทดลอง",
-                { enabled: !r.pilot },
-              )
-            }
-          >
-            {r.pilot ? "ออกจากทดลอง" : "เชิญทดลอง"}
           </button>
           {r.identity_status === "approved" && (
             <button
@@ -604,7 +589,7 @@ export default function Dashboard({
               <p>{meta.description}</p>
             </div>
             <div className="heading-actions">
-              {hasRange && (
+              {showRangeFilter && (
                 <>
                   <label className="sr-only" htmlFor="range">
                     ช่วงเวลา
@@ -624,7 +609,7 @@ export default function Dashboard({
                   </select>
                 </>
               )}
-              {["overview", "reports"].includes(section) && (
+              {isOverview && (
                 <button
                   className="primary"
                   disabled={preview || !result.data}
@@ -644,7 +629,7 @@ export default function Dashboard({
               </button>
             </div>
           </div>
-          {hasRange && days === "custom" && (
+          {showRangeFilter && days === "custom" && (
             <div className="date-filter">
               <label>
                 ตั้งแต่
@@ -688,10 +673,7 @@ export default function Dashboard({
               กำลังโหลดข้อมูล…
             </p>
           )}
-          {section === "overview" && (
-            <Overview data={result.data} base={base} />
-          )}
-          {section === "reports" && (
+          {isOverview && (
             <>
               <div className="report-controls">
                 <select
@@ -703,10 +685,6 @@ export default function Dashboard({
                   <option value="week">รายสัปดาห์</option>
                   <option value="month">รายเดือน</option>
                 </select>
-                <button disabled={preview || !result.data} onClick={download}>
-                  <Download size={18} />
-                  CSV รายละเอียด
-                </button>
                 <button
                   disabled={preview || !result.data}
                   onClick={() => window.print()}
@@ -723,25 +701,6 @@ export default function Dashboard({
                 </p>
               </div>
               <Overview data={reportData} base={base} group={group} />
-              <section className="panel">
-                <div className="panel-heading">
-                  <h2>มูลค่าการจองในช่วงเวลา</h2>
-                  <strong>฿{display(result.data?.booking_value)}</strong>
-                </div>
-                <p className="footnote">ยังไม่มีข้อมูลยอดรับชำระเงินจริง</p>
-              </section>
-              <div className="overview-grid">
-                <Breakdown
-                  rows={result.data?.categories ?? []}
-                  title="สินค้าตามหมวดหมู่"
-                  value="items"
-                />
-                <Breakdown
-                  rows={result.data?.statuses ?? []}
-                  title="สถานะการจอง"
-                  value="bookings"
-                />
-              </div>
             </>
           )}
           {section === "identity" && (
@@ -856,50 +815,9 @@ export default function Dashboard({
               <span className="icon-tile">
                 <ShieldCheck />
               </span>
-              <h2>เปิดยืนยันตัวตนทุกบัญชี</h2>
-              <p className="muted">
-                บัญชีเดิมและบัญชีใหม่ยืนยันผ่านแอป Android/iOS
-                ได้โดยไม่ต้องได้รับเชิญ ทุกวัยยืนยันตัวตนได้
-                และทุกคำขอต้องให้เจ้าหน้าที่ตรวจ
-              </p>
-              <p>
-                สถานะ:{" "}
-                <Badge
-                  value={
-                    result.data?.identity_open_to_all === true
-                      ? "ทุกบัญชี"
-                      : result.data
-                        ? "เฉพาะบัญชีทดลอง"
-                        : "—"
-                  }
-                />
-              </p>
-              <button
-                className="primary"
-                disabled={preview || !result.data}
-                onClick={() =>
-                  setOperation({
-                    action: "settings",
-                    target: "identity",
-                    title: result.data?.identity_open_to_all
-                      ? "จำกัดการยืนยันเฉพาะบัญชีทดลอง"
-                      : "เปิดยืนยันตัวตนทุกบัญชี",
-                    data: {
-                      identity_open_to_all: !result.data?.identity_open_to_all,
-                    },
-                    detail:
-                      "เปลี่ยนสิทธิ์เริ่มยืนยันตัวตนเท่านั้น ทุกคำขอยังต้องผ่านการตรวจโดยเจ้าหน้าที่",
-                  })
-                }
-              >
-                {result.data?.identity_open_to_all
-                  ? "ใช้เฉพาะกลุ่มทดลอง"
-                  : "เปิดให้ทุกบัญชี"}
-              </button>
-              <hr />
               <h2>ยืนยันตัวตนก่อนปล่อยเช่า</h2>
               <p className="muted">
-                ผู้ใหญ่ที่ยังไม่ยืนยันยังใช้แอปและเช่าได้
+                ผู้ที่ยังไม่ยืนยันยังใช้แอปและเช่าได้
                 การเปิดใช้จะบังคับเจ้าของสินค้าก่อนประกาศและรับการจองใหม่
               </p>
               <p>
@@ -935,7 +853,11 @@ export default function Dashboard({
               <hr />
               <h3>นโยบายหลักฐาน</h3>
               <p className="muted">
-                คำขอค้างหมดอายุใน 7 วัน หลักฐานดิบลบภายใน 7 วันหลังผลพิจารณา
+                คำขอค้างหมดอายุใน 7 วัน รูปคู่บัตรและหลักฐานอื่นหมดอายุ 7 วันหลังผลพิจารณา
+                รูปหน้าบัตรล่าสุดที่อนุมัติภายใต้เงื่อนไขการเก็บรักษาฉบับใหม่
+                เก็บกับบัญชีจนกว่าจะมีรูปที่อนุมัติมาแทนหรือมีการลบบัญชี
+              </p>
+              <p className="muted">
                 ผลอนุมัติไม่ผูกกับวันหมดอายุบัตร และรองรับผู้ใช้ทุกวัย
               </p>
             </section>

@@ -42,12 +42,6 @@ export const sections = [
     description: "รับเรื่อง ติดตาม และบันทึกผลการดำเนินงาน",
   },
   {
-    id: "reports",
-    label: "รายงาน",
-    title: "รายงาน",
-    description: "สำรวจข้อมูลและส่งออกรายงาน",
-  },
-  {
     id: "staff",
     label: "เจ้าหน้าที่",
     title: "เจ้าหน้าที่",
@@ -63,7 +57,7 @@ export const sections = [
     id: "settings",
     label: "ตั้งค่า",
     title: "ตั้งค่า",
-    description: "จัดการการเปิดใช้งานระบบยืนยันตัวตน",
+    description: "จัดการข้อกำหนดการยืนยันตัวตนก่อนปล่อยเช่า",
   },
   {
     id: "health",

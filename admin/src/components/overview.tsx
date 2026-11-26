@@ -188,10 +188,29 @@ export default function Overview({
           มูลค่าการจองไม่ใช่ยอดรับชำระเงินจริง
         </p>
       </section>
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>มูลค่าการจองในช่วงเวลา</h2>
+          <strong>฿{display(data?.booking_value)}</strong>
+        </div>
+        <p className="footnote">ยังไม่มีข้อมูลยอดรับชำระเงินจริง</p>
+      </section>
+      <div className="overview-grid">
+        <Breakdown
+          rows={data?.categories ?? []}
+          title="สินค้าตามหมวดหมู่"
+          value="items"
+        />
+        <Breakdown
+          rows={data?.statuses ?? []}
+          title="สถานะการจอง"
+          value="bookings"
+        />
+      </div>
     </>
   );
 }
-export function Breakdown({
+function Breakdown({
   rows,
   title,
   value,
