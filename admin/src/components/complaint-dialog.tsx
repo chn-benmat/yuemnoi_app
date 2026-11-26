@@ -73,8 +73,8 @@ export function ComplaintDialog({
       else if (fields.outcome === "confirmed" && result.strike_count) {
         onSaved(
           result.strike_count >= 3
-            ? "ปิดเรื่องและนำประกาศออกแล้ว ระบบจะแจ้งเจ้าของประกาศ"
-            : `ปิดเรื่องแล้ว ระบบจะแจ้งเตือนเจ้าของประกาศ (${result.strike_count}/3 ครั้ง)`,
+            ? "ปิดเรื่องและนำประกาศออกแล้ว"
+            : `ปิดเรื่องและบันทึกการทำผิดแล้ว (${result.strike_count}/3 ครั้ง)`,
         );
       } else onSaved("บันทึกผลและปิดเรื่องแล้ว");
     } catch (e) {
