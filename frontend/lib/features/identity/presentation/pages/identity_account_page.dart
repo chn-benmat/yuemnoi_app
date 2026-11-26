@@ -86,9 +86,9 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   }
 
   Future<void> _load() => _cubit.load(
-    onDetailsLoaded: (details) async {
+    onDetailsLoaded: (hasConsent) async {
       if (!mounted || _allowExit) return;
-      if (details.hasAcceptedCardRetentionConsent) {
+      if (hasConsent) {
         setState(() => _consent = true);
       } else if (!_consent) {
         setState(() => _showingInitialConsent = true);
@@ -140,6 +140,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   Future<void> _showConsent() async {
     if (_dialogOpen) return;
     _dialogOpen = true;
+    final cubit = _cubit;
     final requiresConsent = !_readOnly && !_consent;
     FocusScope.of(context).unfocus();
     final agreed = await showDialog<bool>(
@@ -147,10 +148,18 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
       barrierDismissible: !requiresConsent,
       builder: (_) => IdentityConsentDialog(requiresConsent: requiresConsent),
     );
-    _dialogOpen = false;
-    if (mounted && agreed == true && requiresConsent) {
-      setState(() => _consent = true);
+    if (agreed == true && requiresConsent) {
+      final saved = await cubit.saveConsent();
+      if (mounted) {
+        setState(() => _consent = true);
+        if (!saved) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('บันทึกความยินยอมในเครื่องไม่ได้')),
+          );
+        }
+      }
     }
+    _dialogOpen = false;
   }
 
   Future<bool> _confirm(
