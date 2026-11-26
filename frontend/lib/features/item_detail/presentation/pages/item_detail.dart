@@ -217,10 +217,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         imageUrl: firstImageUrl,
       );
 
-      // เปิดแชตซ้ำโดยไม่ส่งความสนใจเพิ่ม จนกว่ารายการเช่ารอบเดิมจะปิด
+      // เปิดแชตโดยไม่ส่งความสนใจเพิ่มเมื่อมีรายการเช่าหรือสิทธิ์จากคิว
       final chatDataSource = ChatRemoteDataSource();
       String? initialMessageId;
-      if (!item.isRentalOccupied) {
+      if (!item.isRentalOccupied && !item.isRentalQueueHeld) {
         try {
           initialMessageId = await chatDataSource.sendItemInquiryIfNeeded(
             conversationId: conversation.id,

@@ -49,6 +49,7 @@ class ItemDetail extends Equatable {
     this.additionalDailyPrice,
     required this.status,
     this.isRentalOccupied = false,
+    this.isRentalQueueHeld = false,
     required this.rentalType,
     required this.reviews,
     required this.isOwner,
@@ -66,6 +67,7 @@ class ItemDetail extends Equatable {
   final int? additionalDailyPrice;
   final String status;
   final bool isRentalOccupied;
+  final bool isRentalQueueHeld;
   final String rentalType;
   final List<ItemReview> reviews;
   final bool isOwner;
@@ -88,6 +90,7 @@ class ItemDetail extends Equatable {
     additionalDailyPrice: additionalDailyPrice,
     status: status,
     isRentalOccupied: isRentalOccupied,
+    isRentalQueueHeld: isRentalQueueHeld,
     rentalType: rentalType,
     reviews: reviews,
     isOwner: isOwner,
@@ -113,6 +116,7 @@ class ItemDetail extends Equatable {
     additionalDailyPrice,
     status,
     isRentalOccupied,
+    isRentalQueueHeld,
     rentalType,
     reviews,
     isOwner,

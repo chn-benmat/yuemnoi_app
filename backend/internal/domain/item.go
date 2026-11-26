@@ -28,6 +28,7 @@ type Item struct {
 	Price                 int       `json:"price"`
 	DailyPrice            *int      `json:"daily_price,omitempty"`
 	IsRentalOccupied      bool      `json:"is_rental_occupied"`
+	IsRentalQueueHeld     bool      `json:"is_rental_queue_held,omitempty"`
 	Status                string    `json:"status"` // เช่น "pending", "verified", "rejected"
 	ModerationHidden      bool      `json:"moderation_hidden"`
 	OwnerHidden           bool      `json:"owner_hidden"`

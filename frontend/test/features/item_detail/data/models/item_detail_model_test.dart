@@ -81,6 +81,30 @@ void main() {
     }
   });
 
+  test('models a queue hold separately from an open rental', () {
+    final row = {
+      'id': 7,
+      'user_id': 'owner-id',
+      'is_rental_occupied': false,
+      'is_rental_queue_held': true,
+    };
+    final items = [
+      ItemDetailModel.fromRecords(
+        item: row,
+        profilesByUserId: const {},
+        reviews: const [],
+        currentUserId: null,
+      ),
+      ItemDetailModel.fromApiResponse(item: row, currentUserId: null),
+    ];
+
+    for (final item in items) {
+      expect(item.isRentalOccupied, isFalse);
+      expect(item.isRentalQueueHeld, isTrue);
+      expect(item.withVisibility(hidden: false).isRentalQueueHeld, isTrue);
+    }
+  });
+
   test('uses safe fallbacks for nullable profile and item values', () {
     final item = ItemDetailModel.fromRecords(
       item: {

@@ -706,11 +706,14 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       );
       return;
     }
-    if (itemDetail.isRentalOccupied && queueMessageId == null) {
+    if (queueMessageId == null &&
+        (itemDetail.isRentalOccupied || itemDetail.isRentalQueueHeld)) {
       showAppPopup(
         context,
-        content: const Text(
-          'อุปกรณ์นี้กำลังถูกเช่า ส่งข้อเสนอได้หลังยกเลิกการจองหรือรับคืนอุปกรณ์แล้ว',
+        content: Text(
+          itemDetail.isRentalOccupied
+              ? 'อุปกรณ์นี้กำลังถูกเช่า ส่งข้อเสนอได้หลังยกเลิกการจองหรือรับคืนอุปกรณ์แล้ว'
+              : 'อุปกรณ์นี้มีผู้ได้สิทธิ์จากคิวเช่าต่อ กรุณาส่งข้อเสนอจากการ์ดคิว',
         ),
       );
       return;
@@ -820,11 +823,9 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
         }.contains(booking?.status);
       }),
     );
-    final inviteToRentalQueue = hasOpenRentalWithCustomer
-        ? null
-        : _inviteToRentalQueue;
-    final showQueueShortcutInComposer =
-        _conversation.role == ChatParticipantRole.renter || ownsItemInChat;
+    final canInviteToRentalQueue =
+        !hasOpenRentalWithCustomer &&
+        (_conversation.role == ChatParticipantRole.renter || ownsItemInChat);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6F7),
@@ -834,9 +835,6 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
             conversation: _conversation,
             onPhoneCallPressed: _startPhoneCall,
             isPhoneCallLoading: _isStartingPhoneCall,
-            onRentalQueuePressed: showQueueShortcutInComposer
-                ? null
-                : inviteToRentalQueue,
           ),
           Expanded(
             child: Stack(
@@ -1179,8 +1177,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
             onSend: _sendMessage,
             onCamera: _handleCameraPick,
             onGallery: _handleGalleryPick,
-            onInviteToRentalQueue: showQueueShortcutInComposer
-                ? inviteToRentalQueue
+            onInviteToRentalQueue: canInviteToRentalQueue
+                ? _inviteToRentalQueue
                 : null,
             replyingMessage: _replyingMessage,
             editingMessage: _editingMessage,
