@@ -399,16 +399,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
           widget.bookingData.conversationId ?? widget.message.conversationId,
     );
 
-    // ผู้เช่าดูรายละเอียดนัดรับก่อน ส่วนผู้ปล่อยเช่าหรือรายการที่เริ่มเช่าแล้วเปิดแผนที่ได้เลย
     if (_isConfirmed) {
-      if (!isOwner && _rentalStatus == 'confirmed') {
-        await AppRoutes.openBookingConfirmation(
-          context,
-          bookingData: attachedData,
-          isDetailView: true,
-        );
-        return;
-      }
       AppRoutes.openRentalTrackingMap(
         context,
         bookingData: attachedData,
@@ -744,7 +735,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             const SizedBox(height: 12),
 
             // 5. ปุ่ม Action
-            if (_isRentalActive) ...[
+            if (_isRentalActive)
               // ปุ่มส่งคืนอุปกรณ์ (หรือตรวจรับคืน)
               SizedBox(
                 width: double.infinity,
@@ -795,85 +786,19 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-
-              // ปุ่มดูสถานะการเช่า (เปิดหน้า RentalStatusScreen)
-              SizedBox(
-                width: double.infinity,
-                height: 38,
-                child: OutlinedButton.icon(
-                  key: const ValueKey('chat-booking-rental-status-button'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF0F172A),
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                  ),
-                  onPressed: () => AppRoutes.openRentalStatus(
-                    context,
-                    isLender: isOwnerUser,
-                  ),
-                  icon: const FaIcon(
-                    FontAwesomeIcons.receipt,
-                    size: 13,
-                    color: Color(0xFF475569),
-                  ),
-                  label: Text(
-                    isOwnerUser
-                        ? 'ดูสถานะปล่อยเช่า (กำลังเช่า / กำลังใช้ของ)'
-                        : 'ดูสถานะการเช่า (กำลังเช่า / กำลังใช้ของ)',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
+              )
+            else if (_rentalStatus == 'cancelled')
+              const Text(
+                'ยกเลิกการเช่าแล้ว',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF475569),
                 ),
-              ),
-              const SizedBox(height: 4),
-
-              // ลิงก์ดูจุดนัดพบ / นัดส่งคืนบนแผนที่
-              Center(
-                child: TextButton.icon(
-                  onPressed: () => _handleAction(context, isEditMode: false),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                  ),
-                  icon: const FaIcon(
-                    FontAwesomeIcons.locationDot,
-                    size: 12,
-                    color: Color(0xFF64748B),
-                  ),
-                  label: const Text(
-                    'ดูจุดนัดส่งคืนบนแผนที่',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                ),
-              ),
-            ] else if (_rentalStatus == 'cancelled') ...[
-              OutlinedButton(
-                onPressed: () =>
-                    AppRoutes.openRentalStatus(context, isLender: isOwnerUser),
-                child: Text(
-                  isOwnerUser
-                      ? 'ยกเลิกการเช่าแล้ว • ดูสถานะปล่อยเช่า'
-                      : 'ยกเลิกการเช่าแล้ว • ดูสถานะการเช่า',
-                ),
-              ),
-            ] else if (_rentalStatus == 'completed') ...[
+              )
+            else if (_rentalStatus == 'completed')
               Container(
                 width: double.infinity,
                 height: 42,
@@ -903,8 +828,8 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                   ],
                 ),
-              ),
-            ] else if (_isConfirmed) ...[
+              )
+            else if (_isConfirmed)
               SizedBox(
                 width: double.infinity,
                 height: 42,
@@ -936,40 +861,8 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              SizedBox(
-                width: double.infinity,
-                height: 36,
-                child: OutlinedButton.icon(
-                  key: const ValueKey('chat-booking-rental-status-button'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF475569),
-                    side: const BorderSide(color: Color(0xFFE2E8F0)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: () => AppRoutes.openRentalStatus(
-                    context,
-                    isLender: isOwnerUser,
-                  ),
-                  icon: const FaIcon(
-                    FontAwesomeIcons.receipt,
-                    size: 12,
-                    color: Color(0xFF475569),
-                  ),
-                  label: Text(
-                    isOwnerUser ? 'ดูสถานะปล่อยเช่า' : 'ดูสถานะการเช่า',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ] else if (isMine && isOwnerUser)
+              )
+            else if (isMine && isOwnerUser)
               // ผู้ส่งคำขอ/ข้อเสนอ -> สามารถกดแก้ไขรายละเอียดได้
               SizedBox(
                 width: double.infinity,

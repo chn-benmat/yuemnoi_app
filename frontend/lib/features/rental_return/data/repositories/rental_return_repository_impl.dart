@@ -14,7 +14,10 @@ class RentalReturnRepositoryImpl implements RentalReturnRepository {
   }
 
   @override
-  Future<void> confirmMerchantReceipt({required int rentalId}) {
-    return _remoteDataSource.confirmReceipt(rentalId);
+  Future<void> confirmMerchantReceipt({
+    required int rentalId,
+    bool pauseItem = false,
+  }) {
+    return _remoteDataSource.confirmReceipt(rentalId, pauseItem: pauseItem);
   }
 }

@@ -1,5 +1,3 @@
-import 'package:go_router/go_router.dart';
-import 'package:frontend/core/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -30,7 +28,6 @@ void main() {
     bool isOwner = false,
     bool isHandoverCompleted = false,
     String? bookingStatus,
-    void Function(String)? onRoute,
   }) async {
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     final bookingData = BookingRequestData(
@@ -77,29 +74,7 @@ void main() {
         ),
       ),
     );
-    if (onRoute == null) {
-      await tester.pumpWidget(MaterialApp(home: home));
-    } else {
-      final router = GoRouter(
-        routes: [
-          GoRoute(path: '/', builder: (_, _) => home),
-          GoRoute(
-            path: AppRoutes.rentalStatus,
-            builder: (_, state) {
-              onRoute(state.uri.toString());
-              return const Scaffold(body: Text('rental-status-destination'));
-            },
-          ),
-        ],
-      );
-      addTearDown(router.dispose);
-      await tester.pumpWidget(
-        MaterialApp.router(
-          routerConfig: router,
-          builder: (context, child) => child!,
-        ),
-      );
-    }
+    await tester.pumpWidget(MaterialApp(home: home));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
   }
@@ -130,32 +105,36 @@ void main() {
       },
     );
 
-    testWidgets('status action follows owner=$owner', (tester) async {
-      String? destination;
-      await pumpCard(
-        tester,
-        initialStatus: 'confirmed',
-        isOwner: owner,
-        onRoute: (uri) => destination = uri,
-      );
+    testWidgets('confirmed booking keeps pickup details for owner=$owner', (
+      tester,
+    ) async {
+      await pumpCard(tester, initialStatus: 'confirmed', isOwner: owner);
+      expect(find.text('รายละเอียดนัดรับ'), findsOneWidget);
       expect(
-        find.text(owner ? 'ดูสถานะปล่อยเช่า' : 'ดูสถานะการเช่า'),
-        findsOneWidget,
-      );
-      final button = find.byKey(
-        const ValueKey('chat-booking-rental-status-button'),
-      );
-      await tester.ensureVisible(button);
-      await tester.tap(button);
-      await tester.pumpAndSettle();
-      expect(
-        destination,
-        owner
-            ? '${AppRoutes.rentalStatus}?role=lender'
-            : AppRoutes.rentalStatus,
+        find.textContaining(owner ? 'ดูสถานะปล่อยเช่า' : 'ดูสถานะการเช่า'),
+        findsNothing,
       );
       await tester.pumpWidget(const SizedBox.shrink());
     });
+
+    for (final status in ['active', 'awaiting_return', 'return_ready']) {
+      testWidgets('$status keeps the return action for owner=$owner', (
+        tester,
+      ) async {
+        await pumpCard(tester, initialStatus: status, isOwner: owner);
+        expect(
+          find.byKey(const ValueKey('chat-booking-return-button')),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining(owner ? 'ดูสถานะปล่อยเช่า' : 'ดูสถานะการเช่า'),
+          findsNothing,
+        );
+        expect(find.text('ดูจุดนัดส่งคืนบนแผนที่'), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+    }
   }
 
   testWidgets('pending booking renders one rental details table', (
@@ -217,21 +196,14 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  for (final status in ['active', 'awaiting_return', 'return_ready']) {
-    testWidgets('$status exposes the canonical return action', (tester) async {
-      await pumpCard(tester, initialStatus: status);
-      expect(
-        find.byKey(const ValueKey('chat-booking-return-button')),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-  }
-
   testWidgets('cancelled booking cannot be accepted again', (tester) async {
     await pumpCard(tester, initialStatus: 'cancelled');
-    expect(find.text('ยกเลิกการเช่าแล้ว • ดูสถานะการเช่า'), findsOneWidget);
+    final cancelledStatus = find.text('ยกเลิกการเช่าแล้ว');
+    expect(cancelledStatus, findsOneWidget);
+    expect(
+      find.ancestor(of: cancelledStatus, matching: find.byType(OutlinedButton)),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('chat-booking-action-button')),
       findsNothing,

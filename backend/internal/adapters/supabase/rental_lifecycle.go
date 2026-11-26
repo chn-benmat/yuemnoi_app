@@ -58,6 +58,10 @@ func (r *supabaseRentalRepository) rentalAction(ctx context.Context, user string
 	if err != nil {
 		return nil, err
 	}
+	return rentalOrderFromAction(result)
+}
+
+func rentalOrderFromAction(result map[string]any) (*domain.RentalOrder, error) {
 	raw, err := json.Marshal(result["booking"])
 	if err != nil {
 		return nil, err

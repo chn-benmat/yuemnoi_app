@@ -6,6 +6,7 @@ import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/widgets/skeleton_shimmer.dart';
 import '../../../domain/entities/profile_storefront.dart';
+import '../../../domain/entities/user_item.dart';
 
 const _ink = Color(0xFF24212C);
 const _muted = Color(0xFF706B79);
@@ -246,15 +247,11 @@ class UserProfileRentalCard extends StatelessWidget {
     _ => item.rentalType.isEmpty ? 'ไม่ระบุหน่วย' : item.rentalType,
   };
 
-  (String, bool) get _availability => switch (item.status.toLowerCase()) {
-    _ when item.item.isRentalOccupied => ('กำลังถูกเช่า', false),
-    'available' || 'พร้อมใช้งาน' || 'พร้อมให้เช่า' => ('พร้อมให้เช่า', true),
-    'rented' ||
-    'renting' ||
-    'กำลังเช่า' ||
-    'ถูกเช่า' => ('กำลังถูกเช่า', false),
-    'unavailable' || 'ไม่พร้อมใช้งาน' => ('ยังไม่พร้อมให้เช่า', false),
-    'maintenance' || 'ซ่อมบำรุง' => ('อยู่ระหว่างดูแล', false),
+  (String, bool) get _availability => switch (item.item.listingStatus) {
+    UserItemStatus.rented => ('กำลังถูกเช่า', false),
+    UserItemStatus.available => ('พร้อมให้เช่า', true),
+    UserItemStatus.unavailable => ('ยังไม่พร้อมให้เช่า', false),
+    UserItemStatus.maintenance => ('อยู่ระหว่างดูแล', false),
     _ => (item.status.isEmpty ? 'ไม่ระบุสถานะ' : item.status, false),
   };
 

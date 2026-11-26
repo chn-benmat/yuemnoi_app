@@ -25,7 +25,8 @@ void main() {
           id: 11,
           title: 'Hidden Laptop',
           subtitle: '',
-          status: 'rented',
+          status: 'available',
+          isRentalOccupied: true,
           ownerHidden: true,
         );
         const unavailable = UserItem(
@@ -197,7 +198,8 @@ const _items = [
     title: 'Sony FX3',
     subtitle: '',
     category: 'กล้อง',
-    status: 'renting',
+    status: 'available',
+    isRentalOccupied: true,
   ),
   UserItem(
     id: 1,

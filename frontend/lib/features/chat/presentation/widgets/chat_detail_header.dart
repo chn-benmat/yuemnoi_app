@@ -15,11 +15,13 @@ class ChatDetailHeader extends StatelessWidget {
     required this.conversation,
     required this.onPhoneCallPressed,
     this.isPhoneCallLoading = false,
+    this.onRentalQueuePressed,
   });
 
   final ChatConversation conversation;
   final VoidCallback onPhoneCallPressed;
   final bool isPhoneCallLoading;
+  final VoidCallback? onRentalQueuePressed;
 
   void _openProfile(BuildContext context) {
     if (conversation.otherUserId.isEmpty) return;
@@ -137,6 +139,15 @@ class ChatDetailHeader extends StatelessWidget {
                   ),
                 ),
               ),
+              if (onRentalQueuePressed != null)
+                IconButton(
+                  tooltip: 'ส่งคำขอเช่าต่อ',
+                  onPressed: onRentalQueuePressed,
+                  icon: const Icon(
+                    Icons.playlist_add_rounded,
+                    color: Colors.white,
+                  ),
+                ),
               IconButton(
                 key: const ValueKey('chat-phone-call-button'),
                 tooltip: 'โทรศัพท์',

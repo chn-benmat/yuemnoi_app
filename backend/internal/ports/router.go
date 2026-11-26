@@ -138,6 +138,7 @@ func SetupRouterWithOperations(
 		rentals := api.Group("/rentals")
 		{
 			rentals.Post("", rentalController.CreateRentalOrder)
+			rentals.Post("/queue", rentalController.RentalQueue)
 			rentals.Post("/:id/confirm", rentalController.ConfirmRentalOrder)
 			rentals.Get("/:id/handover-payment", rentalController.GetHandoverPayment)
 			rentals.Post("/:id/handover-payment", rentalController.ConfirmHandoverPayment)

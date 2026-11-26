@@ -20,11 +20,13 @@ import '../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../core/services/chat_notification_service.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../data/datasources/chat_remote_data_source.dart';
+import '../../data/datasources/rental_queue_remote_data_source.dart';
 import '../../data/repositories/chat_repository_impl.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/chat_reply_content.dart';
 import '../../domain/entities/item_inquiry_data.dart';
+import '../../domain/entities/rental_queue_card_data.dart';
 import '../../domain/usecases/fetch_messages_usecase.dart';
 import '../../domain/usecases/get_conversation_contact_phone_usecase.dart';
 import '../../domain/usecases/get_owned_chat_item_ids_usecase.dart';
@@ -124,6 +126,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   String? _highlightedMessageId;
   bool _showScrollToBottom = false;
   bool _isStartingPhoneCall = false;
+  bool _selectingRentalQueueItem = false;
+  RentalQueueRemoteDataSource? _queueSource;
+
+  RentalQueueRemoteDataSource get _rentalQueue =>
+      _queueSource ??= RentalQueueRemoteDataSource();
   final _messageKeys = <String, GlobalKey>{};
 
   GlobalKey _getKeyForMessage(String id) =>
@@ -171,6 +178,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     _messageController.removeListener(_onTextChanged);
     ActiveConversationTracker.instance.clearActive(widget.conversation.id);
     _scrollController.removeListener(_onScroll);
+    _queueSource?.close();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -525,6 +533,81 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     }
   }
 
+  Future<void> _inviteToRentalQueue() async {
+    if (_selectingRentalQueueItem) return;
+    _selectingRentalQueueItem = true;
+    try {
+      final items = await _rentalQueue.listItems(_conversation.id);
+      if (!mounted) return;
+      if (items.isEmpty) {
+        showAppPopup(
+          context,
+          content: const Text('ไม่มีอุปกรณ์ที่เปิดให้เข้าคิวในแชตนี้'),
+        );
+        return;
+      }
+      final itemId = await showModalBottomSheet<int>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(title: Text('เลือกอุปกรณ์ที่จะส่งคำขอเช่าต่อ')),
+              for (final item in items)
+                ListTile(
+                  title: Text(item.name),
+                  onTap: () => Navigator.pop(sheetContext, item.id),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted || itemId == null) return;
+      await _rentalQueue.runAction(_conversation.id, 'invite', itemId: itemId);
+      if (mounted) _scrollToBottom();
+    } on RentalQueueRemoteException catch (error) {
+      if (mounted) showAppPopup(context, content: Text(error.message));
+    } finally {
+      _selectingRentalQueueItem = false;
+    }
+  }
+
+  Future<void> _updateRentalQueue(String messageId, String action) async {
+    final id = int.tryParse(messageId);
+    if (id == null) return;
+    try {
+      await _rentalQueue.runAction(_conversation.id, action, messageId: id);
+    } on RentalQueueRemoteException catch (error) {
+      if (mounted) showAppPopup(context, content: Text(error.message));
+    }
+  }
+
+  bool _canCreateQueueOffer(String messageId, ChatDetailState state) {
+    final id = int.tryParse(messageId);
+    if (id == null) return false;
+    final card = state.messages
+        .where((message) => message.id == messageId)
+        .firstOrNull;
+    if (card == null || !card.isMine) return false;
+    final acceptedAt = RentalQueueCardData.fromMessage(
+      card.message,
+    )?.acceptedAt;
+    if (acceptedAt == null) return false;
+    for (final message in state.messages.reversed) {
+      if (!message.isMine || state.failedMessageIds.contains(message.id)) {
+        continue;
+      }
+      final offer = BookingRequestData.fromChatMessage(message.message);
+      if (offer?.rentalQueueMessageId != id ||
+          message.createdAt.isBefore(acceptedAt)) {
+        continue;
+      }
+      return const {'cancelled', 'rejected', 'expired'}.contains(offer?.status);
+    }
+    return true;
+  }
+
   bool _canCreateOffer(ItemInquiryData inquiry) {
     final state = context.read<ChatDetailBloc>().state;
     if (!state.ownedItemIds.contains(inquiry.itemId)) return false;
@@ -559,9 +642,19 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     return true;
   }
 
-  Future<void> _openBookingRequest(ItemInquiryData inquiry) async {
+  Future<void> _openBookingRequest(
+    ItemInquiryData inquiry, {
+    String? queueMessageId,
+  }) async {
+    bool canSend() => queueMessageId == null
+        ? _canCreateOffer(inquiry)
+        : _canCreateQueueOffer(
+            queueMessageId,
+            context.read<ChatDetailBloc>().state,
+          );
+
     final itemId = inquiry.itemId;
-    if (itemId == null || !_canCreateOffer(inquiry)) return;
+    if (itemId == null || !canSend()) return;
 
     final title = inquiry.itemName.isNotEmpty
         ? inquiry.itemName
@@ -613,7 +706,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       );
       return;
     }
-    if (itemDetail.isRentalOccupied) {
+    if (itemDetail.isRentalOccupied && queueMessageId == null) {
       showAppPopup(
         context,
         content: const Text(
@@ -633,15 +726,20 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       return;
     }
     final reviewStats = await ItemReviewService.fetchStats(itemId);
-    if (!mounted || !_canCreateOffer(inquiry)) return;
+    if (!mounted || !canSend()) return;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final pickupDate = queueMessageId != null && now.hour >= 9
+        ? today.add(const Duration(days: 1))
+        : today;
 
     final itemInfo = BookingItemInfo(
       id: itemId,
       title: title,
-      imageUrl: imageUrl,
+      imageUrl: queueMessageId == null
+          ? imageUrl
+          : (itemDetail.imageUrls.firstOrNull ?? ''),
       rating: reviewStats.rating,
       reviewCount: reviewStats.reviewCount,
       hourlyRate: itemDetail.additionalDailyPrice != null
@@ -663,10 +761,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     final bookingData = BookingRequestData(
       item: itemInfo,
       rentalType: rentalType,
-      startDate: today,
+      startDate: pickupDate,
       endDate: rentalType == BookingRentalType.daily
-          ? today.add(const Duration(days: 1))
-          : today,
+          ? pickupDate.add(const Duration(days: 1))
+          : pickupDate,
       startTime: const TimeOfDay(hour: 9, minute: 0),
       endTime: const TimeOfDay(hour: 17, minute: 0),
       location: pickup.name,
@@ -676,6 +774,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       longitude: pickup.longitude,
       conversationId: _conversation.id,
       ownerId: itemDetail.owner.userId,
+      rentalQueueMessageId: int.tryParse(queueMessageId ?? ''),
     );
 
     final bloc = context.read<ChatDetailBloc>();
@@ -684,7 +783,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       initialData: bookingData,
       onSendRequest: (data) {
         if (!mounted) return;
-        if (!_canCreateOffer(inquiry)) {
+        if (!canSend()) {
           showAppPopup(
             context,
             content: const Text('ไม่สามารถส่งข้อเสนอจากคำถามเช่านี้ได้'),
@@ -705,6 +804,28 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
 
   @override
   Widget build(BuildContext context) {
+    final ownsItemInChat = context.select(
+      (ChatDetailBloc bloc) => bloc.state.ownedItemIds.isNotEmpty,
+    );
+    final hasOpenRentalWithCustomer = context.select(
+      (ChatDetailBloc bloc) => bloc.state.messages.any((message) {
+        if (!message.isMine) return false;
+        final booking = BookingRequestData.fromChatMessage(message.message);
+        // ใช้สถานะเดียวกับระบบคิว ซึ่งกันรายการตั้งแต่ยืนยันนัดรับ
+        return const {
+          'confirmed',
+          'active',
+          'awaiting_return',
+          'return_ready',
+        }.contains(booking?.status);
+      }),
+    );
+    final inviteToRentalQueue = hasOpenRentalWithCustomer
+        ? null
+        : _inviteToRentalQueue;
+    final showQueueShortcutInComposer =
+        _conversation.role == ChatParticipantRole.renter || ownsItemInChat;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6F7),
       body: Column(
@@ -713,6 +834,9 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
             conversation: _conversation,
             onPhoneCallPressed: _startPhoneCall,
             isPhoneCallLoading: _isStartingPhoneCall,
+            onRentalQueuePressed: showQueueShortcutInComposer
+                ? null
+                : inviteToRentalQueue,
           ),
           Expanded(
             child: Stack(
@@ -837,6 +961,13 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                             ? item.message.isMine
                             : ownsInquiryItem;
 
+                        final rentalQueue = RentalQueueCardData.fromMessage(
+                          item.message.message,
+                        );
+                        final canSendQueueOffer =
+                            rentalQueue?.status == RentalQueueStatus.accepted &&
+                            _canCreateQueueOffer(item.message.id, state);
+
                         return Container(
                           key: itemKey,
                           child: Column(
@@ -904,6 +1035,20 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                     ? _openBookingRequest
                                     : null,
                                 defaultItemId: _conversation.itemId,
+                                onQueueAction: (action) =>
+                                    _updateRentalQueue(item.message.id, action),
+                                onSendQueueOffer:
+                                    canSendQueueOffer && rentalQueue != null
+                                    ? () => _openBookingRequest(
+                                        ItemInquiryData(
+                                          itemId: rentalQueue.itemId,
+                                          itemName: rentalQueue.name,
+                                          price: rentalQueue.price?.toDouble(),
+                                          unitLabel: rentalQueue.unitLabel,
+                                        ),
+                                        queueMessageId: item.message.id,
+                                      )
+                                    : null,
                                 onRetry: () {
                                   context.read<ChatDetailBloc>().add(
                                     ChatRetryMessageSent(
@@ -1034,6 +1179,9 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
             onSend: _sendMessage,
             onCamera: _handleCameraPick,
             onGallery: _handleGalleryPick,
+            onInviteToRentalQueue: showQueueShortcutInComposer
+                ? inviteToRentalQueue
+                : null,
             replyingMessage: _replyingMessage,
             editingMessage: _editingMessage,
             onCancelReplyOrEdit: _cancelReplyOrEdit,

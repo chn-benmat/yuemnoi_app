@@ -38,7 +38,11 @@ class _FakeHomeRepository implements HomeRepository {
       priceUnit: i == 0 ? '/ ชั่วโมง' : '/วัน',
       rating: 4.8,
       reviewCount: 12,
-      paidBookingCount: i == 0 ? 3 : 0,
+      paidBookingCount: switch (i) {
+        0 => 3,
+        1 => 1,
+        _ => 0,
+      },
       isRentalOccupied: i == 1,
       distanceKm: 1.5,
       isVerified: true,
@@ -100,8 +104,11 @@ void main() {
       expect(location, findsOneWidget);
       expect(count, findsOneWidget);
       expect(find.text('฿250'), findsOneWidget);
-      expect(find.text('กำลังถูกเช่า'), findsOneWidget);
-      expect(find.textContaining('เช่าแล้ว'), findsOneWidget);
+      final occupied = find.text('กำลังถูกเช่า');
+      final occupiedCount = find.text('เช่าแล้ว 1 ครั้ง');
+      expect(occupied, findsOneWidget);
+      expect(occupiedCount, findsOneWidget);
+      expect(find.textContaining('เช่าแล้ว'), findsNWidgets(2));
       expect(find.textContaining('เริ่มต้น'), findsNothing);
       expect(find.textContaining('ชั่วโมง'), findsNothing);
       expect(find.textContaining('/วัน'), findsNothing);
@@ -120,6 +127,11 @@ void main() {
       final secondCard = find.byKey(const ValueKey('shopee-card-1'));
       final firstCardRect = tester.getRect(firstCard);
       final secondCardRect = tester.getRect(secondCard);
+      expect(secondCardRect.right - tester.getRect(occupied).right, 10);
+      expect(
+        tester.getRect(occupied).bottom,
+        lessThan(tester.getRect(occupiedCount).top),
+      );
       final secondLocation = find.descendant(
         of: secondCard,
         matching: find.text('กรุงเทพฯ'),

@@ -99,12 +99,15 @@ class ShopeeProductCard extends StatelessWidget {
                     ),
                     if (item.isRentalOccupied) ...[
                       const SizedBox(height: 4),
-                      const Text(
-                        'กำลังถูกเช่า',
-                        style: TextStyle(
-                          color: Color(0xFF315FA6),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                      const Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'กำลังถูกเช่า',
+                          style: TextStyle(
+                            color: Color(0xFF315FA6),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],

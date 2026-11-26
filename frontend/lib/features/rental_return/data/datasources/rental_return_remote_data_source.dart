@@ -129,11 +129,11 @@ class RentalReturnRemoteDataSource {
     );
   }
 
-  Future<void> confirmReceipt(int rentalId) async {
+  Future<void> confirmReceipt(int rentalId, {bool pauseItem = false}) async {
     final result = _result(
       await _api.post(
         '/api/rentals/$rentalId/return-confirmation',
-        data: {'checked': true},
+        data: {'checked': true, if (pauseItem) 'pause_item': true},
         headers: _headers,
       ),
     );

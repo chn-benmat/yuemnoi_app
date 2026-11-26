@@ -8,6 +8,7 @@ import (
 	"image/jpeg"
 	_ "image/png"
 	"io"
+	"net/http"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/gofiber/fiber/v3"
@@ -128,12 +129,22 @@ func (h *RentalHandler) ConfirmRentalReceipt(c fiber.Ctx) error {
 		return nil
 	}
 	var req struct {
-		Checked bool `json:"checked"`
+		Checked   bool `json:"checked"`
+		PauseItem bool `json:"pause_item"`
 	}
 	if c.Bind().JSON(&req) != nil || !req.Checked {
 		return c.Status(400).JSON(fiber.Map{"error": "กรุณายืนยันว่าตรวจรับอุปกรณ์แล้ว"})
 	}
-	order, err := h.rentalRepository.ConfirmRentalReceipt(c.Context(), user, id)
+
+	confirm := h.rentalRepository.ConfirmRentalReceipt
+	if req.PauseItem {
+		repo, ok := h.rentalRepository.(domain.RentalReceiptPauseRepository)
+		if !ok {
+			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "ระบบพักอุปกรณ์ยังไม่พร้อมใช้งาน"})
+		}
+		confirm = repo.ConfirmRentalReceiptWithPause
+	}
+	order, err := confirm(c.Context(), user, id)
 	if err != nil {
 		return writeRentalStatusError(c, err)
 	}

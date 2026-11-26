@@ -11,6 +11,7 @@ class ChatMessageComposer extends StatelessWidget {
     required this.onSend,
     required this.onCamera,
     required this.onGallery,
+    this.onInviteToRentalQueue,
     this.replyingMessage,
     this.editingMessage,
     this.onCancelReplyOrEdit,
@@ -20,6 +21,7 @@ class ChatMessageComposer extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onCamera;
   final VoidCallback onGallery;
+  final VoidCallback? onInviteToRentalQueue;
   final ChatMessage? replyingMessage;
   final ChatMessage? editingMessage;
   final VoidCallback? onCancelReplyOrEdit;
@@ -40,6 +42,24 @@ class ChatMessageComposer extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (onInviteToRentalQueue != null)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: FilledButton.tonalIcon(
+                  onPressed: onInviteToRentalQueue,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFF0E5FC),
+                    foregroundColor: AppColors.primaryColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  icon: const Icon(Icons.playlist_add_rounded, size: 20),
+                  label: const Text('ชวนเข้าคิวเช่าต่อ'),
+                ),
+              ),
             if (isReplying || isEditing)
               Container(
                 margin: const EdgeInsets.only(bottom: 6),

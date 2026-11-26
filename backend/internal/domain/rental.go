@@ -27,6 +27,7 @@ type CreateRentalRequest struct {
 	PickupLocation string    `json:"pickup_location"`
 	OfferMessageID string    `json:"offer_message_id,omitempty"`
 	BookingID      int64     `json:"booking_id,omitempty"`
+	QueueMessageID int64     `json:"-"`
 }
 
 type RentalOrder struct {

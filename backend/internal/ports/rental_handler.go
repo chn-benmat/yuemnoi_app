@@ -223,7 +223,7 @@ func writeRentalError(c fiber.Ctx, err error) error {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบรายการเช่าหรืออุปกรณ์"})
 	case errors.Is(err, domain.ErrItemRentalOccupied):
 		return c.Status(http.StatusConflict).JSON(fiber.Map{
-			"code": "item_rental_occupied", "error": "อุปกรณ์นี้กำลังถูกเช่า กรุณาลองใหม่หลังยกเลิกการจองหรือคืนอุปกรณ์เรียบร้อย",
+			"code": "item_rental_occupied", "error": "อุปกรณ์นี้อยู่ระหว่างเช่าหรือมีคิวเช่าต่อ กรุณาตรวจสอบสิทธิ์อีกครั้ง",
 		})
 	case errors.Is(err, domain.ErrRentalUnavailable):
 		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "อุปกรณ์หรือช่วงเวลานี้ไม่พร้อมให้เช่า"})

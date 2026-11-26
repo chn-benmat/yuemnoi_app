@@ -19,12 +19,25 @@ class FakeStorefrontRepository implements ProfileStorefrontRepository {
   );
   List<StorefrontItem> items = [
     const StorefrontItem(
-      item: UserItem(id: 1, title: 'กล้องตัวแรก', subtitle: '', price: 100),
+      item: UserItem(
+        id: 1,
+        title: 'กล้องตัวแรก',
+        subtitle: '',
+        price: 100,
+        status: 'available',
+      ),
       status: 'available',
       rentalType: 'รายวัน',
     ),
     const StorefrontItem(
-      item: UserItem(id: 2, title: 'กล้องตัวที่สอง', subtitle: '', price: 50),
+      item: UserItem(
+        id: 2,
+        title: 'กล้องตัวที่สอง',
+        subtitle: '',
+        price: 50,
+        status: 'rented',
+        isRentalOccupied: true,
+      ),
       status: 'rented',
       rentalType: 'รายชั่วโมง',
     ),

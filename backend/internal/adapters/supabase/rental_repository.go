@@ -57,7 +57,12 @@ func (r *supabaseRentalRepository) createRental(ctx context.Context, userID stri
 	if request.OfferMessageID != "" {
 		params["p_offer_message_id"] = request.OfferMessageID
 	}
-	err := r.client.DB.Rpc("create_rental_request", params).ExecuteWithContext(ctx, &rental)
+	rpc := "create_rental_request"
+	if request.QueueMessageID > 0 {
+		rpc = "create_queued_rental_request"
+		params["p_queue_message_id"] = request.QueueMessageID
+	}
+	err := r.client.DB.Rpc(rpc, params).ExecuteWithContext(ctx, &rental)
 	if err != nil {
 		return nil, mapRentalRepositoryError("create rental request", err)
 	}

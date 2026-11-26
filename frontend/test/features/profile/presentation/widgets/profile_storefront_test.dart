@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/profile/domain/entities/profile_storefront.dart';
+import 'package:frontend/features/profile/domain/entities/user_item.dart';
 import 'package:frontend/features/profile/domain/usecases/get_profile_storefront_usecase.dart';
 import 'package:frontend/features/profile/presentation/pages/profile/user_profile_view_screen.dart';
 import 'package:frontend/features/profile/presentation/widgets/profile/user_profile_widgets.dart';
@@ -92,6 +93,48 @@ void main() {
     expect(find.byKey(const ValueKey('edit-storefront-profile')), findsNothing);
   });
 
+  testWidgets('storefront uses booking occupancy for the rental badge', (
+    tester,
+  ) async {
+    Future<void> showCard({
+      required String status,
+      required bool occupied,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 160,
+              child: UserProfileRentalCard(
+                item: StorefrontItem(
+                  item: UserItem(
+                    title: 'กล้อง',
+                    subtitle: '',
+                    status: status,
+                    isRentalOccupied: occupied,
+                  ),
+                  status: status,
+                  rentalType: 'รายชั่วโมง',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await showCard(status: 'rented', occupied: false);
+    expect(find.text('กำลังถูกเช่า'), findsNothing);
+    expect(find.text('ยังไม่พร้อมให้เช่า'), findsOneWidget);
+
+    await showCard(status: 'available', occupied: true);
+    expect(find.text('กำลังถูกเช่า'), findsOneWidget);
+
+    await showCard(status: 'available', occupied: false);
+    expect(find.text('กำลังถูกเช่า'), findsNothing);
+    expect(find.text('พร้อมให้เช่า'), findsOneWidget);
+  });
+
   for (final scale in [1.0, 2.0]) {
     testWidgets(
       'visitor inventory and sticky chat fit 320px at text scale $scale',
@@ -136,7 +179,7 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('storefront-chat')));
         await tester.pumpAndSettle();
         expect(find.text('เข้าสู่ระบบเพื่อใช้งานแชท'), findsOneWidget);
-        await tester.tap(find.text('ไว้ทีหลัง'));
+        await tester.tap(find.byTooltip('ปิด'));
         await tester.pumpAndSettle();
       },
     );

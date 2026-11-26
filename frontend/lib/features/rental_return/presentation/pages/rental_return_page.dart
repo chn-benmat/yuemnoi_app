@@ -53,6 +53,7 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
   bool _didShowAlarm = false;
   bool _didShowSuccess = false;
   int? _checkedRentalId;
+  int? _pausedRentalId;
   Timer? _refreshTimer;
   DialogRoute<void>? _alarmRoute;
 
@@ -172,9 +173,15 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                         onChecked: (checked) => setState(() {
                           _checkedRentalId = checked ? session.rentalId : null;
                         }),
-                        onConfirm: context
+                        pauseItem: _pausedRentalId == session.rentalId,
+                        onPauseItem: (pause) => setState(() {
+                          _pausedRentalId = pause ? session.rentalId : null;
+                        }),
+                        onConfirm: () => context
                             .read<RentalReturnCubit>()
-                            .confirmMerchantReceipt,
+                            .confirmMerchantReceipt(
+                              pauseItem: _pausedRentalId == session.rentalId,
+                            ),
                       ),
                   ],
                 ),
