@@ -860,13 +860,8 @@ class _FilterTopSheetDialogState extends State<_FilterTopSheetDialog> {
             } else {
               _minPrice = min;
               _maxPrice = max;
-              if (label == '2,000 ฿ ขึ้นไป') {
-                _minPriceController.clear();
-                _maxPriceController.text = min.toString();
-              } else {
-                _minPriceController.text = min?.toString() ?? '';
-                _maxPriceController.text = max?.toString() ?? '';
-              }
+              _minPriceController.text = min?.toString() ?? '';
+              _maxPriceController.text = max?.toString() ?? '';
             }
           });
         },
