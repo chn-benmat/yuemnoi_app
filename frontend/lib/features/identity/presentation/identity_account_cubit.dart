@@ -19,11 +19,16 @@ class IdentityAccountState {
 }
 
 class IdentityAccountCubit extends Cubit<IdentityAccountState> {
-  IdentityAccountCubit(this.repository) : super(const IdentityAccountState());
+  IdentityAccountCubit(
+    this.repository, {
+    required IdentityConsentStore consentStore,
+  }) : _consentStore = consentStore,
+       super(const IdentityAccountState());
   final IdentityAccountRepository repository;
+  final IdentityConsentStore _consentStore;
 
   Future<void> load({
-    Future<void> Function(IdentityAccountDetails)? onDetailsLoaded,
+    Future<void> Function(bool hasConsent)? onDetailsLoaded,
   }) async {
     if (state.busy) return;
     emit(
@@ -37,10 +42,12 @@ class IdentityAccountCubit extends Cubit<IdentityAccountState> {
     );
     try {
       final details = await repository.accountDetails();
+      final hasConsent =
+          details.hasAcceptedCardRetentionConsent || await _hasSavedConsent();
       if (isClosed) return;
       if (onDetailsLoaded != null || details.evidence.isNotEmpty) {
         emit(IdentityAccountState(details: details, busy: true, loading: true));
-        if (onDetailsLoaded != null) await onDetailsLoaded(details);
+        if (onDetailsLoaded != null) await onDetailsLoaded(hasConsent);
         if (isClosed) return;
       }
       final photos = <String, Uint8List>{};
@@ -67,6 +74,22 @@ class IdentityAccountCubit extends Cubit<IdentityAccountState> {
                 : 'โหลดข้อมูลไม่ได้ กรุณาลองใหม่',
           ),
         );
+    }
+  }
+
+  Future<bool> _hasSavedConsent() async {
+    try {
+      return await _consentStore.hasAccepted();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> saveConsent() async {
+    try {
+      return await _consentStore.saveAcceptance();
+    } catch (_) {
+      return false;
     }
   }
 

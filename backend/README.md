@@ -23,16 +23,15 @@
 
 ## ✨ ส่วนนี้ทำอะไร
 
-Go Backend เป็น REST API หลักของ **Yuemnoi** เชื่อม Flutter กับ Supabase, Firebase และ Python AI ใช้ **Hexagonal Architecture** แยก business entities / interfaces ออกจาก HTTP และบริการภายนอก
+Go Backend เป็น REST API หลักของ **Yuemnoi** เชื่อม Flutter กับ Supabase และ Python AI ใช้ **Hexagonal Architecture** แยก business entities / interfaces ออกจาก HTTP และบริการภายนอก
 
 | ความสามารถ      | หน้าที่ของ Backend                                                         |
 | --------------- | -------------------------------------------------------------------------- |
 | 🔑 Auth         | สมัครสมาชิก, login, email OTP, เปลี่ยนรหัสผ่าน และซิงค์รูปจาก Google OAuth |
-| 👤 Profile      | อ่าน / แก้ไขโปรไฟล์, contact และ FCM token ของผู้ใช้                       |
+| 👤 Profile      | อ่าน / แก้ไขโปรไฟล์, และข้อมูลติดต่อของผู้ใช้                       |
 | 📸 Items        | ฟีดจาก ranked view, ค้นหา / กรองหมวดหมู่, CRUD และจัดการรูป                |
 | 📅 Rental       | สร้างคำขอผ่าน Supabase RPC, ตรวจผู้มีสิทธิ์และเปลี่ยนสถานะส่งมอบ / รับคืน  |
 | 💬 Chat contact | ตรวจสิทธิ์คู่สนทนาก่อนอ่านข้อมูลติดต่อ                                     |
-| 🔔 Push         | ส่งแจ้งเตือนแชตผ่าน FCM HTTP v1 และจัดการ device token ที่หมดอายุ          |
 | 🤖 AI Gateway   | ส่งคำขอ JSON / SSE ไป Python พร้อม internal service key                    |
 
 การสร้างคำขอเช่าเรียก RPC `create_rental_request` และส่งมอบเป็น `active` ตอนคืน เจ้าของตรวจอุปกรณ์แล้วเรียก `POST /api/rentals/:id/return-confirmation` ด้วย `{"checked":true}` เพื่อเปลี่ยนสถานะเป็น `completed` ในธุรกรรมเดียว ผู้เช่าดูผลผ่าน `return-session` ใช้ migrations `20261125021333_return_without_renter_photos.sql` และ `20261125023043_complete_rental_return_on_merchant_receipt.sql` ใน `supabase/migrations/` เส้นทาง `return-evidence`, `return-inspection` และ `return` รองรับแอปรุ่นเดิม เจ้าของยืนยันจบรายการที่ค้างในสถานะ `awaiting_return` หรือ `return_ready` ผ่านเส้นทางใหม่ได้ การยกเลิกก่อนส่งมอบใช้ `cancel` พร้อมเหตุผลและหลักฐาน
@@ -51,7 +50,7 @@ Go Backend เป็น REST API หลักของ **Yuemnoi** เชื่�
 
 หน้าตั้งค่าบัญชีใช้ `GET /api/user/promptpay` อ่านค่าของเจ้าของ session และใช้ `PUT` เพื่อบันทึก `promptpay_phone` หรือ `promptpay_national_id` อย่างใดอย่างหนึ่ง ระบบใช้บัญชีเดียวกับหน้าส่งมอบและแสดงเลขบัตรเฉพาะ 4 หลักท้ายผ่าน `national_id_last_four` ถ้าอ่านเลขบัตรเดิมไม่ได้ API จะคืนประเภทเพื่อให้ผู้ใช้กรอกข้อมูลใหม่ได้
 
-แจ้งเตือนแชต การเช่า และระบบเก็บใน `notification_tb` พร้อม outbox จาก transaction ของเหตุการณ์ Worker ส่ง FCM ไปยังทุกอุปกรณ์ใน `notification_device_tb`; ไม่ใช้ `profile_tb.fcm_token` เป็นแหล่งส่งอีกแล้ว API ประวัติ/อ่าน/ลงทะเบียนเครื่องอยู่ที่ `/api/notifications` รายละเอียดและ SQL tests อยู่ใน [ข้อตกลงระบบแจ้งเตือน](../docs/notifications.md)
+API แจ้งเตือนและ worker ส่ง push ถูกถอดออกระหว่างปรับปรุงระบบ ข้อมูลและ schema แจ้งเตือนใน Supabase ยังเก็บไว้
 
 การยืนยันข้อเสนอจากแชทมีสองขั้นตอน: `POST /api/rentals` พร้อม `offer_message_id` สร้างหรือเรียกใช้ booking เดิมเป็น `pending` และผูก `bookingId` / `status` ในข้อความเดิม จากนั้นเมื่อผู้เช่ากดปุ่ม “ยืนยันการเช่า” ในหน้าสรุป จึงเรียก `POST /api/rentals/:id/confirm` พร้อม `offer_message_id` เพื่อเปลี่ยนเป็น `confirmed` และเผยแพร่สถานะให้ทั้งสองเครื่อง Backend ตรวจผู้เช่า เจ้าของสินค้าจริง คู่สนทนา เงื่อนไขข้อเสนอ และเลข booking ที่ผูกกับข้อความซ้ำก่อนยืนยัน การเปิดหรือปิดหน้าสรุปไม่เปลี่ยนสถานะ การลองใหม่ใช้เลขรายการเดิมโดยไม่สร้างซ้ำ รายการ `pending` ยังไม่แสดงในหน้าสถานะการเช่า
 
@@ -65,7 +64,6 @@ Go Backend เป็น REST API หลักของ **Yuemnoi** เชื่�
 flowchart LR
     App["Flutter"] -->|"REST / SSE"| API["Fiber API :8080"]
     API --> SB["Supabase Auth / Database / Storage"]
-    API --> FCM["Firebase FCM HTTP v1"]
     API -->|"X-Internal-Service-Key"| AI["Python AI :8000"]
 ```
 
@@ -95,16 +93,14 @@ Frontend ยังใช้ Supabase โดยตรงในบางฟีเ�
 | `github.com/go-playground/validator/v10` | v10.30.1                                                    | ตรวจ `validate` tags ของ request DTOs ผ่าน Fiber `StructValidator` |
 | `github.com/joho/godotenv`               | v1.5.1                                                      | โหลดไฟล์ `.env`                                                    |
 | `github.com/nedpals/supabase-go`         | v0.5.0                                                      | Supabase Auth / PostgREST                                          |
-| `firebase.google.com/go/v4`              | v4.22.0                                                     | Firebase Admin SDK สำหรับ FCM                                      |
 | `cloud.google.com/go/auth`               | v0.20.0                                                     | Credentials, OAuth และ HTTP transport ของ Google                   |
-| `google.golang.org/api`                  | v0.279.0                                                    | Client options สำหรับ Firebase SDK                                 |
 | `golang.org/x/time`                      | v0.16.0                                                     | Token Bucket ผ่าน package `rate`                                   |
-| `github.com/jellydator/ttlcache/v3`      | v3.4.1                                                      | Cache อายุข้อมูลตาม TTL สำหรับ IP buckets และ FCM device tokens    |
+| `github.com/jellydator/ttlcache/v3`      | v3.4.1                                                      | Cache อายุข้อมูลตาม TTL สำหรับ IP buckets    |
 | `github.com/lmittmann/tint`              | v1.2.1                                                      | Console handler สำหรับ `log/slog` ในโหมด debug                     |
 | `github.com/stretchr/testify`            | v1.12.1                                                     | Assertions และ mocks ใน tests                                      |
 | Go standard library                      | ตาม Go toolchain                                            | `net/http`, `log/slog` และ Supabase Storage adapter                |
 
-FCM adapter ใช้ Firebase Admin SDK ส่ง HTTP v1 และใช้ Google Auth จัดการ credentials / OAuth โดยคง data, Android channel และเสียงแจ้งเตือนเดิม ส่วน Supabase Storage ใช้ HTTP adapter ที่ส่ง context และคืน error แทนการเรียก Upload / Remove ของ SDK เดิม Supabase / Firebase / AI เป็นบริการภายนอก จึงไม่มีเวอร์ชัน server ที่ pin ไว้ใน go.mod
+Supabase Storage ใช้ HTTP adapter ที่ส่ง context และคืน error Supabase และ AI เป็นบริการภายนอก จึงไม่มีเวอร์ชัน server ที่ pin ไว้ใน go.mod
 
 <a id="setup"></a>
 
@@ -115,7 +111,6 @@ FCM adapter ใช้ Firebase Admin SDK ส่ง HTTP v1 และใช้ Go
 - Git และ [Go toolchain](https://go.dev/doc/install) ที่รองรับ `go 1.26.2`
 - Supabase project พร้อม Auth และ schema ของแอปตามรายการด้านล่าง
 - Python AI Service เมื่อต้องใช้ Chatbot
-- Firebase service account เมื่อต้องส่ง push notifications จริง
 
 ควรเก็บ checkout ของ `backend/`, `frontend/` และ `ai_service/` ไว้ในโครงสร้าง repository เดียวกัน เพราะ configuration และ tests บางส่วนอ้างอิงไฟล์ข้ามส่วน
 
@@ -160,8 +155,6 @@ READ_TIMEOUT=15s
 WRITE_TIMEOUT=90s
 SHUTDOWN_TIMEOUT=5s
 
-# ใส่เมื่อใช้ push notifications
-# FIREBASE_SERVICE_ACCOUNT_PATH=service-account.json
 ```
 
 `APP_SECRET_KEY` ใน Flutter ต้องตรงกับหนึ่งใน app keys ของ Backend และ `INTERNAL_SERVICE_KEY` ใน Python ต้องตรงกับคีย์ internal ที่ Backend ส่ง ทั้งสองคีย์มีหน้าที่ต่างกัน
@@ -174,8 +167,6 @@ SHUTDOWN_TIMEOUT=5s
 | `APP_ENV`                       | `debug`                 | ใช้ `release` เพื่อตรวจคอนฟิก production และใช้ JSON slog   |
 | `SUPABASE_URL`                  | ไม่มี                   | **จำเป็นทุกโหมด**                                           |
 | `SUPABASE_SERVICE_ROLE_KEY`     | ไม่มี                   | **จำเป็นทุกโหมด**, server-only                              |
-| `FIREBASE_SERVICE_ACCOUNT_PATH` | ไม่มี                   | path ของ service account สำหรับ FCM                         |
-| `FIREBASE_SERVICE_ACCOUNT_KEY`  | ไม่มี                   | service account JSON แบบ inline; มีลำดับก่อน path           |
 | `APP_SECRET_KEY`                | ไม่มี                   | app key เดี่ยวหรือคั่น comma; ต้องมีคีย์ใน release          |
 | `APP_SECRET_KEYS`               | ไม่มี                   | app keys เพิ่มเติมคั่น comma; รวมกับตัวแปรด้านบน            |
 | `INTERNAL_SERVICE_KEY`          | ไม่มี                   | ต้องมีใน release; primary key ยาวอย่างน้อย **16 ตัวอักษร**  |
@@ -186,16 +177,14 @@ SHUTDOWN_TIMEOUT=5s
 | `WRITE_TIMEOUT`                 | `90s`                   | HTTP server write timeout                                   |
 | `SHUTDOWN_TIMEOUT`              | `5s`                    | เวลา graceful shutdown                                      |
 
-[Config loader](internal/config/config.go) โหลด `.env` จาก working directory ก่อน และลอง `../../.env` หากไฟล์แรกโหลดไม่สำเร็จ แนะนำให้รันจาก `backend/` เพื่อให้ paths ของ Firebase และ shared runtime ชัดเจน Process environment ที่มีอยู่มีลำดับก่อนค่าจาก dotenv
+[Config loader](internal/config/config.go) โหลด `.env` จาก working directory ก่อน และลอง `../../.env` หากไฟล์แรกโหลดไม่สำเร็จ แนะนำให้รันจาก `backend/` เพื่อให้ loader พบไฟล์คอนฟิกตาม path ข้างต้น Process environment ที่มีอยู่มีลำดับก่อนค่าจาก dotenv
 
 `APP_ENV` เป็นชื่อคอนฟิกหลักของ runtime; deployment เดิมยังใช้ `GIN_MODE` เป็น fallback ได้ เมื่อกำหนด `APP_ENV` ไว้จะมีสิทธิ์สูงกว่า โดยคงการตรวจ app key / internal key ในโหมด `release` เหมือนเดิม
 
-**Release configuration:** ตั้ง `APP_ENV=release` พร้อม app key อย่างน้อยหนึ่งตัวจาก `APP_SECRET_KEY` / `APP_SECRET_KEYS` และ internal primary key อย่างน้อย 16 ตัวอักษร โค้ดไม่ได้บังคับความยาวขั้นต่ำของ app key ส่วน credential ของ Firebase เป็นเงื่อนไขสำหรับ push; ขาดแล้ว server ยังเริ่มได้พร้อม warning
+**Release configuration:** ตั้ง `APP_ENV=release` พร้อม app key อย่างน้อยหนึ่งตัวจาก `APP_SECRET_KEY` / `APP_SECRET_KEYS` และ internal primary key อย่างน้อย 16 ตัวอักษร โค้ดไม่ได้บังคับความยาวขั้นต่ำของ app key
 
 <details>
-<summary>ตั้งค่า Firebase และการหมุนคีย์</summary>
-
-วาง service account นอก source control แล้วตั้ง `FIREBASE_SERVICE_ACCOUNT_PATH` ให้ชัดเจน หรือส่ง JSON ผ่าน `FIREBASE_SERVICE_ACCOUNT_KEY` ในระบบจัดการ secrets ฝั่ง server Firebase project ต้องตรงกับแอปที่สร้าง FCM device token
+<summary>การหมุนคีย์</summary>
 
 Backend รวม app keys จากสองตัวแปรและรับค่าใดค่าหนึ่งผ่าน `X-App-Secret` สำหรับ internal key Backend ส่ง **ตัวแรกที่ไม่ว่าง** ของรายการคั่น comma แต่ Python ตรวจ **ทั้ง string แบบตรงตัว** จึงแนะนำให้ใช้ **คีย์เดียวที่เหมือนกัน** ใน Backend และ AI หากหมุนคีย์ ต้องให้ Python รับค่าเดียวกับ primary ที่ Backend ส่ง
 
@@ -222,8 +211,6 @@ CORS ใช้ Fiber middleware ร่วมกับการตรวจ origi
 
 Rate limiter ยังคงเป็น token bucket ของ `x/time/rate`: auth และ admin login แชร์ burst 5 เติม 1 token ทุก 12 วินาที, AI JSON/SSE แชร์ burst 15 เติม 1 token ทุก 4 วินาที และ identity/complaints แชร์ burst 5 อีกชุดหนึ่ง ทุกชุดแยกตาม client IP และเก็บ bucket ใน `ttlcache` จนไม่ได้ใช้งาน 10 นาที รวมคำขอที่ถูกปฏิเสธในการต่ออายุ idle TTL คำขอที่ถูกปฏิเสธไม่หัก token และคง JSON 429 กับข้อความเดิม ไม่เปลี่ยนเป็น fixed/sliding window
 
-Push ใช้ durable outbox และ token ของอุปกรณ์ที่ยังผูกกับผู้รับใน `notification_device_tb` ตรวจการสลับบัญชี การอ่าน และวันหมดอายุก่อน claim งาน Worker ทำงานทุก 10 วินาทีพร้อม lease และ retry แบบจำกัด; token ที่ FCM ยืนยันว่า unregistered จะถูกปิดเฉพาะค่าที่ส่งจริง Adapter cache ของเส้นทางเก่ายังคงอยู่เพื่อ compatibility แต่เส้นทางแจ้งเตือนใหม่ไม่อ่าน cache นั้น
-
 เปิด terminal อีกหน้าตรวจ HTTP server:
 
 **Windows PowerShell**
@@ -244,7 +231,7 @@ curl http://localhost:8080/health
 { "status": "ok" }
 ```
 
-`/health` ตรวจว่า handler ของ server ตอบได้ เป็นผลคงที่ จึงยังต้องลองรายการสินค้า, Auth, AI และ push แยกเพื่อยืนยัน dependencies
+`/health` ตรวจว่า handler ของ server ตอบได้ เป็นผลคงที่ จึงยังต้องลองรายการสินค้า, Auth และ AI แยกเพื่อยืนยัน dependencies
 
 ตัวอย่างเรียกรายการสินค้า เมื่อใช้ app key จาก env ตัวอย่าง ให้แทน placeholder ใน header ด้วยค่าที่ตั้งไว้:
 
@@ -278,21 +265,21 @@ Base path คือ `/api` เส้นทางทั้งหมดอยู�
 | `POST /auth/send-otp`, `POST /auth/verify-otp`            | ส่ง / ตรวจ email OTP               | ไม่ต้อง                               |
 | `POST /auth/google-profile`, `POST /auth/change-password` | ซิงค์รูป / เปลี่ยนรหัสผ่าน         | ต้องมี                                |
 | `GET /user/profile`, `PUT /user/profile`                  | อ่าน / แก้โปรไฟล์                  | ต้องมี                                |
-| `PUT /user/contact`, `POST /user/fcm-token`               | Contact / device token             | ต้องมี                                |
+| `PUT /user/contact`                                       | Contact             | ต้องมี                                |
 | `GET /items`, `GET /items/:id`                            | ฟีด / รายละเอียด                   | ไม่ต้อง                               |
 | `POST /items`, `PUT /items/:id`, `DELETE /items/:id`      | จัดการอุปกรณ์                      | ต้องมี; ตรวจเจ้าของ                   |
 | `GET /items/:id/auto-reply`, `PUT /items/:id/auto-reply` | อ่าน / บันทึกข้อความตอบกลับอัตโนมัติ | ต้องมี; ตรวจเจ้าของ                   |
 | `POST /rentals`                                           | สร้างคำขอเช่า                      | ต้องมี                                |
 | `POST /rentals/:id/confirm`                               | ผู้เช่ายืนยันข้อเสนอเป็น confirmed | ต้องมี; ตรวจผู้เช่าและข้อความข้อเสนอ  |
 | `POST /rentals/:id/handover-payment`, `POST /rentals/:id/return`  | เปลี่ยนสถานะ                       | ต้องมี; ตรวจผู้มีสิทธิ์               |
-| `POST /chat/contact`, `POST /push/chat`                   | Contact / push                     | ต้องมี                                |
+| `POST /chat/contact`                                      | Contact                     | ต้องมี                                |
 | `POST /chat-ai`, `POST /chat-ai/stream`                   | AI JSON / SSE                      | handler ปัจจุบันไม่บังคับ user Bearer |
 
 ทุก route ในตารางยกเว้น `/health` ต้องเติม `/api` ด้านหน้า เช่น `/items` → `/api/items` เส้นทาง AI ยังผ่าน app-key middleware และ rate limiter แม้ handler จะไม่ตรวจ user Bearer
 
 การตอบกลับอัตโนมัติรับ JSON `{ "enabled": true, "message": "ข้อความตอบกลับ" }` จำกัดข้อความหลัง trim ไม่เกิน 500 Unicode code points และเปิดใช้ได้เมื่อข้อความไม่ว่าง ค่าเริ่มต้นปิดไว้ เจ้าของต้องกดบันทึกก่อนมีผล โดยใช้ตารางตั้งค่าส่วนตัวแยกจาก item สาธารณะ ต้องติดตั้ง migrations `item_auto_reply` และ `item_auto_reply_actor_guard` ใน `../supabase/migrations/` ร่วมกับ API รุ่นนี้
 
-เมื่อผู้เช่าส่งการ์ด `[ITEM_INQUIRY:{...}]` ฐานข้อมูลตรวจคู่สนทนาและเจ้าของอุปกรณ์จริง แล้วส่งข้อความเพียงครั้งเดียวต่อผู้เช่า–อุปกรณ์–เจ้าของ แม้ห้องเดิมจะเปลี่ยนไปคุยอุปกรณ์อื่นหรือเจ้าของไม่ได้เปิดแอป การแก้ข้อความ/ปิด–เปิดใหม่ไม่ reset ประวัติและไม่ส่งย้อนหลัง สินค้าที่เจ้าของซ่อนยังตอบการสอบถามในแชทเดิมได้ ข้อความเข้าสตรีม Realtime และประวัติแชทปกติ; ยังไม่ได้เพิ่ม OS push สำหรับข้อความตอบกลับอัตโนมัติ
+เมื่อผู้เช่าส่งการ์ด `[ITEM_INQUIRY:{...}]` ฐานข้อมูลตรวจคู่สนทนาและเจ้าของอุปกรณ์จริง แล้วส่งข้อความเพียงครั้งเดียวต่อผู้เช่า–อุปกรณ์–เจ้าของ แม้ห้องเดิมจะเปลี่ยนไปคุยอุปกรณ์อื่นหรือเจ้าของไม่ได้เปิดแอป การแก้ข้อความ/ปิด–เปิดใหม่ไม่ reset ประวัติและไม่ส่งย้อนหลัง สินค้าที่เจ้าของซ่อนยังตอบการสอบถามในแชทเดิมได้ ข้อความเข้าสตรีม Realtime และประวัติแชทปกติ
 
 Migration ย้ายการรักษา `conversation_tb.last_message` มาอยู่ฝั่งฐานข้อมูลพร้อมข้อความตอบกลับ และป้องกัน client รุ่นเดิมเขียนทับด้วยข้อความขาเข้า ตรวจแบบ rollback ด้วย `../supabase/tests/item_auto_reply.sql` โดยไม่มีข้อความทดสอบค้างในห้องจริง
 
@@ -303,7 +290,6 @@ Migration ย้ายการรักษา `conversation_tb.last_message` �
 - รูปสินค้าใหม่เก็บที่ `item_bk/<owner_user_id>/<item_id>/<filename>` หลังสร้างไอดีสินค้า ส่วนรูปโปรไฟล์ทั้งตอนสมัครและแก้ไขเก็บที่ `profile_bk/<user_id>/<filename>`; URL และการลบรูปเดิมยังอ้างอิง path ที่บันทึกไว้
 - Rate limiter ใช้ `golang.org/x/time/rate` เป็น token bucket **ต่อ client IP ใน memory**: Auth เติม 5/minute, burst 5; AI เติม 15/minute, burst 15 และตอบ 429 เมื่อเกิน กวาด IP ที่ไม่ได้ใช้งานระหว่างรับคำขอโดยไม่สร้าง background goroutine; หลาย server instance ยังไม่แชร์ตัวนับ
 - Supabase Auth / PostgREST / Storage จำกัดเวลาคำขอไว้ **60s** รวมการอ่าน response body และเคารพ context ที่หมดเวลาก่อน ส่วนการชดเชยไฟล์ / รายการหลังบันทึกล้มเหลวใช้ context แยกไม่เกิน **5s** เพื่อทำความสะอาดได้แม้คำขอหลักถูกยกเลิก การล้างข้อมูลเป็น best effort และมี warning หากไม่สำเร็จ รูปโปรไฟล์ที่ยังมีการอ้างอิงหรือตรวจสอบไม่ได้จะถูกเก็บไว้ และ rollback อุปกรณ์จะลบแถวสำเร็จก่อนล้างไฟล์
-- FCM จำกัดเวลางานส่งรวม **10s** รองรับ cancellation ทั้ง OAuth และ delivery SDK อาจ retry ข้อผิดพลาดชั่วคราวภายในเวลานี้ ลบ device token เฉพาะ error `UNREGISTERED` ที่ SDK ระบุชนิดได้; HTTP 404 ทั่วไปไม่ทำให้ token ถูกลบ
 
 ### AI contract
 
@@ -315,7 +301,7 @@ Fiber ใช้ native handlers (`func(fiber.Ctx) error`), `c.Bind()` พร้�
 
 การปิดสตรีม, `WRITE_TIMEOUT` และ server shutdown จะยกเลิก context และปิด upstream body สำหรับ Fiber การตัดการเชื่อมต่อก่อน upstream ตอบ headers ครั้งแรกยังไม่แจ้งผ่าน request context อัตโนมัติ ช่วงนี้จึงมี `AI_SERVICE_TIMEOUT` และ `WRITE_TIMEOUT` เป็นขอบเขตเวลา เมื่อเริ่มสตรีมแล้วตรวจ disconnect จาก write/flush errors ได้
 
-HTTP transport กำหนด request body limit รวม **32 MiB** เพื่อรองรับ multipart รูปสินค้า 5 รูป รูปละ 5 MiB พร้อม overhead และยังตรวจจำนวน / ขนาด / MIME ของแต่ละรูปใน handler เช่นเดิม `net/http` ยังคงใช้กับ outbound clients ของ Supabase, FCM และ AI service
+HTTP transport กำหนด request body limit รวม **32 MiB** เพื่อรองรับ multipart รูปสินค้า 5 รูป รูปละ 5 MiB พร้อม overhead และยังตรวจจำนวน / ขนาด / MIME ของแต่ละรูปใน handler เช่นเดิม `net/http` ยังคงใช้กับ outbound clients ของ Supabase และ AI service
 
 คำขอรองรับ `query` / `message` และ optional `session_id`, `history`, `context`, `questionnaire_answers`, `questionnaire_skipped`, `active_question_id` ผลตอบกลับมีข้อความ, การ์ด, แบบสอบถาม, references และข้อมูล scope / action / response kind / session context
 
@@ -340,7 +326,7 @@ go test ./...
 go vet ./...
 ```
 
-ไฟล์ทดสอบทั้งหมดอยู่ใน `tests/` แยกเป็น `adapters/fcm`, `adapters/supabase`, `domain` และ `ports` ใช้ package ภายนอกที่ import โค้ดจาก `internal/` พร้อม mocks และ `httptest` จึงไม่ต้องมี credentials หรือบริการจริง HTTP middleware tests ครอบคลุม CORS allowlist/preflight/native, Vary header, token-bucket refill และ burst แบบ concurrent, การแชร์ quota ข้าม routes และ proxy IP ส่วน FCM tests ตรวจ cache hit/miss/expiry/invalidation และ fixed TTL ที่ไม่ต่ออายุเมื่ออ่าน การทดสอบภาพหลักฐานและพิกัดเรียกผ่าน HTTP handler จริง
+ไฟล์ทดสอบทั้งหมดอยู่ใน `tests/` แยกเป็น `adapters/supabase`, `domain` และ `ports` ใช้ package ภายนอกที่ import โค้ดจาก `internal/` พร้อม mocks และ `httptest` จึงไม่ต้องมี credentials หรือบริการจริง HTTP middleware tests ครอบคลุม CORS allowlist/preflight/native, Vary header, token-bucket refill และ burst แบบ concurrent, การแชร์ quota ข้าม routes และ proxy IP การทดสอบภาพหลักฐานและพิกัดเรียกผ่าน HTTP handler จริง
 
 รันเฉพาะชุดทดสอบด้วย `go test ./tests/...` หรือเลือกโฟลเดอร์ เช่น `go test ./tests/ports` และวัด coverage ของโค้ดต้นทางด้วย `go test '-coverpkg=github.com/chn-benmat/yuemnoi_app/backend/internal/...' ./tests/...` คำสั่ง `go test ./...` ด้านบนยังครอบคลุมทุกชุดตามเดิม
 
@@ -372,7 +358,6 @@ backend/
 │   ├── domain/              # Entities และ interfaces
 │   ├── adapters/
 │   │   ├── supabase/        # Auth, data, storage
-│   │   ├── fcm/             # FCM HTTP v1
 │   │   └── aiservice/       # Python JSON / SSE client
 │   └── ports/               # Fiber handlers, router, middleware
 ├── tests/                   # External tests แยก adapters/, domain/, ports/
@@ -415,7 +400,6 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 | ฟีด / register ใช้งานไม่ได้    | ตรวจ `home_feed_ranked_v`, `check_email_exists` และ schema            |
 | อัปโหลด avatar ตอนสมัครล้มเหลว | ตรวจกลไกสร้าง profile row และ `profile_bk`                            |
 | อีเมล OTP มีแต่ลิงก์           | ตั้ง Magic Link template ให้มี `{{ .Token }}`                         |
-| Health ผ่านแต่ส่ง push ไม่ได้  | ตรวจ service account, Firebase project และ receiver FCM token         |
 | AI 502 / 503                   | ตรวจ base URL, Python, internal key, provider error และ `Retry-After` |
 | 429                            | รอ rate limiter คืนโควตา; อุปกรณ์ที่ใช้ IP เดียวกันแชร์ bucket        |
 | Rental 409                     | ตรวจสถานะ / ช่วงเวลา / ผู้มีสิทธิ์ตาม booking                         |

@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'item_detail_route_args.dart';
 import '../../features/identity/data/identity_api_repository.dart';
+import '../../features/identity/data/identity_consent_preferences.dart';
 import '../../features/identity/domain/identity_repository.dart';
 import '../../features/identity/presentation/identity_account_cubit.dart';
 import '../../features/identity/presentation/pages/identity_account_page.dart';
@@ -15,6 +16,7 @@ import '../../features/auth/presentation/pages/forget_password.dart';
 import '../../features/auth/presentation/pages/login.dart';
 import '../../features/auth/presentation/pages/one_time_verification.dart';
 import '../../features/auth/presentation/pages/register.dart';
+import '../network/auth_session.dart';
 import '../utils/auth_guard.dart';
 import '../../features/booking/presentation/pages/booking.dart';
 import '../../features/booking/presentation/pages/location_picker_map_page.dart';
@@ -540,7 +542,10 @@ abstract final class AppRoutes {
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
             child: BlocProvider(
-              create: (_) => IdentityAccountCubit(IdentityApiRepository()),
+              create: (_) => IdentityAccountCubit(
+                IdentityApiRepository(),
+                consentStore: IdentityConsentPreferences(AuthSession.userId),
+              ),
               child: const IdentityAccountPage(),
             ),
           ),

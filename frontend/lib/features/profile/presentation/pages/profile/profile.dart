@@ -1,9 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import '../../../../../core/constants/colors.dart';
@@ -15,7 +13,7 @@ import '../../../../auth/presentation/bloc/auth_state.dart';
 import '../../bloc/profile_cubit.dart';
 import '../../bloc/profile_state.dart';
 import '../../../../../core/network/auth_session.dart';
-import '../../../../../core/services/fcm_service.dart';
+import '../../../../../core/services/chat_notification_service.dart';
 import '../../../../../core/services/favorite_service.dart';
 import '../../../../../core/utils/auth_guard.dart';
 import '../../../../auth/presentation/bloc/auth_event.dart';
@@ -198,18 +196,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await AppRoutes.openChangeAccount(context);
   }
 
-  Future<void> _openNotificationSettings() async {
-    try {
-      if (await openAppSettings()) return;
-    } catch (_) {
-      // อุปกรณ์บางรุ่นอาจเปิดหน้าตั้งค่าจากแอปไม่ได้
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('เปิดการตั้งค่าของอุปกรณ์ไม่สำเร็จ')),
-    );
-  }
-
   void _openUserProfile() async {
     final user = _currentUser;
     if (user == null) {
@@ -274,7 +260,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _performLogout() async {
-    await FcmService.instance.unregisterCurrentDevice();
+    await ChatNotificationService.instance.cancelAllNotifications();
     try {
       if (SupabaseConfig.isInitialized) {
         await SupabaseConfig.client.auth.signOut();
@@ -323,18 +309,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 20),
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
-                        child: Text(
-                          'การใช้งานของคุณ',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF30263E),
-                          ),
-                        ),
-                      ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: ProfileQuickActionsRow(
@@ -386,19 +360,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ProfileMenuItemData(
                                   icon: Icons.shield_outlined,
                                   title: 'ศูนย์ความเป็นส่วนตัว',
+                                  showDivider: false,
                                   onTap: _handlePrivacy,
                                 ),
-                                if (!kIsWeb &&
-                                    (defaultTargetPlatform ==
-                                            TargetPlatform.android ||
-                                        defaultTargetPlatform ==
-                                            TargetPlatform.iOS))
-                                  ProfileMenuItemData(
-                                    icon: Icons.notifications_outlined,
-                                    title: 'การตั้งค่าแจ้งเตือนของเครื่อง',
-                                    showDivider: false,
-                                    onTap: _openNotificationSettings,
-                                  ),
                               ],
                             ),
                             const SizedBox(height: 12),

@@ -8,11 +8,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/theme/app_theme.dart';
 import 'package:frontend/core/widgets/app_primary_button.dart';
 import 'package:frontend/core/widgets/skeleton_shimmer.dart';
+import 'package:frontend/features/identity/data/identity_consent_preferences.dart';
 import 'package:frontend/features/identity/domain/identity_account_repository.dart';
 import 'package:frontend/features/identity/domain/identity_repository.dart';
 import 'package:frontend/features/identity/domain/thai_address.dart';
 import 'package:frontend/features/identity/presentation/identity_account_cubit.dart';
 import 'package:frontend/features/identity/presentation/pages/identity_account_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AccountRepository implements IdentityAccountRepository {
   bool pending = false, fail = false, selfieWithCard = true, hasIdentity = true;
@@ -121,8 +123,12 @@ Future<IdentityAccountCubit> open(
   AccountRepository repo, {
   bool acceptConsent = true,
   ThaiAddressRepository? addresses,
+  String userId = 'account-a',
 }) async {
-  final cubit = IdentityAccountCubit(repo);
+  final cubit = IdentityAccountCubit(
+    repo,
+    consentStore: IdentityConsentPreferences(userId),
+  );
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.lightTheme,
@@ -165,6 +171,8 @@ Future<void> acceptIdentityConsent(WidgetTester tester) async {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('เลือกที่อยู่ได้ก่อนโหลดรูปหลักฐานเสร็จ', (tester) async {
     final gate = Completer<void>();
     addTearDown(() {
@@ -395,7 +403,10 @@ void main() {
     final repo = AccountRepository()
       ..loadGate = gate
       ..consentVersion = 'identity-v2';
-    final cubit = IdentityAccountCubit(repo);
+    final cubit = IdentityAccountCubit(
+      repo,
+      consentStore: IdentityConsentPreferences('account-a'),
+    );
     addTearDown(cubit.close);
     await tester.pumpWidget(
       MaterialApp(
@@ -557,6 +568,38 @@ void main() {
     expect(find.text('open'), findsOneWidget);
     expect(find.byType(AlertDialog), findsNothing);
   });
+
+  testWidgets('จำการยินยอมเมื่อกลับเข้าหน้าใหม่ก่อนส่งคำขอ', (tester) async {
+    final repo = AccountRepository()..consentVersion = 'identity-v1';
+    await open(tester, repo);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.text('open'), findsOneWidget);
+    expect(repo.sends, 0);
+
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.reload();
+    await open(tester, AccountRepository(), acceptConsent: false);
+    expect(find.text('เงื่อนไขการเก็บข้อมูลบัตรประชาชน'), findsNothing);
+  });
+
+  testWidgets('ความยินยอมบนเครื่องแยกตามบัญชีและเวอร์ชัน', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'identity_consent.identity-v1.account-a': true,
+    });
+    await open(tester, AccountRepository());
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    await open(
+      tester,
+      AccountRepository(),
+      acceptConsent: false,
+      userId: 'account-b',
+    );
+    expect(find.byType(CheckboxListTile), findsOneWidget);
+  });
+
   testWidgets('ยืนยันก่อนส่ง ใช้รูปเดิม และล็อกฟอร์มเมื่อส่งสำเร็จ', (
     tester,
   ) async {

@@ -256,7 +256,7 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                                 onRefresh: _loadData,
                                 emptyTitle: 'ยังไม่มีรายการปล่อยเช่า',
                                 emptyMessage:
-                                    'เมื่อมีผู้ใช้งานขอเช่าอุปกรณ์ของคุณ รายการจะแสดงและแจ้งเตือนที่นี่',
+                                    'เมื่อมีผู้ใช้งานขอเช่าอุปกรณ์ของคุณ รายการจะแสดงที่นี่',
                                 emptyActionLabel: 'ลงประกาศปล่อยเช่าอุปกรณ์',
                                 onEmptyAction: () =>
                                     AppRoutes.openAddRentalItem(context),

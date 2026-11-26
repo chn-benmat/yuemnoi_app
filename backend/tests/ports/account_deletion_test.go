@@ -76,7 +76,7 @@ func TestAccountDeletionRoutesUseVerifiedUserAndFreshSession(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &deletionRequests{due: after, scheduleErr: tc.scheduleErr, restoreErr: tc.restoreErr}
 			gateway := sbadapter.NewSupabaseUserRepository(sbclient.CreateClient(upstream.URL, "test-key"), "test-key")
-			app := ports.SetupRouterWithOperations(domain.OperationsOptions{AccountDeletion: store}, nil, gateway, nil, nil, nil, nil, "test-secret")
+			app := ports.SetupRouterWithOperations(domain.OperationsOptions{AccountDeletion: store}, nil, gateway, nil, nil, nil, "test-secret")
 			defer app.Shutdown()
 			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(`{"user_id":"someone-else"}`))
 			req.Header.Set("Content-Type", "application/json")

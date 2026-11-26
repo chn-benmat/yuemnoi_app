@@ -67,7 +67,6 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'โปรไฟล์และประกาศของคุณจะถูกซ่อนทันทีและคุณจะออกจากระบบ '
                     'บัญชีจะถูกลบถาวรหลัง 30 วัน คุณสามารถเข้าสู่ระบบเพื่อกู้คืนบัญชีได้ภายในกำหนดนี้',
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,

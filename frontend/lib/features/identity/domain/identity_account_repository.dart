@@ -43,3 +43,8 @@ abstract interface class IdentityAccountRepository {
   });
   void close();
 }
+
+abstract interface class IdentityConsentStore {
+  Future<bool> hasAccepted();
+  Future<bool> saveAcceptance();
+}

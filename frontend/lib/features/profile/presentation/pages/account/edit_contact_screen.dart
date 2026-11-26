@@ -138,11 +138,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const AccountPageIntro(
-                      title: 'ติดต่อกันได้ง่ายขึ้น',
-                      description:
-                          'อัปเดตเบอร์โทรสำหรับการติดต่อเรื่องเช่าของคุณ',
-                    ),
                     // ── Email (Read-only) ──────────────────────────
                     EditContactField(
                       controller: _emailCtrl,

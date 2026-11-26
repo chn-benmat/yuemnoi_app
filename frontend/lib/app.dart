@@ -11,10 +11,9 @@ import 'core/navigation/app_routes.dart';
 import 'core/navigation/item_deep_link.dart';
 import 'core/network/auth_session.dart';
 import 'core/network/supabase_client.dart';
-import 'core/services/app_notification_service.dart';
 import 'core/services/app_orientation_service.dart';
 import 'core/services/app_permission_service.dart';
-import 'core/services/fcm_service.dart';
+import 'core/services/chat_notification_service.dart';
 import 'core/services/recommendation_location_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
@@ -22,7 +21,6 @@ import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/chat/data/datasources/chat_remote_data_source.dart';
-import 'features/notification/presentation/widgets/global_app_notification_listener.dart';
 import 'features/wallet/presentation/bloc/wallet_cubit.dart';
 
 class YuemnoiApp extends StatefulWidget {
@@ -63,13 +61,15 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     );
     unawaited(_handleInitialDeepLink());
 
-    AppNotificationService.instance.onOpen = _openNotification;
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       AppOrientationService.setupOrientation();
-      // ผูก callback หลัง navigator พร้อม เพื่อไม่ทำการแตะ Push ตอน cold start หาย
-      FcmService.instance.onNotificationOpened = _openPush;
+      final notifications = ChatNotificationService.instance;
+      notifications.onNotificationTapped = (conversationId) {
+        if (AuthSession.isAuthenticated) {
+          unawaited(_openConversation(conversationId));
+        }
+      };
       unawaited(_requestFirstLaunchPermissions());
     });
   }
@@ -119,63 +119,6 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
       }
     } catch (_) {}
     if (mounted) _openHomeTab(1);
-  }
-
-  Future<void> _openNotification(AppNotification notification) async {
-    if (!mounted) return;
-    if (notification.category == AppNotificationCategory.chat) {
-      final conversationId = notification.conversationId;
-      if (conversationId != null) await _openConversation(conversationId);
-      return;
-    }
-    _navigateNotification({
-      ...notification.data,
-      'category': notification.category.name,
-      if (notification.bookingId != null) 'booking_id': notification.bookingId,
-    }, openHistoryIfUnknown: false);
-  }
-
-  Future<void> _openPush(Map<String, dynamic> data) async {
-    if (!mounted) return;
-    final id = data['notification_id']?.toString();
-    final updatedAt = DateTime.tryParse('${data['updated_at']}');
-    if (id != null && id.isNotEmpty && updatedAt != null) {
-      unawaited(
-        AppNotificationService.instance.markPushRead(
-          id,
-          readThrough: updatedAt,
-        ),
-      );
-    }
-    final conversationId = data['conversation_id']?.toString();
-    final isChat = data['category'] == 'chat' || data['type'] == 'chat_message';
-    if (isChat) {
-      if (conversationId != null && conversationId.isNotEmpty) {
-        await _openConversation(conversationId);
-      } else {
-        _openHomeTab(1);
-      }
-      return;
-    }
-    _navigateNotification(data);
-  }
-
-  void _navigateNotification(
-    Map<String, dynamic> data, {
-    bool openHistoryIfUnknown = true,
-  }) {
-    final destination = data['destination']?.toString();
-    final bookingId = int.tryParse('${data['booking_id']}');
-    if (bookingId != null && bookingId > 0) {
-      _router.push('${AppRoutes.rentalStatus}?booking_id=$bookingId');
-    } else if (data['category'] == 'rental') {
-      _router.push(AppRoutes.rentalStatus);
-    } else if (destination == AppRoutes.identity ||
-        destination == AppRoutes.myItems) {
-      _router.push(destination!);
-    } else if (openHistoryIfUnknown) {
-      _openHomeTab(2);
-    }
   }
 
   void _openHomeTab(int index) {
@@ -230,10 +173,6 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
       if (_startupPermissionsComplete) {
         unawaited(RecommendationLocationService.instance.refresh());
       }
-      final userId = SupabaseConfig.isInitialized
-          ? SupabaseConfig.client.auth.currentUser?.id
-          : null;
-      if (userId != null) unawaited(FcmService.instance.syncUserToken(userId));
     }
   }
 
@@ -241,8 +180,7 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_deepLinkSubscription?.cancel());
-    FcmService.instance.onNotificationOpened = null;
-    AppNotificationService.instance.onOpen = null;
+    ChatNotificationService.instance.onNotificationTapped = null;
     _router.dispose();
     super.dispose();
   }
@@ -269,11 +207,6 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
         themeMode: ThemeMode.light,
         debugShowCheckedModeBanner: false,
         routerConfig: _router,
-        builder: (context, child) {
-          return GlobalAppNotificationListener(
-            child: child ?? const SizedBox.shrink(),
-          );
-        },
       ),
     );
   }

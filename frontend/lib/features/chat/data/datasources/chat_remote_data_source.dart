@@ -1276,50 +1276,6 @@ class ChatRemoteDataSource {
     }
   }
 
-  Future<void> sendChatPushNotification({
-    required String conversationId,
-    required String message,
-    String? messageId,
-  }) async {
-    final token = AuthSession.accessToken;
-    if (token == null || token.isEmpty) return;
-
-    try {
-      final client = _supabaseClient;
-      final currentUserId = _currentUserId;
-
-      final convRes = await client
-          .schema('messaging')
-          .from('conversation_tb')
-          .select('renter_id, owner_id')
-          .eq('id', conversationId)
-          .maybeSingle();
-
-      if (convRes == null) return;
-      final renterId = convRes['renter_id']?.toString() ?? '';
-      final ownerId = convRes['owner_id']?.toString() ?? '';
-      final receiverId = currentUserId == renterId ? ownerId : renterId;
-
-      if (receiverId.isEmpty) return;
-
-      // สกัดเอาเฉพาะข้อความตอบกลับตัวจริง โดยตัดคำนำหน้า '↩ ตอบกลับ:...' ออก ไม่ให้ขึ้นคำว่าตอบกลับใน Push Notification
-      final cleanMessageForPush = _extractCleanPushMessage(message);
-
-      await _backendClient.post(
-        '/api/push/chat',
-        headers: {'Authorization': 'Bearer $token'},
-        data: {
-          'receiver_id': receiverId,
-          'message': cleanMessageForPush,
-          'message_id': messageId ?? '',
-          'conversation_id': conversationId,
-        },
-      );
-    } catch (e) {
-      debugPrint('sendChatPushNotification error: $e');
-    }
-  }
-
   Stream<List<IncomingChatMessageData>> streamIncomingMessages() {
     if (!SupabaseConfig.isInitialized && _client == null) {
       return const Stream.empty();
@@ -1444,26 +1400,6 @@ class ChatRemoteDataSource {
     'webp' => 'image/webp',
     _ => 'image/jpeg',
   };
-
-  static String _extractCleanPushMessage(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return '📷 ส่งรูปภาพ';
-    if (trimmed.startsWith('↩ ตอบกลับ:') ||
-        trimmed.startsWith('💬 ตอบกลับ') ||
-        trimmed.startsWith('↪ ตอบกลับ')) {
-      final newlineIdx = trimmed.indexOf('\n');
-      if (newlineIdx != -1) {
-        final actual = trimmed.substring(newlineIdx + 1).trim();
-        return actual.isNotEmpty ? actual : 'ส่งข้อความถึงคุณ';
-      }
-      final pipeParts = trimmed.split('|');
-      if (pipeParts.length >= 2) {
-        final actual = pipeParts[1].trim();
-        return actual.isNotEmpty ? actual : 'ส่งข้อความถึงคุณ';
-      }
-    }
-    return trimmed;
-  }
 }
 
 class IncomingChatMessageData {

@@ -35,8 +35,36 @@ func TestRemovedAdminActionsReturnNotFound(t *testing.T) {
 	}
 }
 
+func TestRemovedNotificationEndpointsReturnNotFound(t *testing.T) {
+	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, nil, nil, nil, nil, "test-secret")
+	t.Cleanup(func() { _ = app.Shutdown() })
+	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, "/api/notifications"},
+		{http.MethodPost, "/api/notifications/read-all"},
+		{http.MethodPost, "/api/notifications/read-conversation"},
+		{http.MethodPost, "/api/notifications/10000000-0000-4000-8000-000000000001/read"},
+		{http.MethodPut, "/api/notifications/devices"},
+		{http.MethodDelete, "/api/notifications/devices/test-installation"},
+		{http.MethodPost, "/api/push/chat"},
+		{http.MethodPost, "/api/user/fcm-token"},
+	} {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			req := httptest.NewRequest(route.method, route.path, nil)
+			req.Header.Set("X-App-Secret", "test-secret")
+			res, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusNotFound {
+				t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusNotFound)
+			}
+		})
+	}
+}
+
 func TestCORSHTTPContract(t *testing.T) {
-	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, nil, nil, nil, nil, nil, "test-secret")
+	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, nil, nil, nil, nil, "test-secret")
 	t.Cleanup(func() { _ = app.Shutdown() })
 	for _, tt := range []struct {
 		name, origin, allowOrigin, credentials string
@@ -130,7 +158,7 @@ func TestRateLimiterTouchesActiveKeysAndEvictsIdleKeys(t *testing.T) {
 }
 
 func TestRouterRateLimitGroupsShareQuotaAcrossTheirRoutes(t *testing.T) {
-	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, nil, nil, nil, nil, nil, "test-secret")
+	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, nil, nil, nil, nil, "test-secret")
 	t.Cleanup(func() { _ = app.Shutdown() })
 	send := func(path, key string, want int) {
 		t.Helper()
@@ -169,7 +197,7 @@ func TestRouterRateLimitGroupsShareQuotaAcrossTheirRoutes(t *testing.T) {
 }
 
 func TestCORSResponsesVaryByOrigin(t *testing.T) {
-	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, nil, nil, nil, nil, nil, "test-secret")
+	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, nil, nil, nil, nil, "test-secret")
 	t.Cleanup(func() { _ = app.Shutdown() })
 	for _, origin := range []string{"", "https://yuemnoi.com", "https://example.invalid"} {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)

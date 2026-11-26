@@ -62,9 +62,6 @@ type AuthRepository interface {
 	GetProfile(ctx context.Context, userID string) (*UserProfile, error)
 	UpdateProfile(ctx context.Context, userID string, req UpdateProfileRequest, img *ProfileImage) (*UserProfile, error)
 	UpdateContact(ctx context.Context, userID string, phone string) error
-	UpdateFCMToken(ctx context.Context, userID string, fcmToken string) error
-	GetFCMToken(ctx context.Context, userID string) (string, error)
-	DeleteFCMToken(ctx context.Context, userID string) error
 }
 
 type TokenVerifier interface {

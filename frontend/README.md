@@ -34,7 +34,7 @@ Frontend คือแอป Flutter ของแพลตฟอร์มเช�
 | 💬 Chat          | ห้องแชตผ่าน Supabase Realtime, แนบรูป, typing และ presence                |
 | 🤖 AI Assistant  | คำตอบ JSON / SSE, การ์ดสินค้า, แบบสอบถาม และบริบทของแชตปัจจุบัน           |
 | 📍 Location      | ตำแหน่งผู้ใช้, จุดนัดพบ, แผนที่ และเส้นทาง                                |
-| 🔔 Notifications | Firebase Cloud Messaging และการแจ้งเตือนในเครื่อง                         |
+| 🔔 Notifications | การแจ้งเตือนในเครื่อง                         |
 | 👤 Profile       | โปรไฟล์, อุปกรณ์ของฉัน และรายการเช่า                                      |
 
 > หน้าส่งมอบสร้าง QR พร้อมเพย์จากยอดจองและเบอร์มือถือหรือเลขบัตรประชาชนที่ผูกพร้อมเพย์ของผู้ปล่อยเช่า ผู้ปล่อยเช่าตรวจยอดเข้าบัญชีและกดยืนยันรับเงินด้วยตนเอง ส่วนยอดและการเติมเงินใน [WalletCubit](lib/features/wallet/presentation/bloc/wallet_cubit.dart) ใช้ข้อมูลจำลองในเครื่อง
@@ -46,14 +46,13 @@ flowchart LR
     App["Flutter App"] -->|"REST / AI SSE"| Go["Go Backend :8080"]
     App -->|"Auth / Realtime / Storage / ข้อมูลบางฟีเจอร์"| SB["Supabase"]
     Go -->|"Internal API"| AI["Python AI :8000"]
-    App --> FCM["Firebase Messaging"]
 ```
 
-การเชื่อมต่อปัจจุบันเป็น **Hybrid**: แอปเรียก Go สำหรับ Auth บางส่วน, โปรไฟล์, ลงประกาศ, คำขอเช่า, ขั้นตอนรับคืน, กล่องแจ้งเตือน และ AI ขณะเดียวกันยังอ่าน / เขียน Supabase โดยตรงในบางฟีเจอร์ เช่น ฟีดและแชต จึงต้องเตรียม database permissions และ RLS ให้ตรงกับโค้ดด้วย
+การเชื่อมต่อปัจจุบันเป็น **Hybrid**: แอปเรียก Go สำหรับ Auth บางส่วน, โปรไฟล์, ลงประกาศ, คำขอเช่า, ขั้นตอนรับคืน และ AI ขณะเดียวกันยังอ่าน / เขียน Supabase โดยตรงในบางฟีเจอร์ เช่น ฟีดและแชต จึงต้องเตรียม database permissions และ RLS ให้ตรงกับโค้ดด้วย
 
 ประกาศอุปกรณ์ใหม่จะอยู่ในสถานะ `pending_review` และไม่ปรากฏในฟีดจนกว่าเจ้าหน้าที่จะอนุมัติ การแก้รายละเอียดหรือรูปของประกาศที่เปิดให้เช่าแล้วจะส่งกลับเข้าคิวตรวจอีกครั้ง
 
-การแจ้งเตือนสถานะการเช่าและระบบแสดงผ่าน OS ทั้งขณะเปิดแอปและอยู่เบื้องหลัง ผู้ใช้จัดการสิทธิ์และเสียงได้ในการตั้งค่าของเครื่อง แท็บแจ้งเตือนโหลดประวัติเมื่อเปิดดู แชทยังแสดงแบนเนอร์พร้อมเสียงในแอปและขึ้นแจ้งเตือนผ่าน OS เมื่อแอปอยู่เบื้องหลัง ห้องที่กำลังอ่านจะไม่เด้งแบนเนอร์ สถานะอ่านซิงค์ผ่าน Go และ FCM token เก็บแยกต่อเครื่องใน `notification_device_tb`
+แท็บแจ้งเตือนแสดงข้อความว่าระบบกำลังปรับปรุง บริการแจ้งเตือนในเครื่องยังอยู่ในแอป
 
 แอปตรวจ `GET /api/auth/session` ก่อนยอมรับ session จากรหัสผ่าน, Google OAuth และการกู้คืนเมื่อเปิดแอป บัญชีที่ backend กำหนด `app_metadata.dashboard_only = true` จะแสดงข้อความให้ใช้ Dashboard และออกจาก session เฉพาะแอป การตรวจจาก backend ครอบคลุม metadata ใน session เดิมที่ยังไม่อัปเดต ระหว่างที่ยังตรวจสิทธิ์ไม่สำเร็จ แอปจะไม่เปิดใช้ token สำหรับข้อมูลส่วนตัว ต้องติดตั้ง backend และ [migration แยกสิทธิ์ dashboard](../supabase/migrations/20261017094213_restrict_dashboard_only_accounts.sql) ร่วมกัน
 
@@ -74,7 +73,6 @@ flowchart LR
 | dio                                   | 5.11.1                                                 | REST API และ SSE                |
 | supabase_flutter                      | 2.17.1                                                 | Auth, Realtime และ Storage      |
 | flutter_dotenv                        | 6.0.1                                                  | โหลด configuration จาก asset    |
-| firebase_core / firebase_messaging    | 3.15.2 / 15.2.10                                       | Firebase และ push notifications |
 | flutter_local_notifications           | 22.3.0                                                 | การแจ้งเตือนในเครื่อง           |
 | flutter_map / geolocator / latlong2   | 8.3.2 / 14.0.3 / 0.10.1                                | แผนที่และพิกัด                  |
 | image_picker / flutter_image_compress | 1.2.3 / 2.5.1                                          | เลือกและลดขนาดรูป               |
@@ -100,7 +98,7 @@ flowchart LR
 | flutter_launcher_icons                  | 0.14.4          |
 | Android Gradle Plugin / Gradle wrapper  | 9.0.1 / 9.1.0   |
 | Kotlin plugin / Google Services plugin  | 2.3.20 / 4.4.2  |
-| Firebase Android BoM / desugar library  | 33.10.0 / 2.1.4 |
+| Android desugar library                 | 2.1.4 |
 
 Android ตั้ง Java / Kotlin compilation target เป็น **17**; ค่า compileSdk, minSdk, targetSdk และ NDK รับจาก Flutter SDK ดู [settings.gradle.kts](android/settings.gradle.kts), [build.gradle.kts](android/app/build.gradle.kts) และ [Gradle wrapper](android/gradle/wrapper/gradle-wrapper.properties)
 
@@ -121,7 +119,7 @@ iOS project ตั้ง deployment target เป็น **13.0** แต่ยั
 - iOS: **macOS + Xcode** และเครื่องมือ native dependencies ตาม Flutter setup
 - Supabase project ที่มี schema, views, RPCs, Storage และ permissions ของแอป
 - Go Backend ที่อุปกรณ์ปลายทางเข้าถึงได้; เปิด Python AI เพิ่มเมื่อใช้ Chatbot
-- Firebase project เมื่อ build Android หรือทดสอบ push notifications
+- ไฟล์ `google-services.json` สำหรับ build Android และการตั้งค่า Google Sign-In
 
 จากโฟลเดอร์ root ของ repository:
 
@@ -156,7 +154,7 @@ APP_SECRET_KEY=replace-with-client-app-key
 
 [AppConfig](lib/core/config/app_config.dart) อ่านค่าจาก `--dart-define` ก่อน แล้ว fallback ไปที่ dotenv ส่วน API client มี fallback เป็น `http://127.0.0.1:8080` หากไม่ได้ตั้ง API URL ค่านี้ไม่เหมาะกับมือถือจริง
 
-ไฟล์ `.env.local` ถูกประกาศเป็น **Flutter asset** ใน pubspec จึงต้องมีไฟล์แม้จะส่งค่าผ่าน dart defines ทั้งหมดแล้ว และค่าที่ติดไปกับแอปสามารถถูกอ่านได้: ใส่เฉพาะ configuration ฝั่ง client; เก็บ Supabase service role, Firebase service account และคีย์ AI ไว้ฝั่งเซิร์ฟเวอร์
+ไฟล์ `.env.local` ถูกประกาศเป็น **Flutter asset** ใน pubspec จึงต้องมีไฟล์แม้จะส่งค่าผ่าน dart defines ทั้งหมดแล้ว และค่าที่ติดไปกับแอปสามารถถูกอ่านได้: ใส่เฉพาะ configuration ฝั่ง client; เก็บ Supabase service role และคีย์ AI ไว้ฝั่งเซิร์ฟเวอร์
 
 ### 3. เลือก URL ให้ตรงกับอุปกรณ์
 
@@ -172,16 +170,15 @@ APP_SECRET_KEY=replace-with-client-app-key
 
 | บริการ            | สิ่งที่ต้องเตรียม                                                                                                                                                                                                  |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Supabase Database | `public` สำหรับ item/booking/review, `messaging` สำหรับ conversation/message, `profiles` สำหรับ `profile_tb` และ `public_profile_v`, `notifications` สำหรับ inbox/device/outbox พร้อม RLS / grants ดู [migration และการเปิดใช้พร้อมกัน](../supabase/README.md) |
+| Supabase Database | `public` สำหรับ item/booking/review, `messaging` สำหรับ conversation/message, `profiles` สำหรับ `profile_tb` และ `public_profile_v` พร้อม RLS / grants ดู [migration และการเปิดใช้พร้อมกัน](../supabase/README.md) |
 | Supabase Realtime | เปิดใช้งานตามตารางและ channels ของ chat / booking / presence                                                                                                                                                       |
 | Supabase Storage  | buckets `item_bk`, `profile_bk` และ `chat_bk`; แชตใช้ signed URLs และต้องมี policies ที่ตรงกับผู้ใช้                                                                                                               |
 | Google login      | เปิด Google provider ใน Supabase; Android ต้องมี Web client ID และ Android OAuth client ที่ตรง package/SHA-1 ส่วน iOS / เว็บใช้ OAuth เดิมพร้อม redirect allowlist `yuemnoi://login-callback/` ดู [Google OAuth setup](https://supabase.com/docs/guides/auth/social-login/auth-google) |
-| Firebase Android  | เพิ่ม Android app ID `com.example.frontend` แล้ววาง `android/app/google-services.json` ที่ตรงกับ project                                                                                                           |
-| Firebase iOS      | เพิ่ม iOS app ให้ตรง bundle ID และเพิ่ม `GoogleService-Info.plist` เข้า Runner target; ตั้ง APNs / native capabilities เมื่อทดสอบ FCM                                                                              |
+| Google Sign-In Android | เพิ่ม Android app ID `com.example.frontend` แล้ววาง `android/app/google-services.json` ที่ตรงกับ project                                                                                                           |
 
 รูปที่อัปโหลดใหม่ใช้ path `chat_bk/<conversation_id>/<filename>`, `item_bk/<owner_user_id>/<item_id>/<filename>` และ `profile_bk/<user_id>/<filename>` รวมถึงรูปตรวจสภาพคืนสินค้าที่อยู่ใต้เจ้าของและสินค้าเดียวกัน ต้องใช้ [migration สิทธิ์ Storage](../supabase/migrations/20261017151602_organize_storage_image_folders.sql) ร่วมกับแอปและ backend เวอร์ชันนี้ รูปแชตเก่ายังอ่านและลบได้ตามสิทธิ์ผู้ส่ง โดยไม่ได้ย้ายไฟล์เดิม
 
-Firebase initialization ใช้ `Firebase.initializeApp()` แบบ native และแจ้ง warning หากเริ่มไม่ได้ ดู [Firebase Flutter setup](https://firebase.google.com/docs/flutter/setup) ไฟล์ Firebase configuration ไม่ได้ติดมาใน repository และ checkout นี้ไม่มีชุด SQL migrations สำหรับสร้าง Supabase ทั้งระบบอัตโนมัติ
+ไฟล์คอนฟิก Google Sign-In สำหรับ Android ไม่ได้ติดมาใน repository และ checkout นี้ไม่มีชุด SQL migrations สำหรับสร้าง Supabase ทั้งระบบอัตโนมัติ
 
 #### Google Sign-In บน Android
 
@@ -279,7 +276,7 @@ flutter build ipa --release --dart-define-from-file=.env.local --dart-define-fro
 
 Android ใช้ `--split-per-abi` เพิ่มในคำสั่ง APK ได้ หากต้องการแยกไฟล์ตาม CPU
 
-> **ก่อนขึ้น Store:** Android project ปัจจุบันใช้ application ID `com.example.frontend` และ release signing ยังชี้ไปที่ **debug key** ต้องตั้ง ID, signing และ Firebase configuration ของแอปจริงก่อนเผยแพร่ ฝั่ง iOS ต้องตั้ง bundle ID, signing และ native dependencies ด้วย ดู [Android release guide](https://docs.flutter.dev/deployment/android) และ [iOS release guide](https://docs.flutter.dev/deployment/ios)
+> **ก่อนขึ้น Store:** Android project ปัจจุบันใช้ application ID `com.example.frontend` และ release signing ยังชี้ไปที่ **debug key** ต้องตั้ง ID, signing และ Google Sign-In configuration ของแอปจริงก่อนเผยแพร่ ฝั่ง iOS ต้องตั้ง bundle ID, signing และ native dependencies ด้วย ดู [Android release guide](https://docs.flutter.dev/deployment/android) และ [iOS release guide](https://docs.flutter.dev/deployment/ios)
 
 <a id="development"></a>
 
@@ -353,7 +350,6 @@ frontend/
 | Google login บน Android ไม่เปิดตัวเลือกบัญชี | ตรวจ `GOOGLE_WEB_CLIENT_ID`, Android OAuth package/SHA-1 และ Google Play services; รันแอปใหม่หลังเพิ่ม plugin |
 | Google login บน iOS / เว็บไม่กลับแอป | ตรวจ Google provider, Supabase redirect allowlist และ `yuemnoi://login-callback/` |
 | Google Services task ล้มเหลว          | ตรวจ `google-services.json` และ application ID ว่าตรงกัน                          |
-| ไม่มี push notification               | ตรวจ Firebase / APNs, permission, FCM token และ Backend service account           |
 | AI timeout / quota เต็ม               | ตรวจ Go → AI URL / internal key / runtime / provider quotas ตาม AI README         |
 
 ---
