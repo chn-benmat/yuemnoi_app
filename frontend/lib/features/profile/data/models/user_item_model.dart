@@ -29,6 +29,8 @@ class UserItemModel {
   final String rentalType;
   @JsonKey(name: 'owner_hidden', defaultValue: false)
   final bool ownerHidden;
+  @JsonKey(name: 'moderation_hidden', defaultValue: false)
+  final bool moderationHidden;
 
   const UserItemModel({
     this.id,
@@ -42,6 +44,7 @@ class UserItemModel {
     this.isRentalOccupied = false,
     this.rentalType = '',
     this.ownerHidden = false,
+    this.moderationHidden = false,
   });
 
   factory UserItemModel.fromJson(Map<String, dynamic> json) =>
@@ -75,6 +78,7 @@ class UserItemModel {
       isRentalOccupied: isRentalOccupied,
       rentalType: rentalType,
       ownerHidden: ownerHidden,
+      moderationHidden: moderationHidden,
     );
   }
 

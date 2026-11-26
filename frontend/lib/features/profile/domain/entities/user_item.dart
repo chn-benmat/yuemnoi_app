@@ -21,6 +21,7 @@ class UserItem {
   final bool isRentalOccupied;
   final String rentalType;
   final bool ownerHidden;
+  final bool moderationHidden;
 
   const UserItem({
     this.id,
@@ -34,7 +35,14 @@ class UserItem {
     this.isRentalOccupied = false,
     this.rentalType = '',
     this.ownerHidden = false,
+    this.moderationHidden = false,
   });
+
+  bool get hiddenByModeration =>
+      moderationHidden &&
+      listingStatus != UserItemStatus.pendingReview &&
+      listingStatus != UserItemStatus.rejected;
+  bool get isHidden => ownerHidden || hiddenByModeration;
 
   // ใช้ข้อมูลการจองที่ยืนยันแล้วเป็นเกณฑ์แสดงสถานะกำลังถูกเช่า
   UserItemStatus get listingStatus => switch (status.trim().toLowerCase()) {

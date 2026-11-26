@@ -57,7 +57,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   Uint8List? _card, _selfie;
   bool _allowExit = false, _capturing = false, _dialogOpen = false;
   bool _removedCard = false, _removedSelfie = false;
-  bool _consent = false, _showingInitialConsent = true;
+  bool _consent = false, _showingInitialConsent = false;
   Uint8List? _photoBytes(IdentityAccountState state, bool selfie) => selfie
       ? (_removedSelfie ? null : _selfie ?? state.photos['selfie'])
       : (_removedCard ? null : _card ?? state.photos['card']);
@@ -81,16 +81,26 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
       widget.addressRepository ?? AssetThaiAddressRepository(),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_openInitialConsent());
+      if (mounted) unawaited(_load());
     });
   }
 
-  Future<void> _openInitialConsent() async {
-    final consentClosed = _showConsent();
-    unawaited(_cubit.load(loadEvidenceAfter: consentClosed));
-    await consentClosed;
-    if (!mounted) return;
-    setState(() => _showingInitialConsent = false);
+  Future<void> _load() => _cubit.load(
+    onDetailsLoaded: (details) async {
+      if (!mounted || _allowExit) return;
+      if (details.hasAcceptedCardRetentionConsent) {
+        setState(() => _consent = true);
+      } else if (!_consent) {
+        setState(() => _showingInitialConsent = true);
+        await _showConsent();
+        if (!mounted) return;
+        setState(() => _showingInitialConsent = false);
+      }
+      unawaited(_loadAddress());
+    },
+  );
+
+  Future<void> _loadAddress() async {
     await _address.load();
     if (mounted) _restoreAddress();
   }
@@ -130,21 +140,15 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   Future<void> _showConsent() async {
     if (_dialogOpen) return;
     _dialogOpen = true;
-    final cubit = _cubit;
+    final requiresConsent = !_readOnly && !_consent;
     FocusScope.of(context).unfocus();
     final agreed = await showDialog<bool>(
       context: context,
-      barrierDismissible: _readOnly || _consent,
-      builder: (_) =>
-          BlocSelector<IdentityAccountCubit, IdentityAccountState, bool>(
-            bloc: cubit,
-            selector: (state) => !_isReadOnly(state) && !_consent,
-            builder: (_, requiresConsent) =>
-                IdentityConsentDialog(requiresConsent: requiresConsent),
-          ),
+      barrierDismissible: !requiresConsent,
+      builder: (_) => IdentityConsentDialog(requiresConsent: requiresConsent),
     );
     _dialogOpen = false;
-    if (mounted && agreed == true && !_consent && !_readOnly) {
+    if (mounted && agreed == true && requiresConsent) {
       setState(() => _consent = true);
     }
   }
@@ -894,7 +898,8 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     },
     builder: (context, state) {
       final showLoading =
-          _showingInitialConsent || (state.loading && state.details == null);
+          _showingInitialConsent ||
+          (state.details == null && (state.loading || state.error == null));
       if (!showLoading && _loaded == null && state.details != null) {
         _hydrate(state.details!);
       }
@@ -938,7 +943,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                       Text(state.error ?? 'โหลดข้อมูลไม่ได้'),
                       const SizedBox(height: 12),
                       FilledButton(
-                        onPressed: _cubit.load,
+                        onPressed: _load,
                         child: const Text('ลองอีกครั้ง'),
                       ),
                     ],

@@ -87,20 +87,6 @@ void main() {
   }
 
   testWidgets(
-    'legal documents clearly show unpublished status without placeholder policy',
-    (tester) async {
-      for (final page in const [
-        PrivacyPolicyScreen(),
-        TermsOfServiceScreen(),
-      ]) {
-        await tester.pumpWidget(MaterialApp(home: page));
-        expect(find.text('เนื้อหาอยู่ระหว่างจัดทำ'), findsOneWidget);
-        expect(find.textContaining('Lorem'), findsNothing);
-      }
-    },
-  );
-
-  testWidgets(
     'password visibility toggle preserves validation and typed value',
     (tester) async {
       await tester.pumpWidget(

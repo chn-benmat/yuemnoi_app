@@ -38,6 +38,7 @@ import { toCSV } from "@/lib/export";
 import { groupSeries, type Group } from "@/lib/reports";
 import Overview from "./overview";
 import Identity from "./identity";
+import { ComplaintDialog, complaintOutcomes } from "./complaint-dialog";
 import {
   DataTable,
   Badge,
@@ -183,8 +184,14 @@ const columns: Record<string, Column[]> = {
       label: "สถานะ",
       render: (r) => <Badge value={r.status} />,
     },
-    { key: "assigned_to", label: "ผู้รับผิดชอบ" },
-    { key: "resolution", label: "ผลดำเนินงาน" },
+    {
+      key: "review_outcome",
+      label: "ผลตรวจสอบ",
+      render: (r) => {
+        const outcome = r.review_outcome as keyof typeof complaintOutcomes;
+        return complaintOutcomes[outcome] ?? display(r.resolution);
+      },
+    },
     dateColumn,
   ],
   staff: [
@@ -239,6 +246,7 @@ export default function Dashboard({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [operation, setOperation] = useState<Operation | null>(null);
+  const [complaint, setComplaint] = useState<Row | null>(null);
   const [message, setMessage] = useState("");
   const [approvingItemId, setApprovingItemId] = useState<string | null>(null);
   useEffect(() => {
@@ -429,42 +437,9 @@ export default function Dashboard({
       );
     if (section === "complaints")
       return (
-        <>
-          {r.status !== "in_progress" && (
-            <button
-              disabled={preview}
-              onClick={() =>
-                action(r, "complaint", "รับเรื่องดำเนินการ", {
-                  status: "in_progress",
-                })
-              }
-            >
-              รับเรื่อง
-            </button>
-          )}
-          {r.status !== "resolved" && (
-            <button
-              disabled={preview}
-              onClick={() =>
-                action(r, "complaint", "บันทึกผลและปิดเรื่อง", {
-                  status: "resolved",
-                })
-              }
-            >
-              ปิดเรื่อง
-            </button>
-          )}
-          {r.status === "resolved" && (
-            <button
-              disabled={preview}
-              onClick={() =>
-                action(r, "complaint", "เปิดเรื่องอีกครั้ง", { status: "open" })
-              }
-            >
-              เปิดใหม่
-            </button>
-          )}
-        </>
+        <button disabled={preview} onClick={() => setComplaint(r)}>
+          {r.status === "resolved" ? "ดูผลตรวจ" : "จัดการ"}
+        </button>
       );
     if (section === "staff")
       return (
@@ -917,6 +892,17 @@ export default function Dashboard({
           setMessage("บันทึกการดำเนินงานเรียบร้อยแล้ว");
         }}
       />
+      {complaint && (
+        <ComplaintDialog
+          row={complaint}
+          onClose={() => setComplaint(null)}
+          onSaved={(text) => {
+            setComplaint(null);
+            setMessage(text);
+            result.reload();
+          }}
+        />
+      )}
     </div>
   );
 }

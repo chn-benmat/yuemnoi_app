@@ -33,6 +33,8 @@ class ChatRemoteDataSource {
   final SupabaseClient? _client;
   ApiClient? _apiClient;
   static const _chatBucket = 'chat_bk';
+  static const _conversationItemColumns =
+      'id,item_name,item_image_url,price,type,user_id';
   static final _signedImages =
       <
         (SupabaseClient, String, String),
@@ -138,18 +140,22 @@ class ChatRemoteDataSource {
         if (parsedId != null && parsedId > 0) {
           item = await client
               .from('item_tb')
-              .select('id,item_name,item_image_url,price,type')
+              .select(_conversationItemColumns)
               .eq('id', parsedId)
               .maybeSingle();
         }
       }
 
-      return ChatConversationModel.fromRecords(
+      final result = ChatConversationModel.fromRecords(
         conversation: conversation,
         otherProfile: otherProfile,
         item: item,
         currentUserId: currentUserId,
       );
+      // เมื่อกดสอบถามจากสินค้า ผู้ใช้เป็นผู้เช่าของสินค้าที่เพิ่งเลือก
+      return itemId != null && itemId > 0
+          ? result.copyWith(itemRentalRole: ChatParticipantRole.renter)
+          : result;
     } on ChatRemoteException {
       rethrow;
     } on PostgrestException catch (e) {
@@ -202,7 +208,7 @@ class ChatRemoteDataSource {
         if (itemId != null) {
           item = await client
               .from('item_tb')
-              .select('id,item_name,item_image_url,price,type')
+              .select(_conversationItemColumns)
               .eq('id', itemId)
               .maybeSingle();
         }
@@ -313,7 +319,7 @@ class ChatRemoteDataSource {
         try {
           final items = await client
               .from('item_tb')
-              .select('id,item_name,item_image_url,price,type')
+              .select(_conversationItemColumns)
               .inFilter('id', itemIds.toList(growable: false));
           for (final item in (items as List).cast<Map<String, dynamic>>()) {
             final id = item['id'] is num
@@ -1386,7 +1392,7 @@ class ChatRemoteDataSource {
               if (conv['item_id'] != null) {
                 item = await client
                     .from('item_tb')
-                    .select('id,item_name,item_image_url,price,type')
+                    .select(_conversationItemColumns)
                     .eq('id', conv['item_id'])
                     .maybeSingle();
               }

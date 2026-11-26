@@ -11,7 +11,7 @@ abstract class RentalManagementRepository {
     required int bookingId,
     required String status,
   });
-  Future<RentalIncomeSummary> getRentalIncome(String userId);
+  Future<RentalIncomeSummary> getRentalIncome();
 }
 
 abstract interface class RentalHandoverRepository {

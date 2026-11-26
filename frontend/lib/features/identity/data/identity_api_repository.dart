@@ -7,8 +7,6 @@ import '../domain/identity_account_repository.dart';
 
 class IdentityApiRepository
     implements IdentityRepository, IdentityAccountRepository {
-  static const _cardRetentionConsent = 'identity-v2';
-
   IdentityApiRepository({ApiClient? client})
     : _client =
           client ?? DioApiClient(requestTimeout: const Duration(seconds: 120));
@@ -67,7 +65,10 @@ class IdentityApiRepository
       await _client.postMultipart(
         '/api/identity/sessions/$session/submit',
         headers: _headers,
-        fields: {...fields, 'consent_version': _cardRetentionConsent},
+        fields: {
+          ...fields,
+          'consent_version': identityCardRetentionConsentVersion,
+        },
         files: [
           ApiUpload(fieldName: 'card', bytes: card, fileName: 'card.jpg'),
           ApiUpload(fieldName: 'selfie', bytes: selfie, fileName: 'selfie.jpg'),
@@ -129,7 +130,7 @@ class IdentityApiRepository
         fields: {
           ...fields,
           'selfie_with_card': 'true',
-          'consent_version': _cardRetentionConsent,
+          'consent_version': identityCardRetentionConsentVersion,
         },
         files: [
           if (card != null)

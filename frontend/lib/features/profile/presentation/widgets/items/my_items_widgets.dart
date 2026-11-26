@@ -184,6 +184,7 @@ class MyItemData {
   final UserItemStatus status;
   final String rentalType;
   final bool ownerHidden;
+  final bool hiddenByModeration;
 
   const MyItemData({
     this.id,
@@ -194,6 +195,7 @@ class MyItemData {
     this.status = UserItemStatus.unknown,
     this.rentalType = '',
     this.ownerHidden = false,
+    this.hiddenByModeration = false,
   });
 
   factory MyItemData.fromEntity(UserItem entity, IconData icon) => MyItemData(
@@ -205,6 +207,7 @@ class MyItemData {
     status: entity.listingStatus,
     rentalType: entity.rentalType,
     ownerHidden: entity.ownerHidden,
+    hiddenByModeration: entity.hiddenByModeration,
   );
 
   String get unitLabel => switch (rentalType.trim().toLowerCase()) {
@@ -224,6 +227,12 @@ class MyItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final price = NumberFormat('#,##0.##', 'th').format(item.price);
+    final isHidden = item.ownerHidden || item.hiddenByModeration;
+    final statusLabel = item.hiddenByModeration
+        ? 'ถูกซ่อนโดยผู้ดูแล'
+        : isHidden
+        ? MyItemsFilter.hidden.label
+        : item.status.label;
     return Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(
@@ -279,7 +288,7 @@ class MyItemCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: item.ownerHidden
+                        color: isHidden
                             ? const Color(0xFFF0F1F5)
                             : item.status.background,
                         borderRadius: BorderRadius.circular(6),
@@ -288,25 +297,23 @@ class MyItemCard extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            item.ownerHidden
+                            isHidden
                                 ? MyItemsFilter.hidden.icon
                                 : item.status.icon,
                             size: 14,
-                            color: item.ownerHidden
+                            color: isHidden
                                 ? MyItemsFilter.hidden.foreground
                                 : item.status.foreground,
                           ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
-                              item.ownerHidden
-                                  ? MyItemsFilter.hidden.label
-                                  : item.status.label,
+                              statusLabel,
                               style: TextStyle(
                                 fontFamily: AppTextStyles.fontFamily,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: item.ownerHidden
+                                color: isHidden
                                     ? MyItemsFilter.hidden.foreground
                                     : item.status.foreground,
                               ),

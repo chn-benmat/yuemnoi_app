@@ -63,6 +63,22 @@ type RentalHandoverRepository interface {
 	SavePromptPayAccount(ctx context.Context, userID string, rentalID int64, phone, nationalID string) (RentalHandoverPayment, error)
 }
 
+type RentalIncomeRepository interface {
+	GetRentalIncome(ctx context.Context, userID string) (RentalIncomeSummary, error)
+}
+
+type RentalIncomeSummary struct {
+	TotalSatang  int64                 `json:"total_satang"`
+	Transactions []RentalIncomeReceipt `json:"transactions"`
+}
+
+type RentalIncomeReceipt struct {
+	ItemName      string    `json:"item_name"`
+	ConfirmedAt   time.Time `json:"confirmed_at"`
+	PaymentMethod string    `json:"payment_method"`
+	AmountSatang  int64     `json:"amount_satang"`
+}
+
 type RentalHandoverPayment struct {
 	PaymentMethod       string `json:"payment_method"`
 	Status              string `json:"status"`

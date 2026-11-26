@@ -10,6 +10,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(theme: AppTheme.lightTheme, home: const FaqScreen()),
     );
+    expect(find.text('เริ่มต้นใช้งาน · 5 คำถาม'), findsOneWidget);
     expect(find.byType(SelectableText), findsOneWidget);
     final question = find.text('การลงทะเบียนและการยืนยันตัวตน');
     await tester.ensureVisible(question);
@@ -46,13 +47,25 @@ void main() {
       ),
     );
     expect(tester.takeException(), isNull);
+    final question = find.text('ลบบัญชีอย่างไร?');
+    expect(question, findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('ข้อกำหนดสำหรับผู้เช่า (Renter)'),
+      question,
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('ข้อกำหนดสำหรับผู้เช่า (Renter)'));
+    await tester.tap(question);
     await tester.pumpAndSettle();
+    expect(
+      tester.widget<SelectableText>(find.byType(SelectableText)).data,
+      allOf(
+        contains('โปรไฟล์ → ศูนย์ความเป็นส่วนตัว → ลบบัญชีผู้ใช้'),
+        contains('ยืนยันลบบัญชี'),
+        contains('รายการเช่าที่ค้าง'),
+        contains('30 วัน'),
+        contains('กู้คืนบัญชี'),
+      ),
+    );
     expect(tester.takeException(), isNull);
   });
 }

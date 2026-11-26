@@ -27,4 +27,5 @@ UserItemModel _$UserItemModelFromJson(Map<String, dynamic> json) =>
       isRentalOccupied: json['is_rental_occupied'] as bool? ?? false,
       rentalType: json['type'] as String? ?? '',
       ownerHidden: json['owner_hidden'] as bool? ?? false,
+      moderationHidden: json['moderation_hidden'] as bool? ?? false,
     );

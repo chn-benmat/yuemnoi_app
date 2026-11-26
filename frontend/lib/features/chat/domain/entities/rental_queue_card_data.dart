@@ -17,6 +17,7 @@ class RentalQueueCardData {
     required this.name,
     required this.status,
     this.price,
+    this.additionalDailyPrice,
     this.rentalType,
     this.position,
     this.dueAt,
@@ -28,6 +29,7 @@ class RentalQueueCardData {
   final String name;
   final RentalQueueStatus status;
   final int? price;
+  final int? additionalDailyPrice;
   final String? rentalType;
   final int? position;
   final DateTime? dueAt;
@@ -52,6 +54,7 @@ class RentalQueueCardData {
         name: name,
         status: RentalQueueStatus.values.byName(data['status'] as String),
         price: data['price'] as int?,
+        additionalDailyPrice: data['dailyPrice'] as int?,
         rentalType: data['rentalType'] as String?,
         position: data['position'] as int?,
         dueAt: DateTime.tryParse(data['dueAt']?.toString() ?? ''),

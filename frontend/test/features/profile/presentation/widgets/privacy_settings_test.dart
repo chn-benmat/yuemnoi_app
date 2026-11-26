@@ -38,15 +38,21 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('privacy center contains privacy groups without notifications', (
+  testWidgets('privacy center shows password and account deletion settings', (
     tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: ChangeAccountScreen()));
     await tester.pumpAndSettle();
     expect(find.text('ศูนย์ความเป็นส่วนตัว'), findsOneWidget);
     expect(find.text('บัญชีและความปลอดภัย'), findsOneWidget);
-    expect(find.text('ความเป็นส่วนตัวและการบล็อก'), findsOneWidget);
-    expect(find.text('อุปกรณ์และการจัดการบัญชี'), findsOneWidget);
+    expect(find.text('เปลี่ยนรหัสผ่าน'), findsOneWidget);
+    expect(find.text('ลบบัญชีผู้ใช้'), findsOneWidget);
+    expect(find.text('การยืนยันตัวตน 2 ขั้นตอน (2FA)'), findsNothing);
+    expect(find.text('ความเป็นส่วนตัวและการบล็อก'), findsNothing);
+    expect(find.text('จัดการผู้ใช้ที่บล็อก'), findsNothing);
+    expect(find.text('ซ่อนผู้ใช้ที่ไม่ต้องการเห็น'), findsNothing);
+    expect(find.text('อนุญาตให้ค้นหาโปรไฟล์ของคุณ'), findsNothing);
+    expect(find.text('อุปกรณ์ที่เข้าสู่ระบบอยู่'), findsNothing);
     expect(find.text('ปิดการแจ้งเตือนทั้งหมดชั่วคราว'), findsNothing);
   });
 

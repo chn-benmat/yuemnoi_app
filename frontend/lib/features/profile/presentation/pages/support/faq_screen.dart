@@ -34,6 +34,15 @@ class _FaqScreenState extends State<FaqScreen> {
       answer:
           'ผู้เช่าต้องยืนยันตัวตนก่อนทำการเช่า และต้องปฏิบัติตามเงื่อนไขที่ผู้ให้เช่ากำหนด รวมถึงรับผิดชอบค่าเสียหายที่เกิดขึ้นจากการใช้งาน',
     ),
+    FaqItemData(
+      question: 'ลบบัญชีอย่างไร?',
+      answer:
+          'ไปที่ โปรไฟล์ → ศูนย์ความเป็นส่วนตัว → ลบบัญชีผู้ใช้ แล้วแตะ “ยืนยันลบบัญชี” '
+          'หากมีรายการเช่าที่ค้างอยู่ ให้ดำเนินการให้เสร็จก่อนส่งคำขอ\n\n'
+          'เมื่อส่งคำขอสำเร็จ ระบบจะซ่อนโปรไฟล์และประกาศของคุณทันทีและนำคุณออกจากระบบ '
+          'บัญชีจะถูกลบถาวรเมื่อครบ 30 วัน หากเปลี่ยนใจ ให้เข้าสู่ระบบและกด “ยืนยัน” '
+          'ในหน้าต่าง “กู้คืนบัญชี” ก่อนครบกำหนด',
+    ),
   ];
 
   @override
@@ -65,11 +74,11 @@ class _FaqScreenState extends State<FaqScreen> {
               title: 'มีอะไรให้ช่วยไหม?',
               description: 'รวมเรื่องที่ควรรู้ ก่อนเช่าและปล่อยเช่าบน Yuemnoi',
             ),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
               child: Text(
-                'เริ่มต้นใช้งาน · 4 คำถาม',
-                style: TextStyle(
+                'เริ่มต้นใช้งาน · ${_faqs.length} คำถาม',
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF665D73),

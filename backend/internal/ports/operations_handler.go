@@ -57,8 +57,15 @@ func operationError(c fiber.Ctx, err error) error {
 		"last_staff_required":    "ต้องเหลือเจ้าหน้าที่ที่ใช้งานได้อย่างน้อยหนึ่งบัญชี", "self_suspend_forbidden": "ไม่สามารถระงับบัญชีตนเอง",
 		"manual_review_required": "กรุณายืนยันว่าตรวจหลักฐานด้วยตนเองแล้ว",
 		"evidence_unavailable":   "หลักฐานหมดอายุหรือถูกลบแล้ว", "invalid_date_range": "ช่วงเวลารายงานไม่ถูกต้อง",
-		"invalid_settings":  "กรุณาระบุค่าการเปิดใช้งานเป็น true หรือ false",
-		"citizen_id_locked": "หากต้องการเปลี่ยนเลขบัตร กรุณาติดต่อเจ้าหน้าที่",
+		"invalid_settings":              "กรุณาระบุค่าการเปิดใช้งานเป็น true หรือ false",
+		"citizen_id_locked":             "หากต้องการเปลี่ยนเลขบัตร กรุณาติดต่อเจ้าหน้าที่",
+		"complaint_not_found":           "ไม่พบเรื่องร้องเรียน",
+		"complaint_not_open":            "เรื่องนี้มีการบันทึกผลแล้ว กรุณาโหลดรายการล่าสุด",
+		"invalid_complaint_outcome":     "กรุณาเลือกผลการตรวจสอบ",
+		"invalid_complaint_reason":      "กรุณากรอกข้อความตามจำนวนตัวอักษรที่กำหนด",
+		"invalid_complaint_incident":    "กรุณาเลือกเหตุการณ์เดิมของประกาศนี้",
+		"complaint_listing_unavailable": "ประกาศนี้ไม่มีเจ้าของที่สามารถแจ้งเตือนได้",
+		"complaint_item_removed":        "ประกาศนี้ถูกนำออกเพราะยืนยันข้อร้องเรียนครบ 3 ครั้ง",
 	}
 	message, known := messages[code]
 	if !known {
@@ -69,13 +76,12 @@ func operationError(c fiber.Ctx, err error) error {
 	if code == "staff_required" || code == "account_suspended" {
 		status = 403
 	}
-	if code == "invalid_settings" {
+	switch code {
+	case "invalid_settings", "invalid_complaint_outcome", "invalid_complaint_reason", "invalid_complaint_incident":
 		status = http.StatusBadRequest
-	}
-	if code == "evidence_unavailable" {
+	case "evidence_unavailable":
 		status = 410
-	}
-	if code == "item_not_found" {
+	case "item_not_found", "complaint_not_found":
 		status = http.StatusNotFound
 	}
 	return c.Status(status).JSON(fiber.Map{"error": message, "code": code})
@@ -405,6 +411,12 @@ func (h *OperationsHandler) Read(c fiber.Ctx) error {
 	if module == "guardians" || module == "guardian-detail" {
 		return c.SendStatus(404)
 	}
+	if id := c.Query("id"); module == "complaints" && id != "" {
+		if !validUUID(id) {
+			return c.Status(400).JSON(fiber.Map{"error": "รหัสเรื่องร้องเรียนไม่ถูกต้อง"})
+		}
+		return h.rpc(c, "admin_complaint_context", map[string]any{"p_actor": u, "p_complaint": id})
+	}
 	rpcName := "admin_read"
 	args := map[string]any{"p_actor": u, "p_module": module, "p_query": q}
 	if module == "items" {
@@ -513,6 +525,13 @@ func (h *OperationsHandler) Action(c fiber.Ctx) error {
 	var data map[string]any
 	if err := c.Bind().JSON(&data); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "ข้อมูลการดำเนินงานไม่ถูกต้อง"})
+	}
+	if action == "complaint" {
+		id := c.Params("target")
+		if !validUUID(id) {
+			return c.Status(400).JSON(fiber.Map{"error": "รหัสเรื่องร้องเรียนไม่ถูกต้อง"})
+		}
+		return h.rpc(c, "admin_review_complaint", map[string]any{"p_actor": u, "p_complaint": id, "p_data": data})
 	}
 	if action == "review-item" {
 		itemID, err := strconv.ParseInt(c.Params("target"), 10, 64)

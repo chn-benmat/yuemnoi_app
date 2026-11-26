@@ -4,6 +4,46 @@ import 'package:frontend/features/chat/domain/entities/rental_queue_card_data.da
 import 'package:frontend/features/chat/presentation/widgets/rental_queue_card.dart';
 
 void main() {
+  for (final (description, prices, expected) in const [
+    (
+      'both rates',
+      '"price":150,"rentalType":"รายชั่วโมง","dailyPrice":1200',
+      ['150 บาท / ชั่วโมง', '1,200 บาท / วัน'],
+    ),
+    (
+      'the hourly rate only',
+      '"price":150,"rentalType":"รายชั่วโมง","dailyPrice":null',
+      ['150 บาท / ชั่วโมง'],
+    ),
+    (
+      'the daily rate only from an existing message',
+      '"price":1200,"rentalType":"รายวัน"',
+      ['1,200 บาท / วัน'],
+    ),
+  ]) {
+    testWidgets('the rental queue card shows $description', (tester) async {
+      final data = RentalQueueCardData.fromMessage(
+        '{"rentalQueue":{"itemId":8,"name":"กล้อง","status":"invited",$prices}}',
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RentalQueueCard(
+              data: data!,
+              isOwner: false,
+              onAction: (_) async {},
+            ),
+          ),
+        ),
+      );
+
+      final displayedPrices = tester
+          .widgetList<Text>(find.textContaining('บาท'))
+          .map((text) => text.data);
+      expect(displayedPrices, orderedEquals(expected));
+    });
+  }
+
   testWidgets('the waiting renter sees their place and can leave', (
     tester,
   ) async {

@@ -21,6 +21,10 @@ class IdentityAccountDetails {
   final Map<String, String> fields, evidence;
   final IdentityStatus status;
   final bool hasIdentity, selfieWithCard;
+  bool get hasAcceptedCardRetentionConsent =>
+      (status.verified || pending) &&
+      status.request['consent_version'] == identityCardRetentionConsentVersion;
+
   bool get pending =>
       status.request['status'] == 'pending' &&
       (DateTime.tryParse(

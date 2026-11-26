@@ -59,17 +59,15 @@ class FakeRentalManagementRepository implements RentalManagementRepository {
   }
 
   @override
-  Future<RentalIncomeSummary> getRentalIncome(String userId) async {
-    return const RentalIncomeSummary(
-      totalIncome: 12500.0,
-      pendingIncome: 1200.0,
+  Future<RentalIncomeSummary> getRentalIncome() async {
+    return RentalIncomeSummary(
+      totalSatang: 240000,
       transactions: [
         RentalIncomeEntry(
           itemName: 'Sony A7 IV',
-          date: '12 ส.ค. 2026',
-          duration: 'เช่า 3 วัน',
-          amount: 2400,
-          status: 'เสร็จสิ้น',
+          confirmedAt: DateTime.utc(2026, 8, 12),
+          amountSatang: 240000,
+          paymentMethod: 'cash',
         ),
       ],
     );
@@ -122,10 +120,9 @@ void main() {
       () async {
         final useCase = GetRentalIncomeUseCase(repository);
 
-        final income = await useCase.execute('user1');
+        final income = await useCase.execute();
 
-        expect(income.totalIncome, 12500.0);
-        expect(income.pendingIncome, 1200.0);
+        expect(income.totalSatang, 240000);
         expect(income.transactions.length, 1);
         expect(income.transactions.first.itemName, 'Sony A7 IV');
       },
