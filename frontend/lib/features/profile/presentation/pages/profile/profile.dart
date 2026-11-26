@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import '../../../../../core/constants/colors.dart';
@@ -45,11 +47,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _loadCurrentProfile() {
     final user = _currentUser;
     if (user == null) return;
-    final session = SupabaseConfig.client.auth.currentSession;
     unawaited(
       _profileCubit.loadProfile(
         userId: user.id,
-        accessToken: session?.accessToken,
+        accessToken: AuthSession.accessToken,
       ),
     );
   }
@@ -97,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   User? get _currentUser {
-    if (SupabaseConfig.isInitialized) {
+    if (SupabaseConfig.isInitialized && AuthSession.isAuthenticated) {
       return SupabaseConfig.client.auth.currentUser;
     }
     return null;
@@ -187,18 +188,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _handlePrivacy({bool notificationsOnly = false}) async {
+  Future<void> _handlePrivacy() async {
     final authed = await AuthGuard.requireAuth(
       context,
       title: 'เข้าสู่ระบบ',
       message: 'กรุณาเข้าสู่ระบบก่อนจัดการความเป็นส่วนตัว',
     );
     if (!authed || !mounted) return;
-    if (notificationsOnly) {
-      await AppRoutes.openNotificationSettings(context);
-    } else {
-      await AppRoutes.openChangeAccount(context);
+    await AppRoutes.openChangeAccount(context);
+  }
+
+  Future<void> _openNotificationSettings() async {
+    try {
+      if (await openAppSettings()) return;
+    } catch (_) {
+      // อุปกรณ์บางรุ่นอาจเปิดหน้าตั้งค่าจากแอปไม่ได้
     }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('เปิดการตั้งค่าของอุปกรณ์ไม่สำเร็จ')),
+    );
   }
 
   void _openUserProfile() async {
@@ -295,171 +304,175 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (mounted && state is ProfileLoaded) setState(() {});
         },
         child: Container(
-        color: const Color(0xFFF7F6FA),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ProfileHeader(
-              displayName: _displayName,
-              avatarUrl: _avatarUrl,
-              onProfileTap: _openUserProfile,
-              isGuest: _currentUser == null,
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 20),
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
-                      child: Text(
-                        'การใช้งานของคุณ',
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontFamily,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF30263E),
+          color: const Color(0xFFF7F6FA),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ProfileHeader(
+                displayName: _displayName,
+                avatarUrl: _avatarUrl,
+                onProfileTap: _openUserProfile,
+                isGuest: _currentUser == null,
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+                        child: Text(
+                          'การใช้งานของคุณ',
+                          style: TextStyle(
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF30263E),
+                          ),
                         ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: ProfileQuickActionsRow(
-                        items: [
-                          ProfileQuickActionData(
-                            icon: Icons.inventory_2_outlined,
-                            label: 'อุปกรณ์ของฉัน',
-                            onTap: _handleMyItems,
-                          ),
-                          ProfileQuickActionData(
-                            icon: Icons.monetization_on_outlined,
-                            label: 'รายได้',
-                            onTap: _handleRentalIncome,
-                          ),
-                          ProfileQuickActionData(
-                            icon: Icons.local_shipping_outlined,
-                            label: 'สถานะการเช่า',
-                            onTap: _handleRentalStatus,
-                          ),
-                          ProfileQuickActionData(
-                            icon: Icons.calendar_today_outlined,
-                            label: 'ประวัติการเช่า',
-                            onTap: _handleRentalHistory,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        children: [
-                          ProfileSection(
-                            icon: Icons.settings_outlined,
-                            title: 'การตั้งค่า',
-                            items: [
-                              ProfileMenuItemData(
-                                icon: Icons.manage_accounts_outlined,
-                                title: 'ตั้งค่าบัญชี',
-                                onTap: _handleSettingAccount,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          ProfileSection(
-                            icon: Icons.privacy_tip_outlined,
-                            title: 'ความเป็นส่วนตัว',
-                            items: [
-                              ProfileMenuItemData(
-                                icon: Icons.shield_outlined,
-                                title: 'ศูนย์ความเป็นส่วนตัว',
-                                onTap: () => _handlePrivacy(),
-                              ),
-                              ProfileMenuItemData(
-                                icon: Icons.notifications_outlined,
-                                title: 'การแจ้งเตือน',
-                                showDivider: false,
-                                onTap: () =>
-                                    _handlePrivacy(notificationsOnly: true),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          ProfileSection(
-                            icon: Icons.help_outline_rounded,
-                            title: 'ศูนย์ช่วยเหลือ',
-                            items: [
-                              ProfileMenuItemData(
-                                icon: Icons.headset_mic_outlined,
-                                title: 'ติดต่อเจ้าหน้าที่',
-                                onTap: () => AppRoutes.openContact(context),
-                              ),
-                              ProfileMenuItemData(
-                                icon: Icons.quiz_outlined,
-                                title: 'คำถามที่พบบ่อย',
-                                showDivider: false,
-                                onTap: () => AppRoutes.openFaq(context),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          ProfileSection(
-                            icon: Icons.article_outlined,
-                            title: 'เงื่อนไขและนโยบาย',
-                            items: [
-                              ProfileMenuItemData(
-                                icon: Icons.description_outlined,
-                                title: 'เงื่อนไขการใช้บริการ',
-                                onTap: () =>
-                                    AppRoutes.openTermsOfService(context),
-                              ),
-                              ProfileMenuItemData(
-                                icon: Icons.privacy_tip_outlined,
-                                title: 'นโยบายความเป็นส่วนตัว',
-                                showDivider: false,
-                                onTap: () =>
-                                    AppRoutes.openPrivacyPolicy(context),
-                              ),
-                            ],
-                          ),
-                          if (_currentUser != null) ...[
-                            const SizedBox(height: 24),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _logout,
-                                icon: const Icon(
-                                  Icons.logout_rounded,
-                                  size: 18,
-                                ),
-                                label: const Text('ออกจากระบบ'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFFB42342),
-                                  minimumSize: const Size(0, 52),
-                                  side: const BorderSide(
-                                    color: Color(0xFFF2D4DC),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                              ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: ProfileQuickActionsRow(
+                          items: [
+                            ProfileQuickActionData(
+                              icon: Icons.inventory_2_outlined,
+                              label: 'อุปกรณ์ของฉัน',
+                              onTap: _handleMyItems,
+                            ),
+                            ProfileQuickActionData(
+                              icon: Icons.monetization_on_outlined,
+                              label: 'รายได้',
+                              onTap: _handleRentalIncome,
+                            ),
+                            ProfileQuickActionData(
+                              icon: Icons.local_shipping_outlined,
+                              label: 'สถานะการเช่า',
+                              onTap: _handleRentalStatus,
+                            ),
+                            ProfileQuickActionData(
+                              icon: Icons.calendar_today_outlined,
+                              label: 'ประวัติการเช่า',
+                              onTap: _handleRentalHistory,
                             ),
                           ],
-                          const SizedBox(height: 110),
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          children: [
+                            ProfileSection(
+                              icon: Icons.settings_outlined,
+                              title: 'การตั้งค่า',
+                              items: [
+                                ProfileMenuItemData(
+                                  icon: Icons.manage_accounts_outlined,
+                                  title: 'ตั้งค่าบัญชี',
+                                  onTap: _handleSettingAccount,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ProfileSection(
+                              icon: Icons.privacy_tip_outlined,
+                              title: 'ความเป็นส่วนตัว',
+                              items: [
+                                ProfileMenuItemData(
+                                  icon: Icons.shield_outlined,
+                                  title: 'ศูนย์ความเป็นส่วนตัว',
+                                  onTap: _handlePrivacy,
+                                ),
+                                if (!kIsWeb &&
+                                    (defaultTargetPlatform ==
+                                            TargetPlatform.android ||
+                                        defaultTargetPlatform ==
+                                            TargetPlatform.iOS))
+                                  ProfileMenuItemData(
+                                    icon: Icons.notifications_outlined,
+                                    title: 'การตั้งค่าแจ้งเตือนของเครื่อง',
+                                    showDivider: false,
+                                    onTap: _openNotificationSettings,
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ProfileSection(
+                              icon: Icons.help_outline_rounded,
+                              title: 'ศูนย์ช่วยเหลือ',
+                              items: [
+                                ProfileMenuItemData(
+                                  icon: Icons.headset_mic_outlined,
+                                  title: 'ติดต่อเจ้าหน้าที่',
+                                  onTap: () => AppRoutes.openContact(context),
+                                ),
+                                ProfileMenuItemData(
+                                  icon: Icons.quiz_outlined,
+                                  title: 'คำถามที่พบบ่อย',
+                                  showDivider: false,
+                                  onTap: () => AppRoutes.openFaq(context),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ProfileSection(
+                              icon: Icons.article_outlined,
+                              title: 'เงื่อนไขและนโยบาย',
+                              items: [
+                                ProfileMenuItemData(
+                                  icon: Icons.description_outlined,
+                                  title: 'เงื่อนไขการใช้บริการ',
+                                  onTap: () =>
+                                      AppRoutes.openTermsOfService(context),
+                                ),
+                                ProfileMenuItemData(
+                                  icon: Icons.privacy_tip_outlined,
+                                  title: 'นโยบายความเป็นส่วนตัว',
+                                  showDivider: false,
+                                  onTap: () =>
+                                      AppRoutes.openPrivacyPolicy(context),
+                                ),
+                              ],
+                            ),
+                            if (_currentUser != null) ...[
+                              const SizedBox(height: 24),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _logout,
+                                  icon: const Icon(
+                                    Icons.logout_rounded,
+                                    size: 18,
+                                  ),
+                                  label: const Text('ออกจากระบบ'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFFB42342),
+                                    minimumSize: const Size(0, 52),
+                                    side: const BorderSide(
+                                      color: Color(0xFFF2D4DC),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 110),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );

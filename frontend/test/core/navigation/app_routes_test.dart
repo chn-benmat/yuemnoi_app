@@ -1,10 +1,14 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/app.dart';
 import 'package:frontend/core/navigation/app_routes.dart';
+import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/features/auth/presentation/pages/login.dart';
 import 'package:frontend/features/chatbot/presentation/pages/chat_bot.dart';
 import 'package:frontend/features/home/presentation/pages/home.dart';
+import 'package:frontend/features/profile/presentation/pages/account/promptpay_account_screen.dart';
+import 'package:frontend/features/profile/presentation/pages/account/setting_account_screen.dart';
 import 'package:frontend/features/rental_item/presentation/pages/add_rental_item.dart';
 import 'package:go_router/go_router.dart';
 
@@ -30,6 +34,39 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.byType(HomeScreen), findsOneWidget);
+  });
+
+  testWidgets('PromptPay settings deep link requires an app session', (
+    tester,
+  ) async {
+    AuthSession.clear();
+    await tester.pumpWidget(
+      const YuemnoiApp(initialRoute: AppRoutes.promptPayAccount),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(LoginScreen), findsOneWidget);
+  });
+
+  testWidgets('account settings opens PromptPay and returns to the menu', (
+    tester,
+  ) async {
+    AuthSession.saveAccessToken('user-token');
+    addTearDown(AuthSession.clear);
+    final router = AppRoutes.createRouter(
+      initialLocation: AppRoutes.settingAccount,
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('แก้ไขพร้อมเพย์'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(PromptPayAccountScreen), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton).last);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingAccountScreen), findsOneWidget);
   });
 
   testWidgets('chatbot button opens the chatbot screen', (tester) async {
@@ -78,6 +115,7 @@ void main() {
         AppRoutes.changePassword,
         AppRoutes.addRentalItem,
         AppRoutes.itemAutoReply,
+        AppRoutes.promptPayAccount,
       ]),
     );
   });

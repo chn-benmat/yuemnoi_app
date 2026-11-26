@@ -39,7 +39,7 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  Future<void> goToPayment(
+  Future<void> openPickup(
     WidgetTester tester, {
     String paymentMethod = 'promptpay',
   }) async {
@@ -63,6 +63,10 @@ void main() {
     );
     await tester.tap(find.text('Open pickup'));
     await tester.pumpAndSettle();
+  }
+
+  Future<void> goToPayment(WidgetTester tester) async {
+    await openPickup(tester);
     await tester.tap(find.text('ไปชำระเงิน'));
     await tester.pumpAndSettle();
   }
@@ -191,16 +195,36 @@ void main() {
     expect(find.textContaining('เปิดแอปที่เลือกไม่ได้'), findsNothing);
   });
 
-  testWidgets('cash payment does not query or open other apps', (tester) async {
+  testWidgets('cash inspection stays on pickup while waiting for the owner', (
+    tester,
+  ) async {
     installed = [bank];
-    await goToPayment(tester, paymentMethod: 'cash');
+    await openPickup(tester, paymentMethod: 'cash');
+
+    expect(find.text('ไปชำระเงิน'), findsNothing);
+    expect(find.text('2. ชำระเงิน'), findsNothing);
+    expect(find.text('ตรวจรับอุปกรณ์'), findsOneWidget);
+    expect(find.textContaining('ชำระเงินสดจำนวน ฿1500'), findsOneWidget);
+    await tester.tap(find.text('ตรวจสอบเรียบร้อย'));
+    await tester.pumpAndSettle();
 
     expect(lookupCount, 0);
     expect(opened, isEmpty);
     expect(payButton, findsNothing);
+    expect(find.text('ยอดชำระสุทธิ'), findsNothing);
+    expect(find.textContaining('ชำระเงินสดจำนวน ฿1500'), findsOneWidget);
     expect(
       find.text('รอผู้ปล่อยเช่ายืนยันว่าได้รับเงินเพื่อเริ่มการเช่า'),
       findsOneWidget,
     );
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open pickup'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('รอผู้ปล่อยเช่ายืนยันว่าได้รับเงินเพื่อเริ่มการเช่า'),
+      findsOneWidget,
+    );
+    expect(find.text('ไปชำระเงิน'), findsNothing);
   });
 }

@@ -80,6 +80,28 @@ func TestPromptPayNationalIDEncryptedBeforeDatabaseWrite(t *testing.T) {
 	}
 }
 
+func TestUnreadablePromptPayNationalIDCanBeReplaced(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet {
+			fmt.Fprint(w, `[{"phone":null,"national_id_ciphertext":"old-ciphertext"}]`)
+			return
+		}
+		fmt.Fprint(w, `[{"phone":"0812345678","national_id_ciphertext":null}]`)
+	}))
+	defer server.Close()
+	repo := supabase.NewSupabaseRentalRepository(sb.CreateClient(server.URL, "test-key")).(domain.PromptPayAccountRepository)
+	ctx := context.Background()
+	account, err := repo.GetPromptPayAccount(ctx, "owner")
+	if err != nil || account.IDType != "national_id" || account.NationalIDLastFour != "" {
+		t.Fatal("an unreadable national ID should return its type so settings can offer replacement")
+	}
+	account, err = repo.UpdatePromptPayAccount(ctx, "owner", "0812345678", "")
+	if err != nil || account.Phone != "0812345678" {
+		t.Fatal("saving a phone number should work without the old encryption key")
+	}
+}
+
 func TestRentalReturnUsesServerChallengeAndNeverLeaksRawSecretsToDatabase(t *testing.T) {
 	var tokenHash, otpHash string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

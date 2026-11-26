@@ -22,13 +22,9 @@ func (r *supabaseRentalRepository) HandoverPayment(ctx context.Context, userID s
 func (r *supabaseRentalRepository) SavePromptPayAccount(ctx context.Context, userID string, rentalID int64, phone, nationalID string) (domain.RentalHandoverPayment, error) {
 	params := map[string]any{"p_actor": userID, "p_booking": rentalID, "p_confirm": false}
 	if nationalID != "" {
-		key, err := r.promptPayAccountKey(userID)
+		ciphertext, err := r.encryptPromptPayNationalID(userID, nationalID)
 		if err != nil {
 			return domain.RentalHandoverPayment{}, err
-		}
-		ciphertext, err := domain.EncryptIdentity([]byte(nationalID), key)
-		if err != nil {
-			return domain.RentalHandoverPayment{}, fmt.Errorf("encrypt PromptPay national ID: %w", err)
 		}
 		params["p_promptpay_phone"] = nil
 		params["p_national_id_ciphertext"] = ciphertext
@@ -52,17 +48,36 @@ func (r *supabaseRentalRepository) handoverPayment(ctx context.Context, userID s
 		return payment, fmt.Errorf("handover payment RPC returned incomplete data")
 	}
 	if payment.CanCollectPayment && result.NationalIDCiphertext != "" {
-		key, err := r.promptPayAccountKey(userID)
+		payment.PromptPayNationalID, err = r.decryptPromptPayNationalID(userID, result.NationalIDCiphertext)
 		if err != nil {
 			return payment, err
 		}
-		decrypted, err := domain.DecryptIdentity(result.NationalIDCiphertext, key)
-		if err != nil {
-			return payment, fmt.Errorf("decrypt PromptPay national ID: %w", err)
-		}
-		payment.PromptPayNationalID = string(decrypted)
 	}
 	return payment, nil
+}
+
+func (r *supabaseRentalRepository) encryptPromptPayNationalID(userID, nationalID string) (string, error) {
+	key, err := r.promptPayAccountKey(userID)
+	if err != nil {
+		return "", err
+	}
+	ciphertext, err := domain.EncryptIdentity([]byte(nationalID), key)
+	if err != nil {
+		return "", fmt.Errorf("encrypt PromptPay national ID: %w", err)
+	}
+	return ciphertext, nil
+}
+
+func (r *supabaseRentalRepository) decryptPromptPayNationalID(userID, ciphertext string) (string, error) {
+	key, err := r.promptPayAccountKey(userID)
+	if err != nil {
+		return "", err
+	}
+	plaintext, err := domain.DecryptIdentity(ciphertext, key)
+	if err != nil {
+		return "", fmt.Errorf("decrypt PromptPay national ID: %w", err)
+	}
+	return string(plaintext), nil
 }
 
 func (r *supabaseRentalRepository) promptPayAccountKey(userID string) ([]byte, error) {

@@ -6,14 +6,12 @@ class CustomBottomNavbar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTabChange;
   final bool hasUnreadChat;
-  final bool hasUnreadNotification;
 
   const CustomBottomNavbar({
     super.key,
     required this.selectedIndex,
     required this.onTabChange,
     this.hasUnreadChat = false,
-    this.hasUnreadNotification = false,
   });
 
   @override
@@ -83,8 +81,6 @@ class CustomBottomNavbar extends StatelessWidget {
                         ? Icons.notifications_rounded
                         : Icons.notifications_none_rounded,
                     selected: selectedIndex == 2,
-                    hasUnread: hasUnreadNotification,
-                    badgeKey: const ValueKey('notification-unread-badge'),
                     onTap: () => onTabChange(2),
                   ),
                   _NavItem(

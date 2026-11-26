@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strconv"
 	"strings"
@@ -200,7 +201,11 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 		meta["paymentMethod"], _ = json.Marshal(rental.PaymentMethod)
 	}
 	if _, err := r.saveOfferMetadata(ctx, request.OfferMessageID, message.Message, meta, paymentLabel); err != nil {
-		return nil, err
+		if !confirm {
+			return nil, err
+		}
+		// ผลยืนยันอ้างอิงรายการเช่าที่บันทึกแล้ว แม้การอัปเดตข้อความจะต้องลองใหม่
+		slog.Warn("อัปเดตข้อความหลังยืนยันการเช่าไม่สำเร็จ", "rental_id", rental.ID)
 	}
 	return rental, nil
 }

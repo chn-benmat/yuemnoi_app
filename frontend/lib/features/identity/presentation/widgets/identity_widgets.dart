@@ -324,13 +324,20 @@ class IdentitySectionTitle extends StatelessWidget {
   );
 }
 
-class IdentityConsentDialog extends StatelessWidget {
-  const IdentityConsentDialog({super.key, this.previouslyAccepted = false});
-  final bool previouslyAccepted;
+class IdentityConsentDialog extends StatefulWidget {
+  const IdentityConsentDialog({super.key, this.requiresConsent = true});
+  final bool requiresConsent;
+
+  @override
+  State<IdentityConsentDialog> createState() => _IdentityConsentDialogState();
+}
+
+class _IdentityConsentDialogState extends State<IdentityConsentDialog> {
+  bool _checked = false;
 
   @override
   Widget build(BuildContext context) => PopScope(
-    canPop: previouslyAccepted,
+    canPop: !widget.requiresConsent,
     child: Dialog(
       key: const ValueKey('identity_consent_dialog'),
       backgroundColor: Colors.white,
@@ -339,67 +346,151 @@ class IdentityConsentDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: const BoxDecoration(
-                    color: IdentityColors.tint,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.privacy_tip_outlined,
-                    color: IdentityColors.primary,
-                    size: 28,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 14),
+              child: Semantics(
+                header: true,
+                child: const Text(
+                  'เงื่อนไขการเก็บข้อมูลบัตรประชาชน',
+                  style: TextStyle(
+                    fontSize: 20,
+                    height: 1.4,
+                    fontWeight: FontWeight.w700,
+                    color: IdentityColors.ink,
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
-              const IdentityHeading(
-                'การใช้ข้อมูลยืนยันตัวตน',
-                'ใช้ภาพบัตรประชาชน ภาพใบหน้า และข้อมูลที่กรอก เพื่อให้เจ้าหน้าที่ที่ได้รับสิทธิ์ตรวจสอบและยืนยันตัวตนสำหรับการปล่อยเช่า',
-              ),
-              const SizedBox(height: 16),
-              const IdentityTip(
-                Icons.phone_android_outlined,
-                'ภาพเก็บชั่วคราวในหน้านี้ และส่งให้เจ้าหน้าที่เมื่อคุณกดส่งคำขอเท่านั้น',
-              ),
-              const IdentityTip(
-                Icons.lock_outline_rounded,
-                'หลักฐานเข้าถึงได้โดยเจ้าหน้าที่ที่ได้รับสิทธิ์ตรวจสอบ',
-              ),
-              const IdentityTip(
-                Icons.auto_delete_outlined,
-                'ภาพถูกลบตามกำหนดหลังพิจารณาคำขอ',
-              ),
-              const IdentityTip(
-                Icons.exit_to_app_rounded,
-                'รูปและข้อมูลที่ยังไม่ส่งจะถูกล้างเมื่อออกจากหน้านี้',
-              ),
-              const SizedBox(height: 20),
-              AppPrimaryButton(
-                text: previouslyAccepted
-                    ? 'เข้าใจแล้ว'
-                    : 'ยินยอมและดำเนินการต่อ',
-                onPressed: () => Navigator.pop(context, true),
-              ),
-              if (!previouslyAccepted) ...[
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('ไว้ก่อน'),
+            ),
+            const Divider(height: 1, color: IdentityColors.line),
+            const Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _IdentityConsentSection('1. ข้อมูลที่เก็บ', [
+                      'คำนำหน้าชื่อ ชื่อและนามสกุล เลขประจำตัวประชาชน วันเกิด และที่อยู่ตามบัตร',
+                      'ภาพด้านหน้าบัตรประชาชนและภาพถ่ายใบหน้าที่คุณส่งเป็นหลักฐาน เช่น ภาพถ่ายคู่บัตรประชาชน',
+                    ]),
+                    _IdentityConsentSection('2. วัตถุประสงค์และวิธีใช้ข้อมูล', [
+                      'Yuemnoi ใช้ข้อมูลและภาพที่คุณส่งเพื่อให้เจ้าหน้าที่ตรวจสอบว่าคุณเป็นเจ้าของบัตร และบันทึกผลการยืนยันตัวตนกับบัญชีของคุณ',
+                      'แอปจะส่งข้อมูลและรูปใหม่ไปให้เจ้าหน้าที่ตรวจสอบเมื่อคุณยืนยันส่งคำขอ',
+                    ]),
+                    _IdentityConsentSection('3. ผู้ที่เข้าถึงข้อมูล', [
+                      'คุณดูรูปหน้าบัตรที่เก็บไว้ได้จากหน้าข้อมูลบัตรประชาชน เจ้าหน้าที่ Yuemnoi ที่ได้รับสิทธิ์เข้าถึงข้อมูลและรูปเพื่อพิจารณาคำขอและตรวจสอบข้อมูลยืนยันตัวตน',
+                      'ผู้ให้บริการระบบจัดเก็บข้อมูลประมวลผลข้อมูลและรูปหลักฐานเพื่อให้ Yuemnoi จัดเก็บและเรียกดูได้',
+                    ]),
+                    _IdentityConsentSection('4. การเก็บรักษาและลบข้อมูล', [
+                      'ระบบเก็บรูปหน้าบัตรล่าสุดที่อนุมัติไว้กับบัญชี จนกว่าจะมีรูปที่อนุมัติมาแทนหรือมีการลบบัญชี',
+                      'รูปหลักฐานอื่น เช่น รูปคู่บัตร หมดอายุ 7 วันหลังเจ้าหน้าที่ให้ผลพิจารณา',
+                      'ระบบเก็บข้อมูลบัตรที่อนุมัติล่าสุดแบบเข้ารหัส จนกว่าจะมีข้อมูลที่ได้รับอนุมัติมาแทนที่หรือมีการลบบัญชี',
+                    ]),
+                    _IdentityConsentSection('5. การเลือกให้ความยินยอม', [
+                      'หากยังไม่ยินยอม คุณจะบันทึกหรือส่งข้อมูลบัตรเพื่อยืนยันตัวตนไม่ได้ และสามารถกลับมาให้ความยินยอมได้ภายหลัง',
+                      'หากต้องการถอนความยินยอมหลังส่งข้อมูล ให้แจ้งทีมงานผ่านช่องทางในข้อ 6 การถอนความยินยอมไม่มีผลย้อนหลังต่อการใช้ข้อมูลโดยชอบก่อนถอน',
+                    ]),
+                    _IdentityConsentSection('6. สิทธิและช่องทางติดต่อ', [
+                      'คุณขอเข้าถึง รับสำเนา แก้ไข ลบ จำกัดการใช้ คัดค้านการใช้ หรือขอโอนข้อมูลของคุณได้ตามที่กฎหมายกำหนด',
+                      'หากต้องการใช้สิทธิหรือสอบถามเรื่องข้อมูลส่วนบุคคล ให้ไปที่หน้า «โปรไฟล์» แล้วเลือก «ติดต่อเจ้าหน้าที่» เพื่อแจ้งทีมงาน Yuemnoi',
+                      'คุณสามารถร้องเรียนเรื่องข้อมูลส่วนบุคคลผ่านช่องทางของสำนักงานคณะกรรมการคุ้มครองข้อมูลส่วนบุคคลได้',
+                    ]),
+                  ],
                 ),
-              ],
-            ],
-          ),
+              ),
+            ),
+            const Divider(height: 1, color: IdentityColors.line),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (widget.requiresConsent)
+                    CheckboxListTile(
+                      value: _checked,
+                      onChanged: (value) =>
+                          setState(() => _checked = value == true),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text(
+                        'ฉันยินยอมให้ Yuemnoi เก็บและใช้ข้อมูลบัตรประชาชนและรูปหลักฐานเพื่อยืนยันตัวตน',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  if (widget.requiresConsent) const SizedBox(height: 12),
+                  AppPrimaryButton(
+                    text: widget.requiresConsent
+                        ? 'ยินยอมและดำเนินการต่อ'
+                        : 'เข้าใจแล้ว',
+                    onPressed: !widget.requiresConsent || _checked
+                        ? () => Navigator.pop(context, true)
+                        : null,
+                  ),
+                  if (widget.requiresConsent) ...[
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('ไว้ก่อน'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ),
       ),
+    ),
+  );
+}
+
+class _IdentityConsentSection extends StatelessWidget {
+  const _IdentityConsentSection(this.title, this.details);
+
+  final String title;
+  final List<String> details;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+              color: IdentityColors.ink,
+            ),
+          ),
+        ),
+        for (final detail in details)
+          Padding(
+            padding: const EdgeInsets.only(top: 5, left: 8),
+            child: DefaultTextStyle.merge(
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.6,
+                color: IdentityColors.ink,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const ExcludeSemantics(child: Text('•')),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(detail)),
+                ],
+              ),
+            ),
+          ),
+      ],
     ),
   );
 }

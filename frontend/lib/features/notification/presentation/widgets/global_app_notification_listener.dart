@@ -65,8 +65,7 @@ class _GlobalAppNotificationListenerState
         )) {
       return;
     }
-    if (item.category == AppNotificationCategory.chat &&
-        item.conversationId != null &&
+    if (item.conversationId != null &&
         ActiveConversationTracker.instance.isConversationActive(
           item.conversationId!,
         )) {
@@ -132,15 +131,8 @@ class _GlobalAppNotificationListenerState
                       padding: const EdgeInsets.all(12),
                       child: Row(
                         children: [
-                          Icon(
-                            switch (item.category) {
-                              AppNotificationCategory.chat =>
-                                Icons.chat_bubble_outline_rounded,
-                              AppNotificationCategory.rental =>
-                                Icons.inventory_2_outlined,
-                              AppNotificationCategory.app =>
-                                Icons.notifications_outlined,
-                            },
+                          const Icon(
+                            Icons.chat_bubble_outline_rounded,
                             size: 32,
                             color: AppColors.primaryColor,
                           ),

@@ -58,9 +58,9 @@ Future<void> main() async {
     }
   }
 
-  final isAuthenticated = await AuthSession.restore();
+  final startupAuth = await AuthSession.restore();
   unawaited(FavoriteService.instance.init(forceRefresh: true));
-  if (isAuthenticated) {
+  if (startupAuth.state == AuthStartupState.authenticated) {
     UserPresenceService.instance.initialize();
     unawaited(ChatNotificationService.instance.initialize());
     unawaited(RentalNotificationService.instance.initialize());
@@ -71,5 +71,12 @@ Future<void> main() async {
     }
   }
 
-  runApp(YuemnoiApp(initialRoute: AppRoutes.home));
+  runApp(
+    YuemnoiApp(
+      initialRoute: startupAuth.state == AuthStartupState.loginRequired
+          ? AppRoutes.login
+          : AppRoutes.home,
+      oauthRestoreSession: startupAuth.oauthRestoreSession,
+    ),
+  );
 }

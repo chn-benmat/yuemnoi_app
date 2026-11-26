@@ -6,6 +6,7 @@ import 'package:frontend/core/models/pickup_location.dart';
 import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/core/services/favorite_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:frontend/features/item_detail/data/models/item_detail_model.dart';
 import 'package:frontend/features/item_detail/domain/entities/item_detail.dart';
 import 'package:frontend/features/item_detail/domain/repositories/item_detail_repository.dart';
 import 'package:frontend/features/item_detail/domain/usecases/get_item_detail_usecase.dart';
@@ -105,6 +106,33 @@ void main() {
     );
     await tester.pump();
   }
+
+  testWidgets('shows occupied status on item details', (tester) async {
+    final repository = _MockItemDetailRepository();
+    final bloc = ItemDetailBloc(
+      getItem: GetItemDetailUseCase(repository),
+      updateItem: UpdateItemUseCase(repository),
+      initialItem: ItemDetailModel.fromApiResponse(
+        item: const {
+          'id': 7,
+          'user_id': 'owner-id',
+          'is_rental_occupied': true,
+        },
+        currentUserId: 'renter-id',
+      ),
+    );
+    addTearDown(bloc.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BlocProvider.value(
+          value: bloc,
+          child: const ItemDetailScreen(itemId: 7),
+        ),
+      ),
+    );
+    expect(find.text('กำลังถูกเช่า'), findsOneWidget);
+    expect(find.text('แชทสอบถาม'), findsOneWidget);
+  });
 
   testWidgets('shows hourly and daily rental prices on the item detail', (
     tester,

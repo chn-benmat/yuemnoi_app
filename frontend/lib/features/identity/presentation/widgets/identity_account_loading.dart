@@ -10,36 +10,25 @@ class IdentityAccountLoading extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const IdentityPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SkeletonBox(width: 120, height: 16),
-              SizedBox(height: 18),
-              SkeletonBox(width: 240, height: 24),
-              SizedBox(height: 12),
-              SkeletonBox(height: 14),
-              SizedBox(height: 8),
-              SkeletonBox(width: 200, height: 14),
-            ],
-          ),
-        ),
-        for (var i = 0; i < 2; i++) ...[
-          const SizedBox(height: 16),
-          const IdentityPanel(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SkeletonBox(width: 160, height: 20),
-                SizedBox(height: 10),
-                SkeletonBox(height: 14),
-                SizedBox(height: 20),
-                AspectRatio(aspectRatio: 1.5, child: SkeletonBox(height: 200)),
-              ],
+        for (var i = 0; i < 2; i++)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: IdentityPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SkeletonBox(width: 160, height: 20),
+                  SizedBox(height: 10),
+                  SkeletonBox(height: 14),
+                  SizedBox(height: 20),
+                  AspectRatio(
+                    aspectRatio: 1.5,
+                    child: SkeletonBox(height: 200),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
-        const SizedBox(height: 16),
         IdentityPanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

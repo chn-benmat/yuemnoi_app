@@ -18,6 +18,7 @@ class UserItem {
   final String? imageUrl;
   final String category;
   final String status;
+  final bool isRentalOccupied;
   final String rentalType;
   final bool ownerHidden;
 
@@ -30,13 +31,15 @@ class UserItem {
     this.imageUrl,
     this.category = 'ทั่วไป',
     this.status = '',
+    this.isRentalOccupied = false,
     this.rentalType = '',
     this.ownerHidden = false,
   });
 
   // สถานะประกาศไม่ได้ยืนยันว่าอุปกรณ์ว่างในช่วงวันที่ต้องการเช่า
   UserItemStatus get listingStatus => switch (status.trim().toLowerCase()) {
-    'available' || 'พร้อมใช้งาน' || 'พร้อมให้เช่า' => UserItemStatus.available,
+    'available' || 'พร้อมใช้งาน' || 'พร้อมให้เช่า' =>
+      isRentalOccupied ? UserItemStatus.rented : UserItemStatus.available,
     'pending_review' => UserItemStatus.pendingReview,
     'rejected' => UserItemStatus.rejected,
     'rented' || 'renting' || 'กำลังเช่า' || 'ถูกเช่า' => UserItemStatus.rented,

@@ -16,6 +16,7 @@ void main() {
     expect(find.text('แก้ไขข้อมูล'), findsOneWidget);
     expect(find.text('ข้อมูลติดต่อ'), findsOneWidget);
     expect(find.text('ข้อมูลบัตรประชาชน'), findsOneWidget);
+    expect(find.text('แก้ไขพร้อมเพย์'), findsOneWidget);
     expect(find.text('สิทธิ์ตำแหน่ง'), findsNothing);
   });
 

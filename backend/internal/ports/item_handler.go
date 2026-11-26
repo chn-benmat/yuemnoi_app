@@ -142,6 +142,9 @@ func (h *ItemHandler) GetItemByID(c fiber.Ctx) error {
 	if err != nil {
 		return writeItemError(c, err)
 	}
+	if item.AccountDeletionHidden {
+		return writeItemError(c, domain.ErrItemNotFound)
+	}
 	if item.ModerationHidden || item.OwnerHidden {
 		// รายการที่ถูกซ่อนจากฟีดอ่านได้เฉพาะเจ้าของและผู้เช่าที่มีประวัติอ้างอิงอยู่
 		auth := strings.Fields(c.Get("Authorization"))

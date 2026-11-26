@@ -7,29 +7,6 @@ import 'package:frontend/core/services/app_notification_service.dart';
 import 'support/fake_notification_repository.dart';
 
 void main() {
-  test('notification badge excludes unread chats and read history', () {
-    final state = NotificationInboxState(
-      items: [
-        notification(category: AppNotificationCategory.chat),
-        notification(id: 'read', isRead: true),
-      ],
-      unreadCount: 1,
-    );
-    expect(state.hasUnreadNotification, isFalse);
-    expect(const NotificationInboxState().hasUnreadNotification, isFalse);
-    for (final category in [
-      AppNotificationCategory.rental,
-      AppNotificationCategory.app,
-    ]) {
-      expect(
-        NotificationInboxState(
-          items: [notification(category: category)],
-        ).hasUnreadNotification,
-        isTrue,
-      );
-    }
-  });
-
   late FakeNotificationRepository repository;
   late AppNotificationService service;
   late List<AppNotification> events;
@@ -50,6 +27,21 @@ void main() {
   });
 
   Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+  test(
+    'an OS notification can be marked read without loading an inbox',
+    () async {
+      await service.markPushRead(
+        'system-update',
+        readThrough: notificationTestTime,
+      );
+
+      expect(repository.reads, ['system-update']);
+      expect(repository.lastReadThrough, notificationTestTime);
+      expect(repository.offsets, isEmpty);
+      expect(events, isEmpty);
+    },
+  );
 
   test(
     'initial history and resume backlog are silent; new events are delivered once',
@@ -235,39 +227,6 @@ void main() {
       await service.handlePush({'notification_id': 'old'});
       await settle();
       expect(events, isEmpty);
-    },
-  );
-
-  test(
-    'poll refreshes older loaded pages to synchronize read changes from another device',
-    () async {
-      service.dispose();
-      service = AppNotificationService(
-        repository: repository,
-        pageSize: 2,
-        pollInterval: const Duration(hours: 1),
-      );
-      var rows = [
-        notification(id: 'one'),
-        notification(id: 'two'),
-        notification(id: 'older'),
-      ];
-      repository.onGet = (limit, offset) async =>
-          inboxPage(rows.skip(offset).take(limit).toList());
-      service.setSession('alice');
-      await service.refresh();
-      await service.loadMore();
-      expect(service.inbox.value.items, hasLength(3));
-      repository.offsets.clear();
-      rows = [rows[0], rows[1], rows[2].asRead(notificationTestTime)];
-      await service.refresh(silent: false);
-      expect(repository.offsets, [0, 2]);
-      expect(
-        service.inbox.value.items
-            .singleWhere((item) => item.id == 'older')
-            .isRead,
-        true,
-      );
     },
   );
 

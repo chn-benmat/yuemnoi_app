@@ -36,7 +36,7 @@ func (r *supabaseUserRepository) UserIDFromToken(ctx context.Context, userToken 
 	if err != nil {
 		return "", err
 	}
-	return user.ID, nil
+	return user.accountAccess()
 }
 
 // อ่าน app_metadata ล่าสุดจาก Auth เพื่อให้ session เดิมถูกจำกัดได้ทันที
@@ -48,14 +48,22 @@ func (r *supabaseUserRepository) AppUserIDFromToken(ctx context.Context, userTok
 	if user.AppMetadata.DashboardOnly {
 		return "", domain.ErrDashboardOnly
 	}
-	return user.ID, nil
+	return user.accountAccess()
 }
 
 type authIdentity struct {
 	ID          string `json:"id"`
 	AppMetadata struct {
-		DashboardOnly bool `json:"dashboard_only"`
+		DashboardOnly      bool       `json:"dashboard_only"`
+		AccountDeleteAfter *time.Time `json:"account_delete_after"`
 	} `json:"app_metadata"`
+}
+
+func (u authIdentity) accountAccess() (string, error) {
+	if u.AppMetadata.AccountDeleteAfter != nil {
+		return "", &domain.PendingAccountDeletion{UserID: u.ID, DeleteAfter: *u.AppMetadata.AccountDeleteAfter}
+	}
+	return u.ID, nil
 }
 
 func (r *supabaseUserRepository) authIdentity(ctx context.Context, token string) (*authIdentity, error) {

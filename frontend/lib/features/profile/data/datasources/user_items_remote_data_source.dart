@@ -34,7 +34,7 @@ class UserItemsRemoteDataSource {
       final response = await client
           .from('item_tb')
           .select(
-            'id, user_id, item_name, item_image_url, description, category, price, status, type, owner_hidden',
+            'id, user_id, item_name, item_image_url, description, category, price, status, type, owner_hidden, is_rental_occupied',
           )
           .eq('user_id', userId)
           .order('id', ascending: false)

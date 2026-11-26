@@ -15,6 +15,7 @@ type OperationsStore interface {
 }
 type OperationsOptions struct {
 	Store           OperationsStore
+	AccountDeletion AccountDeletionRepository
 	EncryptionKey   []byte
 	HMACKey         []byte
 	CleanupInterval time.Duration

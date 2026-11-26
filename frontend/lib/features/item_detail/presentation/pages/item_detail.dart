@@ -218,13 +218,15 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       // เปิดแชตซ้ำโดยไม่ส่งความสนใจเพิ่ม จนกว่ารายการเช่ารอบเดิมจะปิด
       final chatDataSource = ChatRemoteDataSource();
       String? initialMessageId;
-      try {
-        initialMessageId = await chatDataSource.sendItemInquiryIfNeeded(
-          conversationId: conversation.id,
-          inquiry: inquiryData,
-          imageUrl: firstImageUrl.isNotEmpty ? firstImageUrl : null,
-        );
-      } catch (_) {}
+      if (!item.isRentalOccupied) {
+        try {
+          initialMessageId = await chatDataSource.sendItemInquiryIfNeeded(
+            conversationId: conversation.id,
+            inquiry: inquiryData,
+            imageUrl: firstImageUrl.isNotEmpty ? firstImageUrl : null,
+          );
+        } catch (_) {}
+      }
 
       if (mounted) {
         setState(() => _isChatLoading = false);
@@ -233,6 +235,11 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           conversation: conversation,
           initialMessageId: initialMessageId,
         );
+        if (mounted && widget.previewItem == null) {
+          context.read<ItemDetailBloc>().add(
+            ItemDetailRequested(widget.itemId),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -1051,6 +1058,16 @@ class _DetailContent extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                if (item.isRentalOccupied) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'กำลังถูกเช่า',
+                    style: TextStyle(
+                      color: Color(0xFF315FA6),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
                 if (location != null) ...[
                   const SizedBox(height: 12),
                   Semantics(

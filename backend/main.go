@@ -83,9 +83,27 @@ func main() {
 		}
 		ops = domain.OperationsOptions{Store: supabase.NewOperationsRepository(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey), EncryptionKey: identityEncryption, HMACKey: hmacKey, CleanupInterval: cfg.IdentityCleanupInterval}
 	}
+	ops.AccountDeletion = supabase.NewAccountDeletionRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
 	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
 	defer stopCleanup()
 	go domain.NewNotificationWorker(notificationRepository, deviceSender).Run(cleanupCtx)
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			ctx, cancel := context.WithTimeout(cleanupCtx, 2*time.Minute)
+			err := domain.ProcessAccountDeletions(ctx, ops.AccountDeletion)
+			cancel()
+			if err != nil && cleanupCtx.Err() == nil {
+				slog.Warn("Account deletion incomplete; retry scheduled")
+			}
+			select {
+			case <-cleanupCtx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
 	if ops.Store != nil {
 		go func() {
 			ticker := time.NewTicker(ops.CleanupInterval)

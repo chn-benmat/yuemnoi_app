@@ -14,6 +14,7 @@ void main() {
   setUp(() {
     client = _ApiClient();
     repository = NotificationRepositoryImpl(
+      category: AppNotificationCategory.chat,
       dataSource: NotificationRemoteDataSource(
         client: client,
         token: () => 'verified-session',
@@ -27,7 +28,7 @@ void main() {
       when(
         () => client.get(
           '/api/notifications',
-          queryParameters: {'limit': 20, 'offset': 40},
+          queryParameters: {'limit': 20, 'offset': 40, 'category': 'chat'},
           headers: {'Authorization': 'Bearer verified-session'},
         ),
       ).thenAnswer(

@@ -56,6 +56,9 @@ func (r *supabaseConversationContactRepository) PhoneForConversation(
 	if err != nil {
 		return "", fmt.Errorf("load conversation contact user: %w", err)
 	}
+	if user.AppMetaData["account_delete_after"] != nil {
+		return "", domain.ErrContactForbidden
+	}
 
 	phone := ""
 	if metadataPhone, ok := user.UserMetaData["phone"].(string); ok {

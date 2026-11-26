@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -7,6 +9,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../data/camera_file_cleanup.dart';
+import '../../data/identity_card_photo.dart';
 import 'identity_widgets.dart';
 
 enum IdentityCaptureKind { card, selfie, selfieWithCard }
@@ -43,6 +46,7 @@ class IdentityCameraPage extends StatefulWidget {
 
 class _IdentityCameraPageState extends State<IdentityCameraPage>
     with WidgetsBindingObserver {
+  final _cardPreviewKey = GlobalKey();
   CameraController? _camera;
   Uint8List? _preview;
   String? _error;
@@ -159,28 +163,41 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
   Future<void> _take() async {
     final camera = _camera;
     if (_taking || camera == null || !camera.value.isInitialized) return;
-    setState(() => _taking = true);
+    final cardPreview = _face ? null : _cardPreviewKey.currentContext?.size;
+    if (!_face && (cardPreview == null || cardPreview.isEmpty)) return;
+    final generation = _generation;
+    setState(() {
+      _taking = true;
+      _error = null;
+    });
     try {
       final file = await camera.takePicture();
       Uint8List data;
       try {
         final raw = await file.readAsBytes();
-        data = await FlutterImageCompress.compressWithList(
-          raw,
-          minWidth: 1800,
-          minHeight: 1800,
-          quality: 90,
-          keepExif: false,
-        );
+        data = cardPreview == null
+            ? await FlutterImageCompress.compressWithList(
+                raw,
+                minWidth: 1800,
+                minHeight: 1800,
+                quality: 90,
+                keepExif: false,
+              )
+            : await cropIdentityCardPhoto((
+                bytes: raw,
+                preview: cardPreview,
+                frame: _cardFrame(cardPreview),
+              ));
       } finally {
         await clearCameraFile(file.path);
       }
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       if (data.length > 5 * 1024 * 1024) throw const FormatException();
-      await _release();
-      if (mounted) setState(() => _preview = data);
+      setState(() => _preview = data);
+      // แสดงรูปทันทีที่พร้อม ส่วนการถ่ายใหม่จะรอคืนกล้องผ่านคิวเดิม
+      unawaited(_release());
     } catch (_) {
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(
           () =>
               _error = 'ถ่ายภาพไม่สำเร็จ กรุณาลองอีกครั้ง ภาพต้องไม่เกิน 5 MB',
@@ -189,6 +206,59 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
     } finally {
       if (mounted) setState(() => _taking = false);
     }
+  }
+
+  Widget _cardCameraPreview(CameraController camera) => Center(
+    child: CameraPreview(
+      camera,
+      child: LayoutBuilder(
+        key: _cardPreviewKey,
+        builder: (context, constraints) {
+          final frame = _cardFrame(constraints.biggest);
+          return IgnorePointer(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CustomPaint(painter: _CardFrameMask(frame)),
+                Positioned.fromRect(
+                  rect: frame,
+                  child: const CustomPaint(
+                    key: ValueKey('identity_card_capture_frame'),
+                    painter: _CardAlignmentGuides(),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    ),
+  );
+
+  Widget _livePreview(CameraController camera) {
+    if (!_face) return _cardCameraPreview(camera);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Center(child: CameraPreview(camera)),
+        IgnorePointer(
+          child: Center(
+            child: FractionallySizedBox(
+              widthFactor: _withCard ? 0.95 : 0.72,
+              child: AspectRatio(
+                aspectRatio: 0.75,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.white, width: 2.5),
+                    borderRadius: BorderRadius.circular(_withCard ? 18 : 180),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -235,7 +305,7 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
                   ? _withCard
                         ? 'ถือบัตรข้างใบหน้า ให้เห็นครบทั้งใบหน้าและบัตร\nไม่บังข้อมูลบนบัตร ถอดหน้ากากและแว่นกันแดด'
                         : 'มองตรง ให้ใบหน้าอยู่ในกรอบ\nถอดหน้ากากและแว่นกันแดด'
-                  : 'วางแนวนอนให้ครบทุกมุม\nใช้แสงสว่างพอดี ไม่ปิดข้อมูลบนบัตร',
+                  : 'วางบัตรแนวนอนให้ครบทั้งสี่มุม\nให้ตราและรูปถ่ายอยู่ในช่องที่กำหนด',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
@@ -248,7 +318,7 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(_face ? 24 : 12),
                 child: _preview != null
                     ? Image.memory(
                         _preview!,
@@ -260,37 +330,7 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
                         child: CircularProgressIndicator(color: Colors.white),
                       )
                     : _camera != null
-                    ? Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Center(child: CameraPreview(_camera!)),
-                          IgnorePointer(
-                            child: Center(
-                              child: FractionallySizedBox(
-                                widthFactor: _withCard
-                                    ? 0.95
-                                    : _face
-                                    ? 0.72
-                                    : 0.92,
-                                child: AspectRatio(
-                                  aspectRatio: _face ? 0.75 : 1.586,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 2.5,
-                                      ),
-                                      borderRadius: BorderRadius.circular(
-                                        _face && !_withCard ? 180 : 18,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
+                    ? _livePreview(_camera!)
                     : const Center(
                         child: Icon(
                           Icons.no_photography_outlined,
@@ -361,25 +401,37 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
                     ],
                   )
                 else
-                  SizedBox(
+                  Container(
                     width: 72,
                     height: 72,
-                    child: Semantics(
-                      label: 'ถ่ายภาพ',
-                      button: true,
-                      child: IconButton.filled(
-                        tooltip: 'ถ่ายภาพ',
-                        onPressed: _starting || _taking || _camera == null
-                            ? null
-                            : _take,
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: IdentityColors.ink,
-                        ),
-                        icon: _taking
-                            ? const CircularProgressIndicator()
-                            : const Icon(Icons.camera_alt_rounded, size: 32),
+                    padding: _face ? null : const EdgeInsets.all(4),
+                    decoration: _face
+                        ? null
+                        : BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                    child: IconButton.filled(
+                      tooltip: 'ถ่ายภาพ',
+                      onPressed: _starting || _taking || _camera == null
+                          ? null
+                          : _take,
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: IdentityColors.ink,
                       ),
+                      icon: _taking
+                          ? const SizedBox.square(
+                              dimension: 24,
+                              child: CircularProgressIndicator(
+                                color: Colors.white70,
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          : Icon(
+                              Icons.camera_alt_rounded,
+                              size: _face ? 32 : 28,
+                            ),
                     ),
                   ),
               ],
@@ -389,4 +441,102 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
       ),
     ),
   );
+}
+
+Rect _cardFrame(Size preview) => Alignment.center.inscribe(
+  applyBoxFit(
+    BoxFit.contain,
+    const Size(85.6, 53.98),
+    preview * 0.94,
+  ).destination,
+  Offset.zero & preview,
+);
+
+class _CardFrameMask extends CustomPainter {
+  const _CardFrameMask(this.frame);
+
+  final Rect frame;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final outside = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(Offset.zero & size)
+      ..addRect(frame);
+    canvas.drawPath(outside, Paint()..color = const Color(0x99000000));
+  }
+
+  @override
+  bool shouldRepaint(_CardFrameMask oldDelegate) => frame != oldDelegate.frame;
+}
+
+class _CardAlignmentGuides extends CustomPainter {
+  const _CardAlignmentGuides();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const accent = Color(0xFF72DEFF);
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..color = const Color(0x99FFFFFF)
+        ..style = PaintingStyle.stroke,
+    );
+    final length = size.shortestSide * 0.13;
+    final corners = Path()
+      ..moveTo(0, length)
+      ..lineTo(0, 0)
+      ..lineTo(length, 0)
+      ..moveTo(size.width - length, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, length)
+      ..moveTo(size.width, size.height - length)
+      ..lineTo(size.width, size.height)
+      ..lineTo(size.width - length, size.height)
+      ..moveTo(length, size.height)
+      ..lineTo(0, size.height)
+      ..lineTo(0, size.height - length);
+    canvas.drawPath(
+      corners,
+      Paint()
+        ..color = accent
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+
+    final marks = Path()
+      ..addOval(
+        Rect.fromCircle(
+          center: Offset(size.width * 0.085, size.height * 0.13),
+          radius: size.height * 0.092,
+        ),
+      )
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(
+            size.width * 0.75,
+            size.height * 0.50,
+            size.width * 0.975,
+            size.height * 0.955,
+          ),
+          Radius.circular(size.height * 0.025),
+        ),
+      );
+    final stroke = Paint()..style = PaintingStyle.stroke;
+    canvas.drawPath(
+      marks,
+      stroke
+        ..color = Colors.black54
+        ..strokeWidth = 4,
+    );
+    canvas.drawPath(
+      marks,
+      stroke
+        ..color = accent
+        ..strokeWidth = 2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_CardAlignmentGuides oldDelegate) => false;
 }

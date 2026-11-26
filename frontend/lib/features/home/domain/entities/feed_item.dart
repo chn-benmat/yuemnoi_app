@@ -12,6 +12,8 @@ class FeedItem extends Equatable {
     required this.priceUnit,
     required this.rating,
     required this.reviewCount,
+    this.paidBookingCount = 0,
+    this.isRentalOccupied = false,
     this.distanceKm,
     required this.isVerified,
     required this.ownerName,
@@ -52,6 +54,11 @@ class FeedItem extends Equatable {
 
   /// จำนวนรีวิว
   final int reviewCount;
+
+  /// จำนวนการจองที่ชำระเงินแล้ว
+  final int paidBookingCount;
+
+  final bool isRentalOccupied;
 
   /// ระยะทางจากผู้ใช้ (กิโลเมตร)
   final double? distanceKm;
@@ -95,6 +102,8 @@ class FeedItem extends Equatable {
     String? priceUnit,
     double? rating,
     int? reviewCount,
+    int? paidBookingCount,
+    bool? isRentalOccupied,
     double? distanceKm,
     bool? isVerified,
     String? ownerName,
@@ -116,6 +125,8 @@ class FeedItem extends Equatable {
       priceUnit: priceUnit ?? this.priceUnit,
       rating: rating ?? this.rating,
       reviewCount: reviewCount ?? this.reviewCount,
+      paidBookingCount: paidBookingCount ?? this.paidBookingCount,
+      isRentalOccupied: isRentalOccupied ?? this.isRentalOccupied,
       distanceKm: distanceKm ?? this.distanceKm,
       isVerified: isVerified ?? this.isVerified,
       ownerName: ownerName ?? this.ownerName,
@@ -142,6 +153,8 @@ class FeedItem extends Equatable {
     priceUnit,
     rating,
     reviewCount,
+    paidBookingCount,
+    isRentalOccupied,
     distanceKm,
     isVerified,
     ownerName,

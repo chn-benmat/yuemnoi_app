@@ -51,10 +51,6 @@ class NotificationInboxState {
     return latest.values.toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
-
-  bool get hasUnreadNotification => visibleItems.any(
-    (item) => item.category != AppNotificationCategory.chat && !item.isRead,
-  );
 }
 
 class AppNotificationService {
@@ -63,12 +59,23 @@ class AppNotificationService {
     // FCM สั่ง refresh เมื่อมีเหตุการณ์ รอบนี้สำรองเมื่อ push ตกหล่นหรืออ่านจากเครื่องอื่น
     this.pollInterval = const Duration(minutes: 1),
     this.pageSize = 50,
-  }) : _repository = repository ?? NotificationRepositoryImpl();
+  }) : _historyOnly = false,
+       _repository =
+           repository ??
+           NotificationRepositoryImpl(category: AppNotificationCategory.chat);
+
+  AppNotificationService.history({
+    NotificationRepository? repository,
+    this.pageSize = 50,
+  }) : _historyOnly = true,
+       pollInterval = null,
+       _repository = repository ?? NotificationRepositoryImpl();
 
   static final AppNotificationService instance = AppNotificationService();
 
   final NotificationRepository _repository;
-  final Duration pollInterval;
+  final Duration? pollInterval;
+  final bool _historyOnly;
   final int pageSize;
   final ValueNotifier<NotificationInboxState> inbox = ValueNotifier(
     const NotificationInboxState(),
@@ -81,6 +88,7 @@ class AppNotificationService {
   Future<void> Function(AppNotification notification)? onOpen;
 
   String? _userId;
+  String? get sessionUserId => _userId;
   bool _foreground = true;
   bool _disposed = false;
   int _generation = 0;
@@ -120,8 +128,10 @@ class AppNotificationService {
   }
 
   void _startPolling() {
+    final interval = pollInterval;
+    if (interval == null) return;
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(pollInterval, (_) {
+    _pollTimer = Timer.periodic(interval, (_) {
       if (_foreground && _userId != null) {
         unawaited(refresh(silent: false));
       }
@@ -177,7 +187,7 @@ class AppNotificationService {
       }
       final page = firstPage!;
       final watermark = _watermark;
-      final items = byId.values.toList()
+      final items = byId.values.where(_includes).toList()
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       _loadedCount = fetchedCount;
       _publish(
@@ -231,7 +241,7 @@ class AppNotificationService {
       );
       if (!_isCurrent(generation)) return;
       final byId = {for (final item in inbox.value.items) item.id: item};
-      for (final item in page.items) {
+      for (final item in page.items.where(_includes)) {
         byId.putIfAbsent(item.id, () => item);
       }
       final merged = byId.values.toList()
@@ -255,8 +265,12 @@ class AppNotificationService {
     }
   }
 
+  bool _includes(AppNotification item) => _historyOnly
+      ? item.category != AppNotificationCategory.chat
+      : item.category == AppNotificationCategory.chat;
+
   Future<void> handlePush(Map<String, dynamic> data) async {
-    if (_disposed || !_foreground || _userId == null) return;
+    if (_historyOnly || _disposed || !_foreground || _userId == null) return;
     final generation = _generation;
     final watermark = _watermark;
     await refresh(silent: false);
@@ -285,7 +299,12 @@ class AppNotificationService {
   }
 
   void _present(AppNotification item) {
-    if (item.isRead || _presentedVersions.contains(item.versionKey)) return;
+    if (_historyOnly ||
+        item.category != AppNotificationCategory.chat ||
+        item.isRead ||
+        _presentedVersions.contains(item.versionKey)) {
+      return;
+    }
     _presentedVersions.add(item.versionKey);
     if (_presentedVersions.length > 500) {
       _presentedVersions.remove(_presentedVersions.first);
@@ -299,6 +318,14 @@ class AppNotificationService {
       return;
     }
     _foregroundEvents.add(item);
+  }
+
+  Future<void> markPushRead(String id, {required DateTime readThrough}) async {
+    try {
+      await _repository.markRead(id, readThrough: readThrough);
+    } catch (_) {
+      // การบันทึกสถานะอ่านไม่ขัดขวางการเปิดปลายทางจากแจ้งเตือนของเครื่อง
+    }
   }
 
   Future<void> markRead(String id) async {

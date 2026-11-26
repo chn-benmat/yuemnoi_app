@@ -5,6 +5,16 @@ import 'package:frontend/features/profile/domain/entities/user_item.dart';
 
 void main() {
   group('UserItemModel', () {
+    test('an occupied listing appears in the rented status', () {
+      final item = UserItemModel.fromJson({
+        'id': 7,
+        'status': 'available',
+        'is_rental_occupied': true,
+      }).toEntity();
+
+      expect(item.listingStatus.name, 'rented');
+    });
+
     test('preserves listing status and the actual rental unit', () {
       final item = UserItemModel.fromJson({
         'status': ' renting ',

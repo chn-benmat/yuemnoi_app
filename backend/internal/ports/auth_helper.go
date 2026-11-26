@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/gofiber/fiber/v3"
@@ -24,6 +25,17 @@ func (v appTokenVerifier) UserIDFromToken(ctx context.Context, token string) (st
 func appTokenError(c fiber.Ctx, err error) error {
 	if errors.Is(err, domain.ErrDashboardOnly) {
 		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": dashboardOnlyMessage, "code": "dashboard_only"})
+	}
+	var pending *domain.PendingAccountDeletion
+	if errors.As(err, &pending) {
+		c.Set("Cache-Control", "private, no-store")
+		if !pending.DeleteAfter.After(time.Now()) {
+			return accountDeletionError(c, "account_deletion_expired")
+		}
+		return c.Status(http.StatusConflict).JSON(fiber.Map{
+			"error": "บัญชีนี้กำลังรอลบ กรุณายืนยันเพื่อกู้คืนบัญชี",
+			"code":  "account_deletion_pending", "delete_after": pending.DeleteAfter,
+		})
 	}
 	return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Access Token ไม่ถูกต้องหรือหมดอายุ"})
 }

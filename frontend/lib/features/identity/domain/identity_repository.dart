@@ -29,10 +29,6 @@ class IdentityStatus {
       Map<String, dynamic>.from(data['request'] as Map? ?? {});
   Map<String, dynamic> get profile =>
       Map<String, dynamic>.from(data['profile'] as Map? ?? {});
-  bool get pilot => data['pilot'] == true;
-  // รองรับ backend รุ่นเดิมที่ยังส่งเฉพาะสิทธิ์กลุ่มทดลอง
-  bool get available =>
-      data['available'] is bool ? data['available'] == true : pilot;
   bool get canList => data['can_list'] == true;
   bool get enforcement => data['enforcement'] == true;
   bool get restricted {

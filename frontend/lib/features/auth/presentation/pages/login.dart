@@ -1,9 +1,10 @@
 import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/network/supabase_client.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/utils/app_form_validators.dart';
 import '../../../../core/widgets/responsive_page_body.dart';
 import '../../../../core/widgets/app_primary_button.dart';
@@ -29,23 +30,26 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _isGoogleLoading = false;
+  bool _restoreDialogOpen = false;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
+    final bloc = context.read<AuthBloc>();
     // รีเซ็ตสถานะ BLoC เมื่อเปิดหน้านี้ขึ้นมาใหม่
-    context.read<AuthBloc>().add(const AuthResetState());
+    bloc.add(const AuthResetState());
 
-    // ตรวจสอบเซสชันที่มีอยู่แล้วเมื่อเริ่มต้นใช้งานแอป
-    if (SupabaseConfig.isInitialized) {
-      final existingSession = SupabaseConfig.client.auth.currentSession;
-      if (existingSession != null && !existingSession.isExpired) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          context.read<AuthBloc>().add(AuthAuthStateChanged(existingSession));
-        });
+    // การตรวจเซสชัน OAuth ทำใน BLoC แม้ callback จะมาถึงก่อนเปิดหน้านี้
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = bloc.state;
+      if (state is LoginNeedsAccountRestore) {
+        _offerAccountRestore(state);
+      } else if (AuthSession.isAuthenticated) {
+        _handleSuccess();
       }
-    }
+    });
   }
 
   void _loginWithGoogle() {
@@ -61,6 +65,45 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.of(context).pop(true);
     } else {
       _goToHome();
+    }
+  }
+
+  Future<void> _offerAccountRestore(LoginNeedsAccountRestore state) async {
+    if (_restoreDialogOpen) return;
+    final bloc = context.read<AuthBloc>();
+    _restoreDialogOpen = true;
+    setState(() {
+      _isLoading = false;
+      _isGoogleLoading = false;
+      _errorMessage = null;
+    });
+    final deadline = DateFormat(
+      'dd/MM/yyyy HH:mm',
+    ).format(state.deleteAfter.toLocal());
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('กู้คืนบัญชี'),
+        content: Text(
+          'บัญชีนี้มีกำหนดลบถาวรวันที่ $deadline '
+          'ยืนยันเพื่อยกเลิกการลบและกลับมาใช้งานบัญชี',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('ยกเลิก'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('ยืนยัน'),
+          ),
+        ],
+      ),
+    );
+    _restoreDialogOpen = false;
+    if (!bloc.isClosed) {
+      bloc.add(AuthAccountRestoreDecided(confirmed: confirmed == true));
     }
   }
 
@@ -114,6 +157,8 @@ class _LoginScreenState extends State<LoginScreen> {
             _isGoogleLoading = true;
             _errorMessage = null;
           });
+        } else if (state is LoginNeedsAccountRestore) {
+          _offerAccountRestore(state);
         } else if (state is LoginSuccess || state is GoogleLoginSuccess) {
           setState(() {
             _isLoading = false;

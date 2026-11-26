@@ -95,11 +95,25 @@ class AuthChangePasswordRequested extends AuthEvent {
 /// Event เมื่อสถานะเซสชันของ Supabase เปลี่ยนแปลง (เช่น เข้าสู่ระบบเสร็จสิ้นจาก OAuth)
 class AuthAuthStateChanged extends AuthEvent {
   final Session session;
+  final bool canRestoreAccount;
 
-  const AuthAuthStateChanged(this.session);
+  const AuthAuthStateChanged(this.session, {this.canRestoreAccount = true});
 
   @override
-  List<Object?> get props => [session];
+  List<Object?> get props => [session, canRestoreAccount];
+}
+
+class AuthAccountRestoreDecided extends AuthEvent {
+  const AuthAccountRestoreDecided({required this.confirmed});
+
+  final bool confirmed;
+
+  @override
+  List<Object?> get props => [confirmed];
+}
+
+class AuthAccountDeletionRequested extends AuthEvent {
+  const AuthAccountDeletionRequested();
 }
 
 /// Event สำหรับรีเซ็ตสถานะภายใน BLoC ให้กลับไปเริ่มต้นใหม่

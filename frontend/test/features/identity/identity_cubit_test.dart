@@ -21,7 +21,6 @@ class Repository implements IdentityRepository {
       throw const IdentityFailure('status unavailable');
     }
     return IdentityStatus({
-      'pilot': true,
       'request': submitted > 0 ? {'status': 'pending'} : request,
     });
   }
@@ -215,20 +214,6 @@ void main() {
     expect(cubit.state.status!.request['status'], 'pending');
     expect(cubit.state.session, isNull);
     await cubit.close();
-  });
-  test('บัญชีทั่วไปเริ่มยืนยันได้เมื่อเปิดใช้ทุกบัญชี', () {
-    const status = IdentityStatus({'pilot': false, 'available': true});
-    expect(status.pilot, isFalse);
-    expect(status.available, isTrue);
-    expect(status.verified, isFalse);
-  });
-  test('สถานะปิดใช้ไม่ถูกสิทธิ์ทดลองจากข้อมูลเดิมเปิดข้าม', () {
-    expect(
-      const IdentityStatus({'pilot': true, 'available': false}).available,
-      isFalse,
-    );
-    expect(const IdentityStatus({}).available, isFalse);
-    expect(const IdentityStatus({'pilot': true}).available, isTrue);
   });
   test('กลับเข้าหน้าจอแล้วถ่ายต่อในรอบที่ยังไม่หมดอายุ', () async {
     final repository = Repository();

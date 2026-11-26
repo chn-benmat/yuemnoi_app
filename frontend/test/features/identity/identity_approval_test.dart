@@ -60,7 +60,6 @@ void main() {
     final repository = _IdentityRepository();
     when(() => repository.status()).thenAnswer(
       (_) async => const IdentityStatus({
-        'available': true,
         'can_list': true,
         'profile': {
           'status': 'approved',

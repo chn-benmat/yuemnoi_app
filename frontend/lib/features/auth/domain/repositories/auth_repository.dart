@@ -31,5 +31,7 @@ abstract class AuthRepository {
 
   Future<String> syncGoogleProfileImage({required String accessToken});
 
+  Future<void> scheduleAccountDeletion({required String accessToken});
+
   void close();
 }

@@ -18,6 +18,7 @@ import '../../../data/repositories/rental_management_repository_impl.dart';
 import '../../../domain/entities/rental_handover_payment.dart';
 import '../../../domain/usecases/update_booking_status_usecase.dart';
 import '../../../../rental_return/data/datasources/rental_return_remote_data_source.dart';
+import '../promptpay_identifier_fields.dart';
 
 /// Modal สำหรับกระบวนการ "ตรวจรับอุปกรณ์ & ชำระเงิน" เมื่อนัดพบกัน
 class RentalPickupPaymentModal extends StatefulWidget {
@@ -176,7 +177,7 @@ class RentalPickupPaymentModal extends StatefulWidget {
 class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
   bool get _isOwner => widget.initialIsOwner;
   late final UpdateBookingStatusUseCase _updateBookingStatusUseCase;
-  int _currentStep = 0; // 0: ตรวจสภาพ, 1: ชำระเงิน
+  int _currentStep = 0; // 0: ตรวจสภาพ, 1: ชำระพร้อมเพย์หรือรอยืนยันเงินสด
   int _maxStepReached = 0;
 
   RentalHandoverPayment? _handoverPayment;
@@ -205,6 +206,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
   RealtimeChannel? _realtimeChannel;
 
   bool get _hasBooking => (widget.bookingId ?? 0) > 0;
+  bool get _hasPaymentMethod => !_hasBooking || _handoverPayment != null;
   bool get _isPromptPay =>
       (_handoverPayment?.paymentMethod ?? widget.paymentMethod) == 'promptpay';
 
@@ -563,6 +565,8 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
 
   @override
   Widget build(BuildContext context) {
+    final showRenterPaymentSteps =
+        !_isOwner && _hasPaymentMethod && _isPromptPay;
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -597,7 +601,11 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
 
                 // หัวแถว: ชื่อหัวข้อ
                 Text(
-                  !_isOwner ? 'ตรวจรับ & ชำระเงิน' : 'ยืนยันการรับชำระเงิน',
+                  _isOwner
+                      ? 'ยืนยันการรับชำระเงิน'
+                      : showRenterPaymentSteps
+                      ? 'ตรวจรับ & ชำระเงิน'
+                      : 'ตรวจรับอุปกรณ์',
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 18,
@@ -645,8 +653,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
                 ),
                 const SizedBox(height: 12),
 
-                // สเต็ปบาร์ (Step Progress) - แสดงเฉพาะฝั่งผู้เช่า
-                if (!_isOwner) ...[
+                if (showRenterPaymentSteps) ...[
                   Row(
                     children: [
                       _buildStepIndicator(stepIndex: 0, label: '1. ตรวจสภาพ'),
@@ -657,9 +664,10 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
                   const SizedBox(height: 18),
                 ],
 
-                // เนื้อหาตามสเต็ป
-                if (_currentStep == 0) _buildStepInspection(),
-                if (_currentStep == 1) _buildStepPayment(),
+                if (_isOwner || (showRenterPaymentSteps && _currentStep == 1))
+                  _buildStepPayment()
+                else
+                  _buildStepInspection(),
               ],
             ),
           ),
@@ -744,6 +752,8 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
   // Step 0: ตรวจสภาพสินค้า (Inspection)
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildStepInspection() {
+    final paysCash = _hasPaymentMethod && !_isPromptPay;
+    final waitingForCashConfirmation = paysCash && _currentStep == 1;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -765,7 +775,9 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'โปรดตรวจเช็กสภาพอุปกรณ์จริงและอุปกรณ์เสริมร่วมกับผู้ปล่อยเช่า',
+                  waitingForCashConfirmation
+                      ? 'รอผู้ปล่อยเช่ายืนยันว่าได้รับเงินเพื่อเริ่มการเช่า'
+                      : 'โปรดตรวจเช็กสภาพอุปกรณ์จริงและอุปกรณ์เสริมร่วมกับผู้ปล่อยเช่า',
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 13,
@@ -777,30 +789,44 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
             ],
           ),
         ),
-        const SizedBox(height: 18),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: () => _setStep(1),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryColor,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+        if (paysCash) ...[
+          const SizedBox(height: 8),
+          Text('กรุณาชำระเงินสดจำนวน $_paymentAmountLabel ให้แก่ผู้ปล่อยเช่า'),
+        ],
+        if (!_hasPaymentMethod) ...[
+          const SizedBox(height: 12),
+          Text(_paymentError ?? 'กำลังตรวจสอบวิธีชำระเงิน'),
+          if (_paymentError != null)
+            TextButton(
+              onPressed: () => _refreshHandoverPayment(),
+              child: const Text('ลองตรวจสอบอีกครั้ง'),
             ),
-            child: const Text(
-              'ไปชำระเงิน',
-              style: TextStyle(
-                fontFamily: AppTextStyles.fontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
+        ] else if (!waitingForCashConfirmation) ...[
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: () => _setStep(1),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                paysCash ? 'ตรวจสอบเรียบร้อย' : 'ไปชำระเงิน',
+                style: const TextStyle(
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),
-        ),
+        ],
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
@@ -925,9 +951,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _isOwner
-                      ? 'กรุณารับเงินสดจำนวน $amount จากผู้เช่าและนับให้ถูกต้อง'
-                      : 'กรุณาชำระเงินสดจำนวน $amount ให้แก่ผู้ปล่อยเช่า',
+                  'กรุณารับเงินสดจำนวน $amount จากผู้เช่าและนับให้ถูกต้อง',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
@@ -1120,62 +1144,20 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: false, label: Text('เบอร์มือถือ')),
-              ButtonSegment(value: true, label: Text('เลขบัตรประชาชน')),
-            ],
-            selected: {_usePromptPayNationalId},
-            showSelectedIcon: false,
-            onSelectionChanged: _isSavingPromptPayAccount
-                ? null
-                : (selection) {
-                    if (selection.single == _usePromptPayNationalId) return;
-                    _promptPayIdentifierController.clear();
-                    setState(() {
-                      _usePromptPayNationalId = selection.single;
-                      _paymentError = null;
-                    });
-                  },
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            key: ValueKey(_usePromptPayNationalId),
+          PromptPayIdentifierFields(
             controller: _promptPayIdentifierController,
+            nationalId: _usePromptPayNationalId,
             enabled: !_isSavingPromptPayAccount,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(
-                _usePromptPayNationalId ? 13 : 10,
-              ),
-            ],
-            decoration: InputDecoration(
-              labelText: _usePromptPayNationalId
-                  ? 'เลขบัตรประชาชนที่ผูกพร้อมเพย์'
-                  : 'เบอร์มือถือที่ผูกพร้อมเพย์',
-              hintText: _usePromptPayNationalId ? null : '08XXXXXXXX',
-              helperText: 'บันทึกไว้ใช้กับรายการเช่าถัดไป',
-              border: const OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (_usePromptPayNationalId) {
-                return value?.length == 13
-                    ? null
-                    : 'กรุณากรอกเลขบัตรประชาชน 13 หลัก';
-              }
-              return RegExp(r'^0[689][0-9]{8}$').hasMatch(value ?? '')
-                  ? null
-                  : 'กรุณากรอกเบอร์มือถือพร้อมเพย์ 10 หลัก';
+            helperText: 'บันทึกไว้ใช้กับรายการเช่าถัดไป',
+            onTypeChanged: (nationalId) {
+              _promptPayIdentifierController.clear();
+              setState(() {
+                _usePromptPayNationalId = nationalId;
+                _paymentError = null;
+              });
             },
-            onFieldSubmitted: (_) => _savePromptPayAccount(),
+            onSubmitted: _savePromptPayAccount,
           ),
-          if (_usePromptPayNationalId)
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: Text('QR จะมีเลขบัตรประชาชนสำหรับการสแกนโอน'),
-            ),
           const SizedBox(height: 8),
           _buildPaymentButton(
             onPressed: _isSavingPromptPayAccount ? null : _savePromptPayAccount,

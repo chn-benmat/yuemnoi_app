@@ -247,6 +247,7 @@ class UserProfileRentalCard extends StatelessWidget {
   };
 
   (String, bool) get _availability => switch (item.status.toLowerCase()) {
+    _ when item.item.isRentalOccupied => ('กำลังถูกเช่า', false),
     'available' || 'พร้อมใช้งาน' || 'พร้อมให้เช่า' => ('พร้อมให้เช่า', true),
     'rented' ||
     'renting' ||

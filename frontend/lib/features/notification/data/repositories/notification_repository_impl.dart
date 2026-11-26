@@ -5,10 +5,13 @@ import '../datasources/notification_remote_data_source.dart';
 import '../models/app_notification_model.dart';
 
 class NotificationRepositoryImpl implements NotificationRepository {
-  NotificationRepositoryImpl({NotificationRemoteDataSource? dataSource})
-    : _dataSource = dataSource ?? NotificationRemoteDataSource();
+  NotificationRepositoryImpl({
+    NotificationRemoteDataSource? dataSource,
+    this.category,
+  }) : _dataSource = dataSource ?? NotificationRemoteDataSource();
 
   final NotificationRemoteDataSource _dataSource;
+  final AppNotificationCategory? category;
 
   Future<T> _request<T>(Future<T> Function() action) async {
     try {
@@ -25,7 +28,11 @@ class NotificationRepositoryImpl implements NotificationRepository {
     int limit = 50,
     int offset = 0,
   }) => _request(() async {
-    final result = await _dataSource.fetch(limit: limit, offset: offset);
+    final result = await _dataSource.fetch(
+      limit: limit,
+      offset: offset,
+      category: category,
+    );
     final items = result['items'];
     final serverTime = DateTime.tryParse('${result['server_time']}');
     if (items is! List || serverTime == null) {

@@ -81,6 +81,9 @@ func mapRentalRepositoryError(operation string, err error) error {
 
 	message := strings.ToLower(requestErr.Message)
 	switch {
+	case message == "item_rental_occupied",
+		requestErr.Code == "23505" && strings.Contains(message, "booking_tb_one_open_rental_per_item"):
+		return domain.ErrItemRentalOccupied
 	case requestErr.Code == "23P01", strings.Contains(message, "rental period is unavailable"),
 		strings.Contains(message, "item is unavailable"):
 		return domain.ErrRentalUnavailable

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/services/app_notification_service.dart';
-import 'package:frontend/core/widgets/custom_bottom_navbar.dart';
 import 'package:frontend/core/widgets/skeleton_shimmer.dart';
 import 'package:frontend/features/notification/presentation/pages/page.dart';
 
@@ -11,6 +10,34 @@ import 'support/fake_notification_repository.dart';
 
 void main() {
   group('NotificationPage UI Tests', () {
+    testWidgets('history loads on demand and has no foreground alerts', (
+      tester,
+    ) async {
+      final repository = FakeNotificationRepository();
+      final history = AppNotificationService.history(repository: repository);
+      addTearDown(history.dispose);
+      final alerts = <AppNotification>[];
+      history.foregroundEvents.listen(alerts.add);
+
+      history.setSession('alice');
+      await history.refresh();
+      expect(repository.offsets, [0]);
+      repository.page = inboxPage([
+        notification(
+          id: 'rental',
+          category: AppNotificationCategory.rental,
+          second: 2,
+        ),
+      ], second: 3);
+      await tester.pump(const Duration(minutes: 2));
+      await history.handlePush({'notification_id': 'rental'});
+      expect(repository.offsets, [0]);
+      expect(history.inbox.value.items, isEmpty);
+
+      await history.refresh(silent: false);
+      expect(history.inbox.value.items.single.id, 'rental');
+      expect(alerts, isEmpty);
+    });
     testWidgets(
       'loading keeps all section headings at their empty inbox positions',
       (tester) async {
@@ -19,7 +46,7 @@ void main() {
         final response = Completer<NotificationInboxPage>();
         final repository = FakeNotificationRepository()
           ..onGet = (_, _) => response.future;
-        final service = AppNotificationService(repository: repository);
+        final service = AppNotificationService.history(repository: repository);
         addTearDown(service.dispose);
         service.setSession('alice');
         await tester.pumpWidget(
@@ -68,9 +95,13 @@ void main() {
             unreadCount: 3,
             title: 'ข้อความล่าสุดจากสมชาย',
           ),
-          notification(id: 'app', title: 'ยืนยันตัวตนสำเร็จ'),
+          notification(
+            id: 'app',
+            category: AppNotificationCategory.app,
+            title: 'ยืนยันตัวตนสำเร็จ',
+          ),
         ]);
-      final service = AppNotificationService(repository: repository);
+      final service = AppNotificationService.history(repository: repository);
       addTearDown(service.dispose);
       service.setSession('alice');
       await service.refresh();
@@ -99,12 +130,14 @@ void main() {
       service.dispose();
     });
 
-    testWidgets('mark all persists read state and updates unread badge', (
+    testWidgets('mark all persists read state on the history page', (
       tester,
     ) async {
       final repository = FakeNotificationRepository()
-        ..page = inboxPage([notification(id: 'app')]);
-      final service = AppNotificationService(repository: repository);
+        ..page = inboxPage([
+          notification(id: 'app', category: AppNotificationCategory.app),
+        ]);
+      final service = AppNotificationService.history(repository: repository);
       addTearDown(service.dispose);
       service.setSession('alice');
       await service.refresh();
@@ -126,7 +159,7 @@ void main() {
     testWidgets('guest sees sign-in message and no private history', (
       tester,
     ) async {
-      final service = AppNotificationService(
+      final service = AppNotificationService.history(
         repository: FakeNotificationRepository(),
       );
       addTearDown(service.dispose);
@@ -143,56 +176,5 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       service.dispose();
     });
-  });
-
-  group('CustomBottomNavbar with Notification Tab', () {
-    testWidgets('renders current 4 tabs including Notification tab', (
-      tester,
-    ) async {
-      int tappedIndex = -1;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            bottomNavigationBar: CustomBottomNavbar(
-              selectedIndex: 0,
-              onTabChange: (index) => tappedIndex = index,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.byKey(const ValueKey('nav-home')), findsOneWidget);
-      expect(find.byKey(const ValueKey('nav-chat')), findsOneWidget);
-      expect(find.byKey(const ValueKey('nav-notification')), findsOneWidget);
-      expect(find.byKey(const ValueKey('nav-profile')), findsOneWidget);
-
-      await tester.tap(find.byKey(const ValueKey('nav-notification')));
-      await tester.pumpAndSettle();
-      expect(tappedIndex, 2);
-    });
-
-    testWidgets(
-      'renders notification unread badge when hasUnreadNotification is true',
-      (tester) async {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              bottomNavigationBar: CustomBottomNavbar(
-                selectedIndex: 0,
-                hasUnreadNotification: true,
-                onTabChange: (_) {},
-              ),
-            ),
-          ),
-        );
-        await tester.pump();
-
-        expect(
-          find.byKey(const ValueKey('notification-unread-badge')),
-          findsWidgets,
-        );
-      },
-    );
   });
 }

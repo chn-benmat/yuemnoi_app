@@ -17,8 +17,10 @@ class AssetThaiAddressRepository implements ThaiAddressRepository {
 
   Future<List<ThaiProvince>> _load() async {
     try {
-      final json = await _bundle.loadString('assets/data/thai_addresses.json');
-      return await compute(_decodeAddresses, json);
+      return await _bundle.loadStructuredBinaryData(
+        'assets/data/thai_addresses.json',
+        (bytes) => compute(_decodeAddresses, bytes),
+      );
     } catch (_) {
       // เปิดให้ลองโหลด asset ใหม่ได้ หากการอ่านครั้งก่อนล้มเหลว
       _cached = null;
@@ -27,8 +29,10 @@ class AssetThaiAddressRepository implements ThaiAddressRepository {
   }
 }
 
-List<ThaiProvince> _decodeAddresses(String source) {
-  final data = jsonDecode(source) as Map<String, dynamic>;
+List<ThaiProvince> _decodeAddresses(ByteData source) {
+  final data =
+      jsonDecode(utf8.decode(Uint8List.sublistView(source)))
+          as Map<String, dynamic>;
   return List.unmodifiable(
     (data['provinces'] as List).cast<Map<String, dynamic>>().map(
       (province) => ThaiProvince(

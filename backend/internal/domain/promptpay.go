@@ -1,9 +1,21 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 )
+
+type PromptPayAccount struct {
+	IDType             string `json:"promptpay_id_type,omitempty"`
+	Phone              string `json:"promptpay_phone,omitempty"`
+	NationalIDLastFour string `json:"national_id_last_four,omitempty"`
+}
+
+type PromptPayAccountRepository interface {
+	GetPromptPayAccount(ctx context.Context, userID string) (PromptPayAccount, error)
+	UpdatePromptPayAccount(ctx context.Context, userID, phone, nationalID string) (PromptPayAccount, error)
+}
 
 var promptPayMobilePattern = regexp.MustCompile(`^0[689][0-9]{8}$`)
 

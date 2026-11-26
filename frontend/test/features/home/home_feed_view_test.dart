@@ -28,15 +28,22 @@ class _FakeHomeRepository implements HomeRepository {
     10,
     (i) => FeedItem(
       id: '$i',
-      title: 'อุปกรณ์ทดสอบ $i',
+      title: switch (i) {
+        0 => 'โต๊ะ',
+        1 => 'อุปกรณ์ทดสอบ 1 สำหรับถ่ายภาพและงานวิดีโอ',
+        _ => 'อุปกรณ์ทดสอบ $i',
+      },
       categoryId: 'camera',
       price: i == 0 ? 75 : 200 + i * 50,
       priceUnit: i == 0 ? '/ ชั่วโมง' : '/วัน',
       rating: 4.8,
       reviewCount: 12,
+      paidBookingCount: i == 0 ? 3 : 0,
+      isRentalOccupied: i == 1,
       distanceKm: 1.5,
       isVerified: true,
       ownerName: 'ผู้ให้เช่า',
+      locationName: i == 0 ? 'ซีคอน บางแค' : 'กรุงเทพฯ',
       imageUrl: '',
     ),
   );
@@ -86,9 +93,41 @@ void main() {
       // Both search bar and chips are visible
       expect(find.byType(HomeSearchBar), findsOneWidget);
       expect(find.byType(CategoryFilterChips), findsOneWidget);
-      expect(find.text('เริ่มต้น '), findsOneWidget);
-      expect(find.text('75'), findsOneWidget);
-      expect(find.text(' / ชั่วโมง'), findsOneWidget);
+      final price = find.text('฿75');
+      final location = find.text('ซีคอน บางแค');
+      final count = find.text('เช่าแล้ว 3 ครั้ง');
+      expect(price, findsOneWidget);
+      expect(location, findsOneWidget);
+      expect(count, findsOneWidget);
+      expect(find.text('฿250'), findsOneWidget);
+      expect(find.text('กำลังถูกเช่า'), findsOneWidget);
+      expect(find.textContaining('เช่าแล้ว'), findsOneWidget);
+      expect(find.textContaining('เริ่มต้น'), findsNothing);
+      expect(find.textContaining('ชั่วโมง'), findsNothing);
+      expect(find.textContaining('/วัน'), findsNothing);
+      expect(find.textContaining('กม.'), findsNothing);
+      expect(find.text('ผู้ให้เช่า'), findsNothing);
+      final title = find.text('โต๊ะ');
+      final priceRect = tester.getRect(price);
+      expect(
+        priceRect.top - tester.getRect(title).bottom,
+        inInclusiveRange(4, 8),
+      );
+      expect(tester.getTopLeft(location).dy, greaterThan(priceRect.bottom));
+      expect(tester.getTopLeft(count).dx, greaterThan(priceRect.right));
+      expect(tester.getCenter(count).dy, closeTo(priceRect.center.dy, 1));
+      final firstCard = find.byKey(const ValueKey('shopee-card-0'));
+      final secondCard = find.byKey(const ValueKey('shopee-card-1'));
+      final firstCardRect = tester.getRect(firstCard);
+      final secondCardRect = tester.getRect(secondCard);
+      final secondLocation = find.descendant(
+        of: secondCard,
+        matching: find.text('กรุงเทพฯ'),
+      );
+      expect(firstCardRect.bottom - tester.getRect(location).bottom, 10);
+      expect(secondCardRect.bottom - tester.getRect(secondLocation).bottom, 10);
+      expect(firstCardRect.top, secondCardRect.top);
+      expect(secondCardRect.height, greaterThan(firstCardRect.height));
 
       final initialSearchBarPosition = tester.getTopLeft(
         find.byType(HomeSearchBar),

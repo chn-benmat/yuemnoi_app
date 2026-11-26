@@ -54,10 +54,13 @@ import '../../features/rental_item/data/repositories/rental_item_repository_impl
 import '../../features/rental_item/domain/usecases/create_rental_item_usecase.dart';
 import '../../features/rental_item/presentation/bloc/rental_item_bloc.dart';
 import '../../features/rental_item/presentation/pages/add_rental_item.dart';
+import '../../features/profile/data/repositories/promptpay_account_repository.dart';
+import '../../features/profile/presentation/bloc/promptpay_account_cubit.dart';
 import '../../features/profile/presentation/pages/account/change_account_screen.dart';
 import '../../features/profile/presentation/pages/account/change_password_screen.dart';
 import '../../features/profile/presentation/pages/account/edit_contact_screen.dart';
 import '../../features/profile/presentation/pages/account/edit_profile_screen.dart';
+import '../../features/profile/presentation/pages/account/promptpay_account_screen.dart';
 import '../../features/profile/presentation/pages/account/setting_account_screen.dart';
 import '../../features/profile/presentation/pages/items/favorite_screen.dart';
 import '../../features/profile/presentation/pages/items/my_items_screen.dart';
@@ -73,9 +76,9 @@ import '../../features/profile/presentation/pages/support/faq_screen.dart';
 import '../../features/wallet/presentation/pages/wallet.dart';
 import '../../features/wallet/presentation/pages/wallet_payment_screen.dart';
 import '../../features/wallet/presentation/pages/wallet_success_screen.dart';
-import '../../features/notification/presentation/pages/page.dart';
 import '../../features/review/presentation/pages/rental_review_screen.dart';
 import '../../features/rental_return/presentation/pages/rental_return_page.dart';
+import '../../features/notification/presentation/pages/page.dart';
 
 abstract final class AppRoutes {
   static final GlobalKey<NavigatorState> navigatorKey =
@@ -112,8 +115,8 @@ abstract final class AppRoutes {
   static const editProfile = '/setting/edit-profile';
   static const editContact = '/setting/edit-contact';
   static const identityAccount = '/setting/identity';
+  static const promptPayAccount = '/setting/promptpay';
   static const changeAccount = '/setting/change-account';
-  static const notificationSettings = '/setting/notifications';
   static const profileChangePassword = '/setting/change-password';
   static const itemDetail = '/items/:itemId';
   static const editRentalItem = '/items/:itemId/edit';
@@ -137,6 +140,7 @@ abstract final class AppRoutes {
     return _currentRouter = GoRouter(
       navigatorKey: navigatorKey,
       initialLocation: initialLocation,
+      overridePlatformDefaultLocation: initialLocation == login,
       initialExtra: initialExtra,
       routes: [
         GoRoute(
@@ -536,21 +540,26 @@ abstract final class AppRoutes {
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
             child: BlocProvider(
-              create: (_) =>
-                  IdentityAccountCubit(IdentityApiRepository())..load(),
+              create: (_) => IdentityAccountCubit(IdentityApiRepository()),
               child: const IdentityAccountPage(),
             ),
           ),
         ),
         GoRoute(
-          path: notificationSettings,
+          path: promptPayAccount,
+          redirect: (_, _) => AuthGuard.isAuthenticated ? null : login,
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
-            child: const ChangeAccountScreen(notificationsOnly: true),
+            child: BlocProvider(
+              create: (_) =>
+                  PromptPayAccountCubit(PromptPayAccountRepository())..load(),
+              child: const PromptPayAccountScreen(),
+            ),
           ),
         ),
         GoRoute(
           path: changeAccount,
+          redirect: (_, _) => AuthGuard.isAuthenticated ? null : login,
           pageBuilder: (context, state) => MaterialPage<void>(
             key: state.pageKey,
             child: const ChangeAccountScreen(),
@@ -729,14 +738,6 @@ abstract final class AppRoutes {
     GoRouter.of(context).go(home, extra: 0);
   }
 
-  static void openNotification(BuildContext context) {
-    goToHome(context, initialIndex: 2);
-  }
-
-  static void goToNotification(BuildContext context) {
-    goToHome(context, initialIndex: 2);
-  }
-
   static void openProfile(BuildContext context) {
     goToHome(context, initialIndex: 3);
   }
@@ -900,6 +901,10 @@ abstract final class AppRoutes {
   static Future<void> openIdentity(BuildContext context) =>
       openIdentityAccount(context);
 
+  static Future<void> openPromptPayAccount(BuildContext context) {
+    return context.push<void>(promptPayAccount);
+  }
+
   static Future<void> openIdentityAccount(BuildContext context) async {
     if (!await AuthGuard.requireAuth(
           context,
@@ -1016,10 +1021,6 @@ abstract final class AppRoutes {
 
   static Future<void> openEditContact(BuildContext context) {
     return context.push<void>(editContact);
-  }
-
-  static Future<void> openNotificationSettings(BuildContext context) {
-    return context.push<void>(notificationSettings);
   }
 
   static Future<void> openChangeAccount(BuildContext context) {

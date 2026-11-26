@@ -63,6 +63,7 @@ func SetupRouterWithOperations(
 	itemController := NewItemHandler(itemRepo, appGateway)
 	rentalController := NewRentalHandler(rentalRepository, appGateway)
 	userController := NewUserHandler(appGateway)
+	accountDeletion := accountDeletionHandler{repository: operations.AccountDeletion, verifier: appGateway}
 	pushController := NewPushHandler(pushSender, appGateway)
 	if validator, ok := authGateway.(domain.ChatPushValidator); ok {
 		pushController.validator = validator
@@ -90,6 +91,7 @@ func SetupRouterWithOperations(
 			// POST /api/auth/login
 			user.Post("/login", authRateLimit, userController.Login)
 			user.Get("/session", userController.Session)
+			user.Post("/account/restore", authRateLimit, accountDeletion.restore)
 			// POST /api/auth/google-profile
 			user.Post("/google-profile", authRateLimit, userController.SyncGoogleProfileImage)
 			// POST /api/auth/change-password
@@ -105,10 +107,13 @@ func SetupRouterWithOperations(
 		{
 			// GET /api/user/profile
 			profile.Get("/profile", userController.GetProfile)
+			profile.Post("/account/deletion", accountDeletion.schedule)
 			// PUT /api/user/profile
 			profile.Put("/profile", userController.UpdateProfile)
 			// PUT /api/user/contact
 			profile.Put("/contact", userController.UpdateContact)
+			profile.Get("/promptpay", rentalController.PromptPaySettings)
+			profile.Put("/promptpay", rentalController.PromptPaySettings)
 			// POST /api/user/fcm-token
 			profile.Post("/fcm-token", userController.UpdateFCMToken)
 		}

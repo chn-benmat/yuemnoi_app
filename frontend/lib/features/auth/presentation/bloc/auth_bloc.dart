@@ -28,7 +28,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository authRepository;
   final AppSessionValidator _sessionValidator;
   StreamSubscription? _authStateSubscription;
-  bool _signInHandled = false;
+  String? _handledAccessToken;
+  Session? _accountRestoreSession;
 
   AuthBloc({
     required this.authRepository,
@@ -42,6 +43,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthVerifyOtpRequested>(_onVerifyOtpRequested);
     on<AuthChangePasswordRequested>(_onChangePasswordRequested);
     on<AuthAuthStateChanged>(_onAuthStateChanged);
+    on<AuthAccountRestoreDecided>(_onAccountRestoreDecided);
+    on<AuthAccountDeletionRequested>(_onAccountDeletionRequested);
     on<AuthResetState>(_onResetState);
 
     // ติดตามการเปลี่ยนแปลงสถานะ Auth ของ Supabase
@@ -50,16 +53,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           .listen(
             (authState) {
               if (authState.event == AuthChangeEvent.signedOut) {
+                if (SupabaseConfig.client.auth.currentSession != null) return;
+                _handledAccessToken = null;
+                AuthSession.clear(purgeCache: true);
+                UserPresenceService.instance.dispose();
                 AppNotificationService.instance.setSession(null);
                 unawaited(FcmService.instance.unregisterCurrentDevice());
               }
               if ((authState.event == AuthChangeEvent.signedIn ||
                       authState.event == AuthChangeEvent.tokenRefreshed) &&
                   authState.session != null) {
-                if (authState.event == AuthChangeEvent.tokenRefreshed) {
-                  _signInHandled = false;
-                }
-                add(AuthAuthStateChanged(authState.session!));
+                add(
+                  AuthAuthStateChanged(
+                    authState.session!,
+                    canRestoreAccount:
+                        authState.event == AuthChangeEvent.signedIn ||
+                        state is LoginLoading ||
+                        state is GoogleLoginLoading,
+                  ),
+                );
               }
             },
             onError: (error) {
@@ -73,7 +85,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLoginRequested event,
     Emitter<AuthState> emit,
   ) async {
-    _signInHandled = false;
+    if (state is LoginLoading ||
+        state is GoogleLoginLoading ||
+        _accountRestoreSession != null) {
+      return;
+    }
+    _handledAccessToken = null;
     emit(const LoginLoading());
     try {
       final tokens = await LoginUseCase(
@@ -103,7 +120,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthGoogleLoginRequested event,
     Emitter<AuthState> emit,
   ) async {
-    if (state is GoogleLoginLoading || state is LoginLoading) return;
+    if (state is GoogleLoginLoading ||
+        state is LoginLoading ||
+        _accountRestoreSession != null) {
+      return;
+    }
 
     if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized) {
       emit(
@@ -114,7 +135,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       return;
     }
 
-    _signInHandled = false;
+    _handledAccessToken = null;
     emit(const GoogleLoginLoading());
 
     try {
@@ -209,19 +230,38 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthAuthStateChanged event,
     Emitter<AuthState> emit,
   ) async {
-    if (_signInHandled) return;
-    _signInHandled = true;
+    final session = event.session;
+    if (_accountRestoreSession != null ||
+        _handledAccessToken == session.accessToken ||
+        !_isCurrentSession(session)) {
+      return;
+    }
+    _handledAccessToken = session.accessToken;
 
     try {
-      await AuthSession.accept(event.session, validator: _sessionValidator);
+      await AuthSession.accept(session, validator: _sessionValidator);
+    } on AccountDeletionPending catch (pending) {
+      if (!_isCurrentSession(session)) return;
+      if (event.canRestoreAccount) {
+        _accountRestoreSession = session;
+        emit(LoginNeedsAccountRestore(deleteAfter: pending.deleteAfter));
+      } else {
+        await _signOutLocally(userId: session.user.id);
+        emit(
+          const LoginFailure(message: 'กรุณาเข้าสู่ระบบใหม่เพื่อกู้คืนบัญชี'),
+        );
+      }
+      return;
     } on AppSessionException catch (error) {
-      _signInHandled = false;
-      if (error.rejected) await AuthSession.reject();
+      if (!_isCurrentSession(session)) return;
+      _handledAccessToken = null;
+      if (error.rejected) await AuthSession.reject(userId: session.user.id);
       unawaited(FavoriteService.instance.init(forceRefresh: true));
       emit(LoginFailure(message: error.message));
       return;
     } catch (_) {
-      _signInHandled = false;
+      if (!_isCurrentSession(session)) return;
+      _handledAccessToken = null;
       AuthSession.clear();
       unawaited(FavoriteService.instance.init(forceRefresh: true));
       emit(
@@ -231,22 +271,104 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
       return;
     }
-    final isGoogle = _signedInWithGoogle(event.session.user.appMetadata);
-    unawaited(FavoriteService.instance.init(forceRefresh: true));
+    _finishSignIn(session, emit);
+  }
 
-    UserPresenceService.instance.initialize();
-    unawaited(ChatNotificationService.instance.initialize());
-    final userId = event.session.user.id;
-    AppNotificationService.instance.setSession(userId);
-    if (userId.isNotEmpty) {
-      unawaited(FcmService.instance.syncUserToken(userId));
+  bool _isCurrentSession(Session session) =>
+      !SupabaseConfig.isInitialized ||
+      SupabaseConfig.client.auth.currentSession?.accessToken ==
+          session.accessToken;
+
+  Future<void> _onAccountRestoreDecided(
+    AuthAccountRestoreDecided event,
+    Emitter<AuthState> emit,
+  ) async {
+    final candidate = _accountRestoreSession;
+    if (candidate == null || state is! LoginNeedsAccountRestore) return;
+    emit(const LoginLoading());
+    if (!event.confirmed) {
+      await _signOutLocally(userId: candidate.user.id);
+      emit(const AuthInitial());
+      return;
+    }
+
+    try {
+      final session = SupabaseConfig.isInitialized
+          ? SupabaseConfig.client.auth.currentSession
+          : candidate;
+      if (session == null || session.user.id != candidate.user.id) {
+        throw const AppSessionException(
+          'กรุณาเข้าสู่ระบบใหม่เพื่อยืนยันการกู้คืนบัญชี',
+        );
+      }
+      await _sessionValidator.restoreAccount(session);
+      await AuthSession.accept(session, validator: _sessionValidator);
+      _accountRestoreSession = null;
+      _handledAccessToken = session.accessToken;
+      _finishSignIn(session, emit);
+    } on AppSessionException catch (error) {
+      await _signOutLocally(userId: candidate.user.id);
+      emit(LoginFailure(message: error.message));
+    } catch (_) {
+      await _signOutLocally(userId: candidate.user.id);
+      emit(const LoginFailure(message: 'กู้คืนบัญชีไม่สำเร็จ กรุณาลองใหม่'));
+    }
+  }
+
+  Future<void> _onAccountDeletionRequested(
+    AuthAccountDeletionRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    if (state is AccountDeletionLoading) return;
+    final token = AuthSession.accessToken;
+    if (token == null) {
+      emit(const AccountDeletionFailure(message: 'กรุณาเข้าสู่ระบบใหม่'));
+      return;
+    }
+    emit(const AccountDeletionLoading());
+    try {
+      await authRepository.scheduleAccountDeletion(accessToken: token);
+    } on AuthApiException catch (error) {
+      emit(AccountDeletionFailure(message: error.message));
+      return;
+    } catch (_) {
+      emit(
+        const AccountDeletionFailure(message: 'ลบบัญชีไม่สำเร็จ กรุณาลองใหม่'),
+      );
+      return;
+    }
+    await _signOutLocally();
+    emit(const AccountDeletionScheduled());
+  }
+
+  Future<void> _signOutLocally({String? userId}) async {
+    await AuthSession.reject(userId: userId);
+    _accountRestoreSession = null;
+    _handledAccessToken = null;
+    UserPresenceService.instance.dispose();
+    AppNotificationService.instance.setSession(null);
+    unawaited(FcmService.instance.unregisterCurrentDevice());
+    unawaited(FavoriteService.instance.init(forceRefresh: true));
+  }
+
+  void _finishSignIn(Session session, Emitter<AuthState> emit) {
+    final isGoogle = _signedInWithGoogle(session.user.appMetadata);
+    if (SupabaseConfig.isInitialized) {
+      unawaited(FavoriteService.instance.init(forceRefresh: true));
+      UserPresenceService.instance.initialize();
+      unawaited(ChatNotificationService.instance.initialize());
+      final userId = session.user.id;
+      AppNotificationService.instance.setSession(userId);
+      if (userId.isNotEmpty) {
+        unawaited(FcmService.instance.syncUserToken(userId));
+      }
     }
 
     if (isGoogle) {
-      emit(GoogleLoginSuccess(session: event.session));
-      unawaited(_syncGoogleProfileImage(event.session.accessToken));
+      emit(GoogleLoginSuccess(session: session));
+      unawaited(_syncGoogleProfileImage(session.accessToken));
     } else {
-      emit(LoginSuccess(session: event.session));
+      emit(LoginSuccess(session: session));
     }
   }
 
@@ -267,7 +389,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   void _onResetState(AuthResetState event, Emitter<AuthState> emit) {
-    _signInHandled = false;
+    if (_accountRestoreSession != null) return;
     emit(const AuthInitial());
   }
 

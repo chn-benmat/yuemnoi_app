@@ -22,7 +22,7 @@ void main() {
         expect(query['user_id'], 'eq.owner');
         expect(
           query['select']!.split(',').map((column) => column.trim()),
-          containsAll(['status', 'type', 'owner_hidden']),
+          containsAll(['status', 'type', 'owner_hidden', 'is_rental_occupied']),
         );
         expect(query['order'], startsWith('id.desc'));
         request.response.headers.contentType = ContentType.json;
@@ -43,6 +43,7 @@ void main() {
                   'item_name': 'Camera',
                   'status': 'available',
                   'owner_hidden': true,
+                  'is_rental_occupied': offset == 0,
                   'type': 'รายชั่วโมง',
                 },
               ),
@@ -65,6 +66,8 @@ void main() {
       expect(offsets, [0, 500]);
       expect(items.first.status, 'available');
       expect(items.first.ownerHidden, isTrue);
+      expect(items.first.isRentalOccupied, isTrue);
+      expect(items.last.isRentalOccupied, isFalse);
       expect(items.last.rentalType, 'รายชั่วโมง');
       fail = true;
       await expectLater(

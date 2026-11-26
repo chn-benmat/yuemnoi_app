@@ -18,11 +18,19 @@ class NotificationRemoteDataSource {
     return {'Authorization': 'Bearer $token'};
   }
 
-  Future<Map<String, dynamic>> fetch({int limit = 50, int offset = 0}) async {
+  Future<Map<String, dynamic>> fetch({
+    int limit = 50,
+    int offset = 0,
+    AppNotificationCategory? category,
+  }) async {
     final response = await _client.get(
       '/api/notifications',
       headers: _headers,
-      queryParameters: {'limit': limit, 'offset': offset},
+      queryParameters: {
+        'limit': limit,
+        'offset': offset,
+        if (category != null) 'category': category.name,
+      },
     );
     _check(response);
     if (response.data is! Map) {

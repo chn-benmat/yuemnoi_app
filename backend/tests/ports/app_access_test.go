@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	sbadapter "github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
@@ -37,6 +38,7 @@ func (accessTestStore) ReadEvidence(context.Context, string) ([]byte, string, er
 func (accessTestStore) DeleteEvidence(context.Context, string) error { return nil }
 
 func TestDashboardOnlyAccessAcrossApplicationAndDashboard(t *testing.T) {
+	deleteAfter := time.Now().UTC().Add(30 * 24 * time.Hour)
 	authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -49,6 +51,9 @@ func TestDashboardOnlyAccessAcrossApplicationAndDashboard(t *testing.T) {
 			if strings.EqualFold(body.Email, "admin@example.invalid") {
 				token = "admin-token"
 			}
+			if strings.EqualFold(body.Email, "pending@example.invalid") {
+				token = "pending-token"
+			}
 			_ = json.NewEncoder(w).Encode(map[string]string{"access_token": token, "refresh_token": "refresh-token"})
 		case "/auth/v1/user":
 			switch r.Header.Get("Authorization") {
@@ -56,6 +61,10 @@ func TestDashboardOnlyAccessAcrossApplicationAndDashboard(t *testing.T) {
 				_, _ = w.Write([]byte(`{"id":"` + adminTestID + `","app_metadata":{"dashboard_only":true}}`))
 			case "Bearer user-token":
 				_, _ = w.Write([]byte(`{"id":"` + userTestID + `","app_metadata":{},"user_metadata":{"dashboard_only":true}}`))
+			case "Bearer pending-token":
+				_ = json.NewEncoder(w).Encode(map[string]any{"id": userTestID, "app_metadata": map[string]any{"account_delete_after": deleteAfter}})
+			case "Bearer expired-deletion-token":
+				_ = json.NewEncoder(w).Encode(map[string]any{"id": userTestID, "app_metadata": map[string]any{"account_delete_after": deleteAfter.Add(-31 * 24 * time.Hour)}})
 			default:
 				w.WriteHeader(http.StatusUnauthorized)
 			}
@@ -84,6 +93,10 @@ func TestDashboardOnlyAccessAcrossApplicationAndDashboard(t *testing.T) {
 		{"regular account dashboard login", "POST", "/api/admin/login", `{"email":"user@example.invalid","password":"password123"}`, "", 403, "staff_required", false},
 		{"regular app login ignores user metadata", "POST", "/api/auth/login", `{"email":"user@example.invalid","password":"password123"}`, "", 200, "", true},
 		{"regular app session", "GET", "/api/auth/session", "", "user-token", 200, "", false},
+		{"pending password authenticates for recovery", "POST", "/api/auth/login", `{"email":"pending@example.invalid","password":"password123"}`, "", 200, "", true},
+		{"pending app session requests explicit restore", "GET", "/api/auth/session", "", "pending-token", 409, "account_deletion_pending", false},
+		{"pending account cannot use private API", "GET", "/api/user/profile", "", "pending-token", 409, "account_deletion_pending", false},
+		{"expired account cannot restore through session", "GET", "/api/auth/session", "", "expired-deletion-token", 410, "account_deletion_expired", false},
 		{"invalid session", "GET", "/api/auth/session", "", "invalid-token", 401, "", false},
 		{"missing session", "GET", "/api/auth/session", "", "", 401, "", false},
 	}
@@ -116,6 +129,13 @@ func TestDashboardOnlyAccessAcrossApplicationAndDashboard(t *testing.T) {
 			}
 			if tt.wantCode != "" && result["code"] != tt.wantCode {
 				t.Errorf("code = %v, want %q", result["code"], tt.wantCode)
+			}
+			if tt.wantCode == "account_deletion_pending" {
+				raw, _ := result["delete_after"].(string)
+				got, err := time.Parse(time.RFC3339Nano, raw)
+				if err != nil || !got.Equal(deleteAfter) {
+					t.Errorf("delete_after = %v, want %v", result["delete_after"], deleteAfter)
+				}
 			}
 			_, hasTokens := result["access_token"]
 			if hasTokens != tt.wantTokens {

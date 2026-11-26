@@ -15,9 +15,17 @@ class NotificationPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-    create: (_) =>
-        NotificationCubit(service ?? AppNotificationService.instance)
-          ..refresh(),
+    create: (_) {
+      final injectedService = service;
+      if (injectedService != null) {
+        return NotificationCubit(injectedService)..refresh();
+      }
+      final session = AppNotificationService.instance;
+      return NotificationCubit(
+        AppNotificationService.history()..onOpen = session.onOpen,
+        sessionSource: session,
+      );
+    },
     child: const _NotificationView(),
   );
 }

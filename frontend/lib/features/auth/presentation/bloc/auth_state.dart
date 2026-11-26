@@ -42,6 +42,32 @@ class LoginFailure extends AuthState {
   List<Object?> get props => [message];
 }
 
+class LoginNeedsAccountRestore extends AuthState {
+  const LoginNeedsAccountRestore({required this.deleteAfter});
+
+  final DateTime deleteAfter;
+
+  @override
+  List<Object?> get props => [deleteAfter];
+}
+
+class AccountDeletionLoading extends AuthState {
+  const AccountDeletionLoading();
+}
+
+class AccountDeletionFailure extends AuthState {
+  const AccountDeletionFailure({required this.message});
+
+  final String message;
+
+  @override
+  List<Object?> get props => [message];
+}
+
+class AccountDeletionScheduled extends AuthState {
+  const AccountDeletionScheduled();
+}
+
 // --- Google Login States ---
 
 /// กำลังดำเนินการเข้าสู่ระบบด้วย Google

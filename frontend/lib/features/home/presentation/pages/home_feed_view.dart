@@ -15,6 +15,7 @@ import '../bloc/home_state.dart';
 import '../widgets/category_filter_chips.dart';
 import '../widgets/home_empty_state.dart';
 import '../widgets/home_search_bar.dart';
+import '../widgets/product_card_grid.dart';
 import '../widgets/shopee_product_card.dart';
 
 /// หน้า Home Feed หลักของแอป Yuemnoi (Shopee 2-Column Grid)
@@ -395,17 +396,12 @@ class _HomeFeedViewState extends State<HomeFeedView> {
 
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 0.61,
-        ),
-        delegate: SliverChildBuilderDelegate((context, index) {
+      sliver: ProductCardGrid(
+        itemCount: items.length,
+        itemBuilder: (context, index) {
           final item = items[index];
           return ShopeeProductCard(item: item, onTap: () => _onItemTap(item));
-        }, childCount: items.length),
+        },
       ),
     );
   }
@@ -421,17 +417,14 @@ class _HomeLoadingView extends StatelessWidget {
         key: const ValueKey('home-feed-skeleton'),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          child: GridView.builder(
-            padding: EdgeInsets.zero,
+          child: CustomScrollView(
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 0.61,
-            ),
-            itemCount: 6,
-            itemBuilder: (context, index) => const _ProductCardSkeleton(),
+            slivers: [
+              ProductCardGrid(
+                itemCount: 6,
+                itemBuilder: (context, index) => const _ProductCardSkeleton(),
+              ),
+            ],
           ),
         ),
       ),
@@ -461,35 +454,17 @@ class _ProductCardSkeleton extends StatelessWidget {
               borderRadius: 0,
             ),
           ),
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(10, 8, 10, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SkeletonBox(
-                        width: double.infinity,
-                        height: 16,
-                        borderRadius: 4,
-                      ),
-                      SizedBox(height: 4),
-                      SkeletonBox(width: 116, height: 13, borderRadius: 4),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SkeletonBox(width: 76, height: 20, borderRadius: 4),
-                      SizedBox(height: 4),
-                      SkeletonBox(width: 96, height: 14, borderRadius: 4),
-                    ],
-                  ),
-                ],
-              ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(10, 8, 10, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SkeletonBox(width: 116, height: 16, borderRadius: 4),
+                SizedBox(height: 6),
+                SkeletonBox(width: 76, height: 20, borderRadius: 4),
+                SizedBox(height: 4),
+                SkeletonBox(width: 96, height: 14, borderRadius: 4),
+              ],
             ),
           ),
         ],

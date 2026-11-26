@@ -240,6 +240,30 @@ class AuthRemoteDataSource {
     }
   }
 
+  Future<void> scheduleAccountDeletion({required String accessToken}) async {
+    try {
+      final response = await _client.post(
+        '/api/user/account/deletion',
+        headers: {'Authorization': 'Bearer $accessToken'},
+      );
+      if (response.statusCode == 200) return;
+
+      final body = _map(response.data);
+      if (response.statusCode == 409 && body['code'] == 'active_rentals') {
+        throw AuthApiException(
+          _errorMessage(body) ??
+              'กรุณาดำเนินรายการเช่าที่ค้างอยู่ให้เสร็จก่อนลบบัญชี',
+        );
+      }
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        throw const AuthApiException('กรุณาเข้าสู่ระบบใหม่');
+      }
+      throw const AuthApiException('ลบบัญชีไม่สำเร็จ กรุณาลองใหม่');
+    } on ApiClientException catch (error) {
+      throw _requestException(error);
+    }
+  }
+
   AuthApiException _requestException(
     ApiClientException error, {
     String timeoutMessage = 'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง',
