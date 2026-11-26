@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -13,13 +11,11 @@ import 'core/navigation/app_routes.dart';
 import 'core/network/auth_session.dart';
 import 'core/network/supabase_client.dart';
 import 'core/services/app_orientation_service.dart';
-
 import 'core/services/chat_notification_service.dart';
+
 import 'core/services/rental_notification_service.dart';
 import 'core/services/chat_pin_service.dart';
 import 'core/services/favorite_service.dart';
-import 'core/services/fcm_service.dart';
-import 'core/services/app_notification_service.dart';
 import 'core/services/user_presence_service.dart';
 
 Future<void> main() async {
@@ -48,28 +44,14 @@ Future<void> main() async {
   await SupabaseConfig.initialize();
   unawaited(ChatPinService.instance.init());
 
-  if (!kIsWeb) {
-    try {
-      await Firebase.initializeApp();
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-      await FcmService.instance.initialize();
-    } catch (e) {
-      debugPrint('Firebase init warning: $e');
-    }
-  }
-
   final startupAuth = await AuthSession.restore();
   unawaited(FavoriteService.instance.init(forceRefresh: true));
   if (startupAuth.state == AuthStartupState.authenticated) {
     UserPresenceService.instance.initialize();
-    unawaited(ChatNotificationService.instance.initialize());
     unawaited(RentalNotificationService.instance.initialize());
-    final userId = SupabaseConfig.client.auth.currentUser?.id;
-    AppNotificationService.instance.setSession(userId);
-    if (userId != null && userId.isNotEmpty && !kIsWeb) {
-      unawaited(FcmService.instance.syncUserToken(userId));
-    }
   }
+
+  await ChatNotificationService.instance.initialize();
 
   runApp(
     YuemnoiApp(

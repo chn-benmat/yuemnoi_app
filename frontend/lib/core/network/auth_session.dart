@@ -38,6 +38,7 @@ class AuthSession {
   }
 
   static bool get isAuthenticated => accessToken != null;
+  static String? get userId => isAuthenticated ? _authorizedUserId : null;
 
   static Future<AuthStartupResult> restore({
     GoTrueClient? auth,

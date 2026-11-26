@@ -7,9 +7,7 @@ import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/app_session_validator.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/chat_notification_service.dart';
-import '../../../../core/services/fcm_service.dart';
 import '../../../../core/services/favorite_service.dart';
-import '../../../../core/services/app_notification_service.dart';
 import '../../../../core/services/user_presence_service.dart';
 import '../../data/datasources/auth_remote_data_source.dart'; // สำหรับ AuthApiException
 import '../../domain/repositories/auth_repository.dart';
@@ -57,8 +55,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 _handledAccessToken = null;
                 AuthSession.clear(purgeCache: true);
                 UserPresenceService.instance.dispose();
-                AppNotificationService.instance.setSession(null);
-                unawaited(FcmService.instance.unregisterCurrentDevice());
+                unawaited(
+                  ChatNotificationService.instance.cancelAllNotifications(),
+                );
               }
               if ((authState.event == AuthChangeEvent.signedIn ||
                       authState.event == AuthChangeEvent.tokenRefreshed) &&
@@ -346,8 +345,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     _accountRestoreSession = null;
     _handledAccessToken = null;
     UserPresenceService.instance.dispose();
-    AppNotificationService.instance.setSession(null);
-    unawaited(FcmService.instance.unregisterCurrentDevice());
+    unawaited(ChatNotificationService.instance.cancelAllNotifications());
     unawaited(FavoriteService.instance.init(forceRefresh: true));
   }
 
@@ -356,12 +354,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (SupabaseConfig.isInitialized) {
       unawaited(FavoriteService.instance.init(forceRefresh: true));
       UserPresenceService.instance.initialize();
-      unawaited(ChatNotificationService.instance.initialize());
-      final userId = session.user.id;
-      AppNotificationService.instance.setSession(userId);
-      if (userId.isNotEmpty) {
-        unawaited(FcmService.instance.syncUserToken(userId));
-      }
     }
 
     if (isGoogle) {

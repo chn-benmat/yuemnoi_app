@@ -26,7 +26,6 @@ func SetupRouterWithOperations(
 	authGateway domain.AuthGateway,
 	contactRepository domain.ConversationContactRepository,
 	rentalRepository domain.RentalRepository,
-	pushSender domain.PushNotificationSender,
 	aiGateway domain.AIChatbotGateway,
 	appSecretKey string,
 	options ...fiber.Config,
@@ -42,12 +41,6 @@ func SetupRouterWithOperations(
 	router.Use(corsMiddleware())
 	router.Use(verifyAppSecret(appSecretKey))
 	appGateway := appTokenVerifier{authGateway}
-	var notificationRepository domain.NotificationRepository
-	if provider, ok := authGateway.(interface {
-		NotificationRepository() domain.NotificationRepository
-	}); ok {
-		notificationRepository = provider.NotificationRepository()
-	}
 	router.Use(operationsBusinessGuard(operations, appGateway))
 
 	// Health check สำหรับ Docker และระบบเฝ้าระวัง โดยไม่เปิดเผยข้อมูลภายใน
@@ -64,24 +57,12 @@ func SetupRouterWithOperations(
 	rentalController := NewRentalHandler(rentalRepository, appGateway)
 	userController := NewUserHandler(appGateway)
 	accountDeletion := accountDeletionHandler{repository: operations.AccountDeletion, verifier: appGateway}
-	pushController := NewPushHandler(pushSender, appGateway)
-	if validator, ok := authGateway.(domain.ChatPushValidator); ok {
-		pushController.validator = validator
-	}
-	notificationController := NewNotificationHandler(notificationRepository, appGateway)
 	chatContactController := NewChatContactHandler(contactRepository, appGateway)
 	chatbotController := NewChatbotHandler(aiGateway, appGateway)
 
 	// จัดการกลุ่มเส้นทาง API
 	api := router.Group("/api")
 	{
-		notifications := api.Group("/notifications")
-		notifications.Get("", notificationController.ListNotifications)
-		notifications.Post("/read-all", notificationController.MarkAllNotificationsRead)
-		notifications.Post("/read-conversation", notificationController.MarkConversationRead)
-		notifications.Post("/:id/read", notificationController.MarkNotificationRead)
-		notifications.Put("/devices", notificationController.RegisterDevice)
-		notifications.Delete("/devices/:installation_id", notificationController.UnregisterDevice)
 		// ทุกอย่างเกี่ยวกับการยืนยันตัวตน (Authentication) - มี Rate Limit ป้องกัน Brute-force
 		user := api.Group("/auth")
 		authRateLimit := RateLimitMiddleware(authRateLimiter, "คุณส่งคำขอยืนยันตัวตนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่")
@@ -114,8 +95,6 @@ func SetupRouterWithOperations(
 			profile.Put("/contact", userController.UpdateContact)
 			profile.Get("/promptpay", rentalController.PromptPaySettings)
 			profile.Put("/promptpay", rentalController.PromptPaySettings)
-			// POST /api/user/fcm-token
-			profile.Post("/fcm-token", userController.UpdateFCMToken)
 		}
 		// ทุกอย่างเกี่ยวกับ Items ปล่อยเช่า
 		items := api.Group("/items")
@@ -150,12 +129,6 @@ func SetupRouterWithOperations(
 			rentals.Post("/:id/return-inspection", rentalController.InspectRentalReturn)
 			rentals.Post("/:id/return-confirmation", rentalController.ConfirmRentalReceipt)
 			rentals.Post("/:id/cancel", rentalController.CancelRental)
-		}
-
-		// Push Notification - ป้องกันด้วย Authentication ภายใน Handler
-		push := api.Group("/push")
-		{
-			push.Post("/chat", pushController.SendChatPush)
 		}
 
 		chat := api.Group("/chat")
@@ -295,6 +268,6 @@ func verifyAppSecret(expectedSecret string) fiber.Handler {
 }
 
 // SetupRouter คง constructor เดิมสำหรับบริการที่ยังไม่เปิดใช้งานระบบเจ้าหน้าที่
-func SetupRouter(itemRepo domain.ItemRepository, authGateway domain.AuthGateway, contactRepository domain.ConversationContactRepository, rentalRepository domain.RentalRepository, pushSender domain.PushNotificationSender, aiGateway domain.AIChatbotGateway, appSecretKey string, options ...fiber.Config) *fiber.App {
-	return SetupRouterWithOperations(domain.OperationsOptions{}, itemRepo, authGateway, contactRepository, rentalRepository, pushSender, aiGateway, appSecretKey, options...)
+func SetupRouter(itemRepo domain.ItemRepository, authGateway domain.AuthGateway, contactRepository domain.ConversationContactRepository, rentalRepository domain.RentalRepository, aiGateway domain.AIChatbotGateway, appSecretKey string, options ...fiber.Config) *fiber.App {
+	return SetupRouterWithOperations(domain.OperationsOptions{}, itemRepo, authGateway, contactRepository, rentalRepository, aiGateway, appSecretKey, options...)
 }

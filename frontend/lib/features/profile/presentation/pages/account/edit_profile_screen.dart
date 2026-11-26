@@ -183,11 +183,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const AccountPageIntro(
-                      title: 'ให้คนอื่นรู้จักคุณ',
-                      description:
-                          'เพิ่มรูปและแนะนำตัว เพื่อให้คุยเรื่องเช่าได้เป็นกันเองขึ้น',
-                    ),
                     // ── Avatar ─────────────────────────────────────────
                     Center(
                       child: Semantics(

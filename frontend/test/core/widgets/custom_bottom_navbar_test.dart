@@ -36,22 +36,23 @@ void main() {
     expect(selected, 3);
   });
 
-  testWidgets('the home tab opens notification history on demand', (
-    tester,
-  ) async {
-    dotenv.loadFromString(envString: 'API_URL=https://api.example.com');
-    await tester.pumpWidget(const YuemnoiApp(initialRoute: AppRoutes.home));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.byType(NotificationPage), findsNothing);
+  testWidgets(
+    'the home tab opens the notification maintenance screen on demand',
+    (tester) async {
+      dotenv.loadFromString(envString: 'API_URL=https://api.example.com');
+      await tester.pumpWidget(const YuemnoiApp(initialRoute: AppRoutes.home));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(NotificationPage), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('nav-notification')));
-    await tester.pump();
-    expect(find.byType(NotificationPage), findsOneWidget);
-    expect(find.text('เข้าสู่ระบบเพื่อดูการแจ้งเตือน'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('nav-notification')));
+      await tester.pump();
+      expect(find.byType(NotificationPage), findsOneWidget);
+      expect(find.text('ระบบแจ้งเตือนกำลังปรับปรุง'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('nav-home')));
-    await tester.pump();
-    expect(find.byType(NotificationPage, skipOffstage: false), findsNothing);
-  });
+      await tester.tap(find.byKey(const ValueKey('nav-home')));
+      await tester.pump();
+      expect(find.byType(NotificationPage, skipOffstage: false), findsNothing);
+    },
+  );
 }

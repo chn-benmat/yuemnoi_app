@@ -78,7 +78,7 @@ func TestPromptPaySettingsSharesHandoverAccount(t *testing.T) {
 	client := sbclient.CreateClient(server.URL, "test-key")
 	auth := sbadapter.NewSupabaseUserRepository(client, "test-key")
 	rentals := sbadapter.NewSupabaseRentalRepository(client, sbadapter.RentalRepositoryKeys{PromptPayEncryption: []byte(strings.Repeat("x", 32))})
-	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, auth, nil, rentals, nil, nil, "test-secret")
+	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, auth, nil, rentals, nil, "test-secret")
 	defer app.Shutdown()
 	const settings = "/api/user/promptpay"
 	const handover = "/api/rentals/25/handover-payment"

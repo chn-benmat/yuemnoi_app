@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/aiservice"
-	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/fcm"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/geocoding"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/logging"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
@@ -56,18 +55,6 @@ func main() {
 	rentalRepository := supabase.NewSupabaseRentalRepository(supabaseClient, supabase.RentalRepositoryKeys{
 		ServiceRole: cfg.SupabaseServiceRoleKey, PromptPayEncryption: identityEncryption,
 	})
-	notificationRepository := supabase.NewSupabaseNotificationRepository(supabaseClient)
-
-	// สร้าง FCM Notification Adapter
-	fcmSender, err := fcm.NewFCMSender(authGateway, cfg.FirebaseSAPath, cfg.FirebaseSAJSON, nil)
-	if err != nil {
-		slog.Warn("Failed to initialize FCM sender", slog.Any("error", err))
-	}
-	var deviceSender domain.DevicePushSender
-	if err == nil {
-		deviceSender = fcmSender
-	}
-
 	// สร้าง AI Chatbot Gateway Adapter พร้อม Primary Internal Service Secret Key
 	aiGateway := aiservice.NewClient(cfg.AIServiceURL, cfg.GetPrimaryInternalServiceKey(), cfg.AIServiceTimeout)
 
@@ -86,7 +73,6 @@ func main() {
 	ops.AccountDeletion = supabase.NewAccountDeletionRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
 	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
 	defer stopCleanup()
-	go domain.NewNotificationWorker(notificationRepository, deviceSender).Run(cleanupCtx)
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -128,7 +114,6 @@ func main() {
 		authGateway,
 		contactRepository,
 		rentalRepository,
-		fcmSender,
 		aiGateway,
 		allAppSecretKeys,
 		fiber.Config{ReadTimeout: cfg.ReadTimeout, WriteTimeout: cfg.WriteTimeout},

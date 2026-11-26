@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -23,22 +22,17 @@ class ChatNotificationService {
   bool _isInitialized = false;
   Future<void>? _initializing;
 
-  static const _rentalUpdates = AndroidNotificationChannel(
-    'yuemnoi_rental_updates_v1',
-    'สถานะการเช่า Yuemnoi',
-    description: 'คำขอและกำหนดคืนสินค้า',
-    importance: Importance.high,
-  );
-  static const _appUpdates = AndroidNotificationChannel(
-    'yuemnoi_app_updates_v1',
-    'แจ้งเตือนระบบ Yuemnoi',
-    description: 'สถานะบัญชีและการอัปเดตจากระบบ',
-    importance: Importance.high,
-  );
-  static const _pushPayloadPrefix = 'push:';
+  String? _pendingTap;
+  void Function(String conversationId)? _onNotificationTapped;
 
-  void Function(String conversationId)? onNotificationTapped;
-  void Function(Map<String, dynamic>)? onPushNotificationTapped;
+  set onNotificationTapped(void Function(String conversationId)? callback) {
+    _onNotificationTapped = callback;
+    final pendingTap = _pendingTap;
+    if (callback != null && pendingTap != null) {
+      _pendingTap = null;
+      callback(pendingTap);
+    }
+  }
 
   FlutterLocalNotificationsPlugin get _notificationsPlugin =>
       _injectedPlugin ?? (_lazyPlugin ??= FlutterLocalNotificationsPlugin());
@@ -92,9 +86,6 @@ class ChatNotificationService {
           sound: const RawResourceAndroidNotificationSound('message_tone'),
         );
         await androidPlatform.createNotificationChannel(chatChannel);
-        for (final channel in const [_rentalUpdates, _appUpdates]) {
-          await androidPlatform.createNotificationChannel(channel);
-        }
       }
 
       final launchDetails = await _notificationsPlugin
@@ -112,53 +103,15 @@ class ChatNotificationService {
 
   void _handleNotificationTap(NotificationResponse response) {
     final payload = response.payload;
-    if (payload == null || payload.isEmpty) return;
-    if (payload.startsWith(_pushPayloadPrefix)) {
-      try {
-        final data = jsonDecode(payload.substring(_pushPayloadPrefix.length));
-        if (data is Map<String, dynamic>) onPushNotificationTapped?.call(data);
-      } on FormatException {
-        return;
-      }
+    if (payload == null || payload.isEmpty || payload.startsWith('push:')) {
       return;
     }
-    onNotificationTapped?.call(payload);
-  }
-
-  Future<void> showForegroundUpdate({
-    required String title,
-    required String body,
-    required Map<String, dynamic> data,
-  }) async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-    final category = data['category'];
-    if (category != 'rental' && category != 'app') return;
-    final notificationId = data['notification_id']?.toString();
-    if (notificationId == null || notificationId.isEmpty) return;
-    final expiry = DateTime.tryParse('${data['expires_at']}');
-    if (expiry != null && !expiry.isAfter(DateTime.now())) return;
-    final channel = category == 'rental' ? _rentalUpdates : _appUpdates;
-    if (!_isInitialized) await initialize();
-    try {
-      await _notificationsPlugin.show(
-        id: notificationId.hashCode,
-        title: title,
-        body: body,
-        notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            channel.id,
-            channel.name,
-            channelDescription: channel.description,
-            importance: channel.importance,
-            priority: Priority.high,
-            tag: notificationId,
-          ),
-        ),
-        payload: '$_pushPayloadPrefix${jsonEncode(data)}',
-      );
-    } catch (_) {
-      debugPrint('แสดงแจ้งเตือนผ่านระบบไม่สำเร็จ');
+    final callback = _onNotificationTapped;
+    if (callback == null) {
+      _pendingTap = payload;
+      return;
     }
+    callback(payload);
   }
 
   /// เล่นเสียงแจ้งเตือนข้อความใหม่พร้อมสั่น

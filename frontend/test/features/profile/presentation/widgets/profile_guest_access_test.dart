@@ -119,6 +119,22 @@ void main() {
     },
   );
 
+  testWidgets(
+    'privacy section only displays the privacy center on mobile',
+    (tester) async {
+      await openProfile(tester);
+      await tester.tap(find.byTooltip('ปิด'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ศูนย์ความเป็นส่วนตัว'), findsOneWidget);
+      expect(find.text('การตั้งค่าแจ้งเตือนของเครื่อง'), findsNothing);
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    }),
+  );
+
   testWidgets('guest prompt appears only when the profile tab becomes active', (
     tester,
   ) async {

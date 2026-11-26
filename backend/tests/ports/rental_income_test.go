@@ -59,7 +59,7 @@ func TestRentalIncomeReadsOnlyReceiptsForAuthenticatedAccount(t *testing.T) {
 	defer database.Close()
 
 	repo := supabase.NewSupabaseRentalRepository(sb.CreateClient(database.URL, "test-service-role-key"))
-	app := ports.SetupRouter(nil, incomeAuthGateway{}, nil, repo, nil, nil, "test-app-secret")
+	app := ports.SetupRouter(nil, incomeAuthGateway{}, nil, repo, nil, "test-app-secret")
 	defer app.Shutdown()
 
 	for _, tc := range []struct {

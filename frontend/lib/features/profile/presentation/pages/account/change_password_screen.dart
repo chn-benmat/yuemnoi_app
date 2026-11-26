@@ -110,11 +110,6 @@ class _ProfileChangePasswordScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const AccountPageIntro(
-                      title: 'ตั้งรหัสผ่านใหม่',
-                      description:
-                          'ใช้ตัวอักษรอย่างน้อย 6 ตัว และหลีกเลี่ยงรหัสผ่านที่ใช้กับบัญชีอื่น',
-                    ),
                     // ── New password ──────────────────────────────
                     ChangePasswordField(
                       controller: _newPwCtrl,

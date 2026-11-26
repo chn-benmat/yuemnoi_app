@@ -71,10 +71,6 @@ type updateContactRequest struct {
 	Phone string `json:"phone" validate:"required"`
 }
 
-type updateFCMTokenRequest struct {
-	FCMToken string `json:"fcm_token" validate:"required"`
-}
-
 // [POST] /api/auth/login - เข้าสู่ระบบและรับ Access Token
 func (h *UserHandler) Login(c fiber.Ctx) error {
 	var req userLoginRequest
@@ -430,30 +426,5 @@ func (h *UserHandler) UpdateContact(c fiber.Ctx) error {
 		"status":  http.StatusOK,
 		"message": "บันทึกข้อมูลติดต่อเรียบร้อย",
 		"phone":   phone,
-	})
-}
-
-// [POST] /api/user/fcm-token - อัปเดต FCM Push Token
-func (h *UserHandler) UpdateFCMToken(c fiber.Ctx) error {
-	userID, ok := authenticatedUserID(c, h.verifier)
-	if !ok {
-		return nil
-	}
-
-	var req updateFCMTokenRequest
-	if err := c.Bind().JSON(&req); err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุ fcm_token"})
-	}
-	if strings.TrimSpace(req.FCMToken) == "" {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุ fcm_token"})
-	}
-
-	if err := h.repo.UpdateFCMToken(c.Context(), userID, req.FCMToken); err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถบันทึก FCM Token ได้"})
-	}
-
-	return c.Status(http.StatusOK).JSON(fiber.Map{
-		"status":  http.StatusOK,
-		"message": "บันทึก FCM Token เรียบร้อย",
 	})
 }

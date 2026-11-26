@@ -103,7 +103,7 @@ func TestDashboardOnlyAccessAcrossApplicationAndDashboard(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gateway := sbadapter.NewSupabaseUserRepository(sbclient.CreateClient(authServer.URL, "test-key"), "test-key")
-			app := ports.SetupRouterWithOperations(domain.OperationsOptions{Store: accessTestStore{}}, nil, gateway, nil, nil, nil, nil, "test-secret")
+			app := ports.SetupRouterWithOperations(domain.OperationsOptions{Store: accessTestStore{}}, nil, gateway, nil, nil, nil, "test-secret")
 			defer app.Shutdown()
 			request := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
 			request.Header.Set("Content-Type", "application/json")
