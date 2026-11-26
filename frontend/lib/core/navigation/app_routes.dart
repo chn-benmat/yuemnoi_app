@@ -584,6 +584,8 @@ abstract final class AppRoutes {
                   initialData: map['initialData'] as BookingRequestData?,
                   itemId: map['itemId'] as int?,
                   isEditMode: map['isEditMode'] as bool? ?? false,
+                  originalQueueOfferMessage:
+                      map['originalQueueOfferMessage'] as String?,
                   onSendRequest:
                       map['onSendRequest'] as ValueChanged<BookingRequestData>?,
                 ),
@@ -812,6 +814,7 @@ abstract final class AppRoutes {
     int? itemId,
     bool isEditMode = false,
     ValueChanged<BookingRequestData>? onSendRequest,
+    String? originalQueueOfferMessage,
   }) {
     if (isEditMode || itemId != null || onSendRequest != null) {
       return context.push<void>(
@@ -821,6 +824,7 @@ abstract final class AppRoutes {
           'itemId': itemId,
           'isEditMode': isEditMode,
           'onSendRequest': onSendRequest,
+          'originalQueueOfferMessage': originalQueueOfferMessage,
         },
       );
     }

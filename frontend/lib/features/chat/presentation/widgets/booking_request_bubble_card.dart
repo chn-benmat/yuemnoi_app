@@ -9,6 +9,7 @@ import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_popup.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../domain/entities/chat_message.dart';
 
@@ -414,10 +415,21 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
 
     if (isEditMode) {
       if (!isOwner) return;
+      final isQueueOffer = attachedData.rentalQueueMessageId != null;
+      if (isQueueOffer && attachedData.bookingId != null) {
+        showAppPopup(
+          context,
+          content: const Text(
+            'ข้อเสนอนี้ผูกกับรายการเช่าแล้ว จึงแก้ไขเวลานัดรับไม่ได้',
+          ),
+        );
+        return;
+      }
       AppRoutes.openBooking(
         context,
         initialData: attachedData,
         isEditMode: true,
+        originalQueueOfferMessage: isQueueOffer ? widget.message.message : null,
       );
       return;
     }

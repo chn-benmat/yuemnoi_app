@@ -20,12 +20,14 @@ class BookingRequestPage extends StatefulWidget {
     this.itemId,
     this.isEditMode = false,
     this.onSendRequest,
+    this.originalQueueOfferMessage,
   });
 
   final BookingRequestData? initialData;
   final int? itemId;
   final bool isEditMode;
   final ValueChanged<BookingRequestData>? onSendRequest;
+  final String? originalQueueOfferMessage;
 
   @override
   State<BookingRequestPage> createState() => _BookingRequestPageState();
@@ -126,13 +128,25 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     });
   }
 
+  bool _checkQueueOfferStart() {
+    if (!_bookingData.hasQueueOfferStartPassed) return true;
+    showAppPopup(
+      context,
+      content: const Text(
+        'เวลาเริ่มเช่าผ่านไปแล้ว กรุณาเลือกวันและเวลาเริ่มเช่าใหม่',
+      ),
+    );
+    return false;
+  }
+
   Future<void> _submitBookingRequestToChat(BuildContext sheetContext) async {
     if (_isSubmitting) return;
-    setState(() => _isSubmitting = true);
 
     if (Navigator.canPop(sheetContext)) {
       Navigator.pop(sheetContext);
     }
+    if (!_checkQueueOfferStart()) return;
+    setState(() => _isSubmitting = true);
 
     try {
       if (!widget.isEditMode && widget.onSendRequest != null) {
@@ -143,9 +157,11 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
       final payload = _bookingData.toChatMessagePayload();
       final chatDataSource = ChatRemoteDataSource();
 
+      final isQueueOfferEdit =
+          widget.isEditMode && _bookingData.rentalQueueMessageId != null;
       String? convId = _bookingData.conversationId;
 
-      if (convId == null || convId.isEmpty) {
+      if (!isQueueOfferEdit && (convId == null || convId.isEmpty)) {
         if (_bookingData.ownerId != null && _bookingData.ownerId!.isNotEmpty) {
           try {
             final conversation = await chatDataSource.getOrCreateConversation(
@@ -160,26 +176,26 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
       if (convId == null || convId.isEmpty) {
         throw const ChatRemoteException('ไม่พบห้องแชตสำหรับส่งคำขอ');
       }
-      if (convId.isNotEmpty) {
-        final oldMsgId = _bookingData.originalMessageId;
-        if (widget.isEditMode && oldMsgId != null && oldMsgId.isNotEmpty) {
-          // อัปเดตข้อมูลบนการ์ดคำขอเช่าเดิมในแชททันทีโดยไม่ต้องส่งการ์ดใหม่
-          try {
-            await chatDataSource.editMessage(
-              messageId: oldMsgId,
-              newMessage: payload,
-              conversationId: convId,
-            );
-          } catch (_) {
-            await chatDataSource.sendMessage(
-              conversationId: convId,
-              message: payload,
-              imageUrl: _bookingData.item.imageUrl.isNotEmpty
-                  ? _bookingData.item.imageUrl
-                  : null,
-            );
-          }
-        } else {
+      final oldMsgId = _bookingData.originalMessageId;
+      if (isQueueOfferEdit) {
+        final originalMessage = widget.originalQueueOfferMessage;
+        if (oldMsgId == null || originalMessage == null) {
+          throw const ChatRemoteException('กรุณาเปิดแก้ไขจากการ์ดข้อเสนอในแชท');
+        }
+        await chatDataSource.editRentalQueueOffer(
+          messageId: oldMsgId,
+          conversationId: convId,
+          originalMessage: originalMessage,
+          newMessage: payload,
+        );
+      } else if (widget.isEditMode && oldMsgId != null && oldMsgId.isNotEmpty) {
+        try {
+          await chatDataSource.editMessage(
+            messageId: oldMsgId,
+            newMessage: payload,
+            conversationId: convId,
+          );
+        } catch (_) {
           await chatDataSource.sendMessage(
             conversationId: convId,
             message: payload,
@@ -188,6 +204,14 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                 : null,
           );
         }
+      } else {
+        await chatDataSource.sendMessage(
+          conversationId: convId,
+          message: payload,
+          imageUrl: _bookingData.item.imageUrl.isNotEmpty
+              ? _bookingData.item.imageUrl
+              : null,
+        );
       }
 
       if (mounted) {
@@ -208,6 +232,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
   }
 
   void _handleSendBookingRequest() {
+    if (!_checkQueueOfferStart()) return;
     final hasValidationError =
         _selectedRentalType == null ||
         !_isRentalPeriodValid ||

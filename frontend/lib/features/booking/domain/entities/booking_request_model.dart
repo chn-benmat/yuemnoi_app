@@ -322,6 +322,9 @@ $metaStartTag$jsonString$metaEndTag''';
     startTime.minute,
   );
 
+  bool get hasQueueOfferStartPassed =>
+      rentalQueueMessageId != null && !startDateTime.isAfter(DateTime.now());
+
   DateTime get endDateTime {
     final date = _rentalEndDate;
     final time = rentalType == BookingRentalType.hourly ? endTime : startTime;
