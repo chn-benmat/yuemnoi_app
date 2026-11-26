@@ -1144,6 +1144,38 @@ class ChatRemoteDataSource {
     }
   }
 
+  Future<void> editRentalQueueOffer({
+    required String messageId,
+    required String conversationId,
+    required String originalMessage,
+    required String newMessage,
+  }) async {
+    final id = int.tryParse(messageId);
+    if (id == null || id <= 0) {
+      throw const ChatRemoteException('ไม่พบการ์ดข้อเสนอที่ต้องการแก้ไข');
+    }
+
+    final List<Map<String, dynamic>> updated;
+    try {
+      updated = await _supabaseClient
+          .schema('messaging')
+          .from('chat_message_tb')
+          .update({'message': newMessage})
+          .eq('id', id)
+          .eq('conversation_id', conversationId)
+          .eq('message', originalMessage)
+          .select('id');
+    } on PostgrestException {
+      throw const ChatRemoteException('แก้ไขข้อเสนอไม่สำเร็จ กรุณาลองใหม่');
+    }
+    // ถ้าข้อเสนอเปลี่ยนไปแล้ว ให้กลับไปเปิดการ์ดล่าสุดก่อนแก้ไขอีกครั้ง
+    if (updated.isEmpty) {
+      throw const ChatRemoteException(
+        'บันทึกการแก้ไขไม่ได้ กรุณากลับไปเปิดการ์ดข้อเสนออีกครั้ง',
+      );
+    }
+  }
+
   Future<void> editMessage({
     required String messageId,
     required String newMessage,

@@ -5,10 +5,65 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/booking/presentation/pages/booking_request_page.dart';
 import 'package:frontend/features/booking/presentation/widgets/booking_location_card.dart';
+import 'package:frontend/features/booking/presentation/widgets/booking_time_range_picker.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 void main() {
   setUpAll(() => initializeDateFormatting('th'));
+
+  testWidgets('owner can correct a past queue offer before saving', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(600, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final now = DateTime.now();
+    final yesterday = DateTime(now.year, now.month, now.day - 1);
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    final data = BookingRequestData(
+      item: BookingItemInfo.defaultMockItem.copyWith(imageUrl: ''),
+      rentalType: BookingRentalType.hourly,
+      startDate: yesterday,
+      endDate: yesterday,
+      startTime: const TimeOfDay(hour: 9, minute: 0),
+      endTime: const TimeOfDay(hour: 17, minute: 0),
+      location: 'สถานที่เดิม',
+      rentalQueueMessageId: 660,
+      originalMessageId: '663',
+      conversationId: 'room',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BookingRequestPage(initialData: data, isEditMode: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final submit = find.byKey(const ValueKey('submit-booking-request-button'));
+    final confirm = find.byKey(
+      const ValueKey('confirm-send-booking-request-button'),
+    );
+    await tester.tap(submit);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(confirm, findsNothing);
+    expect(
+      find.text('เวลาเริ่มเช่าผ่านไปแล้ว กรุณาเลือกวันและเวลาเริ่มเช่าใหม่'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('ยืนยัน'));
+    await tester.pumpAndSettle();
+
+    final periodPicker = tester.widget<BookingTimeRangePicker>(
+      find.byType(BookingTimeRangePicker),
+    );
+    periodPicker.onDatesChanged!(tomorrow, tomorrow);
+    await tester.pumpAndSettle();
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    expect(confirm, findsOneWidget);
+    expect(find.textContaining('09:00 น. - 17:00 น., 8 ชม.'), findsOneWidget);
+  });
 
   testWidgets(
     'editing keeps the existing location without requiring coordinates',
@@ -16,7 +71,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(600, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final data = BookingRequestData(
-        item: BookingItemInfo.defaultMockItem,
+        item: BookingItemInfo.defaultMockItem.copyWith(imageUrl: ''),
         startDate: DateTime(2026, 11, 19),
         endDate: DateTime(2026, 11, 20),
         startTime: const TimeOfDay(hour: 9, minute: 0),

@@ -178,6 +178,73 @@ void main() {
   );
 
   testWidgets(
+    'renter can submit the same queue offer after the owner updates its start',
+    (tester) async {
+      final repository = FakeRentalRequestRepository()
+        ..result = const RentalRequestResult(id: 21, status: 'pending');
+      final cubit = buildCubit(repository);
+      addTearDown(cubit.close);
+      final start = DateTime.now().subtract(const Duration(days: 2));
+      final offer = BookingRequestData(
+        item: const BookingItemInfo(
+          id: 7,
+          title: 'อุปกรณ์ทดสอบ',
+          imageUrl: '',
+          rating: 0,
+          reviewCount: 0,
+          hourlyRate: 100,
+          dailyRate: 500,
+          defaultLocation: 'บางแค',
+        ),
+        startDate: start,
+        endDate: start.add(const Duration(days: 1)),
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 17, minute: 0),
+        location: 'บางแค',
+        originalMessageId: '663',
+        rentalQueueMessageId: 660,
+      );
+      Future<void> openOffer(BookingRequestData data) => tester.pumpWidget(
+        MaterialApp(
+          home: BlocProvider.value(
+            value: cubit,
+            child: BookingConfirmationPage(
+              key: ValueKey(data.startDate),
+              bookingData: data,
+            ),
+          ),
+        ),
+      );
+      await openOffer(offer);
+      final submit = find.byKey(const ValueKey('submit-rental-request-button'));
+      await tester.tap(submit);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(repository.submitCalls, 0);
+      expect(
+        find.text(
+          'เวลาเริ่มเช่าผ่านไปแล้ว กรุณาให้เจ้าของแก้ไขรายละเอียดบนการ์ดข้อเสนอในแชท',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('ยืนยัน'));
+      await tester.pumpAndSettle();
+
+      final futureDate = DateTime.now().add(const Duration(days: 2));
+      final revisedOffer = offer.copyWith(
+        startDate: futureDate,
+        endDate: futureDate.add(const Duration(days: 1)),
+      );
+      await openOffer(revisedOffer);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(repository.submitCalls, 1);
+      expect(repository.lastDraft?.offerMessageId, '663');
+      expect(repository.lastDraft?.startAt, revisedOffer.startDateTime);
+    },
+  );
+
+  testWidgets(
     'confirmation submits the owner offer and preserves an existing booking',
     (tester) async {
       final repository = FakeRentalRequestRepository()

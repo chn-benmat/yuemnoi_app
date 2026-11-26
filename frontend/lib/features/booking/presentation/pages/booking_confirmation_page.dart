@@ -609,6 +609,16 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                                 : hasPendingRental
                                 ? () => _showConfirmation(state.rentalId)
                                 : () async {
+                                    if (_bookingData.hasQueueOfferStartPassed &&
+                                        _bookingData.bookingId == null) {
+                                      showAppPopup(
+                                        context,
+                                        content: const Text(
+                                          'เวลาเริ่มเช่าผ่านไปแล้ว กรุณาให้เจ้าของแก้ไขรายละเอียดบนการ์ดข้อเสนอในแชท',
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     context.read<RentalRequestCubit>().submit(
                                       _buildRentalDraft(),
                                     );
