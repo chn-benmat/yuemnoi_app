@@ -431,6 +431,7 @@ void main() {
 
         final invite = find.text('ชวนเข้าคิวเช่าต่อ');
         expect(invite, findsNothing);
+        expect(find.byIcon(Icons.playlist_add_rounded), findsNothing);
         streamController.add([
           ChatMessage(
             id: 'owned-inquiry',
@@ -455,7 +456,7 @@ void main() {
       sampleConversation2.copyWith(id: 'conv-1'),
       sampleConversation1,
     ]) {
-      testWidgets('hides the queue shortcut during an open rental '
+      testWidgets('limits the queue shortcut to owners without an open rental '
           '(${conversation.role.name})', (tester) async {
         final bloc = ChatDetailBloc(
           streamMessages: mockStreamMessages,
@@ -497,13 +498,15 @@ void main() {
         );
         await tester.pump();
 
-        final shortcut = conversation.role == ChatParticipantRole.renter
-            ? find.text('ชวนเข้าคิวเช่าต่อ')
-            : find.byTooltip('ส่งคำขอเช่าต่อ');
+        final shortcut = find.byIcon(Icons.playlist_add_rounded);
+        final availableWithoutOpenRental =
+            conversation.role == ChatParticipantRole.renter
+            ? findsOneWidget
+            : findsNothing;
         final incomingOffer = offer('active', isMine: false);
         streamController.add([incomingOffer, offer('pending')]);
         await tester.pumpAndSettle();
-        expect(shortcut.hitTestable(), findsOneWidget);
+        expect(shortcut, availableWithoutOpenRental);
 
         for (final status in [
           'confirmed',
@@ -523,7 +526,7 @@ void main() {
 
         streamController.add([incomingOffer, offer('completed')]);
         await tester.pumpAndSettle();
-        expect(shortcut.hitTestable(), findsOneWidget);
+        expect(shortcut, availableWithoutOpenRental);
         await tester.pumpWidget(const SizedBox.shrink());
       });
     }
