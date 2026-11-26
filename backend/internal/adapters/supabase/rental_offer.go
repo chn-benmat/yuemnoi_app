@@ -72,16 +72,17 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 		return nil, domain.ErrInvalidRental
 	}
 	var offer struct {
-		ItemID      int64  `json:"itemId"`
-		RentalType  string `json:"rentalType"`
-		StartDate   string `json:"startDate"`
-		EndDate     string `json:"endDate"`
-		StartHour   int    `json:"startHour"`
-		StartMinute int    `json:"startMinute"`
-		EndHour     int    `json:"endHour"`
-		EndMinute   int    `json:"endMinute"`
-		Location    string `json:"location"`
-		BookingID   int64  `json:"bookingId"`
+		ItemID         int64  `json:"itemId"`
+		RentalType     string `json:"rentalType"`
+		StartDate      string `json:"startDate"`
+		EndDate        string `json:"endDate"`
+		StartHour      int    `json:"startHour"`
+		StartMinute    int    `json:"startMinute"`
+		EndHour        int    `json:"endHour"`
+		EndMinute      int    `json:"endMinute"`
+		Location       string `json:"location"`
+		BookingID      int64  `json:"bookingId"`
+		QueueMessageID int64  `json:"rentalQueueMessageId"`
 	}
 	payload, _ := json.Marshal(meta)
 	if json.Unmarshal(payload, &offer) != nil || offer.ItemID != request.ItemID {
@@ -153,6 +154,7 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 			return nil, domain.ErrInvalidRental
 		}
 	} else {
+		request.QueueMessageID = offer.QueueMessageID
 		rental, err = r.createRental(ctx, userID, request)
 		if err != nil {
 			return nil, err

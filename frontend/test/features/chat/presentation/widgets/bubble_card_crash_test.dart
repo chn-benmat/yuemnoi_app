@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/services/booking_confirmation_tracker.dart';
 import 'package:frontend/core/widgets/rental_countdown_timer_widget.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
-import 'package:frontend/features/booking/presentation/widgets/booking_payment_method_card.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
 import 'package:frontend/features/chat/presentation/widgets/booking_request_bubble_card.dart';
 import 'package:frontend/features/profile/presentation/pages/rentals/rental_tracking_map_page.dart';
@@ -24,7 +23,7 @@ void main() {
     BookingConfirmationTracker.clearMemoryCache();
   });
 
-  testWidgets('confirmed rental opens pickup details and then the route', (
+  testWidgets('confirmed rental opens the pickup route directly from chat', (
     tester,
   ) async {
     final start = DateTime(2026, 11, 24);
@@ -77,28 +76,17 @@ void main() {
     await tester.tap(pickupDetails);
     await tester.pumpAndSettle();
 
-    expect(find.text('รายละเอียดที่นัดรับ'), findsOneWidget);
-    expect(find.text('เซ็นทรัลเวิลด์'), findsOneWidget);
-    expect(find.text('ยืนยันวิธีชำระและดูเส้นทางนัดรับ'), findsNothing);
-    final paymentCard = find.byType(BookingPaymentMethodCard);
-    await tester.ensureVisible(paymentCard);
-    await tester.pumpAndSettle();
-    expect(find.text('PromptPay'), findsOneWidget);
-    expect(find.text('เงินสด'), findsNothing);
-
-    await tester.tap(find.text('ดูเส้นทางนัดรับบนแผนที่'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-
-    final map = tester.widget<RentalTrackingMapPage>(
-      find.byType(RentalTrackingMapPage),
-    );
+    final mapPage = find.byType(RentalTrackingMapPage);
+    expect(mapPage, findsOneWidget);
+    final map = tester.widget<RentalTrackingMapPage>(mapPage);
     expect(map.bookingData?.bookingId, 2072);
+    expect(map.bookingData?.conversationId, 'conv-1');
+    expect(map.bookingData?.location, 'เซ็นทรัลเวิลด์');
     expect(map.bookingData?.paymentMethod, 'promptpay');
 
-    Navigator.of(tester.element(find.byType(RentalTrackingMapPage))).pop();
+    Navigator.of(tester.element(mapPage)).pop();
     await tester.pumpAndSettle();
-    expect(find.text('รายละเอียดที่นัดรับ'), findsOneWidget);
+    expect(pickupDetails, findsOneWidget);
   });
 
   testWidgets(

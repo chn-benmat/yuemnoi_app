@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/models/pickup_location.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/core/services/favorite_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:frontend/features/item_detail/data/datasources/item_complaint_remote_data_source.dart';
 import 'package:frontend/features/item_detail/data/models/item_detail_model.dart';
 import 'package:frontend/features/item_detail/domain/entities/item_detail.dart';
 import 'package:frontend/features/item_detail/domain/repositories/item_detail_repository.dart';
@@ -16,6 +20,8 @@ import 'package:frontend/features/item_detail/presentation/pages/item_detail.dar
 import 'package:mocktail/mocktail.dart';
 
 class _MockItemDetailRepository extends Mock implements ItemDetailRepository {}
+
+class _MockComplaintApi extends Mock implements ApiClient {}
 
 void main() {
   setUp(() async {
@@ -73,6 +79,7 @@ void main() {
     double textScale = 1,
     bool preview = false,
     bool dualPricing = false,
+    ApiClient? complaintApi,
   }) async {
     final repository = _MockItemDetailRepository();
     final bloc = ItemDetailBloc(
@@ -100,7 +107,13 @@ void main() {
         ),
         home: BlocProvider.value(
           value: bloc,
-          child: ItemDetailScreen(itemId: 7, preview: preview),
+          child: ItemDetailScreen(
+            itemId: 7,
+            preview: preview,
+            complaintDataSource: ItemComplaintRemoteDataSource(
+              apiClient: complaintApi,
+            ),
+          ),
         ),
       ),
     );
@@ -405,6 +418,104 @@ void main() {
 
     expect(find.text('1/2'), findsOneWidget);
   });
+
+  testWidgets('shows why a short equipment report cannot be submitted', (
+    tester,
+  ) async {
+    AuthSession.saveAccessToken('test-access-token');
+    addTearDown(AuthSession.clear);
+    await pumpDetail(tester, isOwner: false);
+
+    await tester.tap(find.byTooltip('เพิ่มเติม'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('รายงานปัญหา'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ราคาหรือข้อมูลอุปกรณ์ไม่ถูกต้อง'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '  สั้น  ');
+    await tester.tap(find.text('ส่งรายงาน'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('กรุณาระบุรายละเอียดอย่างน้อย 5 ตัวอักษร'),
+      findsOneWidget,
+    );
+    expect(find.byType(AlertDialog), findsOneWidget);
+  });
+
+  testWidgets(
+    'reports damaged equipment and keeps details after a failed send',
+    (tester) async {
+      AuthSession.saveAccessToken('test-access-token');
+      addTearDown(AuthSession.clear);
+      final api = _MockComplaintApi();
+      final firstResponse = Completer<ApiResponse>();
+      const reason = 'อุปกรณ์ชำรุดหรือใช้งานไม่ได้';
+      const details = 'อุปกรณ์เปิดเครื่องไม่ได้';
+      const payload = {
+        'item_id': 7,
+        'description':
+            'เหตุผล: อุปกรณ์ชำรุดหรือใช้งานไม่ได้\nอุปกรณ์เปิดเครื่องไม่ได้',
+      };
+      const headers = {'Authorization': 'Bearer test-access-token'};
+      when(
+        () => api.post('/api/complaints', data: payload, headers: headers),
+      ).thenAnswer((_) => firstResponse.future);
+      await pumpDetail(tester, isOwner: false, complaintApi: api);
+
+      await tester.tap(find.byTooltip('เพิ่มเติม'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('รายงานปัญหา'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text(reason));
+      await tester.tap(find.text(reason));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '  $details  ');
+      await tester.tap(find.text('ส่งรายงาน'));
+      await tester.pumpAndSettle();
+
+      final sending = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'กำลังส่งรายงาน…'),
+      );
+      expect(sending.onPressed, isNull);
+      verify(
+        () => api.post('/api/complaints', data: payload, headers: headers),
+      ).called(1);
+      const success = 'ส่งรายงานปัญหาให้ทีมงานตรวจสอบเรียบร้อยแล้ว';
+      expect(find.text(success), findsNothing);
+
+      firstResponse.complete(
+        const ApiResponse(statusCode: 200, data: <String, dynamic>{}),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('ส่งรายงานไม่สำเร็จ กรุณาลองใหม่'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        '  $details  ',
+      );
+      expect(find.text(success), findsNothing);
+
+      when(
+        () => api.post('/api/complaints', data: payload, headers: headers),
+      ).thenAnswer(
+        (_) async => const ApiResponse(
+          statusCode: 200,
+          data: {
+            'id': 'a9f0eebc-d686-4d5b-9cef-d918672a75a7',
+            'status': 'open',
+          },
+        ),
+      );
+      await tester.tap(find.text('ส่งรายงาน'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text(success), findsOneWidget);
+      verify(
+        () => api.post('/api/complaints', data: payload, headers: headers),
+      ).called(1);
+    },
+  );
 
   testWidgets('long descriptions expand while the chat action stays fixed', (
     tester,

@@ -120,6 +120,7 @@ class BookingRequestData {
   final String? originalMessageId;
   final String paymentMethod;
   final int? bookingId;
+  final int? rentalQueueMessageId;
   final String? status;
 
   static const String bookingPayloadPrefix = '📋 คำขอเช่าอุปกรณ์';
@@ -143,6 +144,7 @@ class BookingRequestData {
     this.originalMessageId,
     this.paymentMethod = 'cash',
     this.bookingId,
+    this.rentalQueueMessageId,
     this.status,
   });
 
@@ -192,6 +194,8 @@ class BookingRequestData {
       'ownerId': ownerId,
       if (originalMessageId != null) 'originalMessageId': originalMessageId,
       if (bookingId != null) 'bookingId': bookingId,
+      if (rentalQueueMessageId != null)
+        'rentalQueueMessageId': rentalQueueMessageId,
       if (status != null) 'status': status,
     };
 
@@ -257,6 +261,8 @@ $metaStartTag$jsonString$metaEndTag''';
           return BookingRequestData(
             item: item,
             bookingId: (map['bookingId'] as num?)?.toInt(),
+            rentalQueueMessageId: (map['rentalQueueMessageId'] as num?)
+                ?.toInt(),
             status: map['status'] as String?,
             rentalType: rentalType,
             startDate: startDate,
@@ -407,6 +413,7 @@ $metaStartTag$jsonString$metaEndTag''';
     String? originalMessageId,
     String? paymentMethod,
     int? bookingId,
+    int? rentalQueueMessageId,
     String? status,
   }) {
     return BookingRequestData(
@@ -426,6 +433,7 @@ $metaStartTag$jsonString$metaEndTag''';
       originalMessageId: originalMessageId ?? this.originalMessageId,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       bookingId: bookingId ?? this.bookingId,
+      rentalQueueMessageId: rentalQueueMessageId ?? this.rentalQueueMessageId,
       status: status ?? this.status,
     );
   }

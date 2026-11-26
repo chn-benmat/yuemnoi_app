@@ -373,6 +373,161 @@ void main() {
       ChatMessagesCache.clear();
     });
 
+    testWidgets('puts the queue invitation above the owner’s message field', (
+      tester,
+    ) async {
+      final bloc = ChatDetailBloc(
+        streamMessages: mockStreamMessages,
+        sendMessage: mockSendMessage,
+      );
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatDetailScreen(
+            conversation: sampleConversation2.copyWith(id: 'conv-1'),
+            chatDetailBloc: bloc,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final invite = find.ancestor(
+        of: find.text('ชวนเข้าคิวเช่าต่อ'),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is ButtonStyleButton,
+        ),
+      );
+      final field = find.byKey(const ValueKey('chat-message-field'));
+      expect(invite.hitTestable(), findsOneWidget);
+      expect(
+        tester.getRect(invite).bottom,
+        lessThanOrEqualTo(tester.getRect(field).top),
+      );
+      expect(find.byTooltip('ส่งคำขอเช่าต่อ'), findsNothing);
+    });
+
+    testWidgets(
+      'shows the queue shortcut when the chat contains an owned item',
+      (tester) async {
+        final ownership = _MockGetOwnedChatItemIdsUseCase();
+        when(() => ownership({76})).thenAnswer((_) async => {76});
+        final bloc = ChatDetailBloc(
+          streamMessages: mockStreamMessages,
+          sendMessage: mockSendMessage,
+          getOwnedItemIds: ownership,
+        );
+        addTearDown(bloc.close);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatDetailScreen(
+              conversation: sampleConversation1,
+              chatDetailBloc: bloc,
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final invite = find.text('ชวนเข้าคิวเช่าต่อ');
+        expect(invite, findsNothing);
+        streamController.add([
+          ChatMessage(
+            id: 'owned-inquiry',
+            conversationId: 'conv-1',
+            senderId: 'user-owner-1',
+            message: const ItemInquiryData(
+              itemId: 76,
+              itemName: 'Canon EOS R50',
+            ).toChatMessagePayload(),
+            createdAt: DateTime(2026, 11, 26),
+            isMine: false,
+            isRead: true,
+          ),
+        ]);
+        await tester.pumpAndSettle();
+
+        expect(invite.hitTestable(), findsOneWidget);
+      },
+    );
+
+    for (final conversation in [
+      sampleConversation2.copyWith(id: 'conv-1'),
+      sampleConversation1,
+    ]) {
+      testWidgets('hides the queue shortcut during an open rental '
+          '(${conversation.role.name})', (tester) async {
+        final bloc = ChatDetailBloc(
+          streamMessages: mockStreamMessages,
+          sendMessage: mockSendMessage,
+        );
+        addTearDown(bloc.close);
+
+        final booking = BookingRequestData(
+          item: BookingItemInfo.defaultMockItem.copyWith(imageUrl: ''),
+          startDate: DateTime(2026, 11, 27),
+          endDate: DateTime(2026, 11, 28),
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 17, minute: 0),
+          location: 'Pickup',
+        );
+        ChatMessage offer(String status, {bool isMine = true}) => ChatMessage(
+          id: isMine ? 'outgoing-offer' : 'incoming-offer',
+          conversationId: conversation.id,
+          senderId: isMine ? 'me' : conversation.otherUserId,
+          message: booking
+              .copyWith(
+                item: isMine ? booking.item : booking.item.copyWith(id: 76),
+                bookingId: isMine ? 2087 : 2086,
+                status: status,
+              )
+              .toChatMessagePayload(),
+          createdAt: DateTime(2026, 11, 26, 10, isMine ? 1 : 0),
+          isMine: isMine,
+          isRead: true,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatDetailScreen(
+              conversation: conversation,
+              chatDetailBloc: bloc,
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final shortcut = conversation.role == ChatParticipantRole.renter
+            ? find.text('ชวนเข้าคิวเช่าต่อ')
+            : find.byTooltip('ส่งคำขอเช่าต่อ');
+        final incomingOffer = offer('active', isMine: false);
+        streamController.add([incomingOffer, offer('pending')]);
+        await tester.pumpAndSettle();
+        expect(shortcut.hitTestable(), findsOneWidget);
+
+        for (final status in [
+          'confirmed',
+          'active',
+          'awaiting_return',
+          'return_ready',
+        ]) {
+          streamController.add([incomingOffer, offer(status)]);
+          await tester.pumpAndSettle();
+          expect(find.text('ชวนเข้าคิวเช่าต่อ'), findsNothing, reason: status);
+          expect(
+            find.byTooltip('ส่งคำขอเช่าต่อ'),
+            findsNothing,
+            reason: status,
+          );
+        }
+
+        streamController.add([incomingOffer, offer('completed')]);
+        await tester.pumpAndSettle();
+        expect(shortcut.hitTestable(), findsOneWidget);
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+    }
+
     testWidgets('opens the existing inquiry for the selected item', (
       tester,
     ) async {
@@ -2275,8 +2430,9 @@ void main() {
         );
         expect(
           find.byKey(const ValueKey('chat-booking-rental-status-button')),
-          findsOneWidget,
+          findsNothing,
         );
+        expect(find.text('ดูจุดนัดส่งคืนบนแผนที่'), findsNothing);
 
         final completedMessage = ChatMessage(
           id: bookingMsg.id,

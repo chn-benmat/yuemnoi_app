@@ -99,4 +99,53 @@ void main() {
       expect(appliedMinRating, 4.0);
     },
   );
+
+  testWidgets('2,000 baht and up fills only the minimum price', (tester) async {
+    int? appliedMinPrice;
+    int? appliedMaxPrice = 1000;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CategoryFilterButton(
+            categories: testCategories,
+            selectedCategoryId: 'all',
+            minPrice: 500,
+            maxPrice: 1000,
+            onApplyFilter:
+                ({
+                  required String categoryId,
+                  int? minPrice,
+                  int? maxPrice,
+                  double? minRating,
+                }) {
+                  appliedMinPrice = minPrice;
+                  appliedMaxPrice = maxPrice;
+                },
+            onResetFilter: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('category-filter-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2,000 ฿ ขึ้นไป'));
+    await tester.pumpAndSettle();
+
+    final minPrice = tester.widget<TextField>(
+      find.byKey(const ValueKey('filter-min-price-input')),
+    );
+    final maxPrice = tester.widget<TextField>(
+      find.byKey(const ValueKey('filter-max-price-input')),
+    );
+    expect(minPrice.controller!.text, '2000');
+    expect(maxPrice.controller!.text, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('apply-filter-modal-button')));
+    await tester.pumpAndSettle();
+
+    expect(appliedMinPrice, 2000);
+    expect(appliedMaxPrice, isNull);
+  });
 }

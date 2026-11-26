@@ -2,6 +2,7 @@ import 'package:intl/intl.dart';
 
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/item_inquiry_data.dart';
+import '../../domain/entities/rental_queue_card_data.dart';
 
 abstract final class ChatConversationModel {
   static ChatConversation fromRecords({
@@ -32,9 +33,12 @@ abstract final class ChatConversationModel {
 
     final rawLastMessage =
         conversation['last_message']?.toString().trim() ?? '';
+    final queue = RentalQueueCardData.fromMessage(rawLastMessage);
     final String cleanPreview;
     if (rawLastMessage.isEmpty) {
       cleanPreview = 'เริ่มการสนทนา';
+    } else if (queue != null) {
+      cleanPreview = 'คิวเช่าต่อ · ${queue.name}';
     } else if (rawLastMessage.contains('[BOOKING_DATA:')) {
       cleanPreview = '📋 คำขอเช่าอุปกรณ์';
     } else if (ItemInquiryData.isInquiry(rawLastMessage)) {

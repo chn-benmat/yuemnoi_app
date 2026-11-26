@@ -36,14 +36,19 @@ class UserItem {
     this.ownerHidden = false,
   });
 
-  // สถานะประกาศไม่ได้ยืนยันว่าอุปกรณ์ว่างในช่วงวันที่ต้องการเช่า
+  // ใช้ข้อมูลการจองที่ยืนยันแล้วเป็นเกณฑ์แสดงสถานะกำลังถูกเช่า
   UserItemStatus get listingStatus => switch (status.trim().toLowerCase()) {
-    'available' || 'พร้อมใช้งาน' || 'พร้อมให้เช่า' =>
-      isRentalOccupied ? UserItemStatus.rented : UserItemStatus.available,
     'pending_review' => UserItemStatus.pendingReview,
     'rejected' => UserItemStatus.rejected,
-    'rented' || 'renting' || 'กำลังเช่า' || 'ถูกเช่า' => UserItemStatus.rented,
-    'unavailable' || 'ไม่พร้อมใช้งาน' => UserItemStatus.unavailable,
+    _ when isRentalOccupied => UserItemStatus.rented,
+    'available' || 'พร้อมใช้งาน' || 'พร้อมให้เช่า' => UserItemStatus.available,
+    'rented' ||
+    'renting' ||
+    'กำลังเช่า' ||
+    'ถูกเช่า' ||
+    'กำลังถูกเช่า' ||
+    'unavailable' ||
+    'ไม่พร้อมใช้งาน' => UserItemStatus.unavailable,
     'maintenance' || 'ซ่อมบำรุง' => UserItemStatus.maintenance,
     _ => UserItemStatus.unknown,
   };

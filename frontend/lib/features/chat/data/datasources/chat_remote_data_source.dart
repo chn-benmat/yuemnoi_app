@@ -998,6 +998,7 @@ class ChatRemoteDataSource {
     final client = _supabaseClient;
     final currentUserId = _currentUserId;
     final nowIso = DateTime.now().toUtc().toIso8601String();
+    final offer = BookingRequestData.fromChatMessage(message);
 
     try {
       await client
@@ -1008,8 +1009,9 @@ class ChatRemoteDataSource {
             'sender_id': currentUserId,
             'message': message.trim(),
             'image_url': imageUrl,
-            'created_at': nowIso,
-          })
+            // ข้อเสนอในคิวต้องเปรียบเทียบอายุกับเวลายืนยันสิทธิ์ฝั่งเซิร์ฟเวอร์
+            if (offer?.rentalQueueMessageId == null) 'created_at': nowIso,
+          }, defaultToNull: false)
           .select('id')
           .maybeSingle();
 

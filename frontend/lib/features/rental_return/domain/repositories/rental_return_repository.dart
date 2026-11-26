@@ -5,5 +5,8 @@ abstract class RentalReturnRepository {
   Future<RentalReturnSession> getReturnSession([int? rentalId]);
 
   /// ร้านค้ายืนยันว่าตรวจรับเครื่องเรียบร้อยและจบรายการคืน
-  Future<void> confirmMerchantReceipt({required int rentalId});
+  Future<void> confirmMerchantReceipt({
+    required int rentalId,
+    bool pauseItem = false,
+  });
 }

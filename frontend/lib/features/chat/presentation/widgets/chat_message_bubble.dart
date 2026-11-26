@@ -11,6 +11,8 @@ import 'chat_message_action_sheet.dart';
 import 'chat_reply_preview.dart';
 import 'chat_stacked_image_card.dart';
 import 'item_inquiry_bubble_card.dart';
+import '../../domain/entities/rental_queue_card_data.dart';
+import 'rental_queue_card.dart';
 import 'stacked_images_grid_screen.dart';
 import 'swipe_to_reply.dart';
 
@@ -36,6 +38,8 @@ class ChatMessageBubble extends StatelessWidget {
     this.onQuotedTap,
     this.onSendBookingRequest,
     this.defaultItemId,
+    this.onQueueAction,
+    this.onSendQueueOffer,
     this.isHandoverCompleted = false,
     this.isReturnCompleted = false,
   });
@@ -58,6 +62,8 @@ class ChatMessageBubble extends StatelessWidget {
   final ValueChanged<ChatMessage>? onReply;
   final void Function(ItemInquiryData)? onSendBookingRequest;
   final int? defaultItemId;
+  final Future<void> Function(String action)? onQueueAction;
+  final VoidCallback? onSendQueueOffer;
   final ValueChanged<ChatMessage>? onEdit;
   final ValueChanged<ChatMessage>? onDelete;
   final ValueChanged<String>? onQuotedTap;
@@ -82,6 +88,19 @@ class ChatMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMine = message.isMine;
+    final queue = RentalQueueCardData.fromMessage(message.message);
+    final queueAction = onQueueAction;
+    if (queue != null && queueAction != null) {
+      return Align(
+        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+        child: RentalQueueCard(
+          data: queue,
+          isOwner: isMine,
+          onAction: queueAction,
+          onSendOffer: onSendQueueOffer,
+        ),
+      );
+    }
     final replyData = ChatReplyContent.tryParse(message.message);
 
     final isBooking =

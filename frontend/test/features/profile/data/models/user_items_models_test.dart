@@ -12,8 +12,25 @@ void main() {
         'is_rental_occupied': true,
       }).toEntity();
 
-      expect(item.listingStatus.name, 'rented');
+      expect(item.listingStatus, UserItemStatus.rented);
     });
+
+    for (final status in [
+      'rented',
+      'renting',
+      'กำลังเช่า',
+      'ถูกเช่า',
+      'กำลังถูกเช่า',
+    ]) {
+      test('legacy listing status $status needs a confirmed rental', () {
+        final item = UserItemModel.fromJson({
+          'status': status,
+          'is_rental_occupied': false,
+        }).toEntity();
+
+        expect(item.listingStatus, UserItemStatus.unavailable);
+      });
+    }
 
     test('preserves listing status and the actual rental unit', () {
       final item = UserItemModel.fromJson({
@@ -22,7 +39,7 @@ void main() {
         'type': 'รายชั่วโมง',
         'price': 125.5,
       }).toEntity();
-      expect(item.listingStatus, UserItemStatus.rented);
+      expect(item.status, ' renting ');
       expect(item.ownerHidden, isTrue);
       expect(item.rentalType, 'รายชั่วโมง');
       expect(item.price, 125.5);

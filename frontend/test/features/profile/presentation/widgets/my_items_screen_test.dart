@@ -18,7 +18,8 @@ const _camera = UserItem(
   subtitle: 'รายละเอียดที่ควรอยู่ในหน้ารายละเอียด',
   category: 'กล้อง',
   price: 125.5,
-  status: 'rented',
+  status: 'available',
+  isRentalOccupied: true,
   rentalType: 'รายชั่วโมง',
 );
 const _laptop = UserItem(
@@ -92,7 +93,7 @@ void main() {
             .first,
       );
       expect(
-        find.descendant(of: card, matching: find.text('ซ่อนอยู่')),
+        find.descendant(of: card, matching: find.text('กำลังซ่อน')),
         findsOneWidget,
       );
       expect(
@@ -294,7 +295,8 @@ void main() {
           title: 'Sony Camera อัปเดตแล้ว',
           subtitle: '',
           price: 250,
-          status: 'rented',
+          status: 'available',
+          isRentalOccupied: true,
           rentalType: 'รายชั่วโมง',
         ),
       ];
