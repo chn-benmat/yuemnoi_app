@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/item_review_service.dart';
 import '../../../../core/services/phone_call_service.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -41,6 +42,7 @@ import '../widgets/chat_detail_header.dart';
 import '../widgets/chat_empty_view.dart';
 import '../widgets/chat_message_bubble.dart';
 import '../widgets/chat_message_composer.dart';
+import '../widgets/chat_rental_safety_dialog.dart';
 import '../widgets/chat_skeleton_loading_view.dart';
 import '../widgets/chat_typing_indicator_bubble.dart';
 
@@ -149,6 +151,9 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     );
     _scrollController.addListener(_onScroll);
     _messageController.addListener(_onTextChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showRentalSafetyReminder();
+    });
 
     // ⚡ ส่งสัญญาณอ่านข้อความแบบ Direct WebSocket ทันทีเมื่อเปิดห้องแชท
     ChatRemoteDataSource().broadcastReadReceipt(
@@ -169,6 +174,19 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
         }
       });
     }
+  }
+
+  Future<void> _showRentalSafetyReminder() async {
+    final accountId = SupabaseConfig.isInitialized
+        ? SupabaseConfig.client.auth.currentUser?.id
+        : null;
+    if (accountId == null || accountId.isEmpty) return;
+
+    await showChatRentalSafetyReminder(
+      context,
+      accountId: accountId,
+      role: _conversation.currentUserRentalRole,
+    );
   }
 
   @override

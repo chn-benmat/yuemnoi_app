@@ -71,6 +71,7 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
       _ => null,
     };
     final date = DateFormat('dd/MM/yyyy HH:mm');
+    final numberFormat = NumberFormat.decimalPattern();
     return Container(
       constraints: const BoxConstraints(maxWidth: 284),
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -95,9 +96,11 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
           Text(data.name, style: Theme.of(context).textTheme.titleMedium),
           if (data.price case final price?)
             Text(
-              '${NumberFormat.decimalPattern().format(price)} บาท'
+              '${numberFormat.format(price)} บาท'
               '${data.unitLabel == null ? '' : ' / ${data.unitLabel}'}',
             ),
+          if (data.additionalDailyPrice case final dailyPrice?)
+            Text('${numberFormat.format(dailyPrice)} บาท / วัน'),
           const SizedBox(height: 8),
           Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
           if (data.dueAt case final due?)

@@ -21,6 +21,12 @@ abstract final class ChatConversationModel {
     final role = isUserRenter
         ? ChatParticipantRole.owner
         : ChatParticipantRole.renter;
+    // ห้องเดิมใช้ได้ทั้งสองทิศทาง จึงยึดเจ้าของอุปกรณ์ล่าสุดที่ผูกกับห้อง
+    final itemRentalRole = switch (item?['user_id']?.toString()) {
+      final id? when id == currentUserId => ChatParticipantRole.owner,
+      final id? when id == otherUserId => ChatParticipantRole.renter,
+      _ => null,
+    };
 
     final rawDisplayName =
         otherProfile?['display_name']?.toString().trim() ?? '';
@@ -133,6 +139,7 @@ abstract final class ChatConversationModel {
       itemImageUrl: itemImageUrl,
       itemPrice: itemPrice,
       itemRentalType: itemRentalType,
+      itemRentalRole: itemRentalRole,
       isOnline: isOnline,
       hasUnreadMessage: hasUnreadMessage,
     );

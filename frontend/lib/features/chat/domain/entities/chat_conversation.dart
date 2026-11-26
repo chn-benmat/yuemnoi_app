@@ -17,6 +17,7 @@ class ChatConversation extends Equatable {
     this.itemImageUrl,
     this.itemPrice,
     this.itemRentalType,
+    this.itemRentalRole,
     this.isOnline = false,
     this.hasUnreadMessage = false,
   });
@@ -24,6 +25,7 @@ class ChatConversation extends Equatable {
   final String id;
   final String otherUserId;
   final String name;
+  // บทบาทของคู่สนทนาตามข้อมูลห้องตอนสร้าง
   final ChatParticipantRole role;
   final String avatarAsset;
   final String preview;
@@ -34,8 +36,15 @@ class ChatConversation extends Equatable {
   final String? itemImageUrl;
   final int? itemPrice;
   final String? itemRentalType;
+  final ChatParticipantRole? itemRentalRole;
   final bool isOnline;
   final bool hasUnreadMessage;
+
+  ChatParticipantRole get currentUserRentalRole =>
+      itemRentalRole ??
+      (role == ChatParticipantRole.owner
+          ? ChatParticipantRole.renter
+          : ChatParticipantRole.owner);
 
   ChatConversation copyWith({
     String? id,
@@ -51,6 +60,7 @@ class ChatConversation extends Equatable {
     String? itemImageUrl,
     int? itemPrice,
     String? itemRentalType,
+    ChatParticipantRole? itemRentalRole,
     bool? isOnline,
     bool? hasUnreadMessage,
   }) {
@@ -68,6 +78,7 @@ class ChatConversation extends Equatable {
       itemImageUrl: itemImageUrl ?? this.itemImageUrl,
       itemPrice: itemPrice ?? this.itemPrice,
       itemRentalType: itemRentalType ?? this.itemRentalType,
+      itemRentalRole: itemRentalRole ?? this.itemRentalRole,
       isOnline: isOnline ?? this.isOnline,
       hasUnreadMessage: hasUnreadMessage ?? this.hasUnreadMessage,
     );
@@ -88,6 +99,7 @@ class ChatConversation extends Equatable {
     itemImageUrl,
     itemPrice,
     itemRentalType,
+    itemRentalRole,
     isOnline,
     hasUnreadMessage,
   ];
