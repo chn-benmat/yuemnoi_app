@@ -22,7 +22,9 @@ class IdentityAccountCubit extends Cubit<IdentityAccountState> {
   IdentityAccountCubit(this.repository) : super(const IdentityAccountState());
   final IdentityAccountRepository repository;
 
-  Future<void> load({Future<void>? loadEvidenceAfter}) async {
+  Future<void> load({
+    Future<void> Function(IdentityAccountDetails)? onDetailsLoaded,
+  }) async {
     if (state.busy) return;
     emit(
       IdentityAccountState(
@@ -36,9 +38,9 @@ class IdentityAccountCubit extends Cubit<IdentityAccountState> {
     try {
       final details = await repository.accountDetails();
       if (isClosed) return;
-      if (details.evidence.isNotEmpty) {
+      if (onDetailsLoaded != null || details.evidence.isNotEmpty) {
         emit(IdentityAccountState(details: details, busy: true, loading: true));
-        if (loadEvidenceAfter != null) await loadEvidenceAfter;
+        if (onDetailsLoaded != null) await onDetailsLoaded(details);
         if (isClosed) return;
       }
       final photos = <String, Uint8List>{};

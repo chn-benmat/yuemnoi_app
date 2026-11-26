@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+const identityCardRetentionConsentVersion = 'identity-v2';
+
 bool identityValidBirthDate(String value, {DateTime? today}) {
   final birth = DateTime.tryParse(value);
   final now = (today ?? DateTime.now()).toUtc();

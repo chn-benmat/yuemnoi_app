@@ -17,6 +17,7 @@ import 'package:frontend/features/identity/presentation/pages/identity_account_p
 class AccountRepository implements IdentityAccountRepository {
   bool pending = false, fail = false, selfieWithCard = true, hasIdentity = true;
   bool failLoading = false;
+  String? consentVersion;
   int sends = 0, evidenceReads = 0;
   Completer<void>? loadGate;
   Completer<void>? evidenceGate;
@@ -40,14 +41,18 @@ class AccountRepository implements IdentityAccountRepository {
       'fields': fields,
       'has_identity': hasIdentity,
       'selfie_with_card': selfieWithCard,
-      'evidence': [
-        {'kind': 'card', 'id': 'card'},
-        {'kind': 'selfie', 'id': 'selfie'},
-      ],
+      if (hasIdentity || pending)
+        'evidence': [
+          {'kind': 'card', 'id': 'card'},
+          {'kind': 'selfie', 'id': 'selfie'},
+        ],
       'status': {
         if (hasIdentity) 'profile': {'status': 'approved'},
         if (pending || hasIdentity)
-          'request': {'status': pending ? 'pending' : 'approved'},
+          'request': {
+            'status': pending ? 'pending' : 'approved',
+            'consent_version': consentVersion,
+          },
       },
     });
   }
@@ -71,6 +76,7 @@ class AccountRepository implements IdentityAccountRepository {
     if (fail) throw const IdentityFailure('เครือข่ายขัดข้อง');
     this.fields.addAll(fields);
     pending = true;
+    consentVersion = 'identity-v2';
   }
 
   @override
@@ -253,7 +259,7 @@ void main() {
   testWidgets('ต้องติ๊กยินยอมก่อนบันทึกการแก้ไขข้อมูลบัตรที่มีอยู่', (
     tester,
   ) async {
-    final repo = AccountRepository();
+    final repo = AccountRepository()..consentVersion = 'identity-v1';
     await open(tester, repo, acceptConsent: false);
     final dialog = find.byKey(const ValueKey('identity_consent_dialog'));
     final checkbox = find.byType(CheckboxListTile);
@@ -297,9 +303,7 @@ void main() {
     expect(repo.fields['first_name'], 'ชื่อใหม่');
   });
 
-  testWidgets('หน้าที่รอตรวจสอบแสดงเงื่อนไขให้อ่านและยังบันทึกไม่ได้', (
-    tester,
-  ) async {
+  testWidgets('คำขอเดิมที่รอตรวจสอบยังอ่านเงื่อนไขได้', (tester) async {
     final repo = AccountRepository()..pending = true;
     await open(tester, repo, acceptConsent: false);
     expect(
@@ -318,6 +322,19 @@ void main() {
     final save = find.widgetWithText(AppPrimaryButton, 'รอตรวจสอบ');
     expect(tester.widget<AppPrimaryButton>(save).onPressed, isNull);
     expect(repo.sends, 0);
+  });
+
+  testWidgets('คำขอแรกที่รอตรวจสอบและยินยอมแล้วไม่แสดงเงื่อนไข', (
+    tester,
+  ) async {
+    final repo = AccountRepository()
+      ..hasIdentity = false
+      ..pending = true
+      ..consentVersion = 'identity-v2';
+    await open(tester, repo, acceptConsent: false);
+    expect(find.text('เงื่อนไขการเก็บข้อมูลบัตรประชาชน'), findsNothing);
+    final save = find.widgetWithText(AppPrimaryButton, 'รอตรวจสอบ');
+    expect(tester.widget<AppPrimaryButton>(save).onPressed, isNull);
   });
 
   testWidgets('new users verify from account form', (tester) async {
@@ -371,11 +388,13 @@ void main() {
     expect(field.validator!('1101700207030'), isNull);
   });
 
-  testWidgets('แสดงและยินยอมในป๊อปอัปได้ระหว่างโหลดข้อมูลบัตรประชาชน', (
+  testWidgets('บัญชีอนุมัติที่ยินยอมแล้วเปิดหน้าได้โดยไม่มีเงื่อนไข', (
     tester,
   ) async {
     final gate = Completer<void>();
-    final repo = AccountRepository()..loadGate = gate;
+    final repo = AccountRepository()
+      ..loadGate = gate
+      ..consentVersion = 'identity-v2';
     final cubit = IdentityAccountCubit(repo);
     addTearDown(cubit.close);
     await tester.pumpWidget(
@@ -389,7 +408,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 150));
     final dialog = find.byKey(const ValueKey('identity_consent_dialog'));
-    expect(dialog, findsOneWidget);
+    expect(dialog, findsNothing);
     expect(find.byType(SkeletonShimmer), findsOneWidget);
     expect(
       find.ancestor(
@@ -410,32 +429,25 @@ void main() {
     expect(find.byIcon(Icons.refresh_rounded), findsNothing);
     final buttonRect = tester.getRect(save);
 
-    await tester.pump(const Duration(milliseconds: 250));
-    await tester.tap(find.byType(CheckboxListTile));
-    await tester.pump();
-    await tester.tap(find.text('ยินยอมและดำเนินการต่อ'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(dialog, findsNothing);
-    expect(find.byType(SkeletonShimmer), findsOneWidget);
-
     gate.complete();
     await tester.pumpAndSettle();
     expect(find.byType(SkeletonShimmer), findsNothing);
     expect(dialog, findsNothing);
     expect(tester.getRect(save), buttonRect);
     expect(find.text('เงื่อนไขการเก็บข้อมูลบัตรประชาชน'), findsNothing);
+    await tester.ensureVisible(find.byKey(const ValueKey('first_name')));
+    await tester.enterText(
+      find.byKey(const ValueKey('first_name')),
+      'ชื่อใหม่',
+    );
+    await tester.pump();
+    expect(tester.widget<AppPrimaryButton>(save).onPressed, isNotNull);
   });
 
-  testWidgets('โหลดไม่สำเร็จแสดงให้ลองใหม่หลังปิดเงื่อนไข', (tester) async {
+  testWidgets('โหลดไม่สำเร็จแสดงให้ลองใหม่ก่อนตรวจความยินยอม', (tester) async {
     final repo = AccountRepository()..failLoading = true;
     await open(tester, repo, acceptConsent: false);
     final dialog = find.byKey(const ValueKey('identity_consent_dialog'));
-    expect(dialog, findsOneWidget);
-    expect(find.text('มีข้อผิดพลาดเกิดขึ้น'), findsNothing);
-
-    await tester.tap(find.text('ไว้ก่อน'));
-    await tester.pumpAndSettle();
     expect(dialog, findsNothing);
     expect(find.text('โหลดข้อมูลไม่ได้'), findsOneWidget);
     final retry = find.text('ลองอีกครั้ง');
@@ -445,6 +457,8 @@ void main() {
     await tester.tap(retry);
     await tester.pumpAndSettle();
     expect(retry, findsNothing);
+    expect(dialog, findsOneWidget);
+    await acceptIdentityConsent(tester);
     expect(dialog, findsNothing);
   });
 
@@ -576,6 +590,13 @@ void main() {
           .readOnly,
       isTrue,
     );
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.text('open'), findsOneWidget);
+    await open(tester, repo, acceptConsent: false);
+    expect(find.text('เงื่อนไขการเก็บข้อมูลบัตรประชาชน'), findsNothing);
+    expect(find.widgetWithText(AppPrimaryButton, 'รอตรวจสอบ'), findsOneWidget);
   });
   testWidgets('ส่งไม่สำเร็จยังเก็บข้อความไว้แก้และส่งใหม่', (tester) async {
     final repo = AccountRepository()..fail = true;
