@@ -105,6 +105,9 @@ func (s *storageClient) do(request *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Supabase Storage request failed: %w", err)
 	}
+	if request.Method == http.MethodDelete && response.StatusCode == http.StatusNotFound {
+		return response, nil
+	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		defer response.Body.Close()
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))

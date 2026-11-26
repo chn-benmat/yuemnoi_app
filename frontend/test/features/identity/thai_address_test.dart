@@ -10,6 +10,10 @@ void main() {
     provinces = await AssetThaiAddressRepository().load();
   });
 
+  test('เปิด repository ใหม่ใช้รายการที่อยู่เดิมที่แปลงแล้ว', () async {
+    expect(await AssetThaiAddressRepository().load(), same(provinces));
+  });
+
   test('ข้อมูลทั้งประเทศไม่มีรหัสซ้ำและสัมพันธ์กันครบทุกระดับ', () {
     final districts = provinces
         .expand((province) => province.districts)

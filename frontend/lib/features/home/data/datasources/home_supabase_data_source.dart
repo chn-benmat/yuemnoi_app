@@ -560,6 +560,8 @@ class HomeSupabaseDataSource {
           priceUnit: priceUnit,
           rating: double.parse(rating.toStringAsFixed(1)),
           reviewCount: reviewCount,
+          paidBookingCount: int.tryParse('${item['paid_booking_count']}') ?? 0,
+          isRentalOccupied: item['is_rental_occupied'] == true,
           isVerified:
               item['is_verified'] == true ||
               profilesMap?[item['user_id']?.toString()]?['is_verified'] == true,
@@ -612,7 +614,7 @@ class HomeSupabaseDataSource {
     try {
       rawItems = await client
           .from('home_feed_ranked_v')
-          .select('*')
+          .select('*,is_rental_occupied')
           .order('rank_position', ascending: true);
     } catch (e) {
       debugPrint(
@@ -624,7 +626,7 @@ class HomeSupabaseDataSource {
       try {
         rawItems = await client
             .from('item_tb')
-            .select('*')
+            .select('*,is_rental_occupied')
             .eq('owner_hidden', false)
             .eq('moderation_hidden', false)
             .inFilter('status', ['available', 'พร้อมใช้งาน'])

@@ -13,6 +13,7 @@ import '../../domain/repositories/home_repository.dart';
 import '../../domain/usecases/rank_items_by_distance.dart';
 import '../widgets/category_filter_sheet.dart';
 import '../widgets/category_filter_chips.dart';
+import '../widgets/product_card_grid.dart';
 import '../widgets/shopee_product_card.dart';
 
 /// หน้าค้นหาอุปกรณ์สไตล์ Shopee ผสาน Swiss Style / Clean SaaS
@@ -677,17 +678,9 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
     if (_isLoadingCurated && curatedItems.isEmpty) {
       return SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        sliver: SliverGrid(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 0.61,
-          ),
-          delegate: SliverChildBuilderDelegate(
-            (context, index) => const _SearchItemSkeletonCard(),
-            childCount: 4,
-          ),
+        sliver: ProductCardGrid(
+          itemCount: 4,
+          itemBuilder: (context, index) => const _SearchItemSkeletonCard(),
         ),
       );
     }
@@ -708,17 +701,12 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
 
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 0.61,
-        ),
-        delegate: SliverChildBuilderDelegate((context, index) {
+      sliver: ProductCardGrid(
+        itemCount: curatedItems.length,
+        itemBuilder: (context, index) {
           final item = curatedItems[index];
           return ShopeeProductCard(item: item, onTap: () => _onItemTap(item));
-        }, childCount: curatedItems.length),
+        },
       ),
     );
   }
@@ -733,17 +721,21 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
         children: [
           _buildResultsHeader(isPlaceholder: true),
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: CustomScrollView(
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 0.61,
-              ),
-              itemCount: 4,
-              itemBuilder: (context, index) => const _SearchItemSkeletonCard(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  sliver: ProductCardGrid(
+                    itemCount: 4,
+                    itemBuilder: (context, index) =>
+                        const _SearchItemSkeletonCard(),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -765,21 +757,15 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                          childAspectRatio: 0.61,
-                        ),
-                    delegate: SliverChildBuilderDelegate((context, index) {
+                  sliver: ProductCardGrid(
+                    itemCount: searchResults.length,
+                    itemBuilder: (context, index) {
                       final item = searchResults[index];
                       return ShopeeProductCard(
                         item: item,
                         onTap: () => _onItemTap(item),
                       );
-                    }, childCount: searchResults.length),
+                    },
                   ),
                 ),
               const SliverToBoxAdapter(child: SizedBox(height: 50)),

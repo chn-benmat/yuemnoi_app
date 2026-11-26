@@ -32,7 +32,7 @@ void main() {
       ],
     );
     expect(state.visibleItems.map((item) => item.id), ['returned']);
-    expect(state.hasUnreadNotification, isFalse);
+    expect(state.visibleItems.single.isRead, isTrue);
     expect(state.items.length, 3);
     expect(
       NotificationInboxState(
@@ -77,6 +77,5 @@ void main() {
       'camera',
       'phone',
     ]);
-    expect(state.hasUnreadNotification, isTrue);
   });
 }

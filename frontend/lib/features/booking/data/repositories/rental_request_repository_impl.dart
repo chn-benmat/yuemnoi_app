@@ -1,3 +1,4 @@
+import '../../../../core/services/item_catalog_service.dart';
 import '../../domain/entities/rental_request.dart';
 import '../../domain/repositories/rental_request_repository.dart';
 import '../datasources/rental_request_remote_data_source.dart';
@@ -23,11 +24,13 @@ class RentalRequestRepositoryImpl implements RentalRequestRepository {
     required String paymentMethod,
   }) async {
     try {
-      return await remoteDataSource.confirm(
+      final result = await remoteDataSource.confirm(
         rentalId: rentalId,
         offerMessageId: offerMessageId,
         paymentMethod: paymentMethod,
       );
+      ItemCatalogService.instance.notifyChanged();
+      return result;
     } on RentalRequestRemoteException catch (error) {
       throw RentalRequestException(error.message);
     }

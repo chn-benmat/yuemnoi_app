@@ -53,7 +53,7 @@ class SettingAccountScreen extends StatelessWidget {
           centerTitle: true,
           elevation: 0,
         ),
-        body: Padding(
+        body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Container(
             decoration: BoxDecoration(
@@ -105,6 +105,20 @@ class SettingAccountScreen extends StatelessWidget {
                   title: 'ข้อมูลบัตรประชาชน',
                   subtitle: 'รูปยืนยันตัวตน, ข้อมูลบัตรและที่อยู่',
                   onTap: () => AppRoutes.openIdentityAccount(context),
+                ),
+                Divider(
+                  height: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: Colors.grey.shade100,
+                ),
+                AccountSettingItem(
+                  icon: Icons.qr_code_rounded,
+                  iconBgColor: const Color(0xFFF3E8FF),
+                  iconColor: AppColors.primaryColor,
+                  title: 'แก้ไขพร้อมเพย์',
+                  subtitle: 'เบอร์มือถือหรือเลขบัตรสำหรับรับค่าเช่า',
+                  onTap: () => AppRoutes.openPromptPayAccount(context),
                 ),
               ],
             ),

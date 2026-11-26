@@ -5,28 +5,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Session;
 
 import 'core/navigation/app_routes.dart';
 import 'core/navigation/item_deep_link.dart';
+import 'core/network/auth_session.dart';
 import 'core/network/supabase_client.dart';
 import 'core/services/app_notification_service.dart';
 import 'core/services/app_orientation_service.dart';
 import 'core/services/app_permission_service.dart';
-import 'core/services/chat_notification_service.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/recommendation_location_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
+import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/chat/data/datasources/chat_remote_data_source.dart';
 import 'features/notification/presentation/widgets/global_app_notification_listener.dart';
 import 'features/wallet/presentation/bloc/wallet_cubit.dart';
 
 class YuemnoiApp extends StatefulWidget {
-  const YuemnoiApp({super.key, this.initialRoute = AppRoutes.home});
+  const YuemnoiApp({
+    super.key,
+    this.initialRoute = AppRoutes.home,
+    this.oauthRestoreSession,
+  });
 
   final String initialRoute;
+  final Session? oauthRestoreSession;
 
   @override
   State<YuemnoiApp> createState() => _YuemnoiAppState();
@@ -41,6 +48,7 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   late final GoRouter _router;
   StreamSubscription<Uri>? _deepLinkSubscription;
   bool _startupPermissionsComplete = false;
+  int _notificationNavigationId = 0;
 
   @override
   void initState() {
@@ -55,8 +63,6 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     );
     unawaited(_handleInitialDeepLink());
 
-    ChatNotificationService.instance.onNotificationTapped = (conversationId) =>
-        unawaited(_openConversation(conversationId));
     AppNotificationService.instance.onOpen = _openNotification;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -112,51 +118,74 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
         return;
       }
     } catch (_) {}
-    if (mounted) _router.go(AppRoutes.notification);
+    if (mounted) _openHomeTab(1);
   }
 
   Future<void> _openNotification(AppNotification notification) async {
     if (!mounted) return;
-    if (notification.conversationId != null) {
-      await _openConversation(notification.conversationId!);
+    if (notification.category == AppNotificationCategory.chat) {
+      final conversationId = notification.conversationId;
+      if (conversationId != null) await _openConversation(conversationId);
       return;
     }
-    _navigateNotification(notification.data, notification.bookingId);
+    _navigateNotification({
+      ...notification.data,
+      'category': notification.category.name,
+      if (notification.bookingId != null) 'booking_id': notification.bookingId,
+    }, openHistoryIfUnknown: false);
   }
 
   Future<void> _openPush(Map<String, dynamic> data) async {
     if (!mounted) return;
-    final service = AppNotificationService.instance;
-    await service.refresh();
-    if (!mounted) return;
     final id = data['notification_id']?.toString();
-    for (final item in service.inbox.value.items) {
-      if (item.id == id) {
-        await service.open(item);
-        return;
-      }
+    final updatedAt = DateTime.tryParse('${data['updated_at']}');
+    if (id != null && id.isNotEmpty && updatedAt != null) {
+      unawaited(
+        AppNotificationService.instance.markPushRead(
+          id,
+          readThrough: updatedAt,
+        ),
+      );
     }
     final conversationId = data['conversation_id']?.toString();
-    if (conversationId != null && conversationId.isNotEmpty) {
-      await _openConversation(conversationId);
-    } else {
-      _navigateNotification(data, data['booking_id']?.toString());
+    final isChat = data['category'] == 'chat' || data['type'] == 'chat_message';
+    if (isChat) {
+      if (conversationId != null && conversationId.isNotEmpty) {
+        await _openConversation(conversationId);
+      } else {
+        _openHomeTab(1);
+      }
+      return;
     }
+    _navigateNotification(data);
   }
 
-  void _navigateNotification(Map<String, dynamic> data, String? bookingId) {
-    if (!mounted) return;
+  void _navigateNotification(
+    Map<String, dynamic> data, {
+    bool openHistoryIfUnknown = true,
+  }) {
     final destination = data['destination']?.toString();
-    if (bookingId != null) {
-      _router.push(
-        '${AppRoutes.rentalStatus}?booking_id=${Uri.encodeComponent(bookingId)}',
-      );
+    final bookingId = int.tryParse('${data['booking_id']}');
+    if (bookingId != null && bookingId > 0) {
+      _router.push('${AppRoutes.rentalStatus}?booking_id=$bookingId');
+    } else if (data['category'] == 'rental') {
+      _router.push(AppRoutes.rentalStatus);
     } else if (destination == AppRoutes.identity ||
         destination == AppRoutes.myItems) {
       _router.push(destination!);
-    } else {
-      _router.go(AppRoutes.notification);
+    } else if (openHistoryIfUnknown) {
+      _openHomeTab(2);
     }
+  }
+
+  void _openHomeTab(int index) {
+    _router.go(
+      AppRoutes.home,
+      extra: {
+        'initialIndex': index,
+        'navigationId': ++_notificationNavigationId,
+      },
+    );
   }
 
   Future<void> _handleInitialDeepLink() async {
@@ -173,6 +202,14 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
   }
 
   void _handleDeepLink(Uri uri) {
+    final oauthRedirect = Uri.parse(SupabaseConfig.oauthRedirectUrl);
+    if (uri.scheme == oauthRedirect.scheme && uri.host == oauthRedirect.host) {
+      if (!AuthSession.isAuthenticated &&
+          _router.state.matchedLocation != AppRoutes.login) {
+        _router.go(AppRoutes.login);
+      }
+      return;
+    }
     final itemId = ItemDeepLink.parseItemId(uri);
     if (itemId == null) return;
 
@@ -215,9 +252,14 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>(
-          create: (context) => AuthBloc(
-            authRepository: AuthRepositoryImpl(AuthRemoteDataSource()),
-          ),
+          create: (_) {
+            final bloc = AuthBloc(
+              authRepository: AuthRepositoryImpl(AuthRemoteDataSource()),
+            );
+            final session = widget.oauthRestoreSession;
+            if (session != null) bloc.add(AuthAuthStateChanged(session));
+            return bloc;
+          },
         ),
         BlocProvider<WalletCubit>(create: (context) => WalletCubit()),
       ],

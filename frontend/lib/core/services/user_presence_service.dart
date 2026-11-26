@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../network/auth_session.dart';
 import '../network/supabase_client.dart';
 
 class UserPresenceService with WidgetsBindingObserver {
@@ -22,7 +23,7 @@ class UserPresenceService with WidgetsBindingObserver {
   }
 
   void initialize() {
-    if (_isInitialized) return;
+    if (_isInitialized || !SupabaseConfig.isInitialized) return;
     _isInitialized = true;
     WidgetsBinding.instance.addObserver(this);
     _initPresenceChannel();
@@ -84,7 +85,7 @@ class UserPresenceService with WidgetsBindingObserver {
   }
 
   Future<void> _trackPresence({required bool isOnline}) async {
-    if (!SupabaseConfig.isInitialized || _presenceChannel == null) return;
+    if (!AuthSession.isAuthenticated || _presenceChannel == null) return;
     final client = SupabaseConfig.client;
     final userId = client.auth.currentUser?.id;
     if (userId == null || userId.isEmpty) return;
@@ -103,7 +104,7 @@ class UserPresenceService with WidgetsBindingObserver {
   }
 
   Future<void> _updatePresence({required bool isOnline}) async {
-    if (!SupabaseConfig.isInitialized) return;
+    if (!SupabaseConfig.isInitialized || !AuthSession.isAuthenticated) return;
     final client = SupabaseConfig.client;
     final userId = client.auth.currentUser?.id;
     if (userId == null || userId.isEmpty) return;
@@ -138,11 +139,13 @@ class UserPresenceService with WidgetsBindingObserver {
   }
 
   void dispose() {
+    if (!_isInitialized) return;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
     try {
       _presenceChannel?.unsubscribe();
     } catch (_) {}
+    _presenceChannel = null;
     WidgetsBinding.instance.removeObserver(this);
     _isInitialized = false;
   }

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/models/pickup_location.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
+import '../../../../core/services/item_catalog_service.dart';
 import '../../domain/entities/rental_return_session.dart';
 
 class RentalReturnRemoteDataSource {
@@ -139,6 +140,7 @@ class RentalReturnRemoteDataSource {
     if (result['status'] != 'completed') {
       throw StateError('เซิร์ฟเวอร์ยังไม่ยืนยันว่าคืนอุปกรณ์สำเร็จ');
     }
+    ItemCatalogService.instance.notifyChanged();
   }
 
   Future<void> cancelRental({
@@ -158,7 +160,7 @@ class RentalReturnRemoteDataSource {
           ),
         );
       }
-      _result(
+      final result = _result(
         await _api.postMultipart(
           '/api/rentals/$rentalId/cancel',
           fields: {'reason': reason, 'note': note},
@@ -166,6 +168,9 @@ class RentalReturnRemoteDataSource {
           headers: _headers,
         ),
       );
+      if (result['status'] == 'cancelled') {
+        ItemCatalogService.instance.notifyChanged();
+      }
     } on ApiClientException catch (error) {
       final message = switch (error.type) {
         ApiClientErrorType.timeout => 'การยกเลิกใช้เวลานานเกินไป กรุณาลองใหม่',

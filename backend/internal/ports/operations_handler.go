@@ -45,7 +45,7 @@ func operationError(c fiber.Ctx, err error) error {
 	code := err.Error()
 	status := http.StatusConflict
 	messages := map[string]string{
-		"staff_required": "บัญชีนี้ไม่มีสิทธิ์เจ้าหน้าที่", "pilot_invite_required": "บัญชีนี้ยังไม่ได้รับเชิญเข้าร่วมทดลอง",
+		"staff_required":    "บัญชีนี้ไม่มีสิทธิ์เจ้าหน้าที่",
 		"account_suspended": "บัญชีถูกระงับการทำรายการใหม่", "active_request_exists": "มีคำขอที่กำลังดำเนินการอยู่",
 		"capture_expired": "รอบถ่ายภาพหมดอายุ กรุณาเริ่มใหม่", "request_not_pending": "คำขอนี้หมดอายุหรือมีผลพิจารณาแล้ว",
 		"self_review_forbidden": "ต้องให้เจ้าหน้าที่คนอื่นพิจารณาคำขอนี้", "identity_duplicate": "พบข้อมูลซ้ำ กรุณาตรวจสอบโดยเจ้าหน้าที่",
@@ -225,6 +225,12 @@ func (h *OperationsHandler) Submit(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "ไฟล์ภาพไม่ถูกต้อง"})
 	}
+	consent := c.FormValue("consent_version")
+	switch consent {
+	case "", "identity-v1", "identity-v2":
+	default:
+		return c.Status(400).JSON(fiber.Map{"error": "เวอร์ชันเงื่อนไขการใช้ข้อมูลไม่ถูกต้อง", "code": "invalid_consent_version"})
+	}
 	details, err := parseIdentityDetails(form.Value)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "กรุณาตรวจคำนำหน้าชื่อ ชื่อ นามสกุล และที่อยู่ตามบัตรประชาชนให้ครบถ้วน"})
@@ -348,6 +354,7 @@ func (h *OperationsHandler) Submit(c fiber.Ctx) error {
 	}
 	result, err := h.options.Store.RPC(c.Context(), "identity_submit", map[string]any{"p_actor": u, "p_id": id, "p_data": map[string]any{
 		"legal_name": legal, "masked_id": masked, "citizen_hmac": citizenHMAC,
+		"consent_version": consent,
 		// อายุบัตรระบุโดยเจ้าหน้าที่หลังตรวจภาพเท่านั้น
 		"expires_on": nil, "lifetime": false, "is_minor": minor, "raw_encrypted": encrypted, "analysis": map[string]any{"review_mode": "manual", "selfie_with_card": selfieWithCard},
 	}, "p_evidence": evidence})
@@ -493,7 +500,10 @@ func adminItemID(value any) (int64, bool) {
 	}
 }
 func (h *OperationsHandler) Action(c fiber.Ctx) error {
-	if c.Params("action") == "guardian-review" || c.Params("action") == "revoke-guardian" {
+	action := c.Params("action")
+	switch action {
+	case "identity-review", "suspend-user", "hide-item", "review-item", "hide-review", "staff", "revoke-identity", "complaint", "settings":
+	default:
 		return c.SendStatus(404)
 	}
 	u, ok := h.actor(c)
@@ -504,7 +514,7 @@ func (h *OperationsHandler) Action(c fiber.Ctx) error {
 	if err := c.Bind().JSON(&data); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "ข้อมูลการดำเนินงานไม่ถูกต้อง"})
 	}
-	if c.Params("action") == "review-item" {
+	if action == "review-item" {
 		itemID, err := strconv.ParseInt(c.Params("target"), 10, 64)
 		if err != nil || itemID <= 0 {
 			return c.Status(400).JSON(fiber.Map{"error": "รหัสประกาศไม่ถูกต้อง"})
@@ -516,7 +526,7 @@ func (h *OperationsHandler) Action(c fiber.Ctx) error {
 			"p_reason":   data["reason"],
 		})
 	}
-	return h.rpc(c, "admin_action", map[string]any{"p_actor": u, "p_action": c.Params("action"), "p_target": c.Params("target"), "p_data": data})
+	return h.rpc(c, "admin_action", map[string]any{"p_actor": u, "p_action": action, "p_target": c.Params("target"), "p_data": data})
 }
 func (h *OperationsHandler) Evidence(c fiber.Ctx) error {
 	u, ok := h.actor(c)

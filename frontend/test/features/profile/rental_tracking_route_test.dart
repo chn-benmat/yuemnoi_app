@@ -111,6 +111,31 @@ void main() {
   }
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  testWidgets('resuming pickup without a known payment method shows status', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'handover_progress_step_booking_930': 1,
+    });
+    final service = FakeLocationService();
+    addTearDown(service.updates.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RentalTrackingMapPage(
+          locationService: service,
+          bookingId: 930,
+          isOwner: false,
+          destinationLat: 13.71,
+          destinationLng: 100.43,
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('ดูสถานะนัดรับ'), findsOneWidget);
+    expect(find.text('ชำระเงิน'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('missing contact never uses a sample phone number', (
     tester,
   ) async {

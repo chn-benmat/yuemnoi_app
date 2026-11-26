@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/gofiber/fiber/v3"
@@ -87,9 +88,13 @@ func (h *UserHandler) Login(c fiber.Ctx) error {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "อีเมลหรือรหัสผ่านไม่ถูกต้อง"})
 	}
 	if _, err := h.verifier.UserIDFromToken(c.Context(), tokens.AccessToken); err != nil {
-		return appTokenError(c, err)
+		var pending *domain.PendingAccountDeletion
+		if !errors.As(err, &pending) || !pending.DeleteAfter.After(time.Now()) {
+			return appTokenError(c, err)
+		}
 	}
 
+	c.Set("Cache-Control", "private, no-store")
 	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"status":        http.StatusOK,
 		"message":       "เข้าสู่ระบบสำเร็จ",

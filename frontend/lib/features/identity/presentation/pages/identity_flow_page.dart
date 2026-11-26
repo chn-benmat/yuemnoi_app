@@ -158,7 +158,7 @@ class _IdentityPageState extends State<IdentityPage> {
       context: context,
       barrierDismissible: previouslyAccepted,
       builder: (_) =>
-          IdentityConsentDialog(previouslyAccepted: previouslyAccepted),
+          IdentityConsentDialog(requiresConsent: !previouslyAccepted),
     );
     _consentDialogOpen = false;
     if (!mounted || previouslyAccepted) return;
@@ -829,7 +829,6 @@ class _IdentityPageState extends State<IdentityPage> {
       'corrections' => 'แก้อีกนิด แล้วส่งใหม่',
       'rejected' => 'คำขอยังไม่ผ่าน',
       'suspended' => 'บัญชีถูกจำกัดการใช้งาน',
-      'unavailable' => 'ยังเปิดยืนยันไม่ได้',
       _ => 'เริ่มยืนยันตัวตนใหม่',
     };
     final description = switch (kind) {
@@ -842,8 +841,6 @@ class _IdentityPageState extends State<IdentityPage> {
         'อ่านคำแนะนำจากเจ้าหน้าที่ แล้วเริ่มถ่ายและส่งข้อมูลที่ถูกต้องอีกครั้ง',
       'rejected' => 'ตรวจเหตุผลจากเจ้าหน้าที่ก่อนเริ่มคำขอใหม่',
       'suspended' => 'กรุณาติดต่อผู้ดูแลเพื่อสอบถามรายละเอียด',
-      'unavailable' =>
-        'ระบบกำลังทดลองเฉพาะบัญชีที่ได้รับเชิญ กรุณากลับมาใหม่ภายหลัง',
       _ =>
         'รอบการยืนยันเดิมหมดอายุ\nเริ่มรอบใหม่เพื่อส่งข้อมูลให้เจ้าหน้าที่ตรวจ',
     };
@@ -867,8 +864,7 @@ class _IdentityPageState extends State<IdentityPage> {
       'corrections' => 'ต้องแก้ไขข้อมูล',
       'rejected' => 'ตรวจไม่ผ่าน',
       'suspended' => 'จำกัดการใช้งาน',
-      'expired' => 'ต้องยืนยันใหม่',
-      _ => 'ยังไม่เปิดใช้งาน',
+      _ => 'ต้องยืนยันใหม่',
     };
     final reason = status.request['reason'] ?? status.request['review_reason'];
     return Column(
@@ -954,7 +950,7 @@ class _IdentityPageState extends State<IdentityPage> {
   String _kind(IdentityState state) {
     final s = state.status;
     if (s == null) return 'loading';
-    if ((s.data['control'] as Map?)?['suspended'] == true) return 'suspended';
+    if (s.restricted) return 'suspended';
     if (s.verified) return 'approved';
     final request = s.request;
     final status = request['status'];
@@ -965,7 +961,6 @@ class _IdentityPageState extends State<IdentityPage> {
     if (['rejected', 'corrections', 'expired'].contains(status)) {
       return status as String;
     }
-    if (!s.available) return 'unavailable';
     return 'form';
   }
 

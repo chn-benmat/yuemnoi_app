@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../network/auth_session.dart';
@@ -22,6 +23,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 class FcmService {
   FcmService._();
   static final FcmService instance = FcmService._();
+  static const _iosNotifications = MethodChannel(
+    'yuemnoi/foreground_notifications',
+  );
   bool _isInitialized = false;
   Future<void>? _initializing;
   FirebaseMessaging? _messaging;
@@ -54,6 +58,21 @@ class FcmService {
 
   Future<void> _initialize() async {
     try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        _iosNotifications.setMethodCallHandler((call) async {
+          final data = call.arguments;
+          return call.method == 'shouldPresent' &&
+              data is Map &&
+              _canPresentForegroundUpdate(Map<String, dynamic>.from(data));
+        });
+      }
+      final notifications = ChatNotificationService.instance;
+      notifications.onPushNotificationTapped = _queueTap;
+      notifications.onNotificationTapped = (conversationId) => _queueTap({
+        'type': 'chat_message',
+        'conversation_id': conversationId,
+      });
+      await notifications.initialize();
       await Firebase.initializeApp();
       final messaging = _messaging = FirebaseMessaging.instance;
       await messaging.setForegroundNotificationPresentationOptions(
@@ -61,13 +80,9 @@ class FcmService {
         badge: false,
         sound: false,
       );
-      FirebaseMessaging.onMessage.listen((message) {
-        if (_belongsToCurrentUser(message.data))
-          unawaited(AppNotificationService.instance.handlePush(message.data));
-      });
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        _pendingTap = Map<String, dynamic>.from(message.data);
-        unawaited(flushPendingTap());
+        _queueTap(message.data);
       });
       messaging.onTokenRefresh.listen((token) {
         _cachedToken = token;
@@ -75,8 +90,9 @@ class FcmService {
         if (userId != null) unawaited(syncUserToken(userId));
       });
       final initial = await messaging.getInitialMessage();
-      if (initial != null)
-        _pendingTap = Map<String, dynamic>.from(initial.data);
+      if (initial != null) {
+        _pendingTap ??= Map<String, dynamic>.from(initial.data);
+      }
       _isInitialized = true;
       unawaited(flushPendingTap());
     } catch (_) {
@@ -87,9 +103,50 @@ class FcmService {
     }
   }
 
+  void _handleForegroundMessage(RemoteMessage message) {
+    final data = message.data;
+    if (data['category'] == 'chat' || data['type'] == 'chat_message') {
+      if (_belongsToCurrentUser(data)) {
+        unawaited(AppNotificationService.instance.handlePush(data));
+      }
+      return;
+    }
+    // iOS ใช้ push เดิมผ่าน AppDelegate และตรวจบัญชีผ่าน _iosNotifications
+    if (defaultTargetPlatform != TargetPlatform.android ||
+        !_canPresentForegroundUpdate(data)) {
+      return;
+    }
+    final notification = message.notification;
+    final title = notification?.title ?? data['title']?.toString();
+    final body = notification?.body ?? data['body']?.toString();
+    if (title == null || body == null) return;
+    unawaited(
+      ChatNotificationService.instance.showForegroundUpdate(
+        title: title,
+        body: body,
+        data: data,
+      ),
+    );
+  }
+
+  bool _canPresentForegroundUpdate(Map<String, dynamic> data) {
+    final category = data['category'];
+    final expiry = DateTime.tryParse('${data['expires_at']}');
+    return (category == 'app' || category == 'rental') &&
+        data['recipient_id'] != null &&
+        _belongsToCurrentUser(data) &&
+        (expiry == null || expiry.isAfter(DateTime.now()));
+  }
+
+  void _queueTap(Map<String, dynamic> data) {
+    _pendingTap = Map<String, dynamic>.from(data);
+    unawaited(flushPendingTap());
+  }
+
   bool _belongsToCurrentUser(Map<String, dynamic> data) {
-    if (!AuthSession.isAuthenticated || !SupabaseConfig.isInitialized)
+    if (!AuthSession.isAuthenticated || !SupabaseConfig.isInitialized) {
       return false;
+    }
     final recipient = data['recipient_id']?.toString();
     return recipient == null ||
         recipient == SupabaseConfig.client.auth.currentUser?.id;
@@ -99,8 +156,9 @@ class FcmService {
     if (_unregistering != null) await _unregistering;
     if (kIsWeb || userId.isEmpty || !AuthSession.isAuthenticated) return;
     if (!SupabaseConfig.isInitialized ||
-        SupabaseConfig.client.auth.currentUser?.id != userId)
+        SupabaseConfig.client.auth.currentUser?.id != userId) {
       return;
+    }
     if (_userId != userId) {
       _generation++;
       _userId = userId;
@@ -231,8 +289,9 @@ class FcmService {
   Future<void> flushPendingTap() async {
     final data = _pendingTap;
     final callback = _onNotificationOpened;
-    if (data == null || callback == null || !AuthSession.isAuthenticated)
+    if (data == null || callback == null || !AuthSession.isAuthenticated) {
       return;
+    }
     if (!_belongsToCurrentUser(data)) {
       _pendingTap = null;
       return;

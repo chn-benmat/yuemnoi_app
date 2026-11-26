@@ -37,9 +37,13 @@ Go Backend เป็น REST API หลักของ **Yuemnoi** เชื่�
 
 การสร้างคำขอเช่าเรียก RPC `create_rental_request` และส่งมอบเป็น `active` ตอนคืน เจ้าของตรวจอุปกรณ์แล้วเรียก `POST /api/rentals/:id/return-confirmation` ด้วย `{"checked":true}` เพื่อเปลี่ยนสถานะเป็น `completed` ในธุรกรรมเดียว ผู้เช่าดูผลผ่าน `return-session` ใช้ migrations `20261125021333_return_without_renter_photos.sql` และ `20261125023043_complete_rental_return_on_merchant_receipt.sql` ใน `supabase/migrations/` เส้นทาง `return-evidence`, `return-inspection` และ `return` รองรับแอปรุ่นเดิม เจ้าของยืนยันจบรายการที่ค้างในสถานะ `awaiting_return` หรือ `return_ready` ผ่านเส้นทางใหม่ได้ การยกเลิกก่อนส่งมอบใช้ `cancel` พร้อมเหตุผลและหลักฐาน
 
+ติดตั้ง [migration ป้องกันการเช่าซ้ำ](../supabase/migrations/20261126094244_enforce_item_rental_occupancy.sql) ก่อนเผยแพร่ Go และ Flutter รุ่นนี้ ฟีดและรายละเอียดอุปกรณ์ส่ง `is_rental_occupied` ตามสถานะ `confirmed`, `active`, `awaiting_return` และ `return_ready` ฐานข้อมูลป้องกันการเช่าอุปกรณ์ซ้ำข้ามช่วงเวลา และเปิดให้เช่าอีกครั้งเมื่อยกเลิกหรือคืนสำเร็จ ถ้ามีรายการเดิมที่ยังไม่จบมากกว่าหนึ่งรายการต่ออุปกรณ์ ให้ตรวจสอบรายการเหล่านั้นก่อนติดตั้ง migration
+
 ใช้ migrations พร้อมเพย์ตามลำดับ `20261124165600_rental_handover_payment.sql`, `20261124165607_rental_promptpay_qr.sql`, `20261124171624_rental_promptpay_national_id.sql` และ `20261125012154_start_rental_after_payment.sql` ใน `supabase/migrations/` คู่เช่าอ่านสถานะด้วย `GET /api/rentals/:id/handover-payment` ผู้ปล่อยเช่าใช้ `PUT` ที่เส้นทางเดียวกันเพื่อบันทึกเบอร์มือถือหรือเลขบัตรประชาชนสำหรับสร้าง QR พร้อมเพย์ตามยอดจอง เมื่อถึงเวลานัดและได้รับเงินสดหรือพร้อมเพย์แล้ว ผู้ปล่อยเช่าใช้ `POST` ที่เส้นทางเดียวกันเพื่อบันทึกการรับเงินและเปลี่ยนสถานะเป็น `active` ในธุรกรรมเดียวกัน
 
 การบันทึกเลขบัตรพร้อมเพย์ต้องตั้ง `IDENTITY_ENCRYPTION_KEY` เป็น base64 ของคีย์ 32 ไบต์ และใช้ค่าเดียวกันในทุก instance ของ Go แม้ปิด `OPERATIONS_ENABLED` เซิร์ฟเวอร์ใช้คีย์ที่แยกตามบัญชีและวัตถุประสงค์ก่อนเข้ารหัสเลขบัตรลงฐานข้อมูล หากเปลี่ยนคีย์ เลขบัตรพร้อมเพย์ที่เข้ารหัสด้วยคีย์เดิมจะอ่านไม่ได้
+
+หน้าตั้งค่าบัญชีใช้ `GET /api/user/promptpay` อ่านค่าของเจ้าของ session และใช้ `PUT` เพื่อบันทึก `promptpay_phone` หรือ `promptpay_national_id` อย่างใดอย่างหนึ่ง ระบบใช้บัญชีเดียวกับหน้าส่งมอบและแสดงเลขบัตรเฉพาะ 4 หลักท้ายผ่าน `national_id_last_four` ถ้าอ่านเลขบัตรเดิมไม่ได้ API จะคืนประเภทเพื่อให้ผู้ใช้กรอกข้อมูลใหม่ได้
 
 แจ้งเตือนแชต การเช่า และระบบเก็บใน `notification_tb` พร้อม outbox จาก transaction ของเหตุการณ์ Worker ส่ง FCM ไปยังทุกอุปกรณ์ใน `notification_device_tb`; ไม่ใช้ `profile_tb.fcm_token` เป็นแหล่งส่งอีกแล้ว API ประวัติ/อ่าน/ลงทะเบียนเครื่องอยู่ที่ `/api/notifications` รายละเอียดและ SQL tests อยู่ใน [ข้อตกลงระบบแจ้งเตือน](../docs/notifications.md)
 
@@ -62,6 +66,14 @@ flowchart LR
 Frontend ยังใช้ Supabase โดยตรงในบางฟีเจอร์ รายละเอียดอยู่ใน [Frontend README](../frontend/README.md)
 
 บัญชีที่มี `app_metadata.dashboard_only = true` ใช้ได้เฉพาะ dashboard: `POST /api/auth/login`, OTP และ API ส่วนตัวของแอปตอบ HTTP 403 พร้อม `code: dashboard_only` โดยตรวจ metadata ปัจจุบันจาก Supabase Auth ทุกครั้ง `GET /api/auth/session` ใช้ตรวจ OAuth และ session ที่กู้คืน ส่วน dashboard ใช้ `POST /api/admin/login` และตรวจสิทธิ์เจ้าหน้าที่ก่อนคืน token ใช้ [migration](../supabase/migrations/20261017094213_restrict_dashboard_only_accounts.sql) เพื่อกำหนดบัญชี `admin_yuemnoi@gmail.com` และบังคับ RLS สำหรับการเข้าถึง Supabase โดยตรงด้วย JWT เดิม ทดสอบฐานข้อมูลแบบ rollback ได้ด้วย [dashboard_only_access.sql](../supabase/tests/dashboard_only_access.sql)
+
+### การลบบัญชีและกู้คืน
+
+- `POST /api/user/account/deletion` ใช้ Bearer token ของบัญชี ตอบ `delete_after` เมื่อจัดคิวลบสำเร็จ ฐานข้อมูลนับ 30 วันจากครั้งแรกและซ่อนโปรไฟล์ ประกาศ และข้อมูลที่เกี่ยวข้องในแอป รวมถึงรายละเอียดการเช่าและแชตระหว่างรอลบ รายการเช่าที่ค้างทั้งฝั่งผู้เช่าและเจ้าของอุปกรณ์ให้ HTTP 409 พร้อม `code: active_rentals`
+- เมื่อบัญชีรอลบ `GET /api/auth/session` ตอบ HTTP 409 พร้อม `code: account_deletion_pending` และ `delete_after` เส้นทางกู้คืน `POST /api/auth/account/restore` ตรวจเจ้าของและ session ที่สร้างหลังขอลบ ก่อนยกเลิกคำขอและเปิดการเข้าถึงอีกครั้ง เมื่อพ้นกำหนด API ตอบ HTTP 410 ในช่วงที่ worker ยังดำเนินการอยู่
+- งานลบบัญชีใน Go ตรวจคิวทุกนาที รับงานพร้อม lease และลบไฟล์ผ่าน Storage API ก่อนยืนยันลบข้อมูลบัญชีในฐานข้อมูล การลองใหม่ใช้คิวเดิม ประวัติการเช่าของคู่สัญญาที่ยังอยู่เก็บหลังลบข้อมูลระบุตัวตนและไฟล์ของบัญชีที่ลบ
+
+ติดตั้ง [migration จัดคิวและกู้บัญชี](../supabase/migrations/20261126014914_schedule_restore_account_deletion.sql) และ [migration ลบบัญชีครบกำหนด](../supabase/migrations/20261126015023_purge_scheduled_account_deletions.sql) ก่อนเผยแพร่ Go และ Flutter รุ่นนี้ ลิงก์ไฟล์ใน bucket สาธารณะที่เคยแชร์แยกจากแอปอาจยังเข้าถึงได้ในช่วงรอลบจนกว่างาน Storage จะลบไฟล์
 
 <a id="stack"></a>
 
@@ -383,7 +395,7 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 
 ตารางภายในแยกเป็น `identity_private` และ `ops_private` โดย Go ยังเรียก RPC ชื่อเดิมใน `public` ด้วย service role ดู [migration และการตรวจสอบฐานข้อมูล](../supabase/README.md)
 
-`GET /api/identity/status` ส่ง `available` เพื่อบอกสิทธิ์เริ่มยืนยัน โดย `pilot` ยังคงหมายถึงสมาชิกกลุ่มทดลองเท่านั้น `POST /api/admin/actions/settings/identity` รับ `identity_open_to_all` และ/หรือ `enforce_identity` เป็น boolean พร้อม `reason` และคงค่าที่ไม่ได้ส่งมา หากส่งชนิดข้อมูลไม่ถูกต้องจะได้ HTTP 400 พร้อม `code: invalid_settings`
+ติดตั้ง [migration เปิดยืนยันตัวตนทุกบัญชี](../supabase/migrations/20261125175317_remove_identity_pilot.sql) ก่อนใช้งาน Backend และ Admin รุ่นนี้ ผู้ใช้ที่เข้าสู่ระบบเริ่มยืนยันตัวตนได้ทุกบัญชีที่ไม่ถูกระงับ `GET /api/identity/status` และ `status` ใน `GET /api/identity/account` ยังส่ง `available: true` สำหรับแอปรุ่นเดิม ส่วน `control.suspended` ระบุสถานะระงับบัญชี `POST /api/admin/actions/settings/identity` รับ `enforce_identity` เป็น boolean พร้อม `reason` เพื่อกำหนดการยืนยันตัวตนก่อนปล่อยเช่า หากขาดค่าหรือส่งชนิดข้อมูลไม่ถูกต้องจะได้ HTTP 400 พร้อม `code: invalid_settings`
 
 <a id="troubleshooting"></a>
 
@@ -412,7 +424,13 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 
 การแก้ไขใช้ session/submit เดิม ส่งข้อมูลส่วนบุคคลและที่อยู่ครบ พร้อม `selfie_with_card: true` และแนบเฉพาะภาพที่เปลี่ยน ระบบคัดลอกภาพเดิมที่ยังไม่หมดอายุเข้าสู่คำขอใหม่ได้ รูปเดิมที่ยังอ่านได้สามารถใช้ต่อได้แม้ไม่มีธง selfie_with_card ของรุ่นใหม่ โดยคง metadata เดิม ไม่ใช้ธงดังกล่าวแทนผลตรวจของเจ้าหน้าที่ การส่งซ้ำถูกป้องกันระหว่าง pending เลขบัตรเทียบกับ HMAC เดิมทั้ง Go และ database trigger หากต่างจะได้ `409 citizen_id_locked` และต้องติดต่อเจ้าหน้าที่ กรณีข้อมูลเก่าถูก purge แล้วจะแสดงเลขที่ปกปิดไว้และให้กรอกช่องอื่นใหม่ โดยคง HMAC เลขบัตรเดิม
 
-ข้อมูลที่อนุมัติล่าสุดเก็บเป็น ciphertext ใน `identity_profiles.raw_encrypted` จนกว่าข้อมูลบัญชีนั้นถูกแทนที่หรือลบบัญชี ใช้คีย์และการเข้ารหัสเดิม แยกจากข้อมูลคำขอและรูปหลักฐานที่ยังลบตาม retention เดิม ข้อมูล pending/corrections/rejected ไม่ทับ snapshot หรือสิทธิ์เดิม เมื่อเจ้าหน้าที่อนุมัติผ่าน workflow เดิมจึงแทนที่ snapshot โดยอัตโนมัติ หากอัปโหลดล้มเหลวจะยกเลิกรอบ capture ก่อน rollback รูป และจะไม่ลบรูปของคำขอที่เปลี่ยนเป็น pending แล้ว
+ข้อมูลที่อนุมัติล่าสุดเก็บเป็น ciphertext ใน `identity_profiles.raw_encrypted` จนกว่าข้อมูลบัญชีนั้นถูกแทนที่หรือลบบัญชี ใช้คีย์และการเข้ารหัสเดิม ข้อมูล pending/corrections/rejected ไม่ทับ snapshot หรือสิทธิ์เดิม เมื่อเจ้าหน้าที่อนุมัติผ่าน workflow เดิมจึงแทนที่ snapshot โดยอัตโนมัติ หากอัปโหลดล้มเหลวจะยกเลิกรอบ capture ก่อน rollback รูป และจะไม่ลบรูปของคำขอที่เปลี่ยนเป็น pending แล้ว
+
+ติดตั้ง [migration เก็บรูปหน้าบัตรที่อนุมัติ](../supabase/migrations/20261126012643_retain_approved_identity_card.sql) แล้วเผยแพร่ Go และข้อความการเก็บรักษารุ่นใหม่ในแอปและ Admin แอปรุ่นใหม่ส่ง multipart `consent_version: identity-v2` เมื่อยืนยันส่งคำขอหรือแก้ไขข้อมูล API เริ่มรอบถ่ายยังรับ `identity-v1` ตามเดิม ส่วนคำขอที่ส่งจากแอปรุ่นเดิมใช้ระยะเก็บรักษาเดิม
+
+รูปหน้าบัตรของคำขอที่อนุมัติล่าสุดและมี `identity-v2` เก็บใน bucket ส่วนตัวโดยไม่มีกำหนดหมดอายุ รูปเดิมครบกำหนดลบเมื่อคำขอใหม่ได้รับอนุมัติหรือแถวข้อมูลยืนยันของบัญชีถูกลบ รูปคู่บัตรและหลักฐานอื่นหมดอายุตามกำหนดเดิม ส่วนข้อมูลดิบของคำขอถูกล้างตามกำหนดแม้ยังเก็บรูปหน้าบัตร เจ้าของดูรูปผ่าน API ของบัญชีและการเปิดหลักฐานของเจ้าหน้าที่มี audit ตามเดิม รูปที่ลบแล้วต้องถ่ายใหม่
+
+งาน cleanup ใช้ private Storage API ลบไฟล์ และยืนยันผลกลับไปที่ RPC ตามเดิมเมื่อสำเร็จ หากแถวหลักฐานถูกลบตอนล้างข้อมูลบัญชี ตาราง `identity_private.card_files_to_delete` จะเก็บตำแหน่งไฟล์ไว้ให้ worker ลบและลองใหม่ได้
 
 ตรวจด้วย `go test ./...`, `go vet ./...`, `go build ./...` และ `supabase/tests/identity_account_details.sql` ซึ่งสร้าง fixture แล้ว rollback ครอบคลุม ownership, สิทธิ์ RPC, เลขบัตรคงเดิม, pending/corrections/approval และการหมดอายุหลักฐาน
 

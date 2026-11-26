@@ -114,7 +114,7 @@ void main() {
                         bookingId: 501,
                         itemTitle: 'Sony A7 IV',
                         totalPrice: 1500,
-                        paymentMethod: method,
+                        paymentMethod: isOwner ? method : 'promptpay',
                         initialIsOwner: isOwner,
                         initialStep: 1,
                         updateBookingStatusUseCase: useCase,
@@ -150,6 +150,10 @@ void main() {
         await openSheet(isOwner: false);
         expect(find.byType(RentalPickupPaymentModal), findsOneWidget);
         expect(find.textContaining('รหัสส่งมอบ'), findsNothing);
+        expect(
+          find.text('ยอดชำระสุทธิ'),
+          method == 'promptpay' ? findsOneWidget : findsNothing,
+        );
         expect(
           find.text('รอผู้ปล่อยเช่ายืนยันว่าได้รับเงินเพื่อเริ่มการเช่า'),
           findsOneWidget,

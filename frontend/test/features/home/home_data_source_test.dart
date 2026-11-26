@@ -145,6 +145,53 @@ void main() {
   });
 
   test(
+    'retains occupied status in the feed and clears it on refresh',
+    () async {
+      final api = _FakeApiClient(
+        const ApiResponse(
+          statusCode: 200,
+          data: [
+            {'id': 1, 'item_name': 'Camera', 'is_rental_occupied': true},
+          ],
+        ),
+      );
+      final source = HomeSupabaseDataSource(apiClient: api);
+      expect(
+        (await source.fetchNearbyItems()).single.toJson(),
+        containsPair('is_rental_occupied', true),
+      );
+
+      api.response = const ApiResponse(
+        statusCode: 200,
+        data: [
+          {'id': 1, 'item_name': 'Camera', 'is_rental_occupied': false},
+        ],
+      );
+      source.clearMemoryCache();
+      expect(
+        (await source.fetchNearbyItems()).single.toJson(),
+        containsPair('is_rental_occupied', false),
+      );
+    },
+  );
+
+  test('the API rental count is retained in the offline feed', () async {
+    final api = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 200,
+        data: [
+          {'id': 1, 'item_name': 'Camera', 'paid_booking_count': 3},
+        ],
+      ),
+    );
+    final source = HomeSupabaseDataSource(apiClient: api);
+    expect((await source.fetchNearbyItems()).single.paidBookingCount, 3);
+    api.failure = const ApiClientException(ApiClientErrorType.connection);
+    source.clearMemoryCache();
+    expect((await source.fetchNearbyItems()).single.paidBookingCount, 3);
+  });
+
+  test(
     'a previous account location does not provide a feed distance',
     () async {
       final api = _FakeApiClient(
@@ -191,7 +238,7 @@ void main() {
       httpClient: MockClient((request) async {
         final body = switch (request.url.path) {
           '/rest/v1/home_feed_ranked_v' =>
-            '[{"id":1,"item_name":"Far"},{"id":2,"item_name":"Near"},{"id":3,"item_name":"Unknown"}]',
+            '[{"id":1,"item_name":"Far"},{"id":2,"item_name":"Near","paid_booking_count":3},{"id":3,"item_name":"Unknown"}]',
           '/rest/v1/item_tb' =>
             '[{"id":1,"pickup_latitude":14,"pickup_longitude":100},'
                 '{"id":2,"pickup_latitude":13.01,"pickup_longitude":100}]',
@@ -214,6 +261,7 @@ void main() {
     await location.refresh();
     final nearby = rankItemsByDistance(items, location.position.value);
     expect(nearby.map((item) => item.id), ['2', '1', '3']);
+    expect(nearby.map((item) => item.paidBookingCount), [3, 0, 0]);
     expect(nearby.first.distanceKm, closeTo(1.11, 0.02));
     expect(nearby.last.distanceKm, isNull);
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../network/auth_session.dart';
 import '../network/supabase_client.dart';
 
 class FavoriteServiceException implements Exception {
@@ -25,7 +26,9 @@ class FavoriteService {
   String? _loadingOwner;
 
   String? get _authenticatedUserId {
-    if (!SupabaseConfig.isInitialized) return null;
+    if (!SupabaseConfig.isInitialized || !AuthSession.isAuthenticated) {
+      return null;
+    }
     final session = SupabaseConfig.client.auth.currentSession;
     if (session == null || session.isExpired) return null;
     final user = session.user;

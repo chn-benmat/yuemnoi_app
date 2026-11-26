@@ -22,9 +22,8 @@ class _TestAddressRepository implements ThaiAddressRepository {
   }
 }
 
-class RolloutRepository implements IdentityRepository {
-  RolloutRepository({Map<String, dynamic>? data})
-    : data = data ?? {'available': true};
+class TestIdentityRepository implements IdentityRepository {
+  TestIdentityRepository({Map<String, dynamic>? data}) : data = data ?? {};
   Map<String, dynamic> data;
   int begins = 0, submits = 0;
   String? beganWithBirthDate;
@@ -71,15 +70,15 @@ class RolloutRepository implements IdentityRepository {
   void close() {}
 }
 
-Future<RolloutRepository> showPage(
+Future<TestIdentityRepository> showPage(
   WidgetTester tester, {
-  RolloutRepository? repository,
+  TestIdentityRepository? repository,
   double scale = 1,
   IdentityCapture? capture,
   bool acceptConsent = true,
   ThaiAddressRepository? addressRepository,
 }) async {
-  final repo = repository ?? RolloutRepository();
+  final repo = repository ?? TestIdentityRepository();
   final cubit = IdentityCubit(repo);
   addTearDown(cubit.close);
   await cubit.load();
@@ -107,9 +106,20 @@ Future<RolloutRepository> showPage(
   await tester.pumpAndSettle();
   if (acceptConsent &&
       find.text('ยินยอมและดำเนินการต่อ').evaluate().isNotEmpty) {
-    await tapText(tester, 'ยินยอมและดำเนินการต่อ');
+    await acceptIdentityConsent(tester);
   }
   return repo;
+}
+
+Future<void> acceptIdentityConsent(WidgetTester tester) async {
+  final checkbox = find.descendant(
+    of: find.byKey(const ValueKey('identity_consent_dialog')),
+    matching: find.byType(CheckboxListTile),
+  );
+  await tester.ensureVisible(checkbox);
+  await tester.tap(checkbox);
+  await tester.pumpAndSettle();
+  await tapText(tester, 'ยินยอมและดำเนินการต่อ');
 }
 
 Future<void> tapText(WidgetTester tester, String text) async {
@@ -142,7 +152,7 @@ Future<void> selectBirthDate(
 
 Future<void> begin(WidgetTester tester, {int birthYear = 2000}) async {
   if (find.text('ยินยอมและดำเนินการต่อ').evaluate().isNotEmpty) {
-    await tapText(tester, 'ยินยอมและดำเนินการต่อ');
+    await acceptIdentityConsent(tester);
   }
   await tapText(tester, 'ถ่ายบัตรและใบหน้า');
   await selectBirthDate(tester, year: birthYear);
@@ -477,17 +487,25 @@ void main() {
     tester,
   ) async {
     var fail = true;
+    final captures = <IdentityCaptureKind>[];
     final repo = await showPage(
       tester,
       capture: (context, kind) async {
+        captures.add(kind);
         if (fail) throw Exception('camera');
         return testPhoto();
       },
     );
-    await begin(tester);
+    await tapText(tester, 'ถ่ายบัตรและใบหน้า');
     expect(find.textContaining('เปิดกล้องไม่สำเร็จ'), findsOneWidget);
+    await tapText(tester, 'ยืนยัน');
     fail = false;
     await tapText(tester, 'ถ่ายบัตรและใบหน้า');
+    expect(captures, [
+      IdentityCaptureKind.card,
+      IdentityCaptureKind.card,
+      IdentityCaptureKind.selfie,
+    ]);
     expect(repo.begins, 0);
     expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
@@ -545,19 +563,39 @@ void main() {
         return testPhoto();
       },
     );
+    final dialog = find.byKey(const ValueKey('identity_consent_dialog'));
+    expect(dialog, findsOneWidget);
     expect(
-      find.byKey(const ValueKey('identity_consent_dialog')),
-      findsOneWidget,
+      find.descendant(of: dialog, matching: find.byType(Icon)),
+      findsNothing,
     );
+    final text = tester
+        .widgetList<Text>(
+          find.descendant(of: dialog, matching: find.byType(Text)),
+        )
+        .map((widget) => widget.data);
     expect(
-      find.textContaining('เพื่อให้เจ้าหน้าที่ที่ได้รับสิทธิ์ตรวจสอบ'),
-      findsOneWidget,
+      text,
+      containsAllInOrder([
+        '1. ข้อมูลที่เก็บ',
+        '•',
+        '2. วัตถุประสงค์และวิธีใช้ข้อมูล',
+        '•',
+        '3. ผู้ที่เข้าถึงข้อมูล',
+        '•',
+        '4. การเก็บรักษาและลบข้อมูล',
+        '•',
+        '5. การเลือกให้ความยินยอม',
+        '•',
+        '6. สิทธิและช่องทางติดต่อ',
+        '•',
+      ]),
     );
     expect(find.text('ยืนยันตัวตนให้พร้อมปล่อยเช่า'), findsNothing);
     expect(find.text('อายุครบ 20 ปีหรือยัง?'), findsNothing);
     expect(repo.begins, 0);
     expect(captures, isEmpty);
-    await tapText(tester, 'ยินยอมและดำเนินการต่อ');
+    await acceptIdentityConsent(tester);
     expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
     expect(find.byKey(const ValueKey('pick_birth_date')), findsOneWidget);
     expect(repo.begins, 0);
@@ -579,7 +617,7 @@ void main() {
     tester,
   ) async {
     var captures = 0;
-    final repo = RolloutRepository();
+    final repo = TestIdentityRepository();
     final cubit = IdentityCubit(repo);
     addTearDown(cubit.close);
     await cubit.load();
@@ -725,9 +763,8 @@ void main() {
     ) async {
       final repo = await showPage(
         tester,
-        repository: RolloutRepository(
+        repository: TestIdentityRepository(
           data: {
-            'available': true,
             'control': {'is_minor': true, 'suspended': false},
           },
         ),
@@ -747,10 +784,7 @@ void main() {
 
   testWidgets('ผู้เยาว์ส่งคำขอได้โดยไม่มีข้อมูลผู้ปกครอง', (tester) async {
     final year = DateTime.now().year - 10;
-    final repo = await showPage(
-      tester,
-      repository: RolloutRepository(data: {'available': true}),
-    );
+    final repo = await showPage(tester, repository: TestIdentityRepository());
     await tapText(tester, 'ถ่ายบัตรและใบหน้า');
     expect(repo.begins, 0);
     await fillIdentity(tester, birthYear: year);
@@ -768,8 +802,7 @@ void main() {
   ) async {
     final repo = await showPage(
       tester,
-      repository: RolloutRepository(data: {'available': true})
-        ..failSubmit = true,
+      repository: TestIdentityRepository()..failSubmit = true,
     );
     await begin(tester);
     await fillIdentity(tester);
@@ -841,7 +874,7 @@ void main() {
     tester,
   ) async {
     final captures = <IdentityCaptureKind>[];
-    final repo = RolloutRepository()..failBegin = true;
+    final repo = TestIdentityRepository()..failBegin = true;
     await showPage(
       tester,
       repository: repo,
@@ -878,9 +911,8 @@ void main() {
         final captures = <IdentityCaptureKind>[];
         final repo = await showPage(
           tester,
-          repository: RolloutRepository(
+          repository: TestIdentityRepository(
             data: {
-              'available': true,
               'request': {
                 'id': 'test-session',
                 'status': 'capture',
@@ -938,13 +970,12 @@ void main() {
     },
   );
 
-  testWidgets('ปิด availability ยังจำกัดบัญชีทั่วไป', (tester) async {
-    await showPage(
-      tester,
-      repository: RolloutRepository(data: {'available': false}),
-    );
-    expect(find.text('ยังเปิดยืนยันไม่ได้'), findsOneWidget);
-    expect(find.text('ยินยอมและเริ่มยืนยัน'), findsNothing);
+  testWidgets('บัญชีทั่วไปเริ่มยืนยันได้จากสถานะที่ไม่มีธงเปิดใช้งาน', (
+    tester,
+  ) async {
+    await showPage(tester, repository: TestIdentityRepository(data: {}));
+    await begin(tester);
+    expect(find.text('ตรวจข้อมูล แล้วส่งคำขอ'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -1047,7 +1078,7 @@ void main() {
   testWidgets('ส่งล้มเหลวเก็บข้อมูลและรูปเพื่อส่งซ้ำด้วย contract เดิม', (
     tester,
   ) async {
-    final repo = RolloutRepository()..failSubmit = true;
+    final repo = TestIdentityRepository()..failSubmit = true;
     await showPage(tester, repository: repo);
     await begin(tester);
     await fillIdentity(tester);
@@ -1168,9 +1199,8 @@ void main() {
   testWidgets('บัญชีที่ผ่านแล้วไม่มีเมนูผู้ปกครอง', (tester) async {
     await showPage(
       tester,
-      repository: RolloutRepository(
+      repository: TestIdentityRepository(
         data: {
-          'available': true,
           'can_list': true,
           'profile': {'status': 'approved', 'lifetime': true, 'is_minor': true},
         },
@@ -1191,9 +1221,8 @@ void main() {
     testWidgets('สถานะ $kind แสดงผลและคำสั่งถัดไป', (tester) async {
       await showPage(
         tester,
-        repository: RolloutRepository(
+        repository: TestIdentityRepository(
           data: {
-            'available': true,
             'can_list': kind == 'approved',
             'request': {'status': kind, 'reason': 'คำแนะนำทดสอบ'},
             if (kind == 'approved')

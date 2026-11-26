@@ -181,7 +181,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
             ],
           ),
           content: Text(
-            'กำหนดเริ่มเช่า ${_startDate != null ? DateFormat('d MMMM yyyy เวลา HH:mm', 'th').format(_startDate!.toLocal()) : 'ตามที่ตกลง'} น.\n\nระบบจะเปิดให้ดำเนินการชำระเงินเมื่อถึงเวลานัด',
+            'กำหนดเริ่มเช่า ${_startDate != null ? DateFormat('d MMMM yyyy เวลา HH:mm', 'th').format(_startDate!.toLocal()) : 'ตามที่ตกลง'} น.\n\nระบบจะเปิดให้ตรวจรับอุปกรณ์เมื่อถึงเวลานัด',
             style: const TextStyle(
               fontFamily: AppTextStyles.fontFamily,
               fontSize: 13.5,
@@ -965,6 +965,15 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
 
   // ─── แผงข้อมูลลอยด้านล่าง (Bottom Tracking Card) ───
   Widget _buildTrackingBottomCard() {
+    final isPromptPay = widget.bookingData?.paymentMethod == 'promptpay';
+    final inspectionComplete = _renterPaymentStep == 1;
+    final showPaymentIcon = _isOwner || (isPromptPay && inspectionComplete);
+    final renterActionLabel = switch ((isPromptPay, inspectionComplete)) {
+      (true, false) => 'ตรวจรับ & ชำระเงิน',
+      (true, true) => 'ชำระเงิน',
+      (false, false) => 'ตรวจรับอุปกรณ์',
+      (false, true) => 'ดูสถานะนัดรับ',
+    };
     final content = Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
       child: Column(
@@ -1323,7 +1332,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                           ? Icons.check_circle_rounded
                           : (_currentStatusCode == 'cancelled'
                                 ? Icons.cancel_outlined
-                                : (_isOwner || _renterPaymentStep == 1
+                                : (showPaymentIcon
                                       ? Icons.payments_rounded
                                       : Icons.checklist_rounded)),
                       size: 18,
@@ -1336,9 +1345,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
                                 ? 'ยกเลิกการเช่าแล้ว'
                                 : (_isOwner
                                       ? 'ยืนยันการรับเงิน'
-                                      : (_renterPaymentStep == 1
-                                            ? 'ชำระเงิน'
-                                            : 'ตรวจรับ & ชำระเงิน'))),
+                                      : renterActionLabel)),
                       style: const TextStyle(
                         fontFamily: AppTextStyles.fontFamily,
                         fontSize: 13,

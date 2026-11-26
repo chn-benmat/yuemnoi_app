@@ -23,20 +23,62 @@ func (offerConfirmationVerifier) UserIDFromToken(context.Context, string) (strin
 	return "renter", nil
 }
 
+func TestOccupiedItemReturnsConflict(t *testing.T) {
+	for _, failure := range []string{
+		`{"code":"23P01","message":"item_rental_occupied"}`,
+		`{"code":"23505","message":"duplicate key value violates unique constraint \"booking_tb_one_open_rental_per_item\""}`,
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/rest/v1/rpc/create_rental_request" {
+				t.Errorf("unexpected request: %s", r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			fmt.Fprint(w, failure)
+		}))
+		defer server.Close()
+
+		repository := supabase.NewSupabaseRentalRepository(supabaseclient.CreateClient(server.URL, "test-key"))
+		app := ports.NewHTTPApp()
+		defer app.Shutdown()
+		app.Post("/api/rentals", ports.NewRentalHandler(repository, offerConfirmationVerifier{}).CreateRentalOrder)
+		request := httptest.NewRequest(http.MethodPost, "/api/rentals", strings.NewReader(
+			`{"item_id":7,"start_at":"2026-11-27T02:00:00Z","end_at":"2026-11-27T03:00:00Z","rental_type":"hourly","pickup_location":"Pickup"}`,
+		))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer renter-token")
+		response, err := app.Test(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body map[string]string
+		err = json.NewDecoder(response.Body).Decode(&body)
+		response.Body.Close()
+		if err != nil || response.StatusCode != http.StatusConflict || body["code"] != "item_rental_occupied" {
+			t.Fatalf("status=%d body=%v err=%v", response.StatusCode, body, err)
+		}
+	}
+}
+
 func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
-	checkOwnerOfferConfirmation(t, "daily", "รายวัน", "promptpay", time.Date(2026, 10, 19, 2, 0, 0, 0, time.UTC))
+	checkOwnerOfferConfirmation(t, "daily", "รายวัน", "promptpay", time.Date(2026, 10, 19, 2, 0, 0, 0, time.UTC), false)
 }
 
 func TestHourlyOwnerOfferUsesStartDayWhenEndDateIsLeftover(t *testing.T) {
-	checkOwnerOfferConfirmation(t, "hourly", "รายชั่วโมง", "cash", time.Date(2026, 10, 18, 10, 0, 0, 0, time.UTC))
+	checkOwnerOfferConfirmation(t, "hourly", "รายชั่วโมง", "cash", time.Date(2026, 10, 18, 10, 0, 0, 0, time.UTC), false)
 }
 
-func checkOwnerOfferConfirmation(t *testing.T, rentalType, storedType, paymentMethod string, endAt time.Time) {
+func TestConfirmedRentalSurvivesChatPublishFailure(t *testing.T) {
+	checkOwnerOfferConfirmation(t, "daily", "รายวัน", "promptpay", time.Date(2026, 10, 19, 2, 0, 0, 0, time.UTC), true)
+}
+
+func checkOwnerOfferConfirmation(t *testing.T, rentalType, storedType, paymentMethod string, endAt time.Time, failFirstConfirmationPublish bool) {
 	t.Helper()
 	var sharedMessage string
 	createCalls := 0
 	persistedStatus := "pending"
 	persistedPaymentMethod := "cash"
+	firstPublishFailed := false
 	originalMessage := fmt.Sprintf(`รายละเอียดคำขอเช่า
 วิธีชำระเงิน: เงินสด
 ยอดรวม: 500 ฿
@@ -88,6 +130,12 @@ func checkOwnerOfferConfirmation(t *testing.T, rentalType, storedType, paymentMe
 			}
 			fmt.Fprintf(w, `[{"id":25,"user_id":"renter","item_id":7,"status":"confirmed","payment_method":%q}]`, persistedPaymentMethod)
 		case r.URL.Path == "/rest/v1/chat_message_tb" && r.Method == http.MethodPatch:
+			if failFirstConfirmationPublish && persistedStatus == "confirmed" && !firstPublishFailed {
+				firstPublishFailed = true
+				w.WriteHeader(http.StatusServiceUnavailable)
+				fmt.Fprint(w, `{"message":"chat temporarily unavailable"}`)
+				return
+			}
 			currentMessage := sharedMessage
 			if currentMessage == "" {
 				currentMessage = originalMessage
@@ -148,7 +196,7 @@ func checkOwnerOfferConfirmation(t *testing.T, rentalType, storedType, paymentMe
 		retryMethod = "promptpay"
 		paymentLabel = "เงินสด"
 	}
-	for _, method := range []string{paymentMethod, retryMethod} {
+	for index, method := range []string{paymentMethod, retryMethod} {
 		request := httptest.NewRequest(http.MethodPost, "/api/rentals/25/confirm", strings.NewReader(fmt.Sprintf(`{"offer_message_id":"11","payment_method":%q}`, method)))
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("Authorization", "Bearer renter-token")
@@ -165,9 +213,11 @@ func checkOwnerOfferConfirmation(t *testing.T, rentalType, storedType, paymentMe
 		if err != nil || response.StatusCode != http.StatusOK || confirmed.Status != "confirmed" || persistedStatus != "confirmed" || createCalls != 1 {
 			t.Fatalf("explicit confirmation/retry: HTTP=%d result=%v err=%v status=%s creates=%d", response.StatusCode, confirmed, err, persistedStatus, createCalls)
 		}
+		chatUpdated := strings.Contains(sharedMessage, `"status":"confirmed"`) &&
+			strings.Contains(sharedMessage, fmt.Sprintf(`"paymentMethod":%q`, paymentMethod)) &&
+			strings.Contains(sharedMessage, "\nวิธีชำระเงิน: "+paymentLabel+"\n")
 		if confirmed.PaymentMethod != paymentMethod || persistedPaymentMethod != paymentMethod ||
-			!strings.Contains(sharedMessage, `"status":"confirmed"`) || !strings.Contains(sharedMessage, fmt.Sprintf(`"paymentMethod":%q`, paymentMethod)) ||
-			!strings.Contains(sharedMessage, "\nวิธีชำระเงิน: "+paymentLabel+"\n") {
+			chatUpdated != (!failFirstConfirmationPublish || index > 0) {
 			t.Fatalf("confirmed payment: API=%q database=%q chat=%q, want %q", confirmed.PaymentMethod, persistedPaymentMethod, sharedMessage, paymentMethod)
 		}
 	}

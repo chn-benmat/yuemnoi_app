@@ -130,6 +130,7 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 			"category",
 			"price",
 			"status",
+			"is_rental_occupied",
 			"type",
 			"created_at",
 			"updated_at",
@@ -171,7 +172,7 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domain.Item, error) {
 	var items []domain.Item
 
-	err := r.client.DB.From("item_tb").Select("*").Eq("id", strconv.FormatInt(id, 10)).ExecuteWithContext(ctx, &items)
+	err := r.client.DB.From("account_deletion_item_v").Select("*", "is_rental_occupied").Eq("id", strconv.FormatInt(id, 10)).ExecuteWithContext(ctx, &items)
 	if err != nil {
 		return nil, fmt.Errorf("supabase find by id failed: %w", err)
 	}

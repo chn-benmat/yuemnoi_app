@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/network/auth_session.dart';
@@ -7,6 +9,14 @@ class SessionClient implements ApiClient {
   String? path;
   Map<String, dynamic>? data;
   Map<String, String>? headers;
+  Map<String, String>? submittedFields;
+
+  @override
+  Future<ApiResponse> get(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    Map<String, String>? headers,
+  }) async => const ApiResponse(statusCode: 200, data: {});
 
   @override
   Future<ApiResponse> post(
@@ -21,11 +31,47 @@ class SessionClient implements ApiClient {
   }
 
   @override
+  Future<ApiResponse> postMultipart(
+    String path, {
+    Map<String, String>? fields,
+    List<ApiUpload> files = const [],
+    Map<String, String>? headers,
+  }) async {
+    submittedFields = fields;
+    return const ApiResponse(statusCode: 201, data: {});
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
   tearDown(AuthSession.clear);
+
+  for (final updatingAccount in [false, true]) {
+    test(
+      'ส่งเวอร์ชันข้อความเก็บรูปเมื่อส่งคำขอ (แก้ไข: $updatingAccount)',
+      () async {
+        AuthSession.saveAccessToken('test-token');
+        final client = SessionClient();
+        final repository = IdentityApiRepository(client: client);
+        final fields = {'birth_date': '2000-01-01'};
+
+        if (updatingAccount) {
+          await repository.updateAccount(fields, card: Uint8List(1));
+        } else {
+          await repository.submit(
+            'test-session',
+            fields,
+            Uint8List(1),
+            Uint8List(1),
+          );
+        }
+
+        expect(client.submittedFields!['consent_version'], 'identity-v2');
+      },
+    );
+  }
 
   for (final birthDate in ['2000-01-01', '${DateTime.now().year - 10}-01-01']) {
     test(

@@ -23,6 +23,8 @@ class UserItemModel {
   final String category;
   @JsonKey(defaultValue: '')
   final String status;
+  @JsonKey(name: 'is_rental_occupied')
+  final bool isRentalOccupied;
   @JsonKey(name: 'type', defaultValue: '')
   final String rentalType;
   @JsonKey(name: 'owner_hidden', defaultValue: false)
@@ -37,6 +39,7 @@ class UserItemModel {
     this.imageUrl,
     this.category = 'ทั่วไป',
     this.status = '',
+    this.isRentalOccupied = false,
     this.rentalType = '',
     this.ownerHidden = false,
   });
@@ -69,6 +72,7 @@ class UserItemModel {
       imageUrl: imageUrl,
       category: category,
       status: status,
+      isRentalOccupied: isRentalOccupied,
       rentalType: rentalType,
       ownerHidden: ownerHidden,
     );

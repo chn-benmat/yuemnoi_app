@@ -40,6 +40,7 @@ class ShopeeProductCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ส่วนภาพสินค้าอัตราส่วน 1:1 พร้อมป้าย Badge และปุ่มบันทึก
@@ -80,130 +81,94 @@ class ShopeeProductCard extends StatelessWidget {
                 ],
               ),
 
-              // ส่วนข้อมูลด้านล่าง (ชื่อ, สถานที่, ราคา, ดาว/รีวิว)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // ชื่ออุปกรณ์ (สูงสุด 2 บรรทัด สไตล์การ์ด Shopee)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.title.replaceAll('\n', ' '),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF1E2226),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              height: 1.25,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-
-                          // ข้อมูลสถานที่และระยะทาง
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.location_on_outlined,
-                                size: 12,
-                                color: Color(0xFF888E94),
-                              ),
-                              const SizedBox(width: 2),
-                              Expanded(
-                                child: Text(
-                                  item.distanceKm == null
-                                      ? item.locationName
-                                      : '${item.locationName} • ${item.distanceKm!.toStringAsFixed(1)} กม.',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF7E848A),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title.replaceAll('\n', ' '),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF1E2226),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        height: 1.25,
                       ),
-
-                      // ส่วนราคา และ คะแนนรีวิวด้านล่าง
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              textBaseline: TextBaseline.alphabetic,
-                              children: [
-                                if (item.priceUnit == '/ ชั่วโมง')
-                                  const Text(
-                                    'เริ่มต้น ',
-                                    style: TextStyle(
-                                      color: Color(0xFF7E8388),
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                const Text(
-                                  '฿',
-                                  style: TextStyle(
-                                    color: AppColors.primaryColor,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                Text(
-                                  _formatPrice(item.price),
-                                  style: const TextStyle(
-                                    color: AppColors.primaryColor,
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                Text(
-                                  ' ${item.priceUnit}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF7E8388),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 4),
-
-                          // แสดงชื่อเจ้าของใต้ราคา โดยไม่แสดงคะแนนรีวิวในการ์ด Home
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  item.ownerName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF7E848A),
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                    ),
+                    if (item.isRentalOccupied) ...[
+                      const SizedBox(height: 4),
+                      const Text(
+                        'กำลังถูกเช่า',
+                        style: TextStyle(
+                          color: Color(0xFF315FA6),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
-                  ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          flex: 2,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '฿${_formatNumber(item.price)}',
+                              style: const TextStyle(
+                                color: AppColors.primaryColor,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (item.paidBookingCount > 0) ...[
+                          const SizedBox(width: 6),
+                          Flexible(
+                            flex: 3,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                'เช่าแล้ว ${_formatNumber(item.paidBookingCount)} ครั้ง',
+                                style: const TextStyle(
+                                  color: Color(0xFF7E848A),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 12,
+                          color: Color(0xFF888E94),
+                        ),
+                        const SizedBox(width: 2),
+                        Expanded(
+                          child: Text(
+                            item.locationName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF7E848A),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -226,8 +191,8 @@ class ShopeeProductCard extends StatelessWidget {
     );
   }
 
-  String _formatPrice(int price) {
-    return price.toString().replaceAllMapped(
+  String _formatNumber(int value) {
+    return value.toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]},',
     );

@@ -140,23 +140,11 @@ func (h *RentalHandler) handoverPayment(c fiber.Ctx, confirm bool) error {
 	var payment domain.RentalHandoverPayment
 	var err error
 	if c.Method() == http.MethodPut {
-		var req struct {
-			Phone      string `json:"promptpay_phone" validate:"max=32"`
-			NationalID string `json:"promptpay_national_id" validate:"max=32"`
+		req, message := bindPromptPayAccount(c)
+		if message != "" {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": message})
 		}
-		if err := c.Bind().JSON(&req); err != nil {
-			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลพร้อมเพย์ไม่ถูกต้อง"})
-		}
-		phone, nationalID := strings.TrimSpace(req.Phone), strings.TrimSpace(req.NationalID)
-		switch {
-		case (phone == "") == (nationalID == ""):
-			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกเบอร์มือถือหรือเลขบัตรประชาชนอย่างใดอย่างหนึ่ง"})
-		case phone != "" && !domain.IsPromptPayMobile(phone):
-			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณากรอกเบอร์มือถือพร้อมเพย์ 10 หลัก"})
-		case nationalID != "" && !domain.IsPromptPayNationalID(nationalID):
-			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "เลขบัตรประชาชนไม่ถูกต้อง กรุณาตรวจสอบทั้ง 13 หลัก"})
-		}
-		payment, err = repo.SavePromptPayAccount(c.Context(), userID, id, phone, nationalID)
+		payment, err = repo.SavePromptPayAccount(c.Context(), userID, id, req.Phone, req.NationalID)
 	} else {
 		payment, err = repo.HandoverPayment(c.Context(), userID, id, confirm)
 	}
@@ -233,6 +221,10 @@ func writeRentalError(c fiber.Ctx, err error) error {
 		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "ยืนยันได้เฉพาะข้อเสนอที่เจ้าของอุปกรณ์ส่งให้คุณเท่านั้น"})
 	case errors.Is(err, domain.ErrRentalNotFound), errors.Is(err, domain.ErrItemNotFound):
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบรายการเช่าหรืออุปกรณ์"})
+	case errors.Is(err, domain.ErrItemRentalOccupied):
+		return c.Status(http.StatusConflict).JSON(fiber.Map{
+			"code": "item_rental_occupied", "error": "อุปกรณ์นี้กำลังถูกเช่า กรุณาลองใหม่หลังยกเลิกการจองหรือคืนอุปกรณ์เรียบร้อย",
+		})
 	case errors.Is(err, domain.ErrRentalUnavailable):
 		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "อุปกรณ์หรือช่วงเวลานี้ไม่พร้อมให้เช่า"})
 	case errors.Is(err, domain.ErrRentalStatusTransition):

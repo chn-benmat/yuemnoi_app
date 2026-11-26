@@ -12,6 +12,7 @@ void main() {
         'category': 'กล้อง',
         'item_image_url': 'image',
         'price': 120.9,
+        'paid_booking_count': 3,
         'is_verified': 'true',
         'tags': ['tag', 1, null],
         'distance_km': 4.2,
@@ -24,6 +25,7 @@ void main() {
       expect(item.rawCategory, 'กล้อง');
       expect(item.imageUrl, 'image');
       expect(item.price, 120);
+      expect(item.paidBookingCount, 3);
       expect(item.isVerified, false);
       expect(item.tags, ['tag', '1', 'null']);
       expect(item.distanceKm, isNull);
@@ -41,6 +43,8 @@ void main() {
           'price_unit',
           'rating',
           'review_count',
+          'paid_booking_count',
+          'is_rental_occupied',
           'is_verified',
           'owner_name',
           'is_owner',
@@ -56,6 +60,7 @@ void main() {
       );
       expect(FeedItemModel.fromJson(item.toJson()), item);
       expect(FeedItemModel.fromJson({}).categoryId, 'all');
+      expect(FeedItemModel.fromJson({}).paidBookingCount, 0);
     },
   );
 

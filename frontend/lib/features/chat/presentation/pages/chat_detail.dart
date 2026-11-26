@@ -613,6 +613,15 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       );
       return;
     }
+    if (itemDetail.isRentalOccupied) {
+      showAppPopup(
+        context,
+        content: const Text(
+          'อุปกรณ์นี้กำลังถูกเช่า ส่งข้อเสนอได้หลังยกเลิกการจองหรือรับคืนอุปกรณ์แล้ว',
+        ),
+      );
+      return;
+    }
     final pickup = itemDetail.pickupLocation;
     if (pickup == null) {
       showAppPopup(

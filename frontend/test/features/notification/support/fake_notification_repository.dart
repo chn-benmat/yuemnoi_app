@@ -5,7 +5,7 @@ final notificationTestTime = DateTime.utc(2026, 10, 19, 9);
 
 AppNotification notification({
   String id = 'notification-1',
-  AppNotificationCategory category = AppNotificationCategory.app,
+  AppNotificationCategory category = AppNotificationCategory.chat,
   int second = 0,
   bool isRead = false,
   String? conversationId,

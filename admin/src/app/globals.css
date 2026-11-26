@@ -1258,9 +1258,11 @@ footer {
   }
 }
 @media print {
+  .skip-link,
   .sidebar,
   .topbar,
   .page-heading,
+  .date-filter,
   .filters,
   .report-controls,
   .heading-actions,
@@ -1296,9 +1298,10 @@ footer {
     border-color: #ddd;
   }
   .chart {
-    height: 160px;
+    height: 230px;
   }
   .metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
   }
   .overview-grid {

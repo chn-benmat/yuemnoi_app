@@ -25,11 +25,12 @@ func (itemManagementVerifier) UserIDFromToken(_ context.Context, token string) (
 
 type itemManagementRepository struct {
 	domain.ItemRepository
-	fields  map[string]interface{}
-	actor   string
-	deleted bool
-	err     error
-	hidden  bool
+	fields         map[string]interface{}
+	actor          string
+	deleted        bool
+	err            error
+	hidden         bool
+	deletionHidden bool
 }
 
 func (r *itemManagementRepository) Insert(_ context.Context, item *domain.Item, _ []domain.ItemImage) (*domain.Item, error) {
@@ -112,7 +113,7 @@ func TestUpdateItemDailyPrice(t *testing.T) {
 }
 
 func (r *itemManagementRepository) FindByID(_ context.Context, id int64) (*domain.Item, error) {
-	return &domain.Item{ID: id, UserID: "owner", OwnerHidden: r.hidden}, nil
+	return &domain.Item{ID: id, UserID: "owner", OwnerHidden: r.hidden, AccountDeletionHidden: r.deletionHidden}, nil
 }
 func (r *itemManagementRepository) HasRentalAccess(_ context.Context, _ int64, actor string) (bool, error) {
 	return actor == "renter", nil
@@ -190,17 +191,20 @@ func TestOwnerItemManagement(t *testing.T) {
 
 func TestHiddenItemReadAccess(t *testing.T) {
 	for _, tc := range []struct {
-		token  string
-		hidden bool
-		status int
+		token          string
+		hidden         bool
+		deletionHidden bool
+		status         int
 	}{
-		{"", false, 200}, {"", true, 404}, {"invalid", true, 404},
-		{"stranger", true, 404}, {"owner", true, 200}, {"renter", true, 200},
+		{"", false, false, 200}, {"", true, false, 404}, {"invalid", true, false, 404},
+		{"stranger", true, false, 404}, {"owner", true, false, 200}, {"renter", true, false, 200},
+		{"", false, true, 404}, {"renter", false, true, 404},
 	} {
 		t.Run(tc.token, func(t *testing.T) {
 			app := ports.NewHTTPApp()
 			defer app.Shutdown()
-			app.Get("/api/items/:id", ports.NewItemHandler(&itemManagementRepository{hidden: tc.hidden}, itemManagementVerifier{}).GetItemByID)
+			repo := &itemManagementRepository{hidden: tc.hidden, deletionHidden: tc.deletionHidden}
+			app.Get("/api/items/:id", ports.NewItemHandler(repo, itemManagementVerifier{}).GetItemByID)
 			req := httptest.NewRequest("GET", "/api/items/7", nil)
 			if tc.token != "" {
 				req.Header.Set("Authorization", "Bearer "+tc.token)

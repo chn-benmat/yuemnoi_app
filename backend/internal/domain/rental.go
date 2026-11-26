@@ -9,6 +9,7 @@ import (
 var (
 	ErrRentalNotFound         = errors.New("rental not found")
 	ErrRentalUnavailable      = errors.New("rental period is unavailable")
+	ErrItemRentalOccupied     = errors.New("item rental occupied")
 	ErrInvalidRental          = errors.New("invalid rental")
 	ErrRentalForbidden        = errors.New("forbidden to update this rental")
 	ErrRentalStatusTransition = errors.New("invalid rental status transition")

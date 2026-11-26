@@ -90,6 +90,11 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<void> scheduleAccountDeletion({required String accessToken}) {
+    return remoteDataSource.scheduleAccountDeletion(accessToken: accessToken);
+  }
+
+  @override
   void close() {
     remoteDataSource.close();
   }

@@ -64,6 +64,16 @@ class OwnerItemDetailView extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                        if (item.isRentalOccupied) ...[
+                          const SizedBox(height: 8),
+                          const Text(
+                            'กำลังถูกเช่า',
+                            style: TextStyle(
+                              color: Color(0xFF315FA6),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 20,

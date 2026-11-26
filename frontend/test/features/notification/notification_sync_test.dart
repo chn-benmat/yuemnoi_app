@@ -30,6 +30,7 @@ class _NotificationApi {
     });
     service = AppNotificationService(
       repository: NotificationRepositoryImpl(
+        category: AppNotificationCategory.chat,
         dataSource: NotificationRemoteDataSource(
           client: client,
           token: () => 'test-session',
@@ -45,7 +46,7 @@ class _NotificationApi {
   var second = 1;
   final items = <Map<String, dynamic>>[];
 
-  void receive(String id, {String category = 'app'}) {
+  void receive(String id, {String category = 'chat'}) {
     second += 2;
     final eventTime = _time
         .add(Duration(seconds: second - 1))
@@ -108,7 +109,7 @@ void main() {
   );
 
   syncTest(
-    'foreground push immediately refreshes chat rental and app banners with sound',
+    'foreground chat push immediately refreshes the chat banner with sound',
     (tester, api) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       var sounds = 0;
@@ -124,21 +125,18 @@ void main() {
         ),
       );
 
-      for (final category in ['chat', 'rental', 'app']) {
-        await tester.pump(const Duration(seconds: 1));
-        api.receive(category, category: category);
-        await api.service.handlePush({'notification_id': category});
-        expect(api.service.inbox.value.error, isNull);
-        await tester.pumpAndSettle();
-        expect(find.text(category), findsOneWidget);
-      }
-      expect(api.requests, 4);
-      expect(sounds, 3);
-      expect(api.service.inbox.value.unreadCount, 3);
+      api.receive('chat');
+      await api.service.handlePush({'notification_id': 'chat'});
+      expect(api.service.inbox.value.error, isNull);
+      await tester.pumpAndSettle();
+      expect(find.text('chat'), findsOneWidget);
+      expect(api.requests, 2);
+      expect(sounds, 1);
+      expect(api.service.inbox.value.unreadCount, 1);
 
-      await api.service.handlePush({'notification_id': 'app'});
+      await api.service.handlePush({'notification_id': 'chat'});
       await tester.pump();
-      expect(sounds, 3);
+      expect(sounds, 1);
       expect(tester.takeException(), isNull);
     },
   );

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -55,15 +57,16 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   Uint8List? _card, _selfie;
   bool _allowExit = false, _capturing = false, _dialogOpen = false;
   bool _removedCard = false, _removedSelfie = false;
-  bool _consent = false;
+  bool _consent = false, _showingInitialConsent = true;
   Uint8List? _photoBytes(IdentityAccountState state, bool selfie) => selfie
       ? (_removedSelfie ? null : _selfie ?? state.photos['selfie'])
       : (_removedCard ? null : _card ?? state.photos['card']);
   IdentityAccountCubit get _cubit => context.read<IdentityAccountCubit>();
-  bool get _readOnly =>
-      _cubit.state.sent ||
-      _cubit.state.details?.pending == true ||
-      _cubit.state.details?.status.restricted == true;
+  bool get _readOnly => _isReadOnly(_cubit.state);
+  bool _isReadOnly(IdentityAccountState state) =>
+      state.sent ||
+      state.details?.pending == true ||
+      state.details?.status.restricted == true;
   bool get _dirty =>
       _removedCard ||
       _removedSelfie ||
@@ -77,9 +80,19 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     _address = IdentityAddressCubit(
       widget.addressRepository ?? AssetThaiAddressRepository(),
     );
-    _address.load().then((_) {
-      if (mounted) _restoreAddress();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_openInitialConsent());
     });
+  }
+
+  Future<void> _openInitialConsent() async {
+    final consentClosed = _showConsent();
+    unawaited(_cubit.load(loadEvidenceAfter: consentClosed));
+    await consentClosed;
+    if (!mounted) return;
+    setState(() => _showingInitialConsent = false);
+    await _address.load();
+    if (mounted) _restoreAddress();
   }
 
   @override
@@ -113,6 +126,28 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   );
 
   void _message(String text) => showAppPopup(context, content: Text(text));
+
+  Future<void> _showConsent() async {
+    if (_dialogOpen) return;
+    _dialogOpen = true;
+    final cubit = _cubit;
+    FocusScope.of(context).unfocus();
+    final agreed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: _readOnly || _consent,
+      builder: (_) =>
+          BlocSelector<IdentityAccountCubit, IdentityAccountState, bool>(
+            bloc: cubit,
+            selector: (state) => !_isReadOnly(state) && !_consent,
+            builder: (_, requiresConsent) =>
+                IdentityConsentDialog(requiresConsent: requiresConsent),
+          ),
+    );
+    _dialogOpen = false;
+    if (mounted && agreed == true && !_consent && !_readOnly) {
+      setState(() => _consent = true);
+    }
+  }
 
   Future<bool> _confirm(
     String title,
@@ -171,16 +206,9 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   }
 
   Future<void> _photo(bool selfie) async {
-    if (_capturing || _cubit.state.busy) return;
-    if (_loaded?.hasIdentity != true && !_consent) {
-      final agreed = await showDialog<bool>(
-        context: context,
-        builder: (_) => const IdentityConsentDialog(previouslyAccepted: false),
-      );
-      if (!mounted || agreed != true) return;
-      _consent = true;
-    }
-    if (!mounted) return;
+    if (_capturing || _cubit.state.busy || _readOnly) return;
+    if (!_consent) await _showConsent();
+    if (!mounted || !_consent) return;
     FocusScope.of(context).unfocus();
     setState(() => _capturing = true);
     try {
@@ -280,6 +308,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   }
 
   Future<void> _save(IdentityAccountState state) async {
+    if (!_consent || _dialogOpen) return;
     FocusScope.of(context).unfocus();
     if (!_form.currentState!.validate()) {
       _message('กรุณาตรวจข้อมูลให้ครบถ้วน');
@@ -288,13 +317,6 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     if (_photoBytes(state, false) == null || _photoBytes(state, true) == null) {
       _message('กรุณาเพิ่มรูปบัตรและรูปคู่บัตรประชาชนให้ครบ');
       return;
-    }
-    if (!state.details!.hasIdentity && !_consent) {
-      final agreed = await showDialog<bool>(
-        context: context,
-        builder: (_) => const IdentityConsentDialog(previouslyAccepted: false),
-      );
-      if (!mounted || agreed != true) return;
     }
     if (!await _confirm(
       'ส่งข้อมูลให้เจ้าหน้าที่ตรวจสอบ?',
@@ -349,6 +371,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   Widget _text(
     String field,
     String label, {
+    required String hintText,
     int maxLines = 1,
     TextInputType? keyboard,
     List<TextInputFormatter>? formatters,
@@ -358,6 +381,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
       variant: AppFormFieldVariant.outlined,
       fieldKey: ValueKey(field),
       label: label,
+      hintText: hintText,
       controller: _fields[field],
       readOnly: _readOnly,
       maxLines: maxLines,
@@ -455,6 +479,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                 context,
                 variant: AppFormFieldVariant.outlined,
               ).copyWith(
+                hintText: 'เลขบัตร 13 หลัก',
                 suffixIcon: _loaded?.hasIdentity == true
                     ? const Icon(Icons.lock_outline_rounded, size: 18)
                     : null,
@@ -492,7 +517,12 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
           );
           return Column(
             children: [
-              _text('address_detail', 'รายละเอียดที่อยู่', maxLines: 3),
+              _text(
+                'address_detail',
+                'รายละเอียดที่อยู่',
+                hintText: 'บ้านเลขที่ หมู่ ซอย ถนน',
+                maxLines: 3,
+              ),
               if (address.error)
                 Row(
                   children: [
@@ -552,6 +582,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
               _text(
                 'postal_code',
                 'รหัสไปรษณีย์',
+                hintText: 'รหัสไปรษณีย์ 5 หลัก',
                 keyboard: TextInputType.number,
                 formatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -568,8 +599,9 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     String subtitle,
     Uint8List? photo,
     bool selfie,
-    bool editable,
-  ) => Padding(
+    bool editable, {
+    required bool loading,
+  }) => Padding(
     padding: const EdgeInsets.only(bottom: 16),
     child: IdentityPanel(
       child: Column(
@@ -604,7 +636,14 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                     color: photo == null
                         ? IdentityColors.canvas
                         : const Color(0xFF29313C),
-                    child: photo == null
+                    child: loading
+                        ? const Center(
+                            child: SizedBox.square(
+                              dimension: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : photo == null
                         ? Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -686,7 +725,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
           if (editable) ...[
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: _capturing ? null : () => _photo(selfie),
+              onPressed: _capturing || loading ? null : () => _photo(selfie),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
                 shape: RoundedRectangleBorder(
@@ -699,7 +738,13 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                     : Icons.photo_camera_outlined,
                 size: 18,
               ),
-              label: Text(photo == null ? 'เพิ่มรูป' : 'เปลี่ยนรูป'),
+              label: Text(
+                loading
+                    ? 'กำลังโหลดรูป…'
+                    : photo == null
+                    ? 'เพิ่มรูป'
+                    : 'เปลี่ยนรูป',
+              ),
             ),
           ],
         ],
@@ -716,65 +761,14 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          margin: const EdgeInsets.only(bottom: 20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFF0E3FF), Color(0xFFFAF5FF)],
+        if (pending)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: IdentityNotice(
+              'ส่งข้อมูลแล้วและกำลังรอตรวจสอบ\nข้อมูลใหม่จะมีผลเมื่อเจ้าหน้าที่อนุมัติ ระหว่างนี้ยังใช้ข้อมูลและสิทธิ์เดิมได้ตามปกติ',
+              icon: Icons.schedule_rounded,
             ),
-            borderRadius: BorderRadius.circular(24),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    pending ? Icons.schedule_rounded : Icons.verified_rounded,
-                    color: IdentityColors.primary,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      pending
-                          ? 'รอตรวจสอบ'
-                          : details.status.verified
-                          ? 'ยืนยันตัวตนแล้ว'
-                          : 'ยืนยันตัวตนด้วยบัตรประชาชน',
-                      style: const TextStyle(
-                        color: IdentityColors.primary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                pending ? 'ส่งแล้ว รออีกนิดนะ' : 'ข้อมูลของคุณ ดูแลได้ง่าย ๆ',
-                style: const TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w700,
-                  color: IdentityColors.ink,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                pending
-                    ? 'ดูข้อมูลที่ส่งได้ที่นี่ ข้อมูลใหม่จะมีผลเมื่อเจ้าหน้าที่อนุมัติ ระหว่างนี้ยังใช้ข้อมูลและสิทธิ์เดิมได้ตามปกติ'
-                    : 'อัปเดตข้อมูลให้ตรงกับบัตรประชาชน\nทุกการแก้ไขจะได้รับการตรวจสอบโดยเจ้าหน้าที่',
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.7,
-                  color: IdentityColors.muted,
-                ),
-              ),
-            ],
-          ),
-        ),
         if (details.status.restricted)
           const Padding(
             padding: EdgeInsets.only(bottom: 16),
@@ -798,6 +792,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
           _photoBytes(state, true),
           true,
           editable,
+          loading: state.loading,
         ),
         _photoTile(
           'รูปบัตรประชาชน',
@@ -805,6 +800,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
           _photoBytes(state, false),
           false,
           editable,
+          loading: state.loading,
         ),
         _section(
           'ข้อมูลบัตรประชาชน',
@@ -822,10 +818,14 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                     ? _fields['name_prefix']!.text
                     : null,
                 isExpanded: true,
-                decoration: AppFormFieldStyles.decoration(
-                  context,
-                  variant: AppFormFieldVariant.outlined,
-                ).copyWith(labelText: 'คำนำหน้าชื่อ'),
+                decoration:
+                    AppFormFieldStyles.decoration(
+                      context,
+                      variant: AppFormFieldVariant.outlined,
+                    ).copyWith(
+                      labelText: 'คำนำหน้าชื่อ',
+                      hintText: 'เลือกคำนำหน้าชื่อ',
+                    ),
                 items: const ['นาย', 'นางสาว', 'นาง']
                     .map((p) => DropdownMenuItem(value: p, child: Text(p)))
                     .toList(),
@@ -837,8 +837,16 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                 validator: _required,
               ),
               const SizedBox(height: 20),
-              _text('first_name', 'ชื่อ (ภาษาไทย)'),
-              _text('last_name', 'นามสกุล (ภาษาไทย)'),
+              _text(
+                'first_name',
+                'ชื่อ (ภาษาไทย)',
+                hintText: 'ชื่อตามบัตรประชาชน',
+              ),
+              _text(
+                'last_name',
+                'นามสกุล (ภาษาไทย)',
+                hintText: 'นามสกุลตามบัตรประชาชน',
+              ),
               _citizenField(),
               const SizedBox(height: 16),
               AppTextFormField(
@@ -876,16 +884,21 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     BuildContext context,
   ) => BlocConsumer<IdentityAccountCubit, IdentityAccountState>(
     listener: (context, state) {
-      if (state.error != null) _message(state.error!);
-      if (state.details != null && _loaded != state.details && !_dirty)
+      if (state.error != null && state.details != null) _message(state.error!);
+      if (!_showingInitialConsent &&
+          state.details != null &&
+          _loaded != state.details &&
+          !_dirty) {
         setState(() => _hydrate(state.details!));
+      }
     },
     builder: (context, state) {
-      if (_loaded == null && state.details != null) _hydrate(state.details!);
-      final blocked =
-          state.sent ||
-          state.details?.pending == true ||
-          state.details?.status.restricted == true;
+      final showLoading =
+          _showingInitialConsent || (state.loading && state.details == null);
+      if (!showLoading && _loaded == null && state.details != null) {
+        _hydrate(state.details!);
+      }
+      final blocked = _isReadOnly(state);
       return PopScope(
         canPop: _allowExit,
         onPopInvokedWithResult: (didPop, result) {
@@ -904,13 +917,16 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
             surfaceTintColor: Colors.transparent,
             leading: BackButton(onPressed: _back),
           ),
-          body: state.loading
+          body: showLoading
               ? SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 600),
-                      child: const IdentityAccountLoading(),
+                      child: TickerMode(
+                        enabled: !_showingInitialConsent,
+                        child: const IdentityAccountLoading(),
+                      ),
                     ),
                   ),
                 )
@@ -929,7 +945,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                   ),
                 )
               : AbsorbPointer(
-                  absorbing: state.busy,
+                  absorbing: state.busy && !state.loading,
                   child: Form(
                     key: _form,
                     child: SingleChildScrollView(
@@ -943,7 +959,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                     ),
                   ),
                 ),
-          bottomNavigationBar: state.details == null && !state.loading
+          bottomNavigationBar: state.details == null && !showLoading
               ? null
               : Container(
                   decoration: const BoxDecoration(
@@ -961,18 +977,33 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
                             text: blocked ? 'รอตรวจสอบ' : 'บันทึกข้อมูล',
                             isLoading: state.busy && !state.loading,
                             onPressed:
-                                state.busy || blocked || !_dirty || _capturing
+                                state.busy ||
+                                    blocked ||
+                                    !_consent ||
+                                    !_dirty ||
+                                    _capturing
                                 ? null
                                 : () => _save(state),
                           ),
                           const SizedBox(height: 6),
-                          const Text(
-                            'ตรวจสอบก่อนส่ง เพื่อให้ข้อมูลของคุณถูกต้องเสมอ',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: IdentityColors.muted,
+                          if (!showLoading &&
+                              state.details != null &&
+                              !blocked &&
+                              !_consent)
+                            TextButton(
+                              onPressed: _showConsent,
+                              child: const Text(
+                                'เงื่อนไขการเก็บข้อมูลบัตรประชาชน',
+                              ),
+                            )
+                          else
+                            const Text(
+                              'ตรวจสอบข้อมูลก่อนส่ง',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: IdentityColors.muted,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),

@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/auth_session.dart';
-import '../../../../core/services/app_notification_service.dart';
 import '../../../../core/widgets/custom_bottom_navbar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
@@ -84,7 +83,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
-    _checkNotifications();
     _showInitialMessage(widget.initialMessage);
   }
 
@@ -96,10 +94,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(message)));
     });
-  }
-
-  Future<void> _checkNotifications() async {
-    await AppNotificationService.instance.refresh();
   }
 
   @override
@@ -120,7 +114,10 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
   List<Widget> get _pages => [
     const HomeFeedView(),
     const ChatScreen(),
-    const NotificationPage(),
+    if (_selectedIndex == 2)
+      const NotificationPage()
+    else
+      const SizedBox.shrink(),
     ProfileScreen(isActive: _selectedIndex == 3),
   ];
 
@@ -130,7 +127,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
       listener: (context, authState) {
         if (authState is LoginSuccess || authState is GoogleLoginSuccess) {
           context.read<ChatListBloc>().add(const LoadChatListStarted());
-          _checkNotifications();
           if (mounted) setState(() {});
         }
       },
@@ -162,21 +158,10 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
               (c) => c.hasUnreadMessage,
             );
 
-            return ValueListenableBuilder<NotificationInboxState>(
-              valueListenable: AppNotificationService.instance.inbox,
-              builder: (context, notifications, _) => CustomBottomNavbar(
-                selectedIndex: _selectedIndex,
-                hasUnreadChat: hasUnread,
-                hasUnreadNotification: notifications.hasUnreadNotification,
-                onTabChange: (index) {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
-                  if (index == 2) {
-                    _checkNotifications();
-                  }
-                },
-              ),
+            return CustomBottomNavbar(
+              selectedIndex: _selectedIndex,
+              hasUnreadChat: hasUnread,
+              onTabChange: (index) => setState(() => _selectedIndex = index),
             );
           },
         ),

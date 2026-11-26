@@ -16,6 +16,25 @@ import (
 	"golang.org/x/time/rate"
 )
 
+func TestRemovedAdminActionsReturnNotFound(t *testing.T) {
+	app := ports.NewHTTPApp()
+	handler := ports.NewOperationsHandler(domain.OperationsOptions{}, nil)
+	app.Post("/api/admin/actions/:action/:target", handler.Action)
+	for _, action := range []string{"pilot", "guardian-review", "revoke-guardian"} {
+		t.Run(action, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/admin/actions/"+action+"/target", nil)
+			res, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusNotFound {
+				t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusNotFound)
+			}
+		})
+	}
+}
+
 func TestCORSHTTPContract(t *testing.T) {
 	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, nil, nil, nil, nil, nil, "test-secret")
 	t.Cleanup(func() { _ = app.Shutdown() })

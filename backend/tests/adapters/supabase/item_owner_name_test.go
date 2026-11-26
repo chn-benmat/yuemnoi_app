@@ -21,7 +21,7 @@ func TestItemDetailUsesOwnerAccountName(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				switch r.URL.Path {
-				case "/rest/v1/item_tb":
+				case "/rest/v1/account_deletion_item_v":
 					_, _ = w.Write([]byte(`[{"id":11,"user_id":"owner-11","item_name":"Camera"}]`))
 				case "/rest/v1/public_profile_v":
 					if r.URL.Query().Get("user_id") != "eq.owner-11" {

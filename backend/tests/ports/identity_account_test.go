@@ -87,11 +87,13 @@ func TestIdentityAccountReusesOwnedEvidenceAndKeepsCommittedImages(t *testing.T)
 		wantStatus             int
 		wantDeletes            int32
 		legacy                 bool
+		consentVersion         string
 	}{
-		{"reuse originals", false, false, 201, 0, false},
-		{"reuse legacy originals without new metadata", false, false, 201, 0, true},
-		{"failed capture can retry", true, true, 503, 2, false},
-		{"ambiguous submit preserves committed images", true, false, 503, 0, false},
+		{"reuse originals with updated consent", false, false, 201, 0, false, "identity-v2"},
+		{"reuse legacy originals without new metadata", false, false, 201, 0, true, ""},
+		{"failed capture can retry", true, true, 503, 2, false, ""},
+		{"ambiguous submit preserves committed images", true, false, 503, 0, false, ""},
+		{"unsupported consent stops upload", false, false, 400, 0, false, "unknown"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			key := bytes.Repeat([]byte{1}, 32)
@@ -107,6 +109,9 @@ func TestIdentityAccountReusesOwnedEvidenceAndKeepsCommittedImages(t *testing.T)
 				"card_evidence_id": "00000000-0000-4000-8000-000000000002", "selfie_evidence_id": "00000000-0000-4000-8000-000000000003"} {
 				_ = form.WriteField(field, value)
 			}
+			if tc.consentVersion != "" {
+				_ = form.WriteField("consent_version", tc.consentVersion)
+			}
 			_ = form.Close()
 			req := httptest.NewRequest("POST", "/sessions/00000000-0000-4000-8000-000000000001", &body)
 			req.Header.Set("Authorization", "Bearer renter-token")
@@ -119,6 +124,15 @@ func TestIdentityAccountReusesOwnedEvidenceAndKeepsCommittedImages(t *testing.T)
 			payload, _ := io.ReadAll(response.Body)
 			if response.StatusCode != tc.wantStatus {
 				t.Fatalf("status=%d body=%s", response.StatusCode, payload)
+			}
+			if tc.wantStatus == 400 {
+				if store.uploads.Load() != 0 || store.submitted != nil {
+					t.Fatal("invalid consent was accepted for upload")
+				}
+				return
+			}
+			if version, _ := store.submitted["consent_version"].(string); version != tc.consentVersion {
+				t.Fatalf("submitted consent=%q, want %q", version, tc.consentVersion)
 			}
 			if store.uploads.Load() != 2 || store.deletes.Load() != tc.wantDeletes {
 				t.Fatalf("uploads=%d deletes=%d", store.uploads.Load(), store.deletes.Load())

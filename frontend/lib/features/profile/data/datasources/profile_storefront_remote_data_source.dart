@@ -37,7 +37,7 @@ class ProfileStorefrontRemoteDataSource {
       final rows = await client
           .from('item_tb')
           .select(
-            'id, item_name, item_image_url, description, category, price, status, type',
+            'id, item_name, item_image_url, description, category, price, status, type, is_rental_occupied',
           )
           .eq('user_id', userId)
           .eq('moderation_hidden', false)
