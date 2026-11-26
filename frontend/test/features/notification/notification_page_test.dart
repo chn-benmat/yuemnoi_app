@@ -10,6 +10,35 @@ import 'support/fake_notification_repository.dart';
 
 void main() {
   group('NotificationPage UI Tests', () {
+    testWidgets('shows the full correction message for a complaint notice', (
+      tester,
+    ) async {
+      const message = 'กรุณาแก้รายละเอียดและราคาให้ตรงตามที่แสดงไว้ในประกาศ';
+      final repository = FakeNotificationRepository()
+        ..page = inboxPage([
+          AppNotification(
+            id: 'complaint-warning',
+            category: AppNotificationCategory.app,
+            type: 'complaint_listing_warning',
+            title: 'กรุณาตรวจสอบประกาศของคุณ',
+            body: message,
+            createdAt: notificationTestTime,
+            updatedAt: notificationTestTime,
+          ),
+        ]);
+      final service = AppNotificationService.history(repository: repository);
+      addTearDown(service.dispose);
+      service.setSession('alice');
+      await tester.pumpWidget(
+        MaterialApp(home: NotificationPage(service: service)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<Text>(find.text(message)).maxLines, isNull);
+      await tester.pumpWidget(const SizedBox());
+      service.dispose();
+    });
+
     testWidgets('history loads on demand and has no foreground alerts', (
       tester,
     ) async {

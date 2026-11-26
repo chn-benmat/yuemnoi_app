@@ -920,6 +920,84 @@ dialog::backdrop {
   gap: 10px;
   margin-top: 22px;
 }
+.complaint-dialog .dialog-heading h2 {
+  margin-bottom: 0;
+}
+.complaint-details {
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--neutral);
+}
+.complaint-details > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.complaint-details p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.complaint-details small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+}
+.complaint-summary {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.complaint-outcomes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.complaint-outcomes legend {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.complaint-outcomes label {
+  flex-direction: row;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.complaint-outcomes label:has(:checked) {
+  border-color: var(--brand);
+}
+.complaint-outcomes label:has(:disabled) {
+  opacity: 0.55;
+}
+.complaint-outcomes input {
+  accent-color: var(--brand);
+}
+.complaint-field {
+  margin-top: 14px;
+}
+.complaint-field + p {
+  margin: 8px 0 0;
+}
+.complaint-warning {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--danger);
+}
+.complaint-actions {
+  flex-wrap: wrap;
+}
+@media (max-width: 520px) {
+  .complaint-dialog {
+    padding: 20px;
+  }
+}
 label {
   display: flex;
   flex-direction: column;

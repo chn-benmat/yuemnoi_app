@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/features/profile/data/models/user_item_model.dart';
 import 'package:frontend/features/profile/domain/entities/user_item.dart';
 import 'package:frontend/features/profile/domain/usecases/get_my_items_usecase.dart';
 import 'package:frontend/features/profile/presentation/pages/items/my_items_screen.dart';
@@ -68,6 +69,24 @@ Future<void> _selectStatus(WidgetTester tester, String status) async {
 }
 
 void main() {
+  testWidgets('a moderated listing appears as removed from public view', (
+    tester,
+  ) async {
+    final moderated = UserItemModel.fromJson({
+      'id': 20,
+      'item_name': 'โต๊ะที่ถูกซ่อน',
+      'status': 'available',
+      'moderation_hidden': true,
+    }).toEntity();
+    final repository = _Repository()..items = [_laptop, moderated];
+    await tester.pumpWidget(_app(repository));
+    await tester.pumpAndSettle();
+    await _selectStatus(tester, 'hidden');
+    expect(find.text('โต๊ะที่ถูกซ่อน'), findsOneWidget);
+    expect(find.text('ถูกซ่อนโดยผู้ดูแล'), findsOneWidget);
+    expect(find.text('เปิดให้เช่า'), findsNothing);
+  });
+
   testWidgets(
     'hidden cards show one badge and the filter uses visibility counts',
     (tester) async {

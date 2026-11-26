@@ -9,14 +9,13 @@ enum MyItemsFilter {
 
   // ใช้เงื่อนไขเดียวกันสำหรับยอดนับและรายการที่แสดง โดยไม่เปลี่ยนสถานะการเช่าจริง
   bool matches(UserItem item) => switch (this) {
-    hidden => item.ownerHidden,
+    hidden => item.isHidden,
     available =>
-      !item.ownerHidden && item.listingStatus == UserItemStatus.available,
+      !item.isHidden && item.listingStatus == UserItemStatus.available,
     pendingReview =>
-      !item.ownerHidden && item.listingStatus == UserItemStatus.pendingReview,
-    rejected =>
-      !item.ownerHidden && item.listingStatus == UserItemStatus.rejected,
-    rented => !item.ownerHidden && item.listingStatus == UserItemStatus.rented,
+      !item.isHidden && item.listingStatus == UserItemStatus.pendingReview,
+    rejected => !item.isHidden && item.listingStatus == UserItemStatus.rejected,
+    rented => !item.isHidden && item.listingStatus == UserItemStatus.rented,
   };
 }
 

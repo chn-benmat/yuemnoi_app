@@ -44,6 +44,17 @@ func (r *operationsRepository) request(ctx context.Context, method, path string,
 			return nil, "", nil
 		}
 		// ส่งกลับเฉพาะรหัสที่กำหนดไว้ ไม่เผยแพร่ข้อความ SQL หรือข้อมูลผู้ใช้
+		var rpcError struct {
+			Message string `json:"message"`
+		}
+		if json.Unmarshal(data, &rpcError) == nil {
+			switch rpcError.Message {
+			case "complaint_not_found", "complaint_not_open", "invalid_complaint_outcome",
+				"invalid_complaint_reason", "invalid_complaint_incident", "complaint_listing_unavailable",
+				"complaint_item_removed":
+				return nil, "", errors.New(rpcError.Message)
+			}
+		}
 		if strings.Contains(string(data), "invalid_settings") {
 			return nil, "", errors.New("invalid_settings")
 		}

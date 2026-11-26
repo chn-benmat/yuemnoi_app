@@ -314,7 +314,11 @@ class _NotificationCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       item.body,
-                      maxLines: 3,
+                      maxLines: switch (item.type) {
+                        'complaint_listing_warning' ||
+                        'complaint_listing_removed' => null,
+                        _ => 3,
+                      },
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 12.5,
