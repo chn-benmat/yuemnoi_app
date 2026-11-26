@@ -1,38 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../domain/entities/rental_income.dart';
-
-// ─── Models ───────────────────────────────────────────────────────────────────
-
-class RentalIncomeTransaction {
-  final String itemName;
-  final String date;
-  final String duration;
-  final double amount;
-  final String status;
-
-  RentalIncomeTransaction({
-    required this.itemName,
-    required this.date,
-    required this.duration,
-    required this.amount,
-    required this.status,
-  });
-
-  factory RentalIncomeTransaction.fromEntity(RentalIncomeEntry entry) {
-    return RentalIncomeTransaction(
-      itemName: entry.itemName,
-      date: entry.date,
-      duration: entry.duration,
-      amount: entry.amount,
-      status: entry.status,
-    );
-  }
-}
-
-// ─── Widgets ──────────────────────────────────────────────────────────────────
 
 class RentalIncomeStatCard extends StatelessWidget {
   final String title;
@@ -97,12 +68,20 @@ class RentalIncomeStatCard extends StatelessWidget {
 }
 
 class RentalIncomeTransactionItem extends StatelessWidget {
-  final RentalIncomeTransaction tx;
+  final RentalIncomeEntry tx;
 
   const RentalIncomeTransactionItem({super.key, required this.tx});
 
   @override
   Widget build(BuildContext context) {
+    final date = DateFormat(
+      'dd/MM/yyyy HH:mm',
+    ).format(tx.confirmedAt.toLocal());
+    final method = switch (tx.paymentMethod) {
+      'cash' => 'เงินสด',
+      'promptpay' => 'PromptPay',
+      _ => 'ยืนยันรับเงินแล้ว',
+    };
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -138,7 +117,7 @@ class RentalIncomeTransactionItem extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  tx.itemName,
+                  tx.itemName.isEmpty ? 'อุปกรณ์ให้เช่า' : tx.itemName,
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 15,
@@ -150,7 +129,7 @@ class RentalIncomeTransactionItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${tx.date} • ${tx.duration}',
+                  date,
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 13,
@@ -165,7 +144,7 @@ class RentalIncomeTransactionItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '+฿${tx.amount.toStringAsFixed(0)}',
+                '+฿${(tx.amountSatang / 100).toStringAsFixed(2)}',
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontFamily,
                   fontSize: 15,
@@ -181,7 +160,7 @@ class RentalIncomeTransactionItem extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  tx.status,
+                  method,
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 10,

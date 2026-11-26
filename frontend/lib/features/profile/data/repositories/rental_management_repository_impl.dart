@@ -59,7 +59,7 @@ class RentalManagementRepositoryImpl
   }
 
   @override
-  Future<RentalIncomeSummary> getRentalIncome(String userId) {
-    return remoteDataSource.getRentalIncome(userId);
+  Future<RentalIncomeSummary> getRentalIncome() {
+    return remoteDataSource.getRentalIncome();
   }
 }

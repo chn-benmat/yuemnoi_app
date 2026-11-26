@@ -1,30 +1,24 @@
 // คำอธิบาย: Entity สำหรับข้อมูลสรุปรายได้และประวัติรายรับจากการปล่อยเช่า
 class RentalIncomeSummary {
-  final double totalIncome;
-  final double pendingIncome;
+  final int totalSatang;
   final List<RentalIncomeEntry> transactions;
-  final bool isAvailable;
 
   const RentalIncomeSummary({
-    required this.totalIncome,
-    required this.pendingIncome,
+    required this.totalSatang,
     required this.transactions,
-    this.isAvailable = true,
   });
 }
 
 class RentalIncomeEntry {
   final String itemName;
-  final String date;
-  final String duration;
-  final double amount;
-  final String status;
+  final DateTime confirmedAt;
+  final String paymentMethod;
+  final int amountSatang;
 
   const RentalIncomeEntry({
     required this.itemName,
-    required this.date,
-    required this.duration,
-    required this.amount,
-    required this.status,
+    required this.confirmedAt,
+    required this.paymentMethod,
+    required this.amountSatang,
   });
 }

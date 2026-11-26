@@ -137,6 +137,7 @@ func SetupRouterWithOperations(
 		// ทุกอย่างเกี่ยวกับการจอง (Rentals)
 		rentals := api.Group("/rentals")
 		{
+			rentals.Get("/income", rentalController.RentalIncome)
 			rentals.Post("", rentalController.CreateRentalOrder)
 			rentals.Post("/queue", rentalController.RentalQueue)
 			rentals.Post("/:id/confirm", rentalController.ConfirmRentalOrder)

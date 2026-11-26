@@ -232,13 +232,41 @@ class RentalManagementRemoteDataSource {
     throw StateError('กรุณาดำเนินการผ่านขั้นตอนตรวจสภาพและยืนยันการคืน');
   }
 
-  Future<RentalIncomeSummary> getRentalIncome(String userId) async {
-    return RentalIncomeSummary(
-      totalIncome: 0,
-      pendingIncome: 0,
-      transactions: const [],
-      isAvailable: false,
+  Future<RentalIncomeSummary> getRentalIncome() async {
+    final token = AuthSession.accessToken;
+    if (token == null || token.isEmpty) {
+      throw StateError('กรุณาเข้าสู่ระบบก่อนดูรายได้');
+    }
+
+    final response = await _backendClient.get(
+      '/api/rentals/income',
+      headers: {'Authorization': 'Bearer $token'},
     );
+    if (response.data case {
+      'total_satang': final int totalSatang,
+      'transactions': final List<Object?> transactions,
+    } when response.statusCode == 200) {
+      return RentalIncomeSummary(
+        totalSatang: totalSatang,
+        transactions: transactions.map((transaction) {
+          if (transaction case {
+            'item_name': final String itemName,
+            'confirmed_at': final String confirmedAt,
+            'payment_method': final String paymentMethod,
+            'amount_satang': final int amountSatang,
+          }) {
+            return RentalIncomeEntry(
+              itemName: itemName,
+              confirmedAt: DateTime.parse(confirmedAt),
+              paymentMethod: paymentMethod,
+              amountSatang: amountSatang,
+            );
+          }
+          throw const FormatException('ข้อมูลรายการรับเงินไม่ถูกต้อง');
+        }).toList(),
+      );
+    }
+    throw StateError('โหลดข้อมูลรายได้ไม่สำเร็จ');
   }
 
   Future<Map<int, Map<String, dynamic>>> _fetchItemsMap(

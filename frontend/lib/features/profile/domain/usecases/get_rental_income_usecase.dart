@@ -7,7 +7,7 @@ class GetRentalIncomeUseCase {
 
   const GetRentalIncomeUseCase(this.repository);
 
-  Future<RentalIncomeSummary> execute(String userId) {
-    return repository.getRentalIncome(userId);
+  Future<RentalIncomeSummary> execute() {
+    return repository.getRentalIncome();
   }
 }
