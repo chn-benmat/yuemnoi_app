@@ -13,8 +13,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/network/supabase_client.dart';
-import '../../../../core/network/api_client.dart';
-import '../../../../core/network/auth_session.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/utils/auth_guard.dart';
 import '../../../../core/navigation/item_deep_link.dart';
@@ -26,12 +24,14 @@ import '../../../../core/utils/phone_formatter.dart';
 import '../../../../core/services/favorite_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../profile/presentation/pages/profile/user_profile_view_screen.dart';
+import '../../data/datasources/item_complaint_remote_data_source.dart';
 import '../../domain/entities/item_detail.dart';
 import '../../domain/entities/related_item.dart';
 import '../bloc/item_detail_bloc.dart';
 import '../bloc/item_detail_event.dart';
 import '../bloc/item_detail_state.dart';
 import '../widgets/full_screen_image_viewer.dart';
+import '../widgets/item_complaint_dialog.dart';
 import '../widgets/review_content.dart';
 import '../widgets/owner_item_controls.dart';
 import '../widgets/owner_item_detail_view.dart';
@@ -62,6 +62,7 @@ class ItemDetailScreen extends StatefulWidget {
     this.preview = false,
     this.previewItem,
     this.previewPhotos,
+    this.complaintDataSource = const ItemComplaintRemoteDataSource(),
   });
 
   final int itemId;
@@ -69,6 +70,7 @@ class ItemDetailScreen extends StatefulWidget {
   final bool preview;
   final ItemDetail? previewItem;
   final List<RentalItemPhoto>? previewPhotos;
+  final ItemComplaintRemoteDataSource complaintDataSource;
 
   @override
   State<ItemDetailScreen> createState() => _ItemDetailScreenState();
@@ -278,8 +280,35 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     );
   }
 
-  void _openReportOptions(ItemDetail item) {
-    showModalBottomSheet<void>(
+  Future<void> _openReportOptions(ItemDetail item) async {
+    const reasons = [
+      (
+        label: 'เนื้อหาไม่เหมาะสม / หลอกลวง',
+        icon: Icons.error_outline_rounded,
+        color: Color(0xFFEF4444),
+      ),
+      (
+        label: 'ราคาหรือข้อมูลอุปกรณ์ไม่ถูกต้อง',
+        icon: Icons.price_change_outlined,
+        color: Color(0xFFF59E0B),
+      ),
+      (
+        label: 'อุปกรณ์ชำรุดหรือใช้งานไม่ได้',
+        icon: Icons.build_outlined,
+        color: Color(0xFF64748B),
+      ),
+      (
+        label: 'สินค้าต้องห้ามหรือผิดกฎหมาย',
+        icon: Icons.block_rounded,
+        color: Color(0xFF64748B),
+      ),
+      (
+        label: 'เหตุผลอื่นๆ',
+        icon: Icons.more_horiz_rounded,
+        color: Color(0xFF94A3B8),
+      ),
+    ];
+    final reason = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -287,7 +316,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       ),
       builder: (ctx) {
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -342,137 +371,49 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(
-                    Icons.error_outline_rounded,
-                    color: Color(0xFFEF4444),
+                for (final reason in reasons)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(reason.icon, color: reason.color),
+                    title: Text(
+                      reason.label,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () => Navigator.of(ctx).pop(reason.label),
                   ),
-                  title: const Text(
-                    'เนื้อหาไม่เหมาะสม / หลอกลวง',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _submitComplaint();
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(
-                    Icons.price_change_outlined,
-                    color: Color(0xFFF59E0B),
-                  ),
-                  title: const Text(
-                    'ราคาหรือข้อมูลอุปกรณ์ไม่ถูกต้อง',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _submitComplaint();
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(
-                    Icons.block_rounded,
-                    color: Color(0xFF64748B),
-                  ),
-                  title: const Text(
-                    'สินค้าต้องห้ามหรือผิดกฎหมาย',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _submitComplaint();
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(
-                    Icons.more_horiz_rounded,
-                    color: Color(0xFF94A3B8),
-                  ),
-                  title: const Text(
-                    'เหตุผลอื่นๆ',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _submitComplaint();
-                  },
-                ),
               ],
             ),
           ),
         );
       },
     );
-  }
-
-  Future<void> _submitComplaint() async {
+    if (reason == null || !mounted) return;
     final authed = await AuthGuard.requireAuth(
       context,
       title: 'เข้าสู่ระบบเพื่อรายงานปัญหา',
       message: 'กรุณาเข้าสู่ระบบก่อนส่งเรื่องให้เจ้าหน้าที่ตรวจสอบ',
     );
     if (!authed || !mounted) return;
-    final controller = TextEditingController();
-    final description = await showDialog<String>(
+    final submitted = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('รายละเอียดปัญหา'),
-        content: TextField(
-          controller: controller,
-          maxLength: 2000,
-          minLines: 3,
-          maxLines: 5,
-          decoration: const InputDecoration(
-            hintText:
-                'อธิบายปัญหาอย่างน้อย 5 ตัวอักษร ไม่ใส่เลขบัตรหรือข้อมูลส่วนตัว',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('ยกเลิก'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (controller.text.trim().length >= 5) {
-                Navigator.pop(ctx, controller.text.trim());
-              }
-            },
-            child: const Text('ส่งรายงาน'),
-          ),
-        ],
+      barrierDismissible: false,
+      builder: (_) => ItemComplaintDialog(
+        itemId: item.id,
+        reason: reason,
+        dataSource: widget.complaintDataSource,
       ),
     );
-    controller.dispose();
-    if (description == null || !mounted) return;
-    final api = DioApiClient();
-    String message;
-    try {
-      final response = await api.post(
-        '/api/complaints',
-        headers: {'Authorization': 'Bearer ${AuthSession.accessToken}'},
-        data: {'item_id': widget.itemId, 'description': description},
+    if (submitted != true || !mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('ส่งรายงานปัญหาให้ทีมงานตรวจสอบเรียบร้อยแล้ว'),
+        ),
       );
-      message = response.statusCode >= 200 && response.statusCode < 300
-          ? 'ส่งรายงานปัญหาให้ทีมงานตรวจสอบเรียบร้อยแล้ว'
-          : response.data is Map && response.data['error'] is String
-          ? response.data['error']
-          : 'ส่งรายงานไม่สำเร็จ กรุณาลองใหม่';
-    } catch (_) {
-      message = 'เชื่อมต่อระบบไม่ได้ กรุณาลองใหม่';
-    } finally {
-      api.close();
-    }
-    if (!mounted) return;
-    if (message == 'ส่งรายงานปัญหาให้ทีมงานตรวจสอบเรียบร้อยแล้ว') {
-      return;
-    }
-    showAppPopup(context, content: Text(message));
   }
 
   @override
