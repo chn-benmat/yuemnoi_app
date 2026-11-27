@@ -22,5 +22,5 @@ abstract class HomeRepository {
   Future<bool> toggleFavorite(String itemId);
 
   /// ล้างแคชในหน่วยความจำเพื่อบังคับโหลดข้อมูลใหม่
-  void clearCache() {}
+  void clearCache({bool rotateRecommendations = true}) {}
 }

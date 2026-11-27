@@ -10,6 +10,8 @@ class HomeRepositoryImpl implements HomeRepository {
 
   final HomeSupabaseDataSource _dataSource;
 
+  Stream<void> watchFeedChanges() => _dataSource.watchFeedChanges();
+
   @override
   Future<List<FeedCategory>> getCategories() async {
     final categories = await _dataSource.fetchCategories();
@@ -46,7 +48,7 @@ class HomeRepositoryImpl implements HomeRepository {
   }
 
   @override
-  void clearCache() {
-    _dataSource.clearMemoryCache();
+  void clearCache({bool rotateRecommendations = true}) {
+    _dataSource.clearMemoryCache(rotateRecommendations: rotateRecommendations);
   }
 }

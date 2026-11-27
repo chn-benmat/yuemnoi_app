@@ -1,11 +1,11 @@
-import '../../../../core/cache/app_cache.dart';
-import '../../../../core/cache/cache_database.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/cache/app_cache.dart';
+import '../../../../core/cache/cache_database.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/favorite_service.dart';
@@ -29,6 +29,65 @@ class HomeSupabaseDataSource {
 
   final SupabaseClient? _supabaseClient;
   final ApiClient _apiClient;
+
+  static final _feedChangesByClient = Expando<Stream<void>>();
+
+  Stream<void> watchFeedChanges() {
+    final client = _activeSupabaseClient;
+    if (client == null) return const Stream.empty();
+
+    // ใช้ช่องเดียวต่อ client แม้หน้าหลักทั้งเก่าและใหม่จะยังเปิดอยู่
+    return _feedChangesByClient[client] ??= _watchFeedChanges(client);
+  }
+
+  static Stream<void> _watchFeedChanges(SupabaseClient client) {
+    RealtimeChannel? channel;
+    late StreamSubscription<AuthState> authChanges;
+    late final StreamController<void> changes;
+
+    void leaveChannel() {
+      final subscription = channel;
+      channel = null;
+      if (subscription != null) unawaited(client.removeChannel(subscription));
+    }
+
+    void joinChannel() {
+      final subscription = client.channel(
+        'home_feed',
+        opts: const RealtimeChannelConfig(private: true),
+      );
+      channel = subscription;
+
+      void notifyChanged() {
+        if (channel == subscription) changes.add(null);
+      }
+
+      subscription
+          .onBroadcast(event: 'feed_changed', callback: (_) => notifyChanged())
+          .subscribe((status, _) {
+            // ดึงข้อมูลหลังเชื่อมต่อเพื่อเก็บการเปลี่ยนแปลงที่เกิดระหว่างหลุด
+            if (status == RealtimeSubscribeStatus.subscribed) notifyChanged();
+          });
+    }
+
+    changes = StreamController<void>.broadcast(
+      onListen: () {
+        authChanges = client.auth.onAuthStateChange.listen((event) {
+          if (event.event == AuthChangeEvent.signedOut) {
+            // เข้าช่องใหม่ด้วยสิทธิ์ผู้เยี่ยมชมหลังออกจากระบบ
+            leaveChannel();
+            joinChannel();
+          }
+        }, onError: (Object _) {});
+        joinChannel();
+      },
+      onCancel: () {
+        unawaited(authChanges.cancel());
+        leaveChannel();
+      },
+    );
+    return changes.stream;
+  }
 
   static const _categories = [
     FeedCategoryModel(id: 'all', name: 'ทั้งหมด', iconName: 'apps'),
@@ -239,6 +298,7 @@ class HomeSupabaseDataSource {
   List<FeedItemModel>? _cachedFeedItems;
   DateTime? _lastFetchTime;
   String? _memoryOwner;
+  bool _preserveFeaturedItems = false;
   Set<String> _deferPreviouslyShownIds = {};
   static const int _curatedItemCount = 4;
   static const int _recentRecommendationWindow = 12;
@@ -246,7 +306,11 @@ class HomeSupabaseDataSource {
   String _recentItemsKey(String ownerId) =>
       'home_recent_recommendations_$ownerId';
 
-  void clearMemoryCache() {
+  void clearMemoryCache({bool rotateRecommendations = true}) {
+    _lastFetchTime = null;
+    _preserveFeaturedItems = !rotateRecommendations;
+    if (!rotateRecommendations) return;
+
     final cachedItems = _cachedFeedItems;
     if (cachedItems != null) {
       _deferPreviouslyShownIds = cachedItems
@@ -255,7 +319,22 @@ class HomeSupabaseDataSource {
           .toSet();
     }
     _cachedFeedItems = null;
-    _lastFetchTime = null;
+  }
+
+  List<FeedItemModel> _keepFeaturedItems(
+    List<FeedItemModel> items,
+    List<FeedItemModel> previousItems,
+  ) {
+    final remaining = {for (final item in items) item.id: item};
+    final ordered = [
+      for (final item in previousItems.take(_curatedItemCount))
+        ?remaining.remove(item.id),
+      ...remaining.values,
+    ];
+    return [
+      for (var index = 0; index < ordered.length; index++)
+        ordered[index].copyWith(isCurated: index < _curatedItemCount),
+    ];
   }
 
   Future<List<FeedItemModel>> _rotateRecentlyShownItems(
@@ -769,7 +848,10 @@ class HomeSupabaseDataSource {
       );
     }
     if (freshItems != null) {
-      freshItems = await _rotateRecentlyShownItems(freshItems, ownerId);
+      final previousItems = _cachedFeedItems;
+      freshItems = _preserveFeaturedItems && previousItems != null
+          ? _keepFeaturedItems(freshItems, previousItems)
+          : await _rotateRecentlyShownItems(freshItems, ownerId);
       _cachedFeedItems = freshItems;
       _lastFetchTime = DateTime.now();
       await _saveCachedItems(freshItems, ownerId);
@@ -791,10 +873,10 @@ class HomeSupabaseDataSource {
         );
       }
       if (cachedItems != null) {
-        final rotated = await _rotateRecentlyShownItems(cachedItems, ownerId);
-        _cachedFeedItems = rotated;
+        // ใช้ลำดับใน snapshot เมื่ออ่านข้อมูลสดไม่ได้
+        _cachedFeedItems = cachedItems;
         _lastFetchTime = DateTime.now();
-        return _withCurrentFavoriteState(rotated);
+        return _withCurrentFavoriteState(cachedItems);
       }
     }
 

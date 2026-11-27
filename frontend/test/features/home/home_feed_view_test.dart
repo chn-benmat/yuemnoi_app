@@ -14,7 +14,7 @@ import 'package:frontend/features/home/presentation/widgets/home_search_bar.dart
 
 class _FakeHomeRepository implements HomeRepository {
   @override
-  void clearCache() {}
+  void clearCache({bool rotateRecommendations = true}) {}
 
   @override
   Future<List<FeedCategory>> getCategories() async => const [

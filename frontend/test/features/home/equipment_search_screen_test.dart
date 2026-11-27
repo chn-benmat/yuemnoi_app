@@ -17,7 +17,7 @@ class _FakeHomeRepository implements HomeRepository {
   final List<FeedItem> nearbyItems;
 
   @override
-  void clearCache() {}
+  void clearCache({bool rotateRecommendations = true}) {}
 
   @override
   Future<List<FeedCategory>> getCategories() async => const [];
