@@ -13,6 +13,39 @@ import 'package:intl/date_symbol_data_local.dart';
 void main() {
   setUpAll(() => initializeDateFormatting('th'));
 
+  testWidgets('a daily request can start today after the hidden start time', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(600, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final bangkokNow = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final today = DateUtils.dateOnly(bangkokNow);
+    final data = BookingRequestData(
+      item: BookingItemInfo.defaultMockItem.copyWith(imageUrl: ''),
+      rentalType: BookingRentalType.daily,
+      startDate: today,
+      endDate: DateTime(today.year, today.month, today.day + 1),
+      startTime: const TimeOfDay(hour: 0, minute: 0),
+      endTime: const TimeOfDay(hour: 0, minute: 0),
+      location: 'จุดนัดรับ',
+      isCustomerRequest: true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: BookingRequestPage(initialData: data)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('submit-booking-request-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('confirm-send-booking-request-button')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('owner can correct a past queue offer before saving', (
     tester,
   ) async {

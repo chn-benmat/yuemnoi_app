@@ -8,6 +8,7 @@ declare
   room constant uuid := gen_random_uuid();
   starts timestamptz := (date_trunc('day', now() at time zone 'Asia/Bangkok') + interval '2 days 9 hours')
     at time zone 'Asia/Bangkok';
+  today_start timestamptz := date_trunc('day', now(), 'Asia/Bangkok');
   booking public.booking_tb;
   retry public.booking_tb;
   equipment_id bigint;
@@ -120,9 +121,39 @@ begin
 
   booking := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 day',
     'daily', 'กรุงเทพ', 'promptpay', 900);
-  update public.booking_tb set start_at = now() - interval '1 minute' where id = booking.id;
+  update public.booking_tb set start_at = today_start - interval '1 day' where id = booking.id;
   perform app_private.expire_chat_rental_requests();
   assert (select status = 'cancelled' from public.booking_tb where id = booking.id);
+
+  begin
+    perform public.create_chat_rental_request(renter, room, equipment_id, today_start - interval '1 day', today_start,
+      'daily', 'กรุงเทพ', 'cash', 900);
+    raise exception 'daily request for yesterday was accepted';
+  exception when raise_exception then
+    if sqlerrm not in ('rental_not_started', 'rental_request_expired') then raise; end if;
+  end;
+  begin
+    perform public.create_chat_rental_request(renter, room, equipment_id, today_start, today_start + interval '1 hour',
+      'hourly', 'กรุงเทพ', 'cash', 150);
+    raise exception 'hourly request after its start time was accepted';
+  exception when raise_exception then
+    if sqlerrm not in ('rental_not_started', 'rental_request_expired') then raise; end if;
+  end;
+
+  booking := public.create_chat_rental_request(renter, room, equipment_id, today_start, today_start + interval '1 day',
+    'daily', 'กรุงเทพ', 'promptpay', 900);
+  assert booking.status = 'pending' and booking.total_price = 900;
+  perform app_private.expire_chat_rental_requests();
+  assert (select status = 'pending' from public.booking_tb where id = booking.id);
+  retry := public.create_chat_rental_request(renter, room, equipment_id, today_start, today_start + interval '1 day',
+    'daily', 'กรุงเทพ', 'promptpay', 900);
+  assert retry.id = booking.id;
+  retry := public.edit_chat_rental_request(renter, room, equipment_id, today_start,
+    today_start + interval '2 days', 'daily', 'กรุงเทพ', 'cash', 900, null, booking.id, 0);
+  assert retry.id = booking.id and retry.total_price = 1800;
+  booking := public.confirm_chat_rental_request(owner, booking.id, booking.rental_request_message_id, 1);
+  assert booking.status = 'confirmed';
+  update public.booking_tb set status = 'cancelled' where id = booking.id;
 
   insert into messaging.chat_message_tb(conversation_id, sender_id, message)
     values (room, owner, 'คิวทดสอบ') returning id into queue_message_id;
@@ -137,9 +168,9 @@ begin
   exception when exclusion_violation then
     if sqlerrm <> 'item_rental_occupied' then raise; end if;
   end;
-  booking := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 hour',
-    'hourly', 'กรุงเทพ', 'cash', 150, queue_message_id);
-  assert booking.status = 'pending' and booking.rental_queue_id = queue_id and booking.total_price = 150;
+  booking := public.create_chat_rental_request(renter, room, equipment_id, today_start, today_start + interval '1 day',
+    'daily', 'กรุงเทพ', 'cash', 900, queue_message_id);
+  assert booking.status = 'pending' and booking.rental_queue_id = queue_id and booking.total_price = 900;
   begin
     perform public.edit_chat_rental_request(renter, room, equipment_id, starts,
       starts + interval '2 hours', 'hourly', 'กรุงเทพ', 'cash', 150, null, booking.id, 0);
@@ -147,9 +178,9 @@ begin
   exception when exclusion_violation then
     if sqlerrm <> 'item_rental_occupied' then raise; end if;
   end;
-  retry := public.edit_chat_rental_request(renter, room, equipment_id, starts,
-    starts + interval '2 hours', 'hourly', 'กรุงเทพ', 'cash', 150, queue_message_id, booking.id, 0);
-  assert retry.id = booking.id and retry.rental_queue_id = queue_id and retry.total_price = 300;
+  retry := public.edit_chat_rental_request(renter, room, equipment_id, today_start,
+    today_start + interval '2 days', 'daily', 'กรุงเทพ', 'cash', 900, queue_message_id, booking.id, 0);
+  assert retry.id = booking.id and retry.rental_queue_id = queue_id and retry.total_price = 1800;
   booking := public.confirm_chat_rental_request(owner, booking.id, booking.rental_request_message_id, 1);
   assert booking.status = 'confirmed';
   assert (select status = 'booked' from app_private.rental_queue where id = queue_id);

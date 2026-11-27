@@ -899,13 +899,13 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     if (!canSend()) return;
 
     final now = DateTime.now().toUtc().add(const Duration(hours: 7));
-    final today = DateTime(now.year, now.month, now.day);
-    final pickupDate = now.hour >= 9
-        ? today.add(const Duration(days: 1))
-        : today;
+    final today = DateUtils.dateOnly(now);
     final rentalType = itemDetail.hourlyPrice == null
         ? BookingRentalType.daily
         : BookingRentalType.hourly;
+    final pickupDate = rentalType == BookingRentalType.hourly && now.hour >= 9
+        ? DateUtils.addDaysToDate(today, 1)
+        : today;
 
     final itemInfo = BookingItemInfo(
       id: itemId,
@@ -926,7 +926,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       rentalType: rentalType,
       startDate: pickupDate,
       endDate: rentalType == BookingRentalType.daily
-          ? pickupDate.add(const Duration(days: 1))
+          ? DateUtils.addDaysToDate(pickupDate, 1)
           : pickupDate,
       startTime: const TimeOfDay(hour: 9, minute: 0),
       endTime: const TimeOfDay(hour: 17, minute: 0),

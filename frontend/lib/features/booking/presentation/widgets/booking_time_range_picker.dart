@@ -35,15 +35,15 @@ class BookingTimeRangePicker extends StatelessWidget {
 
   Future<void> _pickStartDate(BuildContext context) async {
     if (!isEditable || onDatesChanged == null) return;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = BookingRequestData.todayInBangkok;
     final initial = startDate.isBefore(today) ? today : startDate;
 
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
+      currentDate: today,
       firstDate: today,
-      lastDate: today.add(const Duration(days: 365)),
+      lastDate: DateUtils.addDaysToDate(today, 365),
       initialEntryMode: DatePickerEntryMode.calendarOnly,
       helpText: 'เลือกวันที่เริ่มเช่า',
       cancelText: 'ยกเลิก',
@@ -69,7 +69,7 @@ class BookingTimeRangePicker extends StatelessWidget {
       // ล็อคไม่ให้วันสิ้นสุดเป็นวันเดียวกับวันเริ่ม (ต้องเป็นวันถัดไปเป็นอย่างน้อย)
       final newEnd = currentEnd.isAfter(pickedDate)
           ? endDate
-          : pickedDate.add(const Duration(days: 1));
+          : DateUtils.addDaysToDate(pickedDate, 1);
 
       onDatesChanged!(pickedDate, newEnd);
     }
@@ -77,18 +77,18 @@ class BookingTimeRangePicker extends StatelessWidget {
 
   Future<void> _pickEndDate(BuildContext context) async {
     if (!isEditable || onDatesChanged == null) return;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = BookingRequestData.todayInBangkok;
 
     // ล็อคให้เลือกได้ตั้งแต่วันถัดไปของวันเริ่มต้นขึ้นไปเท่านั้น
-    final minEndDate = startDate.add(const Duration(days: 1));
+    final minEndDate = DateUtils.addDaysToDate(startDate, 1);
     final initial = endDate.isAfter(startDate) ? endDate : minEndDate;
 
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
+      currentDate: today,
       firstDate: minEndDate,
-      lastDate: today.add(const Duration(days: 365)),
+      lastDate: DateUtils.addDaysToDate(today, 365),
       initialEntryMode: DatePickerEntryMode.calendarOnly,
       helpText: 'เลือกวันที่คืนอุปกรณ์',
       cancelText: 'ยกเลิก',

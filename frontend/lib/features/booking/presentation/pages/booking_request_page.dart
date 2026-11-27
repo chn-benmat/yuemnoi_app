@@ -53,8 +53,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = BookingRequestData.todayInBangkok;
 
     _bookingData =
         widget.initialData ??
@@ -62,7 +61,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
           item: BookingItemInfo.defaultMockItem,
           rentalType: BookingRentalType.daily,
           startDate: today,
-          endDate: today.add(const Duration(days: 1)),
+          endDate: DateUtils.addDaysToDate(today, 1),
           startTime: const TimeOfDay(hour: 9, minute: 0),
           endTime: const TimeOfDay(hour: 17, minute: 0),
           location: 'ซีคอน บางแค',
@@ -136,7 +135,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
           _bookingData.endDate.day,
         );
         if (end.isBefore(start) || end.isAtSameMomentAs(start)) {
-          newEnd = start.add(const Duration(days: 1));
+          newEnd = DateUtils.addDaysToDate(start, 1);
         }
       }
       _bookingData = _bookingData.copyWith(rentalType: type, endDate: newEnd);
@@ -164,8 +163,10 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     if (!startPassed) return true;
     showAppPopup(
       context,
-      content: const Text(
-        'เวลาเริ่มเช่าผ่านไปแล้ว กรุณาเลือกวันและเวลาเริ่มเช่าใหม่',
+      content: Text(
+        _bookingData.rentalType == BookingRentalType.daily
+            ? 'วันที่เริ่มเช่าผ่านไปแล้ว กรุณาเลือกวันที่เริ่มเช่าใหม่'
+            : 'เวลาเริ่มเช่าผ่านไปแล้ว กรุณาเลือกวันและเวลาเริ่มเช่าใหม่',
       ),
     );
     return false;
