@@ -28,18 +28,19 @@ func NewRentalHandler(
 }
 
 type createRentalRequest struct {
-	ItemID          int64     `json:"item_id" validate:"required,gt=0"`
-	StartAt         time.Time `json:"start_at" validate:"required"`
-	EndAt           time.Time `json:"end_at" validate:"required"`
-	RentalType      string    `json:"rental_type" validate:"required,oneof=daily hourly"`
-	PickupLocation  string    `json:"pickup_location" validate:"required,min=1,max=500"`
-	OfferMessageID  string    `json:"offer_message_id" validate:"omitempty,max=100"`
-	BookingID       int64     `json:"booking_id" validate:"omitempty,gt=0"`
-	ConversationID  string    `json:"conversation_id" validate:"omitempty,uuid"`
-	PaymentMethod   string    `json:"payment_method" validate:"omitempty,oneof=cash promptpay"`
-	UnitPrice       int64     `json:"unit_price" validate:"omitempty,gt=0,lte=2147483647"`
-	QueueMessageID  int64     `json:"queue_message_id" validate:"omitempty,gt=0"`
-	RequestRevision int       `json:"request_revision" validate:"gte=0,lte=2147483647"`
+	ExpectedPenaltyTerms *domain.RentalPenaltyTerms `json:"expected_penalty_terms"`
+	ItemID               int64                      `json:"item_id" validate:"required,gt=0"`
+	StartAt              time.Time                  `json:"start_at" validate:"required"`
+	EndAt                time.Time                  `json:"end_at" validate:"required"`
+	RentalType           string                     `json:"rental_type" validate:"required,oneof=daily hourly"`
+	PickupLocation       string                     `json:"pickup_location" validate:"required,min=1,max=500"`
+	OfferMessageID       string                     `json:"offer_message_id" validate:"omitempty,max=100"`
+	BookingID            int64                      `json:"booking_id" validate:"omitempty,gt=0"`
+	ConversationID       string                     `json:"conversation_id" validate:"omitempty,uuid"`
+	PaymentMethod        string                     `json:"payment_method" validate:"omitempty,oneof=cash promptpay"`
+	UnitPrice            int64                      `json:"unit_price" validate:"omitempty,gt=0,lte=2147483647"`
+	QueueMessageID       int64                      `json:"queue_message_id" validate:"omitempty,gt=0"`
+	RequestRevision      int                        `json:"request_revision" validate:"gte=0,lte=2147483647"`
 }
 
 // CreateRentalOrder สร้างคำขอจองอุปกรณ์ใหม่ โดยระบบจะตรวจสอบความพร้อมและคำนวณราคา
@@ -72,18 +73,19 @@ func (h *RentalHandler) CreateRentalOrder(c fiber.Ctx) error {
 	}
 
 	rental, err := h.rentalRepository.CreateRental(c.Context(), userID, domain.CreateRentalRequest{
-		ItemID:          req.ItemID,
-		StartAt:         req.StartAt,
-		EndAt:           req.EndAt,
-		RentalType:      req.RentalType,
-		PickupLocation:  req.PickupLocation,
-		OfferMessageID:  req.OfferMessageID,
-		BookingID:       req.BookingID,
-		ConversationID:  req.ConversationID,
-		PaymentMethod:   req.PaymentMethod,
-		UnitPrice:       req.UnitPrice,
-		QueueMessageID:  req.QueueMessageID,
-		RequestRevision: req.RequestRevision,
+		ExpectedPenaltyTerms: req.ExpectedPenaltyTerms,
+		ItemID:               req.ItemID,
+		StartAt:              req.StartAt,
+		EndAt:                req.EndAt,
+		RentalType:           req.RentalType,
+		PickupLocation:       req.PickupLocation,
+		OfferMessageID:       req.OfferMessageID,
+		BookingID:            req.BookingID,
+		ConversationID:       req.ConversationID,
+		PaymentMethod:        req.PaymentMethod,
+		UnitPrice:            req.UnitPrice,
+		QueueMessageID:       req.QueueMessageID,
+		RequestRevision:      req.RequestRevision,
 	})
 	if err != nil {
 		if isChatEdit && errors.Is(err, domain.ErrRentalStatusTransition) {
@@ -257,7 +259,7 @@ func writeRentalError(c fiber.Ctx, err error) error {
 	case errors.Is(err, domain.ErrRentalRequestExpired):
 		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "เวลานัดรับผ่านไปแล้ว กรุณาส่งคำขอพร้อมวันและเวลาใหม่"})
 	case errors.Is(err, domain.ErrRentalPriceChanged):
-		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "ราคาเช่ามีการเปลี่ยนแปลง กรุณากลับไปเปิดคำขอใหม่เพื่อตรวจสอบราคา"})
+		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "ราคาเช่าหรือค่าปรับมีการเปลี่ยนแปลง กรุณากลับไปเปิดคำขอใหม่เพื่อตรวจสอบราคา"})
 	case errors.Is(err, domain.ErrRentalRequestChanged):
 		return c.Status(http.StatusConflict).JSON(fiber.Map{
 			"code": "rental_request_changed", "error": "คำขอเช่าถูกแก้ไขแล้ว กรุณากลับไปเปิดรายละเอียดล่าสุดในแชท",

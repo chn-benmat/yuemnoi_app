@@ -12,6 +12,7 @@ import 'package:frontend/features/rental_return/presentation/widgets/lender_insp
 import 'package:frontend/features/rental_return/presentation/widgets/role_switcher_bar.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _MockRentalReturnRepository extends Mock
@@ -98,6 +99,45 @@ void main() {
 
         // 3. Should display LenderInspectionView for Lender
         expect(find.byType(LenderInspectionView), findsOneWidget);
+        final damaged = find.text('แจ้งชำรุด');
+        final confirm = find.text('ยืนยันรับคืนสินค้า');
+        when(
+          () => mockRepository.savePenaltyReport(
+            rentalId: 1024,
+            damaged: true,
+            late: false,
+            details: 'เลนส์แตกร้าว',
+          ),
+        ).thenAnswer(
+          (_) async => const RentalReturnPenaltyReport(
+            damaged: true,
+            late: false,
+            details: 'เลนส์แตกร้าว',
+            amountSatang: 12500,
+          ),
+        );
+        when(
+          () => mockRepository.getPenaltyQr(1024),
+        ).thenAnswer((_) async => 'server-generated-promptpay');
+        expect(
+          tester.getCenter(damaged).dx,
+          lessThan(tester.getCenter(confirm).dx),
+        );
+        await tester.ensureVisible(damaged);
+        await tester.tap(damaged);
+        await tester.pumpAndSettle();
+        expect(find.text('บันทึกปัญหาการคืนสินค้า'), findsOneWidget);
+        expect(find.text('Sony Alpha A7 IV (Body)'), findsWidgets);
+        expect(find.byType(TextFormField), findsOneWidget);
+        expect(find.text('เรียกเก็บค่าปรับ'), findsNothing);
+        await tester.enterText(find.byType(TextFormField), 'เลนส์แตกร้าว');
+        await tester.tap(find.text('บันทึกรายงาน'));
+        await tester.pumpAndSettle();
+        expect(find.text('ค่าปรับ 125 บาท'), findsWidgets);
+        await tester.tap(find.text('เรียกเก็บค่าปรับ'));
+        await tester.pumpAndSettle();
+        expect(find.byType(QrImageView), findsOneWidget);
+        verify(() => mockRepository.getPenaltyQr(1024)).called(1);
         expect(find.text('ส่งภาพยืนยันให้ร้านค้า'), findsNothing);
         expect(find.text('ยืนยันการตรวจสภาพด้านบนก่อน'), findsNothing);
       },

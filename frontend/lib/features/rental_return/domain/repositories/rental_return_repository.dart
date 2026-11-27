@@ -9,4 +9,13 @@ abstract class RentalReturnRepository {
     required int rentalId,
     bool pauseItem = false,
   });
+
+  Future<RentalReturnPenaltyReport> savePenaltyReport({
+    required int rentalId,
+    required bool damaged,
+    required bool late,
+    required String details,
+  });
+
+  Future<String> getPenaltyQr(int rentalId);
 }

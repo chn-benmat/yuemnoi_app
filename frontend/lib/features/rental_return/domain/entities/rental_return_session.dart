@@ -1,6 +1,42 @@
 import 'package:intl/intl.dart';
 
 import '../../../../core/models/pickup_location.dart';
+import '../../../../core/models/rental_penalty_terms.dart';
+
+class RentalReturnPenaltyReport {
+  const RentalReturnPenaltyReport({
+    required this.damaged,
+    required this.late,
+    required this.details,
+    required this.amountSatang,
+  });
+
+  factory RentalReturnPenaltyReport.fromJson(Map<String, dynamic> json) =>
+      RentalReturnPenaltyReport(
+        damaged: json['damaged'] == true,
+        late: json['late'] == true,
+        details: json['details'] as String,
+        amountSatang: (json['amount_satang'] as num).toInt(),
+      );
+
+  final bool damaged;
+  final bool late;
+  final String details;
+  final int amountSatang;
+
+  String get formattedAmount =>
+      NumberFormat.decimalPattern('th').format(amountSatang ~/ 100);
+}
+
+class RentalReturnPenaltyException implements Exception {
+  const RentalReturnPenaltyException(
+    this.message, {
+    this.needsPromptPay = false,
+  });
+
+  final String message;
+  final bool needsPromptPay;
+}
 
 /// ขั้นตอนในกระบวนการคืนอุปกรณ์
 enum RentalReturnStep {
@@ -69,6 +105,8 @@ class RentalReturnSession {
   final RentalReturnStep step;
   final List<ReturnInspectionPhoto> photos;
   final DateTime? completedAt;
+  final RentalPenaltyTerms penaltyTerms;
+  final RentalReturnPenaltyReport? penaltyReport;
 
   const RentalReturnSession({
     required this.rentalId,
@@ -90,6 +128,8 @@ class RentalReturnSession {
     this.step = RentalReturnStep.inProgress,
     this.photos = const [],
     this.completedAt,
+    this.penaltyTerms = const RentalPenaltyTerms(),
+    this.penaltyReport,
   });
 
   /// เลขที่คำสั่งซื้อ/เลขออเดอร์ (Order Number)
@@ -180,6 +220,7 @@ class RentalReturnSession {
     RentalReturnStep? step,
     DateTime? completedAt,
     DateTime? endAt,
+    RentalReturnPenaltyReport? penaltyReport,
   }) {
     return RentalReturnSession(
       rentalId: rentalId,
@@ -201,6 +242,8 @@ class RentalReturnSession {
       step: step ?? this.step,
       photos: photos,
       completedAt: completedAt ?? this.completedAt,
+      penaltyTerms: penaltyTerms,
+      penaltyReport: penaltyReport ?? this.penaltyReport,
     );
   }
 

@@ -10,6 +10,7 @@ import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/booking_confirmation_tracker.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/rental_penalty_summary.dart';
 import '../../domain/entities/booking_request_model.dart';
 import '../../domain/entities/rental_request.dart';
 import '../bloc/rental_request_cubit.dart';
@@ -541,6 +542,11 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     ),
                     const SizedBox(height: 18),
                     BookingPriceSummaryCard(bookingData: _bookingData),
+                    if (_bookingData.item.penaltyTerms case final terms?
+                        when !terms.isEmpty) ...[
+                      const SizedBox(height: 12),
+                      RentalPenaltySummary(terms: terms),
+                    ],
                     const SizedBox(height: 18),
                     BookingPaymentMethodCard(
                       selectedMethod: _bookingData.paymentMethod,

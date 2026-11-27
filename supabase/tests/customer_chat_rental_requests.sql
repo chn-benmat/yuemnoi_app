@@ -11,6 +11,8 @@ declare
   today_start timestamptz := date_trunc('day', now(), 'Asia/Bangkok');
   booking public.booking_tb;
   retry public.booking_tb;
+  expired public.booking_tb;
+  cancelled public.booking_tb;
   equipment_id bigint;
   queue_message_id bigint;
   queue_id bigint;
@@ -118,12 +120,14 @@ begin
     'daily', 'กรุงเทพ', 'promptpay', 900);
   delete from messaging.chat_message_tb where id = booking.rental_request_message_id;
   assert (select status = 'cancelled' from public.booking_tb where id = booking.id);
+  cancelled := booking;
 
   booking := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 day',
     'daily', 'กรุงเทพ', 'promptpay', 900);
   update public.booking_tb set start_at = today_start - interval '1 day' where id = booking.id;
   perform app_private.expire_chat_rental_requests();
   assert (select status = 'cancelled' from public.booking_tb where id = booking.id);
+  expired := booking;
 
   begin
     perform public.create_chat_rental_request(renter, room, equipment_id, today_start - interval '1 day', today_start,
@@ -140,9 +144,23 @@ begin
     if sqlerrm not in ('rental_not_started', 'rental_request_expired') then raise; end if;
   end;
 
+  begin
+    perform public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 day',
+      'daily', 'กรุงเทพ', 'cash', 850);
+    raise exception 'replacement accepted a stale price';
+  exception when raise_exception then
+    if sqlerrm <> 'rental_price_changed' then raise; end if;
+  end;
+  assert exists (select 1 from public.booking_tb where id = expired.id), 'failed replacement removed the old request';
+  assert exists (select 1 from messaging.chat_message_tb where id = expired.rental_request_message_id);
+
   booking := public.create_chat_rental_request(renter, room, equipment_id, today_start, today_start + interval '1 day',
     'daily', 'กรุงเทพ', 'promptpay', 900);
   assert booking.status = 'pending' and booking.total_price = 900;
+  assert booking.id <> expired.id;
+  assert not exists (select 1 from public.booking_tb where id = expired.id), 'expired request survived replacement';
+  assert not exists (select 1 from messaging.chat_message_tb where id = expired.rental_request_message_id);
+  assert exists (select 1 from public.booking_tb where id = cancelled.id), 'other cancellation was deleted';
   perform app_private.expire_chat_rental_requests();
   assert (select status = 'pending' from public.booking_tb where id = booking.id);
   retry := public.create_chat_rental_request(renter, room, equipment_id, today_start, today_start + interval '1 day',
@@ -154,6 +172,46 @@ begin
   booking := public.confirm_chat_rental_request(owner, booking.id, booking.rental_request_message_id, 1);
   assert booking.status = 'confirmed';
   update public.booking_tb set status = 'cancelled' where id = booking.id;
+
+  expired := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 day',
+    'daily', 'กรุงเทพ', 'cash', 900);
+  update public.booking_tb set start_at = today_start - interval '1 day' where id = expired.id;
+  perform app_private.expire_chat_rental_requests();
+  perform set_config('request.jwt.claim.sub', owner::text, true);
+  insert into messaging.chat_message_tb(conversation_id, sender_id, message)
+    values (room, owner, format(E'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:\n[ITEM_INQUIRY:{"itemId":%s,"previousBookingId":%s}]', equipment_id, expired.id));
+  assert exists (select 1 from public.booking_tb where id = expired.id), 'another user removed the request';
+
+  perform set_config('request.jwt.claim.sub', renter::text, true);
+  set local role authenticated;
+  insert into messaging.chat_message_tb(conversation_id, sender_id, message)
+    select room, renter, format(E'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:\n[ITEM_INQUIRY:{"itemId":%s,"previousBookingId":%s}]', equipment_id, expired.id)
+    from generate_series(1, 2);
+  insert into messaging.chat_message_tb(conversation_id, sender_id, message)
+    values (room, renter, format(E'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:\n[ITEM_INQUIRY:{"itemId":%s,"previousBookingId":%s}]', equipment_id, booking.id));
+  reset role;
+  assert not exists (select 1 from public.booking_tb where id = expired.id), 'expired request survived the inquiry';
+  assert not exists (select 1 from messaging.chat_message_tb where id = expired.rental_request_message_id);
+  assert (select count(*) = 1 from messaging.chat_message_tb where conversation_id = room and sender_id = renter
+    and message like 'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:%'), 'retry must send one inquiry without creating a booking';
+  assert not exists (select 1 from public.booking_tb where item_id = equipment_id and status = 'pending');
+  perform set_config('request.jwt.claim.sub', '', true);
+
+  expired := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 day',
+    'daily', 'กรุงเทพ', 'cash', 900);
+  update public.booking_tb set start_at = today_start - interval '1 day' where id = expired.id;
+  perform app_private.expire_chat_rental_requests();
+  insert into messaging.chat_message_tb(conversation_id, sender_id, message)
+    values (room, renter, format(E'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:\n[ITEM_INQUIRY:{"itemId":%s,"previousBookingId":%s}]', equipment_id, expired.id));
+  perform set_config('request.jwt.claim.sub', renter::text, true);
+  set local role authenticated;
+  insert into messaging.chat_message_tb(conversation_id, sender_id, message)
+    values (room, renter, format(E'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:\n[ITEM_INQUIRY:{"itemId":%s,"previousBookingId":%s}]', equipment_id, expired.id));
+  reset role;
+  perform set_config('request.jwt.claim.sub', '', true);
+  assert not exists (select 1 from public.booking_tb where id = expired.id), 'reopening an existing inquiry left its expired request';
+  assert (select count(*) = 2 from messaging.chat_message_tb where conversation_id = room and sender_id = renter
+    and message like 'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:%'), 'existing inquiry was duplicated';
 
   insert into messaging.chat_message_tb(conversation_id, sender_id, message)
     values (room, owner, 'คิวทดสอบ') returning id into queue_message_id;
@@ -185,6 +243,17 @@ begin
   assert booking.status = 'confirmed';
   assert (select status = 'booked' from app_private.rental_queue where id = queue_id);
 
+  update public.booking_tb set status = 'cancelled' where id = booking.id;
+  update app_private.rental_queue set status = 'accepted', accepted_at = now(), expires_at = now() + interval '1 hour'
+    where id = queue_id;
+  booking := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 hour',
+    'hourly', 'กรุงเทพ', 'cash', 150, queue_message_id);
+  update public.booking_tb set start_at = today_start - interval '1 day' where id = booking.id;
+  update app_private.rental_queue set expires_at = today_start - interval '2 days' where id = queue_id;
+  perform app_private.expire_chat_rental_requests();
+  assert (select status = 'cancelled' and not pickup_deadline_expired from public.booking_tb where id = booking.id),
+    'queue rights expired before the pickup deadline';
+
   assert not has_function_privilege('authenticated',
     'public.create_chat_rental_request(uuid,uuid,bigint,timestamptz,timestamptz,text,text,text,integer,bigint)', 'execute');
   assert not has_function_privilege('authenticated', 'public.confirm_chat_rental_request(uuid,bigint,bigint)', 'execute');
@@ -192,6 +261,8 @@ begin
     'public.edit_chat_rental_request(uuid,uuid,bigint,timestamptz,timestamptz,text,text,text,integer,bigint,bigint,integer)', 'execute');
   assert not has_function_privilege('anon',
     'public.confirm_chat_rental_request(uuid,bigint,bigint,integer)', 'execute');
+  assert not has_function_privilege('authenticated',
+    'app_private.remove_expired_customer_rental_requests(uuid,uuid,bigint,bigint)', 'execute');
 end;
 $$;
 

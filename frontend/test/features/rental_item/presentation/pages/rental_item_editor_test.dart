@@ -63,15 +63,35 @@ void main() {
     final dailyPrice = find.byKey(const Key('rental-item-daily-price'));
     expect(hourlyPrice, findsOneWidget);
     expect(dailyPrice, findsOneWidget);
+    expect(tester.getTopLeft(hourlyPrice).dy, tester.getTopLeft(dailyPrice).dy);
+    expect(
+      tester.getTopLeft(hourlyPrice).dx,
+      lessThan(tester.getTopLeft(dailyPrice).dx),
+    );
     await tester.ensureVisible(hourlyPrice);
     await tester.enterText(hourlyPrice, '75');
     await tester.ensureVisible(dailyPrice);
     await tester.enterText(dailyPrice, '410');
+    final damageFee = find.byKey(const Key('rental-item-damage-fee'));
+    await tester.ensureVisible(damageFee);
+    await tester.enterText(damageFee, '125');
+    final damageTerms = find.widgetWithText(
+      TextFormField,
+      'เช่น อุปกรณ์ตกแตกหรือมีชิ้นส่วนเสียหาย',
+    );
+    await tester.ensureVisible(damageTerms);
+    await tester.enterText(damageTerms, 'เลนส์แตกร้าว');
+    final lateFee = find.byKey(const Key('rental-item-late-return-fee'));
+    await tester.ensureVisible(lateFee);
+    await tester.enterText(lateFee, '50');
     await confirmAdd(tester);
 
     expect(submitted.single.rentalType, 'รายชั่วโมง');
     expect(submitted.single.price, 75);
     expect(submitted.single.additionalDailyPrice, 410);
+    expect(submitted.single.penaltyTerms.damageFee, 125);
+    expect(submitted.single.penaltyTerms.lateReturnFee, 50);
+    expect(submitted.single.penaltyTerms.damageTerms, 'เลนส์แตกร้าว');
   });
 
   for (final unit in ['hourly', 'daily']) {

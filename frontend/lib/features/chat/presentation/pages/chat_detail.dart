@@ -825,7 +825,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
           BookingConfirmationTracker.getCachedBookingId(message.id);
       matchesPreviousBooking =
           matchesPreviousBooking ||
-          (bookingId != null && inquiry.previousBookingId == bookingId);
+          (bookingId != null && inquiry.followsBooking(bookingId));
       // การยกเลิกรอบถัดไปไม่ควรเปิดให้ใช้คำถามก่อนรอบที่เช่าเสร็จแล้ว
       if (isCompleted) return matchesPreviousBooking;
     }
@@ -915,6 +915,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       reviewCount: itemDetail.reviews.length,
       hourlyRate: itemDetail.hourlyPrice?.toDouble() ?? 0,
       dailyRate: itemDetail.dailyPrice?.toDouble() ?? 0,
+      penaltyTerms: itemDetail.penaltyTerms,
       defaultLocation: pickup.name,
       latitude: pickup.latitude,
       longitude: pickup.longitude,

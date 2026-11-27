@@ -10,6 +10,8 @@ class LenderInspectionView extends StatelessWidget {
     required this.isSubmitting,
     required this.onChecked,
     required this.onConfirm,
+    required this.onReport,
+    required this.reportLabel,
     required this.pauseItem,
     required this.onPauseItem,
   });
@@ -18,6 +20,8 @@ class LenderInspectionView extends StatelessWidget {
   final bool isSubmitting;
   final ValueChanged<bool> onChecked;
   final VoidCallback onConfirm;
+  final VoidCallback onReport;
+  final String reportLabel;
   final bool pauseItem;
   final ValueChanged<bool> onPauseItem;
 
@@ -72,35 +76,52 @@ class LenderInspectionView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        ElevatedButton.icon(
-          onPressed: isChecked && !isSubmitting ? onConfirm : null,
-          icon: isSubmitting
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFF62596D),
+        Row(
+          spacing: 8,
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: isSubmitting ? null : onReport,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                )
-              : const Icon(Icons.check_circle_outline_rounded, size: 20),
-          label: Text(isSubmitting ? 'กำลังยืนยัน…' : 'ยืนยันรับคืนสินค้า'),
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size.fromHeight(52),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            backgroundColor: AppColors.primaryColor,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: const Color(0xFFEDE9F2),
-            disabledForegroundColor: const Color(0xFF62596D),
-            elevation: 0,
-            textStyle: const TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+                ),
+                child: Text(reportLabel, textAlign: TextAlign.center),
+              ),
             ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: isChecked && !isSubmitting ? onConfirm : null,
+                child: Text(
+                  isSubmitting ? 'กำลังยืนยัน…' : 'ยืนยันรับคืนสินค้า',
+                  textAlign: TextAlign.center,
+                ),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 10,
+                  ),
+                  backgroundColor: AppColors.primaryColor,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFFEDE9F2),
+                  disabledForegroundColor: const Color(0xFF62596D),
+                  elevation: 0,
+                  textStyle: const TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
         Material(
           type: MaterialType.transparency,

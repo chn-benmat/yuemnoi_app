@@ -17,6 +17,7 @@ class _ChatFixture {
   final bookings = <Map<String, dynamic>>[];
   bool failHistory = false;
   bool failNextInsert = false;
+  int inquirySubmissions = 0;
   late final SupabaseClient client;
   late final SupabaseClient authenticated;
 
@@ -38,6 +39,28 @@ class _ChatFixture {
             );
           }
           final body = jsonDecode(request.body) as Map<String, dynamic>;
+          inquirySubmissions++;
+          final inquiry = ItemInquiryData.fromChatMessage(
+            body['message'] as String,
+          );
+          final duplicate =
+              inquiry?.previousBookingId != null &&
+              messages.any((message) => message['message'] == body['message']);
+          if (duplicate &&
+              request.headers['accept'] ==
+                  'application/vnd.pgrst.object+json') {
+            return http.Response(
+              '{"code":"PGRST116","details":"The result contains 0 rows"}',
+              406,
+              request: request,
+            );
+          }
+          bookings.removeWhere(
+            (booking) =>
+                booking['id'] == inquiry?.previousBookingId &&
+                booking['pickup_deadline_expired'] == true,
+          );
+          if (duplicate) return http.Response('', 201, request: request);
           final record = {...body, 'id': 'message-${messages.length + 1}'};
           messages.add(record);
           response = {'id': record['id']};
@@ -117,11 +140,14 @@ class _ChatFixture {
     );
   }
 
-  Future<String?> openItemChat({int itemId = 1}) =>
-      ChatRemoteDataSource(client: authenticated).sendItemInquiryIfNeeded(
-        conversationId: 'room',
-        inquiry: ItemInquiryData(itemId: itemId, itemName: 'Canon EOS R50'),
-      );
+  Future<String?> openItemChat({
+    int itemId = 1,
+    bool onlyIfPickupDeadlineExpired = false,
+  }) => ChatRemoteDataSource(client: authenticated).sendItemInquiryIfNeeded(
+    conversationId: 'room',
+    inquiry: ItemInquiryData(itemId: itemId, itemName: 'Canon EOS R50'),
+    onlyIfPickupDeadlineExpired: onlyIfPickupDeadlineExpired,
+  );
 
   void addBooking(String status, {int id = 10, int itemId = 1}) {
     bookings.add({
@@ -201,6 +227,25 @@ void main() {
   });
 
   test(
+    'reopening after removing a superseded booking reuses its inquiry',
+    () async {
+      final fixture = _ChatFixture();
+      addTearDown(fixture.client.dispose);
+      fixture.addBooking('completed', id: 10);
+      fixture.addBooking('cancelled', id: 11);
+      await fixture.openItemChat();
+      fixture.bookings.removeLast();
+
+      expect(await fixture.openItemChat(), 'message-1');
+      expect(fixture.messages, hasLength(1));
+
+      fixture.addBooking('cancelled', id: 12);
+      await fixture.openItemChat();
+      expect(fixture.messages, hasLength(2));
+    },
+  );
+
+  test(
     'simultaneous entry through separate datasource instances sends once',
     () async {
       final fixture = _ChatFixture();
@@ -227,6 +272,34 @@ void main() {
     }
     await fixture.openItemChat();
     expect(fixture.messages, hasLength(102));
+  });
+
+  test('reopens an existing inquiry and removes its expired booking', () async {
+    final fixture = _ChatFixture();
+    addTearDown(fixture.client.dispose);
+    fixture.addBooking('cancelled');
+    await fixture.openItemChat();
+    fixture.bookings.single['pickup_deadline_expired'] = true;
+
+    expect(await fixture.openItemChat(), 'message-1');
+    expect(fixture.bookings, isEmpty);
+    expect(fixture.messages, hasLength(1));
+    await fixture.openItemChat();
+    expect(fixture.inquirySubmissions, 2);
+  });
+
+  test('unavailable items only send inquiries for pickup expiry', () async {
+    final fixture = _ChatFixture();
+    addTearDown(fixture.client.dispose);
+    await fixture.openItemChat(onlyIfPickupDeadlineExpired: true);
+    fixture.addBooking('cancelled');
+    await fixture.openItemChat(onlyIfPickupDeadlineExpired: true);
+    expect(fixture.messages, isEmpty);
+
+    fixture.bookings.single['pickup_deadline_expired'] = true;
+    await fixture.openItemChat(onlyIfPickupDeadlineExpired: true);
+    expect(fixture.bookings, isEmpty);
+    expect(fixture.messages, hasLength(1));
   });
 
   test('history failure does not create an unchecked duplicate', () async {

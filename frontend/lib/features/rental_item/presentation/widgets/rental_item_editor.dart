@@ -56,7 +56,7 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
   final _pickupKey = GlobalKey();
   final _scrollController = ScrollController();
   final _fieldKeys = List.generate(
-    5,
+    8,
     (_) => GlobalKey<FormFieldState<String>>(),
   );
   final _nameFocus = FocusNode();
@@ -65,6 +65,9 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
   late final TextEditingController _description;
   late final TextEditingController _hourlyPrice;
   late final TextEditingController _dailyPrice;
+  late final TextEditingController _damageFee;
+  late final TextEditingController _lateReturnFee;
+  late final TextEditingController _damageTerms;
   late final List<RentalItemPhoto> _photos;
   late String? _category;
   PickupLocation? _pickup;
@@ -85,6 +88,9 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
         _description.text != initial.description ||
         _hourlyPrice.text != initial.hourlyPrice ||
         _dailyPrice.text != initial.dailyPrice ||
+        _damageFee.text != initial.damageFee ||
+        _lateReturnFee.text != initial.lateReturnFee ||
+        _damageTerms.text != initial.damageTerms ||
         _category != initial.category ||
         _pickup != initial.pickupLocation ||
         !listEquals(_photos, initial.photos);
@@ -96,6 +102,9 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     description: _description.text.trim(),
     hourlyPrice: _hourlyPrice.text.trim(),
     dailyPrice: _dailyPrice.text.trim(),
+    damageFee: _damageFee.text.trim(),
+    lateReturnFee: _lateReturnFee.text.trim(),
+    damageTerms: _damageTerms.text.trim(),
     photos: List.unmodifiable(_photos),
     pickupLocation: _pickup,
   );
@@ -108,6 +117,9 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     _description = TextEditingController(text: initial.description);
     _hourlyPrice = TextEditingController(text: initial.hourlyPrice);
     _dailyPrice = TextEditingController(text: initial.dailyPrice);
+    _damageFee = TextEditingController(text: initial.damageFee);
+    _lateReturnFee = TextEditingController(text: initial.lateReturnFee);
+    _damageTerms = TextEditingController(text: initial.damageTerms);
     _photos = [...initial.photos];
     _category = initial.category;
     _pickup = initial.pickupLocation;
@@ -125,6 +137,9 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     _description.dispose();
     _hourlyPrice.dispose();
     _dailyPrice.dispose();
+    _damageFee.dispose();
+    _lateReturnFee.dispose();
+    _damageTerms.dispose();
     _scrollController.dispose();
     _nameFocus.dispose();
     _descriptionFocus.dispose();
@@ -362,14 +377,15 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
   Widget _priceField({
     required int index,
     required String id,
-    required String unit,
+    required String label,
+    String? unit,
     required TextEditingController controller,
     TextEditingController? fallbackPrice,
     required TextInputAction action,
   }) => KeyedSubtree(
     key: ValueKey('$_prefix-$id'),
     child: _label(
-      'ราคาต่อ$unit',
+      label,
       TextFormField(
         key: _fieldKeys[index],
         controller: controller,
@@ -379,20 +395,23 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
         inputFormatters: _priceInputFormatters,
         onChanged: (_) => setState(() {}),
         decoration: _decoration('0').copyWith(
-          prefixIcon: const Center(
-            widthFactor: 1,
-            heightFactor: 1,
-            child: Text('฿'),
+          prefixIconConstraints: const BoxConstraints.tightFor(width: 26),
+          prefixIcon: const Center(child: Text('฿')),
+          suffixIconConstraints: BoxConstraints.tightFor(
+            width: unit == 'ชั่วโมง'
+                ? 65
+                : unit == null
+                ? 35
+                : 48,
           ),
           suffixIcon: Padding(
-            padding: const EdgeInsetsDirectional.only(start: 12, end: 16),
-            child: Center(
-              widthFactor: 1,
-              heightFactor: 1,
+            padding: const EdgeInsetsDirectional.only(end: 7),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
               child: Text(
-                'บาท / $unit',
+                unit == null ? 'บาท' : 'บาท / $unit',
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   color: AppFormFieldStyles.outlinedHintColor,
                 ),
               ),
@@ -403,12 +422,12 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
           final text = value?.trim() ?? '';
           if (text.isEmpty) {
             return fallbackPrice?.text.trim().isEmpty == true
-                ? 'กรุณาระบุราคาต่อชั่วโมงหรือราคาต่อวัน'
+                ? 'กรุณาระบุราคาเช่า'
                 : null;
           }
           final price = int.tryParse(text);
           return price == null || price <= 0 || price > 2147483647
-              ? 'กรุณาระบุราคาตั้งแต่ 1 ถึง 2,147,483,647 บาท'
+              ? 'ยอดเงินไม่ถูกต้อง'
               : null;
         },
       ),
@@ -531,20 +550,70 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
             ),
             _separator,
             _section('ราคาและการให้เช่า', 'ระบุราคาอย่างน้อยหนึ่งแบบ'),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 12,
+              children: [
+                Expanded(
+                  child: _priceField(
+                    index: 3,
+                    id: 'hourly-price',
+                    label: 'ราคาต่อชั่วโมง',
+                    unit: 'ชั่วโมง',
+                    controller: _hourlyPrice,
+                    fallbackPrice: _dailyPrice,
+                    action: TextInputAction.next,
+                  ),
+                ),
+                Expanded(
+                  child: _priceField(
+                    index: 4,
+                    id: 'daily-price',
+                    label: 'ราคาต่อวัน',
+                    unit: 'วัน',
+                    controller: _dailyPrice,
+                    action: TextInputAction.next,
+                  ),
+                ),
+              ],
+            ),
+            _separator,
+            _section(
+              'ค่าปรับ',
+              'ระบุจำนวนบาทต่อครั้ง เว้นว่างได้หากไม่มีค่าปรับ',
+            ),
             _priceField(
-              index: 3,
-              id: 'hourly-price',
-              unit: 'ชั่วโมง',
-              controller: _hourlyPrice,
-              fallbackPrice: _dailyPrice,
+              index: 5,
+              id: 'damage-fee',
+              label: 'ค่าปรับกรณีชำรุด',
+              controller: _damageFee,
               action: TextInputAction.next,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
+            _label(
+              'เงื่อนไขกรณีชำรุด',
+              TextFormField(
+                key: _fieldKeys[6],
+                controller: _damageTerms,
+                maxLength: 500,
+                minLines: 2,
+                maxLines: 4,
+                style: AppFormFieldStyles.textStyle,
+                decoration: _decoration(
+                  'เช่น อุปกรณ์ตกแตกหรือมีชิ้นส่วนเสียหาย',
+                ),
+                validator: (value) =>
+                    _damageFee.text.isNotEmpty && (value ?? '').trim().isEmpty
+                    ? 'กรุณาระบุเงื่อนไขกรณีชำรุด'
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 8),
             _priceField(
-              index: 4,
-              id: 'daily-price',
-              unit: 'วัน',
-              controller: _dailyPrice,
+              index: 7,
+              id: 'late-return-fee',
+              label: 'ค่าปรับคืนเกินกำหนด',
+              controller: _lateReturnFee,
               action: TextInputAction.done,
             ),
             _separator,

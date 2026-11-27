@@ -5,6 +5,7 @@ import '../../../../core/widgets/pickup_location_field.dart';
 
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
+import '../../../../core/widgets/rental_penalty_summary.dart';
 import '../../domain/entities/item_detail.dart';
 import 'full_screen_image_viewer.dart';
 import 'owner_item_controls.dart';
@@ -113,6 +114,10 @@ class OwnerItemDetailView extends StatelessWidget {
                   ),
                   if (item.pickupLocation != null)
                     PickupLocationCard(location: item.pickupLocation!),
+                  if (!item.penaltyTerms.isEmpty) ...[
+                    const SizedBox(height: 16),
+                    RentalPenaltySummary(terms: item.penaltyTerms),
+                  ],
                   const SizedBox(height: 20),
                   Container(
                     padding: const EdgeInsets.all(12),

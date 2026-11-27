@@ -18,23 +18,26 @@ var (
 	ErrRentalRequestExpired   = errors.New("requested pickup time has passed")
 	ErrRentalPriceChanged     = errors.New("rental listing price has changed")
 	ErrRentalRequestChanged   = errors.New("rental request has changed")
+	ErrReturnPenaltyNoAmount  = errors.New("return penalty has no amount")
+	ErrReturnPenaltyNoAccount = errors.New("return penalty requires a PromptPay account")
 )
 
 // CreateRentalRequest accepts only user-selected values. Pricing is calculated
 // by the database from the current item price.
 type CreateRentalRequest struct {
-	ItemID          int64     `json:"item_id"`
-	StartAt         time.Time `json:"start_at"`
-	EndAt           time.Time `json:"end_at"`
-	RentalType      string    `json:"rental_type"`
-	PickupLocation  string    `json:"pickup_location"`
-	OfferMessageID  string    `json:"offer_message_id,omitempty"`
-	BookingID       int64     `json:"booking_id,omitempty"`
-	ConversationID  string    `json:"conversation_id,omitempty"`
-	PaymentMethod   string    `json:"payment_method,omitempty"`
-	UnitPrice       int64     `json:"unit_price,omitempty"`
-	QueueMessageID  int64     `json:"-"`
-	RequestRevision int       `json:"-"`
+	ExpectedPenaltyTerms *RentalPenaltyTerms `json:"expected_penalty_terms,omitempty"`
+	ItemID               int64               `json:"item_id"`
+	StartAt              time.Time           `json:"start_at"`
+	EndAt                time.Time           `json:"end_at"`
+	RentalType           string              `json:"rental_type"`
+	PickupLocation       string              `json:"pickup_location"`
+	OfferMessageID       string              `json:"offer_message_id,omitempty"`
+	BookingID            int64               `json:"booking_id,omitempty"`
+	ConversationID       string              `json:"conversation_id,omitempty"`
+	PaymentMethod        string              `json:"payment_method,omitempty"`
+	UnitPrice            int64               `json:"unit_price,omitempty"`
+	QueueMessageID       int64               `json:"-"`
+	RequestRevision      int                 `json:"-"`
 }
 
 type RentalOrder struct {
@@ -69,6 +72,18 @@ type RentalRepository interface {
 type RentalHandoverRepository interface {
 	HandoverPayment(ctx context.Context, userID string, rentalID int64, confirm bool) (RentalHandoverPayment, error)
 	SavePromptPayAccount(ctx context.Context, userID string, rentalID int64, phone, nationalID string) (RentalHandoverPayment, error)
+}
+
+type RentalReturnPenaltyReport struct {
+	Damaged      bool   `json:"damaged"`
+	Late         bool   `json:"late"`
+	Details      string `json:"details"`
+	AmountSatang int64  `json:"amount_satang"`
+}
+
+type RentalReturnPenaltyRepository interface {
+	SaveRentalReturnPenalty(ctx context.Context, userID string, rentalID int64, report RentalReturnPenaltyReport) (RentalReturnPenaltyReport, error)
+	RentalReturnPenaltyQR(ctx context.Context, userID string, rentalID int64) (string, error)
 }
 
 type RentalIncomeRepository interface {

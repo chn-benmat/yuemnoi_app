@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/rental_penalty_summary.dart';
 import '../../../chat/data/datasources/chat_remote_data_source.dart';
 import '../../../item_detail/data/datasources/item_detail_remote_data_source.dart';
 import '../../domain/entities/booking_request_model.dart';
@@ -279,6 +280,9 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
         conversationId: _bookingData.conversationId,
         paymentMethod: _bookingData.paymentMethod,
         unitPrice: _bookingData.unitRate.toInt(),
+        expectedPenaltyTerms: widget.isEditMode
+            ? null
+            : _bookingData.item.penaltyTerms,
         queueMessageId: _bookingData.rentalQueueMessageId,
         bookingId: widget.isEditMode ? _bookingData.bookingId : null,
         requestRevision: widget.isEditMode
@@ -484,6 +488,11 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                             '${_bookingData.totalPrice.toStringAsFixed(0)} ฿',
                         isHighlight: true,
                       ),
+                      if (_bookingData.item.penaltyTerms case final terms?
+                          when !terms.isEmpty) ...[
+                        const SizedBox(height: 12),
+                        RentalPenaltySummary(terms: terms),
+                      ],
                     ],
                   ),
                 ),
@@ -720,6 +729,11 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
               ),
               const SizedBox(height: 24),
               BookingPriceSummaryCard(bookingData: _bookingData),
+              if (_bookingData.item.penaltyTerms case final terms?
+                  when !terms.isEmpty) ...[
+                const SizedBox(height: 12),
+                RentalPenaltySummary(terms: terms),
+              ],
               if (_bookingData.isCustomerRequest) ...[
                 const SizedBox(height: 18),
                 BookingPaymentMethodCard(

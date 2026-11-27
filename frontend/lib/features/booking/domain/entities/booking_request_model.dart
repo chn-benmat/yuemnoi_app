@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:json_annotation/json_annotation.dart';
 
+import '../../../../core/models/rental_penalty_terms.dart';
+
 part 'booking_request_model.g.dart';
 
 /// ประเภทการเช่า: รายชั่วโมง หรือ รายวัน
@@ -16,7 +18,7 @@ enum BookingRentalType {
 }
 
 /// ข้อมูลอุปกรณ์สำหรับการจอง
-@JsonSerializable()
+@JsonSerializable(explicitToJson: true)
 class BookingItemInfo {
   @JsonKey(defaultValue: 1)
   final int id;
@@ -37,6 +39,8 @@ class BookingItemInfo {
   final String ownerName;
   final double? latitude;
   final double? longitude;
+  @JsonKey(includeIfNull: false)
+  final RentalPenaltyTerms? penaltyTerms;
 
   const BookingItemInfo({
     required this.id,
@@ -50,6 +54,7 @@ class BookingItemInfo {
     this.ownerName = 'ผู้ปล่อยเช่า',
     this.latitude,
     this.longitude,
+    this.penaltyTerms,
   });
 
   /// Mock เริ่มต้นตามดีไซน์ UI (Sony Alpha a7 IV)
@@ -80,6 +85,7 @@ class BookingItemInfo {
     String? ownerName,
     double? latitude,
     double? longitude,
+    RentalPenaltyTerms? penaltyTerms,
   }) {
     return BookingItemInfo(
       id: id ?? this.id,
@@ -93,6 +99,7 @@ class BookingItemInfo {
       ownerName: ownerName ?? this.ownerName,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      penaltyTerms: penaltyTerms ?? this.penaltyTerms,
     );
   }
 

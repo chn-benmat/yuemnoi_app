@@ -43,6 +43,7 @@ class RentalRequestRemoteDataSource {
           if (draft.queueMessageId != null)
             'queue_message_id': draft.queueMessageId,
           'request_revision': ?draft.requestRevision,
+          'expected_penalty_terms': ?draft.expectedPenaltyTerms?.toJson(),
         },
         headers: {'Authorization': 'Bearer $token'},
       );

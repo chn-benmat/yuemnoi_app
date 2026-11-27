@@ -87,6 +87,7 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
               category: value.category ?? '',
               price: value.price ?? 0,
               additionalDailyPrice: value.additionalDailyPrice,
+              penaltyTerms: value.penaltyTerms,
               status: 'available',
               rentalType: value.rentalType,
               reviews: const [],
@@ -111,6 +112,7 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
                 rentalType: value.rentalType,
                 price: value.price!,
                 additionalDailyPrice: value.additionalDailyPrice,
+                penaltyTerms: value.penaltyTerms,
                 images: value.photos
                     .map((photo) => photo.localImage!)
                     .toList(growable: false),

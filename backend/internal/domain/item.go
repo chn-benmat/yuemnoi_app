@@ -27,6 +27,9 @@ type Item struct {
 	Category              string    `json:"category"`
 	Price                 int       `json:"price"`
 	DailyPrice            *int      `json:"daily_price,omitempty"`
+	DamageFee             int       `json:"damage_fee,omitempty"`
+	LateReturnFee         int       `json:"late_return_fee,omitempty"`
+	DamageTerms           string    `json:"damage_terms,omitempty"`
 	IsRentalOccupied      bool      `json:"is_rental_occupied"`
 	IsRentalQueueHeld     bool      `json:"is_rental_queue_held,omitempty"`
 	Status                string    `json:"status"` // เช่น "pending", "verified", "rejected"
@@ -54,6 +57,12 @@ type ItemImage struct {
 	Data        []byte
 	ContentType string
 	Extension   string
+}
+
+type RentalPenaltyTerms struct {
+	DamageFee     int    `json:"damage_fee" validate:"gte=0,lte=2147483647"`
+	LateReturnFee int    `json:"late_return_fee" validate:"gte=0,lte=2147483647"`
+	DamageTerms   string `json:"damage_terms" validate:"max=500"`
 }
 
 type ItemRepository interface {
