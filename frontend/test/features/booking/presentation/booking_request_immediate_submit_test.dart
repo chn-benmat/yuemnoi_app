@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/navigation/app_routes.dart';
+import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/booking/presentation/pages/booking_request_page.dart';
 import 'package:frontend/features/booking/presentation/widgets/booking_location_card.dart';
@@ -100,6 +102,55 @@ void main() {
       );
     },
   );
+
+  testWidgets('confirming a customer edit reaches rental submission', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(600, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    AuthSession.clear();
+    final router = AppRoutes.createRouter(
+      initialLocation: AppRoutes.termsOfService,
+    );
+    addTearDown(router.dispose);
+    final tomorrow = DateUtils.dateOnly(
+      DateTime.now(),
+    ).add(const Duration(days: 1));
+    final data = BookingRequestData(
+      item: BookingItemInfo.defaultMockItem.copyWith(imageUrl: ''),
+      rentalType: BookingRentalType.hourly,
+      startDate: tomorrow,
+      endDate: tomorrow,
+      startTime: const TimeOfDay(hour: 14, minute: 0),
+      endTime: const TimeOfDay(hour: 15, minute: 0),
+      location: 'จุดนัดรับ',
+      isCustomerRequest: true,
+      bookingId: 25,
+      conversationId: 'room',
+      requestRevision: 2,
+    );
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    unawaited(
+      AppRoutes.openBooking(
+        tester.element(find.byType(Scaffold)),
+        initialData: data,
+        isEditMode: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('submit-booking-request-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-send-booking-request-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('กรุณาเข้าสู่ระบบก่อนส่งคำขอเช่า'), findsOneWidget);
+  });
 
   testWidgets('confirming a rental returns to chat while saving is pending', (
     tester,
