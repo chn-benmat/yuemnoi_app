@@ -33,7 +33,7 @@ void main() {
     testWidgets(
       hasConfirmedRental
           ? 'the confirmed renter keeps their booking without a queue prompt'
-          : 'another renter has the item (existing inquiry: $hasInquiry)',
+          : 'rental event shows the occupied notice (existing inquiry: $hasInquiry)',
       (tester) async {
         SharedPreferences.setMockInitialValues({});
         AuthSession.saveAccessToken('test-token');
@@ -58,6 +58,8 @@ void main() {
         );
         final stream = StreamController<List<ChatMessage>>();
         addTearDown(stream.close);
+        final rentalChanges = StreamController<void>.broadcast();
+        addTearDown(rentalChanges.close);
         final messages = _MockStreamMessages();
         when(() => messages(conversation.id)).thenAnswer((_) => stream.stream);
         final bloc = ChatDetailBloc(
@@ -66,7 +68,7 @@ void main() {
         );
         addTearDown(bloc.close);
         final queue = _MockRentalQueue();
-        var occupied = hasConfirmedRental || !hasInquiry;
+        var occupied = hasConfirmedRental;
         var joined = false;
         when(() => queue.listItems(conversation.id)).thenAnswer(
           (_) async => occupied && !joined && !hasConfirmedRental
@@ -89,6 +91,8 @@ void main() {
               getUnavailableRentalItemIds: (ids) async => {
                 if (occupied && ids.contains(1)) 1,
               },
+              watchRentalAvailabilityChanges: (itemId) =>
+                  itemId == 1 ? rentalChanges.stream : const Stream.empty(),
             ),
           ),
         );
@@ -136,6 +140,8 @@ void main() {
               widget is ItemInquiryBubbleCard && widget.inquiryData.itemId == 1,
         );
         if (hasConfirmedRental) {
+          rentalChanges.add(null);
+          await tester.pumpAndSettle();
           expect(tableInquiry, findsOneWidget);
           expect(find.text('ยืนยันคำขอเช่าเรียบร้อยแล้ว'), findsOneWidget);
           expect(find.text('ขอคิวเช่าต่อ'), findsNothing);
@@ -143,11 +149,12 @@ void main() {
           await tester.pumpWidget(const SizedBox.shrink());
           return;
         }
+        expect(tableInquiry, hasInquiry ? findsOneWidget : findsNothing);
+        expect(find.textContaining('กรุณาต่อคิวเพื่อเช่าต่อ'), findsNothing);
+        occupied = true;
+        rentalChanges.add(null);
+        await tester.pumpAndSettle();
         if (hasInquiry) {
-          expect(tableInquiry, findsOneWidget);
-          occupied = true;
-          await tester.pump(const Duration(seconds: 30));
-          await tester.pumpAndSettle();
           expect(find.byType(ItemInquiryBubbleCard), findsOneWidget);
           expect(find.text('เลนส์'), findsOneWidget);
         }
@@ -166,11 +173,12 @@ void main() {
 
         if (hasInquiry) {
           occupied = false;
-          await tester.pump(const Duration(seconds: 30));
+          rentalChanges.add(null);
           await tester.pumpAndSettle();
           expect(tableInquiry, findsOneWidget);
         }
         await tester.pumpWidget(const SizedBox.shrink());
+        expect(rentalChanges.hasListener, isFalse);
       },
     );
   }
@@ -523,6 +531,160 @@ void main() {
     expect(find.text('ส่งคำขอเช่าใหม่'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  for (final viewerIsOwner in [false, true]) {
+    testWidgets(
+      'a renewed inquiry stays visible when availability changes (owner: $viewerIsOwner)',
+      (tester) async {
+        await initializeDateFormatting('th');
+        SharedPreferences.setMockInitialValues({});
+        AuthSession.saveAccessToken('test-token');
+        addTearDown(AuthSession.clear);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        tester.view.physicalSize = const Size(800, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final conversation = ChatConversation(
+          id: 'completed-queue-$viewerIsOwner',
+          otherUserId: viewerIsOwner ? 'customer' : 'item-owner',
+          name: viewerIsOwner ? 'ผู้เช่า' : 'ผู้ปล่อยเช่า',
+          role: viewerIsOwner
+              ? ChatParticipantRole.renter
+              : ChatParticipantRole.owner,
+          avatarAsset: '',
+          preview: '',
+          timeLabel: '',
+          itemId: 1,
+        );
+        final stream = StreamController<List<ChatMessage>>();
+        addTearDown(stream.close);
+        final availabilityChanges = StreamController<void>.broadcast();
+        addTearDown(availabilityChanges.close);
+        final messages = _MockStreamMessages();
+        when(() => messages(conversation.id)).thenAnswer((_) => stream.stream);
+        final bloc = ChatDetailBloc(
+          streamMessages: messages,
+          sendMessage: _MockSendMessage(),
+        );
+        addTearDown(bloc.close);
+        final queue = _MockRentalQueue();
+        var occupied = false;
+        final initialAvailability = Completer<Set<int>>();
+        when(() => queue.listItems(conversation.id)).thenAnswer(
+          (_) async =>
+              occupied && !viewerIsOwner ? [(id: 1, name: 'โต๊ะ')] : [],
+        );
+        final completed = BookingRequestData(
+          item: BookingItemInfo.defaultMockItem.copyWith(
+            id: 1,
+            title: 'โต๊ะ',
+            imageUrl: '',
+          ),
+          startDate: DateTime(2026, 11, 26),
+          endDate: DateTime(2026, 11, 27),
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 9, minute: 0),
+          location: 'จุดนัดรับ',
+          bookingId: 25,
+          status: 'completed',
+          isCustomerRequest: true,
+        );
+        ChatMessage message(int index, String content) => ChatMessage(
+          id: '$index',
+          conversationId: conversation.id,
+          senderId: 'customer',
+          message: content,
+          createdAt: DateTime(2026, 11, 27, 10, index),
+          isMine: !viewerIsOwner,
+        );
+        const inquiry = ItemInquiryData(itemId: 1, itemName: 'โต๊ะ');
+        final history = [
+          message(1, completed.toChatMessagePayload()),
+          message(2, inquiry.toChatMessagePayload()),
+          message(
+            3,
+            const ItemInquiryData(
+              itemId: 2,
+              itemName: 'กล้อง',
+            ).toChatMessagePayload(),
+          ),
+        ];
+        final renewed = message(
+          4,
+          inquiry.withPreviousBookingId(25).toChatMessagePayload(),
+        );
+        Finder inquiryCard(String id) => find.byWidgetPredicate(
+          (widget) =>
+              widget is ItemInquiryBubbleCard && widget.message.id == id,
+        );
+        final queueButton = find.text('ขอคิวเช่าต่อ');
+        final queueNotice = find.textContaining('กรุณาต่อคิวเพื่อเช่าต่อ');
+        final sendRequest = find.descendant(
+          of: inquiryCard('4'),
+          matching: find.text('ส่งคำขอเช่าอุปกรณ์นี้'),
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatDetailScreen(
+              conversation: conversation,
+              chatDetailBloc: bloc,
+              rentalQueueSource: queue,
+              getUnavailableRentalItemIds: (ids) async {
+                final unavailable = !initialAvailability.isCompleted
+                    ? await initialAvailability.future
+                    : {if (occupied) 1};
+                return unavailable.intersection(ids);
+              },
+              watchRentalAvailabilityChanges: (id) =>
+                  id == 1 ? availabilityChanges.stream : const Stream.empty(),
+            ),
+          ),
+        );
+        stream.add([...history, renewed]);
+        await tester.pumpAndSettle();
+        expect(find.text('การเช่าเสร็จสิ้น'), findsOneWidget);
+        expect(inquiryCard('2'), findsNothing);
+        expect(inquiryCard('3'), findsOneWidget);
+        final wasVisibleWhileLoading = inquiryCard('4').evaluate().isNotEmpty;
+        expect(sendRequest, findsNothing);
+
+        initialAvailability.complete({});
+        await tester.pumpAndSettle();
+        expect(inquiryCard('4'), findsOneWidget);
+        expect(sendRequest, viewerIsOwner ? findsNothing : findsOneWidget);
+
+        occupied = true;
+        availabilityChanges.add(null);
+        await tester.pumpAndSettle();
+        expect(inquiryCard('4'), findsOneWidget);
+        expect(wasVisibleWhileLoading, isTrue);
+        expect(sendRequest, findsNothing);
+        expect(queueNotice, findsNothing);
+        expect(queueButton, viewerIsOwner ? findsNothing : findsOneWidget);
+        if (!viewerIsOwner) {
+          final composer = find.byKey(const ValueKey('chat-message-field'));
+          expect(
+            tester.getRect(queueButton).bottom,
+            lessThanOrEqualTo(tester.getRect(composer).top),
+          );
+        }
+
+        occupied = false;
+        availabilityChanges.add(null);
+        await tester.pumpAndSettle();
+        expect(inquiryCard('2'), findsNothing);
+        expect(inquiryCard('4'), findsOneWidget);
+        expect(sendRequest, viewerIsOwner ? findsNothing : findsOneWidget);
+        expect(queueButton, findsNothing);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
 
   testWidgets('queue prompts follow the eligibility of each item in chat', (
     tester,

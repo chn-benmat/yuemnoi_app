@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../data/datasources/chat_remote_data_source.dart';
 import '../../data/models/chat_message_model.dart';
 import '../../domain/entities/chat_message.dart';
@@ -126,13 +127,14 @@ class ChatMessagesCache {
 }
 
 class _ChatItemOwnershipUpdated extends ChatDetailEvent {
-  const _ChatItemOwnershipUpdated(this.itemIds, this.epoch);
+  const _ChatItemOwnershipUpdated(this.itemIds, this.ownedItemIds, this.epoch);
 
   final Set<int> itemIds;
+  final Set<int> ownedItemIds;
   final int epoch;
 
   @override
-  List<Object?> get props => [itemIds, epoch];
+  List<Object?> get props => [itemIds, ownedItemIds, epoch];
 }
 
 class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
@@ -182,7 +184,13 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
           _cacheUserId != ChatMessagesCache._userId)
         return;
       emit(
-        state.copyWith(ownedItemIds: {...state.ownedItemIds, ...event.itemIds}),
+        state.copyWith(
+          ownedItemIds: {...state.ownedItemIds, ...event.ownedItemIds},
+          resolvedItemOwnershipIds: {
+            ...state.resolvedItemOwnershipIds,
+            ...event.itemIds,
+          },
+        ),
       );
     });
   }
@@ -191,7 +199,7 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     final cached = conversationId == null
         ? null
         : ChatMessagesCache.peek(conversationId);
-    return cached == null
+    return cached == null || cached.isEmpty
         ? const ChatDetailState()
         : ChatDetailState(status: ChatDetailStatus.success, messages: cached);
   }
@@ -207,6 +215,10 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
   String? _conversationId;
   String? _cacheUserId;
   int _subscriptionEpoch = 0;
+
+  bool hasResolvedItemOwnership(int itemId) =>
+      _getOwnedItemIds == null ||
+      state.resolvedItemOwnershipIds.contains(itemId);
 
   @override
   void onChange(Change<ChatDetailState> change) {
@@ -234,7 +246,13 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     try {
       final ownedIds = await getOwnedItemIds(itemIds);
       if (!isClosed && epoch == _subscriptionEpoch) {
-        add(_ChatItemOwnershipUpdated(ownedIds.intersection(itemIds), epoch));
+        add(
+          _ChatItemOwnershipUpdated(
+            itemIds,
+            ownedIds.intersection(itemIds),
+            epoch,
+          ),
+        );
       }
     } catch (_) {
       // หากตรวจเจ้าของไม่ได้ ให้ซ่อนปุ่มและลองใหม่เมื่อข้อความเปลี่ยน
@@ -269,7 +287,12 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     final epoch = ++_subscriptionEpoch;
     _fallbackItemId = event.itemId;
     _checkedItemIds.clear();
-    emit(state.copyWith(ownedItemIds: const {}));
+    emit(
+      state.copyWith(
+        ownedItemIds: const {},
+        resolvedItemOwnershipIds: const {},
+      ),
+    );
     final userId = SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentUser?.id ?? ''
         : '';
@@ -449,11 +472,18 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
   ) {
     if (_cacheUserId != null && _cacheUserId != ChatMessagesCache._userId)
       return;
-    if (event.messages.isEmpty && _conversationId != null) {
+    final previousById = {
+      for (final message in state.messages) message.id: message,
+    };
+    final confirmedMessages = [
+      for (final message in event.messages)
+        _retainClosedBookingStatus(message, previousById[message.id]),
+    ];
+    if (confirmedMessages.isEmpty && _conversationId != null) {
       _cacheMessages(_conversationId!, const []);
     }
-    if (event.messages.isNotEmpty) {
-      _cacheMessages(event.messages.first.conversationId, event.messages);
+    if (confirmedMessages.isNotEmpty) {
+      _cacheMessages(confirmedMessages.first.conversationId, confirmedMessages);
       final unreadIncoming = event.messages.any((m) => !m.isMine && !m.isRead);
       if (unreadIncoming) {
         _markMessagesAsRead?.call(event.messages.first.conversationId);
@@ -475,7 +505,7 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
     final seenIds = <String>{};
     final mergedMessages = <ChatMessage>[];
 
-    for (final m in event.messages) {
+    for (final m in confirmedMessages) {
       if (seenIds.add(m.id)) {
         mergedMessages.add(m);
       }
@@ -491,6 +521,55 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
         status: ChatDetailStatus.success,
         messages: mergedMessages,
       ),
+    );
+  }
+
+  ChatMessage _retainClosedBookingStatus(
+    ChatMessage message,
+    ChatMessage? previous,
+  ) {
+    if (previous == null ||
+        previous.conversationId != message.conversationId ||
+        previous.message == message.message) {
+      return message;
+    }
+    final priorBooking = BookingRequestData.fromChatMessage(previous.message);
+    final status = priorBooking?.status;
+    final bookingId = priorBooking?.bookingId;
+    if (bookingId == null ||
+        bookingId <= 0 ||
+        !const {
+          'cancelled',
+          'completed',
+          'finished',
+          'คืนของสำเร็จ',
+        }.contains(status)) {
+      return message;
+    }
+    final booking = BookingRequestData.fromChatMessage(message.message);
+    if (booking == null ||
+        booking.bookingId != bookingId ||
+        !const {
+          null,
+          'pending',
+          'confirmed',
+          'active',
+          'awaiting_return',
+          'return_ready',
+        }.contains(booking.status)) {
+      return message;
+    }
+
+    // ข้อความอาจยังมีสถานะเดิมก่อนที่ข้อมูลจากรายการเช่าจะมาถึง
+    return ChatMessage(
+      id: message.id,
+      conversationId: message.conversationId,
+      senderId: message.senderId,
+      message: booking.copyWith(status: status).toChatMessagePayload(),
+      createdAt: message.createdAt,
+      isMine: message.isMine,
+      imageUrl: message.imageUrl,
+      isRead: message.isRead,
     );
   }
 

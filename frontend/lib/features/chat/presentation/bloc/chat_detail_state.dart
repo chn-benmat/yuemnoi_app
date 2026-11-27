@@ -15,6 +15,7 @@ class ChatDetailState extends Equatable {
     this.failedMessageIds = const {},
     this.sendingMessageIds = const {},
     this.ownedItemIds = const {},
+    this.resolvedItemOwnershipIds = const {},
     this.errorMessage,
   });
 
@@ -29,6 +30,7 @@ class ChatDetailState extends Equatable {
   // แยกสถานะรอเครือข่ายออกจากข้อความที่บันทึกสำเร็จแล้ว
   final Set<String> sendingMessageIds;
   final Set<int> ownedItemIds;
+  final Set<int> resolvedItemOwnershipIds;
   final String? errorMessage;
 
   ChatDetailState copyWith({
@@ -42,6 +44,7 @@ class ChatDetailState extends Equatable {
     Set<String>? failedMessageIds,
     Set<String>? sendingMessageIds,
     Set<int>? ownedItemIds,
+    Set<int>? resolvedItemOwnershipIds,
     String? errorMessage,
   }) {
     return ChatDetailState(
@@ -55,6 +58,8 @@ class ChatDetailState extends Equatable {
       failedMessageIds: failedMessageIds ?? this.failedMessageIds,
       sendingMessageIds: sendingMessageIds ?? this.sendingMessageIds,
       ownedItemIds: ownedItemIds ?? this.ownedItemIds,
+      resolvedItemOwnershipIds:
+          resolvedItemOwnershipIds ?? this.resolvedItemOwnershipIds,
       errorMessage: errorMessage,
     );
   }
@@ -71,6 +76,7 @@ class ChatDetailState extends Equatable {
     failedMessageIds,
     sendingMessageIds,
     ownedItemIds,
+    resolvedItemOwnershipIds,
     errorMessage,
   ];
 }
