@@ -18,6 +18,7 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   UserProfile? _currentProfile;
   UserProfile? get currentProfile => _currentProfile;
+  int _loadRevision = 0;
 
   ProfileCubit({
     GetUserProfileUseCase? getUserProfile,
@@ -47,8 +48,15 @@ class ProfileCubit extends Cubit<ProfileState> {
     required String userId,
     String? accessToken,
   }) async {
-    if (accessToken != null && accessToken.isNotEmpty) {
-      _currentProfile = getUserProfile.repository.readCachedProfile(userId);
+    if (isClosed) return;
+    final revision = ++_loadRevision;
+    final cached = accessToken?.isNotEmpty == true
+        ? getUserProfile.repository.readCachedProfile(userId)
+        : null;
+    if (cached != null && cached.userId == userId) {
+      _currentProfile = cached;
+    } else if (_currentProfile?.userId != userId) {
+      _currentProfile = null;
     }
     emit(const ProfileLoading());
     try {
@@ -56,11 +64,14 @@ class ProfileCubit extends Cubit<ProfileState> {
         userId: userId,
         accessToken: accessToken,
       );
-      if (isClosed) return;
+      if (isClosed || revision != _loadRevision) return;
+      if (profile.userId != userId) {
+        throw const ProfileApiException('โหลดโปรไฟล์ไม่สำเร็จ กรุณาลองใหม่');
+      }
       _currentProfile = profile;
       emit(ProfileLoaded(profile));
     } catch (e) {
-      if (isClosed) return;
+      if (isClosed || revision != _loadRevision) return;
       emit(
         ProfileActionFailure(
           message: e.toString(),

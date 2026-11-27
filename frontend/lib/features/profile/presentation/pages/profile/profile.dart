@@ -33,11 +33,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _guestPromptOpen = false;
   bool _guestPromptScheduled = false;
   late final ProfileCubit _profileCubit;
+  StreamSubscription<String?>? _accountSubscription;
 
   @override
   void initState() {
     super.initState();
     _profileCubit = ProfileCubit();
+    if (SupabaseConfig.isInitialized) {
+      final auth = SupabaseConfig.client.auth;
+      // ล้างการแสดงบัญชีเดิมได้ทันทีระหว่างรอแอปยืนยันเซสชันใหม่
+      _accountSubscription = auth.onAuthStateChange
+          .map((_) => auth.currentUser?.id)
+          .distinct()
+          .listen((_) {
+            if (mounted) setState(() {});
+          }, onError: (Object _) {});
+    }
     _loadCurrentProfile();
     _scheduleGuestPrompt();
   }
@@ -55,6 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
+    unawaited(_accountSubscription?.cancel());
     _profileCubit.close();
     super.dispose();
   }
@@ -115,9 +127,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = _currentUser;
     if (user == null) return null;
     final metadata = user.userMetadata;
-    final profileImage = _profileCubit.currentProfile?.avatarUrl;
+    final profile = _profileCubit.currentProfile;
     for (final candidate in [
-      profileImage,
+      if (profile != null && profile.userId == user.id) profile.avatarUrl,
       metadata?['user_image_url'],
       metadata?['avatar_url'],
       metadata?['picture'],
@@ -295,6 +307,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ProfileHeader(
+                key: ValueKey(_currentUser?.id),
                 displayName: _displayName,
                 avatarUrl: _avatarUrl,
                 onProfileTap: _openUserProfile,

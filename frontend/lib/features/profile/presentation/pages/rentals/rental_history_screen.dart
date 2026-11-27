@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
@@ -20,9 +23,17 @@ class RentalHistoryScreen extends StatefulWidget {
 
 class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
   late final GetRentalHistoryUseCase _getRentalHistoryUseCase;
-  bool _isLoading = true;
+  StreamSubscription<AuthState>? _authSubscription;
+  int _loadRequestId = 0;
+  String? _historyUserId;
   String? _loadError;
-  List<RentalHistoryItemData> _history = [];
+  List<RentalHistoryItemData>? _history;
+
+  String? get _currentUserId {
+    if (!SupabaseConfig.isInitialized) return null;
+    final userId = SupabaseConfig.client.auth.currentUser?.id;
+    return userId == null || userId.isEmpty ? null : userId;
+  }
 
   @override
   void initState() {
@@ -34,34 +45,43 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
   }
 
   Future<void> _loadRentalHistory() async {
-    if (!SupabaseConfig.isInitialized) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _loadError = 'ระบบข้อมูลการเช่ายังไม่พร้อมใช้งาน';
-        });
-      }
+    if (!mounted) return;
+    if (SupabaseConfig.isInitialized) {
+      _authSubscription ??= SupabaseConfig.client.auth.onAuthStateChange.listen(
+        (_) {
+          if (_currentUserId != _historyUserId) {
+            unawaited(_loadRentalHistory());
+          }
+        },
+        onError: (Object _) {},
+      );
+    }
+
+    final requestId = ++_loadRequestId;
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) {
+      setState(() {
+        _history = null;
+        _historyUserId = null;
+        _loadError = SupabaseConfig.isInitialized
+            ? 'กรุณาเข้าสู่ระบบเพื่อดูประวัติการเช่า'
+            : 'ระบบข้อมูลการเช่ายังไม่พร้อมใช้งาน';
+      });
       return;
     }
 
-    final currentUserId = SupabaseConfig.client.auth.currentUser?.id;
-    if (currentUserId == null || currentUserId.isEmpty) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _loadError = 'กรุณาเข้าสู่ระบบเพื่อดูประวัติการเช่า';
-        });
-      }
-      return;
+    if (currentUserId != _historyUserId || _loadError != null) {
+      setState(() {
+        _history = null;
+        _historyUserId = currentUserId;
+        _loadError = null;
+      });
     }
-
-    setState(() {
-      _isLoading = true;
-      _loadError = null;
-    });
 
     try {
       final bookings = await _getRentalHistoryUseCase.execute(currentUserId);
+      if (!mounted || !_isCurrentLoad(requestId, currentUserId)) return;
+
       final completedBookingIds = bookings
           .where(
             (booking) =>
@@ -87,6 +107,8 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
           // หากตรวจประวัติรีวิวไม่ได้ ยังให้เปิดแบบฟอร์มที่มีการตรวจซ้ำก่อนบันทึก
         }
       }
+      if (!mounted || !_isCurrentLoad(requestId, currentUserId)) return;
+
       final List<RentalHistoryItemData> result = [];
 
       for (final b in bookings) {
@@ -125,21 +147,42 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
         );
       }
 
-      if (mounted) {
-        setState(() {
-          _history = result;
-          _isLoading = false;
-        });
-      }
+      setState(() => _history = result);
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _loadError =
-              'โหลดประวัติการเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';
-        });
+      if (!mounted || !_isCurrentLoad(requestId, currentUserId)) return;
+
+      if (_history == null) {
+        setState(
+          () => _loadError =
+              'โหลดประวัติการเช่าไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
+        );
+      } else {
+        ScaffoldMessenger.maybeOf(context)
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: const Text('อัปเดตประวัติการเช่าไม่สำเร็จ'),
+              action: SnackBarAction(
+                label: 'ลองใหม่',
+                onPressed: () {
+                  if (mounted && _currentUserId == currentUserId) {
+                    unawaited(_loadRentalHistory());
+                  }
+                },
+              ),
+            ),
+          );
       }
     }
+  }
+
+  bool _isCurrentLoad(int requestId, String userId) =>
+      requestId == _loadRequestId && _currentUserId == userId;
+
+  @override
+  void dispose() {
+    unawaited(_authSubscription?.cancel());
+    super.dispose();
   }
 
   bool _isCompleted(String? status) {
@@ -148,7 +191,11 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
   }
 
   Future<void> _openReview(RentalHistoryItemData item) async {
-    if (item.bookingId == null || item.itemId == null) return;
+    if (_historyUserId != _currentUserId ||
+        item.bookingId == null ||
+        item.itemId == null) {
+      return;
+    }
     await AppRoutes.openReview(
       context,
       bookingId: item.bookingId,
@@ -237,6 +284,9 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final matchesAccount = _historyUserId == _currentUserId;
+    final history = matchesAccount ? _history : null;
+    final loadError = matchesAccount ? _loadError : null;
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F9),
       appBar: AppBar(
@@ -254,16 +304,16 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
         centerTitle: true,
         elevation: 0,
       ),
-      body: _isLoading
+      body: history == null && loadError == null
           ? const RentalHistoryLoadingSkeleton()
-          : _loadError != null
+          : loadError != null
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(28),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(_loadError!, textAlign: TextAlign.center),
+                    Text(loadError, textAlign: TextAlign.center),
                     const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: _loadRentalHistory,
@@ -273,21 +323,22 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
                 ),
               ),
             )
-          : _history.isEmpty
+          : history!.isEmpty
           ? _buildEmptyState()
           : RefreshIndicator(
               color: AppColors.primaryColor,
               onRefresh: _loadRentalHistory,
               child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 24,
                 ),
-                itemCount: _history.length,
+                itemCount: history.length,
                 separatorBuilder: (context, index) =>
                     const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  final item = _history[index];
+                  final item = history[index];
                   return RentalHistoryCard(
                     item: item,
                     onReview: item.isCompleted && !item.alreadyReviewed

@@ -10,7 +10,9 @@ class RentalStatusInitial extends RentalStatusState {
 }
 
 class RentalStatusLoading extends RentalStatusState {
-  const RentalStatusLoading();
+  const RentalStatusLoading({this.previous});
+
+  final RentalStatusLoaded? previous;
 }
 
 class RentalStatusLoaded extends RentalStatusState {
@@ -34,5 +36,7 @@ class RentalStatusActionSuccess extends RentalStatusState {
 
 class RentalStatusError extends RentalStatusState {
   final String message;
-  const RentalStatusError(this.message);
+  final RentalStatusLoaded? previous;
+
+  const RentalStatusError(this.message, {this.previous});
 }

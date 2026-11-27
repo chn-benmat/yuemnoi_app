@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -29,10 +31,17 @@ class RentalStatusScreen extends StatefulWidget {
 class _RentalStatusScreenState extends State<RentalStatusScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  late final RentalStatusCubit _cubit;
+  late RentalStatusCubit _cubit;
+  late final GoTrueClient? _auth;
+  StreamSubscription<AuthState>? _authSubscription;
   RealtimeChannel? _realtimeChannel;
-  bool _isGuest = false;
+  String? _userId;
   bool _didOpenInitialBooking = false;
+
+  String? get _authenticatedUserId {
+    final userId = _auth?.currentUser?.id;
+    return userId == null || userId.isEmpty ? null : userId;
+  }
 
   @override
   void initState() {
@@ -46,12 +55,27 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
       if (mounted) setState(() {});
     });
     _cubit = RentalStatusCubit();
-    _loadData();
+    _auth = SupabaseConfig.isInitialized ? SupabaseConfig.client.auth : null;
+    _userId = _authenticatedUserId;
+    _authSubscription = _auth?.onAuthStateChange.listen(
+      (state) {
+        if (!mounted) return;
+        final signedOut = state.event == AuthChangeEvent.signedOut;
+        if (signedOut || _authenticatedUserId != _userId) {
+          unawaited(_loadData(resetSession: signedOut));
+        }
+      },
+      onError: (Object error) {
+        debugPrint('Auth subscription error in RentalStatusScreen: $error');
+      },
+    );
+    unawaited(_loadData());
     _setupRealtimeSubscription();
   }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _realtimeChannel?.unsubscribe();
     _realtimeChannel = null;
     _tabController.dispose();
@@ -89,26 +113,33 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
     }
   }
 
-  Future<void> _loadData() async {
-    final currentUserId = SupabaseConfig.isInitialized
-        ? SupabaseConfig.client.auth.currentUser?.id
-        : null;
+  Future<void> _loadData({bool resetSession = false}) async {
+    final currentUserId = _authenticatedUserId;
 
-    if (currentUserId == null || currentUserId.isEmpty) {
+    if (resetSession || currentUserId != _userId) {
+      // ปิด Cubit เดิมเพื่อไม่ให้ผลที่ยังโหลดอยู่กลับมาแสดงหลังเปลี่ยนบัญชี
+      final previousCubit = _cubit;
       setState(() {
-        _isGuest = true;
+        _userId = currentUserId;
+        _cubit = RentalStatusCubit();
       });
+      unawaited(previousCubit.close());
+    }
+    if (currentUserId == null) return;
+
+    final cubit = _cubit;
+    bool isCurrentSession() =>
+        mounted &&
+        identical(cubit, _cubit) &&
+        currentUserId == _authenticatedUserId;
+
+    await cubit.loadBookings(currentUserId);
+    if (!isCurrentSession() ||
+        _didOpenInitialBooking ||
+        widget.initialBookingId == null) {
       return;
     }
-
-    setState(() {
-      _isGuest = false;
-    });
-
-    await _cubit.loadBookings(currentUserId);
-    if (!mounted || _didOpenInitialBooking || widget.initialBookingId == null)
-      return;
-    final state = _cubit.state;
+    final state = cubit.state;
     if (state is! RentalStatusLoaded) return;
     final renting = state.rentingList
         .where((b) => b.bookingId == widget.initialBookingId)
@@ -121,7 +152,9 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
     _didOpenInitialBooking = true;
     _tabController.index = lending != null ? 1 : 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) RentalStatusCard.showDetails(context, _toItemData(booking));
+      if (isCurrentSession()) {
+        RentalStatusCard.showDetails(context, _toItemData(booking));
+      }
     });
   }
 
@@ -204,22 +237,51 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: BlocProvider.value(
+        key: ObjectKey(_cubit),
         value: _cubit,
         child: Scaffold(
           backgroundColor: const Color(0xFFF1F5F9), // Slate 100 เหมือนหน้า Home
-          body: BlocBuilder<RentalStatusCubit, RentalStatusState>(
+          body: BlocConsumer<RentalStatusCubit, RentalStatusState>(
+            listener: (context, state) {
+              if (state is! RentalStatusError ||
+                  state.previous == null ||
+                  ModalRoute.isCurrentOf(context) != true) {
+                return;
+              }
+              final cubit = _cubit;
+              ScaffoldMessenger.maybeOf(context)
+                ?..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: const Text('อัปเดตสถานะการเช่าไม่สำเร็จ'),
+                    action: SnackBarAction(
+                      label: 'ลองใหม่อีกครั้ง',
+                      onPressed: () {
+                        if (mounted && identical(cubit, _cubit)) {
+                          unawaited(_loadData());
+                        }
+                      },
+                    ),
+                  ),
+                );
+            },
             builder: (context, state) {
-              final rentingItems = state is RentalStatusLoaded
-                  ? state.rentingList.map(_toItemData).toList()
-                  : <RentalStatusItemData>[];
+              final bookings = switch (state) {
+                RentalStatusLoaded() => state,
+                RentalStatusLoading(:final previous) => previous,
+                RentalStatusError(:final previous) => previous,
+                _ => null,
+              };
 
-              final lendingItems = state is RentalStatusLoaded
-                  ? state.lendingList.map(_toItemData).toList()
-                  : <RentalStatusItemData>[];
+              final rentingItems =
+                  bookings?.rentingList.map(_toItemData).toList() ?? [];
+              final lendingItems =
+                  bookings?.lendingList.map(_toItemData).toList() ?? [];
 
               final isLoading =
-                  state is RentalStatusLoading ||
-                  (state is RentalStatusInitial && !_isGuest);
+                  bookings == null &&
+                  (state is RentalStatusLoading ||
+                      state is RentalStatusInitial);
 
               return Column(
                 children: [
@@ -231,11 +293,11 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
 
                   // ── 2. Content Body ──
                   Expanded(
-                    child: _isGuest
+                    child: _userId == null
                         ? _buildGuestView()
                         : isLoading
                         ? const RentalStatusLoadingSkeleton()
-                        : state is RentalStatusError
+                        : state is RentalStatusError && bookings == null
                         ? _buildErrorView(state.message)
                         : TabBarView(
                             controller: _tabController,
