@@ -22,12 +22,14 @@ class RentalRequestRepositoryImpl implements RentalRequestRepository {
     required int rentalId,
     required String offerMessageId,
     required String paymentMethod,
+    int? requestRevision,
   }) async {
     try {
       final result = await remoteDataSource.confirm(
         rentalId: rentalId,
         offerMessageId: offerMessageId,
         paymentMethod: paymentMethod,
+        requestRevision: requestRevision,
       );
       ItemCatalogService.instance.notifyChanged();
       return result;

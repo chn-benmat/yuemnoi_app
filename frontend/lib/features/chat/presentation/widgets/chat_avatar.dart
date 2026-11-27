@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../domain/entities/chat_conversation.dart';
+
 class ChatAvatar extends StatelessWidget {
   const ChatAvatar({
     super.key,
@@ -21,7 +23,17 @@ class ChatAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isNetwork =
         asset.startsWith('http://') || asset.startsWith('https://');
-    final Widget imageWidget = isNetwork
+    final isAnonymous = asset == ChatConversation.anonymousAvatar;
+    final Widget imageWidget = isAnonymous
+        ? ColoredBox(
+            color: const Color(0xFFF0F1F2),
+            child: Icon(
+              Icons.person_off_outlined,
+              color: const Color(0xFF6A6D70),
+              size: size * 0.55,
+            ),
+          )
+        : isNetwork
         ? CachedNetworkImage(
             imageUrl: asset,
             fit: BoxFit.cover,
@@ -63,7 +75,7 @@ class ChatAvatar extends StatelessWidget {
                 : ClipOval(child: imageWidget),
           ),
           // จุดสถานะออนไลน์ (เขียว) หรือ ออฟไลน์ (เทา)
-          if (showStatus)
+          if (showStatus && !isAnonymous)
             Positioned(
               right: -1,
               bottom: 2,

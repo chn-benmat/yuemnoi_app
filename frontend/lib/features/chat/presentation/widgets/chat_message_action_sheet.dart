@@ -55,7 +55,7 @@ class ChatMessageActionSheet extends StatelessWidget {
 
   final ChatMessage message;
   final List<String> imageUrls;
-  final VoidCallback onReply;
+  final VoidCallback? onReply;
   final VoidCallback onCopy;
   final VoidCallback? onEdit;
   final VoidCallback onDelete;
@@ -65,7 +65,7 @@ class ChatMessageActionSheet extends StatelessWidget {
     BuildContext context, {
     required ChatMessage message,
     List<String> imageUrls = const [],
-    required VoidCallback onReply,
+    required VoidCallback? onReply,
     VoidCallback? onEdit,
     required VoidCallback onDelete,
     VoidCallback? onSaveImage,
@@ -82,10 +82,12 @@ class ChatMessageActionSheet extends StatelessWidget {
       builder: (modalContext) => ChatMessageActionSheet(
         message: message,
         imageUrls: effectiveImages,
-        onReply: () {
-          Navigator.of(modalContext).pop();
-          onReply();
-        },
+        onReply: onReply == null
+            ? null
+            : () {
+                Navigator.of(modalContext).pop();
+                onReply();
+              },
         onCopy: () {
           Navigator.of(modalContext).pop();
           final textToCopy = _extractActualTextMessage(message.message);
@@ -204,12 +206,13 @@ class ChatMessageActionSheet extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _ActionButton(
-              icon: Icons.reply_rounded,
-              label: 'ตอบกลับ',
-              color: Colors.white,
-              onTap: onReply,
-            ),
+            if (onReply != null)
+              _ActionButton(
+                icon: Icons.reply_rounded,
+                label: 'ตอบกลับ',
+                color: Colors.white,
+                onTap: onReply!,
+              ),
             if (hasImages)
               _ActionButton(
                 icon: Icons.download_rounded,

@@ -57,20 +57,60 @@ begin
   assert retry.id = booking.id and retry.rental_request_message_id = booking.rental_request_message_id;
 
   begin
+    perform public.edit_chat_rental_request(owner, room, equipment_id, starts,
+      starts + interval '3 hours', 'hourly', 'กรุงเทพ', 'cash', 150, null, booking.id, 0);
+    raise exception 'owner edited the customer request';
+  exception when raise_exception then
+    if sqlerrm <> 'rental_forbidden' then raise; end if;
+  end;
+  retry := public.edit_chat_rental_request(renter, room, equipment_id, starts,
+    starts + interval '3 hours', 'hourly', 'กรุงเทพ', 'cash', 150, null, booking.id, 0);
+  assert retry.id = booking.id and retry.rental_request_message_id = booking.rental_request_message_id
+    and retry.total_price = 450 and retry.status = 'pending' and retry.payment_method::text = 'cash';
+  assert (select count(*) = 1 from public.booking_tb where item_id = equipment_id);
+  select substring(message from '(?p)\n\[RENTAL_REQUEST_DATA:(.*)\]$')::jsonb into card
+    from messaging.chat_message_tb where id = booking.rental_request_message_id;
+  assert card->>'requestRevision' = '1' and card->>'paymentMethod' = 'cash'
+    and card->>'rentalType' = 'hourly' and card->>'endHour' = '12';
+  retry := public.edit_chat_rental_request(renter, room, equipment_id, starts,
+    starts + interval '3 hours', 'hourly', 'กรุงเทพ', 'cash', 150, null, booking.id, 0);
+  assert retry.id = booking.id and retry.total_price = 450;
+  begin
+    perform public.edit_chat_rental_request(renter, room, equipment_id, starts,
+      starts + interval '2 hours', 'hourly', 'กรุงเทพ', 'cash', 150, null, booking.id, 0);
+    raise exception 'stale edit overwrote a newer request';
+  exception when raise_exception then
+    if sqlerrm <> 'rental_request_changed' then raise; end if;
+  end;
+  begin
+    perform public.confirm_chat_rental_request(owner, booking.id, booking.rental_request_message_id);
+    raise exception 'owner confirmed an outdated request';
+  exception when raise_exception then
+    if sqlerrm <> 'rental_request_changed' then raise; end if;
+  end;
+
+  begin
     perform public.confirm_chat_rental_request(renter, booking.id, booking.rental_request_message_id);
     raise exception 'renter confirmed their own request';
   exception when raise_exception then
     if sqlerrm <> 'rental_forbidden' then raise; end if;
   end;
 
-  booking := public.confirm_chat_rental_request(owner, booking.id, booking.rental_request_message_id);
+  booking := public.confirm_chat_rental_request(owner, booking.id, booking.rental_request_message_id, 1);
   assert booking.status = 'confirmed' and booking.notification_actor_id = owner
-    and booking.payment_method::text = 'promptpay';
+    and booking.payment_method::text = 'cash' and booking.total_price = 450;
   select substring(message from '(?p)\n\[RENTAL_REQUEST_DATA:(.*)\]$')::jsonb into card
     from messaging.chat_message_tb where id = booking.rental_request_message_id;
-  assert card->>'status' = 'confirmed' and card->>'paymentMethod' = 'promptpay';
-  retry := public.confirm_chat_rental_request(owner, booking.id, booking.rental_request_message_id);
+  assert card->>'status' = 'confirmed' and card->>'paymentMethod' = 'cash';
+  retry := public.confirm_chat_rental_request(owner, booking.id, booking.rental_request_message_id, 1);
   assert retry.id = booking.id and retry.status = 'confirmed';
+  begin
+    perform public.edit_chat_rental_request(renter, room, equipment_id, starts,
+      starts + interval '2 hours', 'hourly', 'กรุงเทพ', 'cash', 150, null, booking.id, 1);
+    raise exception 'renter edited a confirmed request';
+  exception when raise_exception then
+    if sqlerrm <> 'rental_transition' then raise; end if;
+  end;
 
   update public.booking_tb set status = 'cancelled' where id = booking.id;
   booking := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 day',
@@ -100,13 +140,27 @@ begin
   booking := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 hour',
     'hourly', 'กรุงเทพ', 'cash', 150, queue_message_id);
   assert booking.status = 'pending' and booking.rental_queue_id = queue_id and booking.total_price = 150;
-  booking := public.confirm_chat_rental_request(owner, booking.id, booking.rental_request_message_id);
+  begin
+    perform public.edit_chat_rental_request(renter, room, equipment_id, starts,
+      starts + interval '2 hours', 'hourly', 'กรุงเทพ', 'cash', 150, null, booking.id, 0);
+    raise exception 'edit accepted without the original queue card';
+  exception when exclusion_violation then
+    if sqlerrm <> 'item_rental_occupied' then raise; end if;
+  end;
+  retry := public.edit_chat_rental_request(renter, room, equipment_id, starts,
+    starts + interval '2 hours', 'hourly', 'กรุงเทพ', 'cash', 150, queue_message_id, booking.id, 0);
+  assert retry.id = booking.id and retry.rental_queue_id = queue_id and retry.total_price = 300;
+  booking := public.confirm_chat_rental_request(owner, booking.id, booking.rental_request_message_id, 1);
   assert booking.status = 'confirmed';
   assert (select status = 'booked' from app_private.rental_queue where id = queue_id);
 
   assert not has_function_privilege('authenticated',
     'public.create_chat_rental_request(uuid,uuid,bigint,timestamptz,timestamptz,text,text,text,integer,bigint)', 'execute');
   assert not has_function_privilege('authenticated', 'public.confirm_chat_rental_request(uuid,bigint,bigint)', 'execute');
+  assert not has_function_privilege('authenticated',
+    'public.edit_chat_rental_request(uuid,uuid,bigint,timestamptz,timestamptz,text,text,text,integer,bigint,bigint,integer)', 'execute');
+  assert not has_function_privilege('anon',
+    'public.confirm_chat_rental_request(uuid,bigint,bigint,integer)', 'execute');
 end;
 $$;
 

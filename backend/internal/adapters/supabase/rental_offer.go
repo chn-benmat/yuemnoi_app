@@ -15,7 +15,7 @@ import (
 
 const bookingMetaTag = "[BOOKING_DATA:"
 
-func (r *supabaseRentalRepository) ConfirmRental(ctx context.Context, userID string, rentalID int64, offerMessageID, paymentMethod string) (*domain.RentalOrder, error) {
+func (r *supabaseRentalRepository) ConfirmRental(ctx context.Context, userID string, rentalID int64, offerMessageID, paymentMethod string, requestRevision int) (*domain.RentalOrder, error) {
 	if rentalID <= 0 || strings.TrimSpace(offerMessageID) == "" {
 		return nil, domain.ErrInvalidRental
 	}
@@ -33,9 +33,13 @@ func (r *supabaseRentalRepository) ConfirmRental(ctx context.Context, userID str
 			return nil, domain.ErrInvalidRental
 		}
 		var confirmed domain.RentalOrder
-		if err := r.client.DB.Rpc("confirm_chat_rental_request", map[string]any{
+		params := map[string]any{
 			"p_owner": userID, "p_booking_id": rentalID, "p_message_id": messageID,
-		}).ExecuteWithContext(ctx, &confirmed); err != nil {
+		}
+		if requestRevision > 0 {
+			params["p_request_revision"] = requestRevision
+		}
+		if err := r.client.DB.Rpc("confirm_chat_rental_request", params).ExecuteWithContext(ctx, &confirmed); err != nil {
 			return nil, mapRentalRepositoryError("confirm chat rental request", err)
 		}
 		return &confirmed, nil

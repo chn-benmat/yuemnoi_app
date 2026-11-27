@@ -12,12 +12,15 @@ abstract final class ChatConversationModel {
     required Map<String, dynamic>? item,
     required String currentUserId,
     bool hasUnreadMessage = false,
+    bool profileLookupSucceeded = true,
   }) {
     final id = conversation['id'].toString();
     final renterId = conversation['renter_id']?.toString() ?? '';
     final ownerId = conversation['owner_id']?.toString() ?? '';
     final isUserRenter = currentUserId == renterId;
     final otherUserId = isUserRenter ? ownerId : renterId;
+    final isOtherUserUnavailable =
+        otherUserId.isEmpty || (profileLookupSucceeded && otherProfile == null);
 
     final role = isUserRenter
         ? ChatParticipantRole.owner
@@ -129,9 +132,13 @@ abstract final class ChatConversationModel {
     return ChatConversation(
       id: id,
       otherUserId: otherUserId,
-      name: displayName,
+      name: isOtherUserUnavailable ? 'ไม่พบผู้ใช้' : displayName,
       role: role,
-      avatarAsset: avatarUrl.isEmpty ? 'assets/images/user.png' : avatarUrl,
+      avatarAsset: isOtherUserUnavailable
+          ? ChatConversation.anonymousAvatar
+          : avatarUrl.isEmpty
+          ? 'assets/images/user.png'
+          : avatarUrl,
       preview: cleanPreview,
       timeLabel: timeLabel,
       lastMessageAt: lastMessageAt,

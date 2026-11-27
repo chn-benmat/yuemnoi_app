@@ -111,6 +111,7 @@ void main() {
     await pumpCard(tester, bookingStatus: 'pending', customerRequest: true);
     expect(find.text('รอผู้ปล่อยเช่ายืนยันคำขอ'), findsOneWidget);
     expect(find.text(label), findsNothing);
+    expect(find.text('แก้ไขรายละเอียด'), findsOneWidget);
 
     await pumpCard(
       tester,
@@ -119,6 +120,10 @@ void main() {
       isOwner: true,
     );
     expect(find.text(label), findsOneWidget);
+    expect(find.text('แก้ไขรายละเอียด'), findsNothing);
+
+    await pumpCard(tester, bookingStatus: 'confirmed', customerRequest: true);
+    expect(find.text('แก้ไขรายละเอียด'), findsNothing);
   });
 
   testWidgets('closing the owner review leaves the customer request pending', (

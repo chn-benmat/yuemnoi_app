@@ -7,6 +7,7 @@ abstract class RentalRequestRepository {
     required int rentalId,
     required String offerMessageId,
     required String paymentMethod,
+    int? requestRevision,
   });
 
   void close();

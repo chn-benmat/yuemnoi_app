@@ -51,6 +51,9 @@ func (r *supabaseConversationContactRepository) PhoneForConversation(
 	default:
 		return "", domain.ErrContactForbidden
 	}
+	if contactUserID == "" {
+		return "", domain.ErrContactPhoneNotFound
+	}
 
 	user, err := r.client.Admin.GetUser(ctx, contactUserID)
 	if err != nil {

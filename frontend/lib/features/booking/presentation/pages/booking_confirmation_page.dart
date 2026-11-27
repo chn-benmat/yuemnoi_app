@@ -395,6 +395,9 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                             paymentMethod: _bookingData.isCustomerRequest
                                 ? ''
                                 : _bookingData.paymentMethod,
+                            requestRevision: _bookingData.isCustomerRequest
+                                ? _bookingData.requestRevision
+                                : null,
                             rentalId: bookingId,
                           );
                           if (!confirmed) return;

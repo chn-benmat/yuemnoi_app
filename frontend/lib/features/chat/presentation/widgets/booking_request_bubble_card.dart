@@ -24,6 +24,9 @@ class BookingRequestBubbleCard extends StatefulWidget {
     this.isReturnCompleted = false,
     this.initialStatus,
     this.onTap,
+    this.onRetryCustomerRequest,
+    this.customerRequestBlockedByRental = false,
+    this.onRequestRentalQueue,
   });
 
   final ChatMessage message;
@@ -34,6 +37,9 @@ class BookingRequestBubbleCard extends StatefulWidget {
   final bool isReturnCompleted;
   final String? initialStatus;
   final VoidCallback? onTap;
+  final VoidCallback? onRetryCustomerRequest;
+  final bool customerRequestBlockedByRental;
+  final VoidCallback? onRequestRentalQueue;
 
   @override
   State<BookingRequestBubbleCard> createState() =>
@@ -177,16 +183,18 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   }
 
   Future<void> _checkConfirmedStatus() async {
+    final message = widget.message;
     // 1. ตรวจสอบสถานะการยืนยันจาก Local Tracker ทันที (เฉพาะ messageId)
     final isLocallyConfirmed = await BookingConfirmationTracker.isConfirmed(
-      messageId: widget.message.id,
+      messageId: message.id,
     );
     final cachedBookingId = await BookingConfirmationTracker.getBookingId(
-      messageId: widget.message.id,
+      messageId: message.id,
     );
     final cachedStatus = await BookingConfirmationTracker.getStatus(
-      messageId: widget.message.id,
+      messageId: message.id,
     );
+    if (!mounted || widget.message != message) return;
     final targetBookingId =
         widget.bookingData.bookingId ?? cachedBookingId ?? _bookingId;
     final hasSharedStatus =
@@ -253,7 +261,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             .eq('id', targetBookingId)
             .maybeSingle();
 
-        if (exactBooking != null && mounted) {
+        if (exactBooking != null && mounted && widget.message == message) {
           final rawDbStatus =
               exactBooking['status']?.toString().toLowerCase().trim() ??
               'confirmed';
@@ -324,7 +332,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             );
           }
           await BookingConfirmationTracker.setStatus(
-            messageId: widget.message.id,
+            messageId: message.id,
             status: resolvedStatus,
           );
         }
@@ -362,8 +370,14 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   }
 
   bool get _canConfirmCustomerRequest =>
-      _checkIsOwner() &&
-      !widget.message.isMine &&
+      _checkIsOwner() && !widget.message.isMine && _isPendingCustomerRequest;
+
+  bool get _canEditCustomerRequest =>
+      !_checkIsOwner() && widget.message.isMine && _isPendingCustomerRequest;
+
+  bool get _isPendingCustomerRequest =>
+      widget.bookingData.isCustomerRequest &&
+      !widget.customerRequestBlockedByRental &&
       _rentalStatus == 'pending' &&
       (_bookingId ?? 0) > 0 &&
       !widget.bookingData.hasCustomerRequestStartPassed;
@@ -429,8 +443,14 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     }
 
     if (isEditMode) {
-      if (!isOwner || attachedData.isCustomerRequest) return;
-      final isQueueOffer = attachedData.rentalQueueMessageId != null;
+      if (attachedData.isCustomerRequest
+          ? !_canEditCustomerRequest
+          : !isOwner) {
+        return;
+      }
+      final isQueueOffer =
+          !attachedData.isCustomerRequest &&
+          attachedData.rentalQueueMessageId != null;
       if (isQueueOffer && attachedData.bookingId != null) {
         showAppPopup(
           context,
@@ -895,9 +915,10 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                 ),
               )
             else if (widget.bookingData.isCustomerRequest &&
-                !_canConfirmCustomerRequest)
+                !_canConfirmCustomerRequest &&
+                !_canEditCustomerRequest)
               const SizedBox.shrink()
-            else if (isMine && isOwnerUser)
+            else if (_canEditCustomerRequest || (isMine && isOwnerUser))
               // ผู้ส่งคำขอ/ข้อเสนอ -> สามารถกดแก้ไขรายละเอียดได้
               SizedBox(
                 width: double.infinity,
@@ -972,6 +993,30 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                   ),
                 ),
+              ),
+            if (widget.onRequestRentalQueue != null &&
+                (_rentalStatus == 'pending' ||
+                    const {
+                      'cancelled',
+                      'expired',
+                      'rejected',
+                    }.contains(_rentalStatus)))
+              FilledButton(
+                onPressed: widget.onRequestRentalQueue,
+                child: const Text('ชวนเข้าคิวเช่าต่อ'),
+              )
+            else if (!widget.customerRequestBlockedByRental &&
+                widget.onRetryCustomerRequest != null &&
+                (const {
+                      'cancelled',
+                      'expired',
+                      'rejected',
+                    }.contains(_rentalStatus) ||
+                    (_rentalStatus == 'pending' &&
+                        widget.bookingData.hasCustomerRequestStartPassed)))
+              TextButton(
+                onPressed: widget.onRetryCustomerRequest,
+                child: const Text('ส่งคำขอเช่าใหม่'),
               ),
           ],
         ),

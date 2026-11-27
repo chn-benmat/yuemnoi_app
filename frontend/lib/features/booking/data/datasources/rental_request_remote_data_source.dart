@@ -42,11 +42,13 @@ class RentalRequestRemoteDataSource {
           if (draft.unitPrice != null) 'unit_price': draft.unitPrice,
           if (draft.queueMessageId != null)
             'queue_message_id': draft.queueMessageId,
+          'request_revision': ?draft.requestRevision,
         },
         headers: {'Authorization': 'Bearer $token'},
       );
 
-      if (response.statusCode != 201) {
+      final isEdit = draft.conversationId != null && draft.bookingId != null;
+      if (response.statusCode != (isEdit ? 200 : 201)) {
         final blocked = RentalVerificationRequired.fromJson(response.data);
         if (blocked != null) throw blocked;
         throw RentalRequestRemoteException(_serverMessage(response));
@@ -54,7 +56,10 @@ class RentalRequestRemoteDataSource {
       final data = _map(response.data);
       final id = _int(data['id']);
       final status = data['status']?.toString() ?? '';
-      if (id == null || id <= 0 || status.isEmpty) {
+      if (id == null ||
+          id <= 0 ||
+          status.isEmpty ||
+          (isEdit && (id != draft.bookingId || status != 'pending'))) {
         throw const RentalRequestRemoteException(
           'ข้อมูลคำขอเช่าที่ได้รับไม่ถูกต้อง',
         );
@@ -77,6 +82,7 @@ class RentalRequestRemoteDataSource {
     required int rentalId,
     required String offerMessageId,
     required String paymentMethod,
+    int? requestRevision,
   }) async {
     final token = AuthSession.accessToken;
     if (token == null || token.isEmpty) {
@@ -90,6 +96,7 @@ class RentalRequestRemoteDataSource {
         data: {
           'offer_message_id': offerMessageId,
           'payment_method': paymentMethod,
+          'request_revision': ?requestRevision,
         },
         headers: {'Authorization': 'Bearer $token'},
       );

@@ -29,7 +29,7 @@ type rentalConfirmationRepository struct {
 	err   error
 }
 
-func (r *rentalConfirmationRepository) ConfirmRental(_ context.Context, userID string, id int64, messageID, paymentMethod string) (*domain.RentalOrder, error) {
+func (r *rentalConfirmationRepository) ConfirmRental(_ context.Context, userID string, id int64, messageID, paymentMethod string, _ int) (*domain.RentalOrder, error) {
 	r.calls++
 	if userID != "renter" || id != 25 || messageID != "11" {
 		return nil, domain.ErrInvalidRental
@@ -56,6 +56,7 @@ func TestFinalRentalConfirmationHTTPContract(t *testing.T) {
 		{"forbidden", "/api/rentals/25/confirm", `{"offer_message_id":"11"}`, "renter-token", domain.ErrRentalForbidden, 403, 1},
 		{"changed offer", "/api/rentals/25/confirm", `{"offer_message_id":"11"}`, "renter-token", domain.ErrInvalidRental, 400, 1},
 		{"cancelled", "/api/rentals/25/confirm", `{"offer_message_id":"11"}`, "renter-token", domain.ErrRentalStatusTransition, 409, 1},
+		{"stale request", "/api/rentals/25/confirm", `{"offer_message_id":"11","request_revision":1}`, "renter-token", domain.ErrRentalRequestChanged, 409, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repository := &rentalConfirmationRepository{err: tc.err}

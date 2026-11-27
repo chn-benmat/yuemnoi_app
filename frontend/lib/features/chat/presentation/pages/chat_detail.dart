@@ -3,7 +3,7 @@ import '../../../item_detail/data/datasources/item_detail_remote_data_source.dar
 import '../../../item_detail/domain/entities/item_detail.dart';
 import '../../../../core/widgets/package_chat_list.dart';
 import 'dart:async';
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -57,6 +57,7 @@ class ChatDetailScreen extends StatelessWidget {
     this.initialMessageId,
     this.chatDetailBloc,
     this.rentalQueueSource,
+    this.getUnavailableRentalItemIds,
     this.getContactPhone,
     this.phoneCallService = const UrlPhoneCallService(),
   });
@@ -65,14 +66,14 @@ class ChatDetailScreen extends StatelessWidget {
   final String? initialMessageId;
   final ChatDetailBloc? chatDetailBloc;
   final RentalQueueRemoteDataSource? rentalQueueSource;
+  final Future<Set<int>> Function(Set<int>)? getUnavailableRentalItemIds;
   final GetConversationContactPhoneUseCase? getContactPhone;
   final PhoneCallService phoneCallService;
 
   @override
   Widget build(BuildContext context) {
-    final repository = ChatRepositoryImpl(
-      remoteDataSource: ChatRemoteDataSource(),
-    );
+    final remoteDataSource = ChatRemoteDataSource();
+    final repository = ChatRepositoryImpl(remoteDataSource: remoteDataSource);
     final contactPhoneUseCase =
         getContactPhone ?? GetConversationContactPhoneUseCase(repository);
     final chatDetailView = _ChatDetailView(
@@ -81,6 +82,9 @@ class ChatDetailScreen extends StatelessWidget {
       phoneCallService: phoneCallService,
       initialMessageId: initialMessageId,
       rentalQueueSource: rentalQueueSource,
+      getUnavailableRentalItemIds:
+          getUnavailableRentalItemIds ??
+          remoteDataSource.getUnavailableRentalItemIds,
     );
 
     if (chatDetailBloc != null) {
@@ -107,6 +111,7 @@ class _ChatDetailView extends StatefulWidget {
     required this.conversation,
     required this.getContactPhone,
     required this.phoneCallService,
+    required this.getUnavailableRentalItemIds,
     this.initialMessageId,
     this.rentalQueueSource,
   });
@@ -116,6 +121,7 @@ class _ChatDetailView extends StatefulWidget {
   final PhoneCallService phoneCallService;
   final String? initialMessageId;
   final RentalQueueRemoteDataSource? rentalQueueSource;
+  final Future<Set<int>> Function(Set<int>) getUnavailableRentalItemIds;
 
   @override
   State<_ChatDetailView> createState() => _ChatDetailViewState();
@@ -140,6 +146,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   bool _refreshRentalQueueItemsAgain = false;
   Timer? _rentalQueueRefreshTimer;
   List<({int id, String name})> _rentalQueueItems = const [];
+  final _requestingRentalQueueItemIds = <int>{};
+  Set<int> _rentalRequestItemIds = const {};
+  Set<int> _unavailableRentalRequestItemIds = const {};
+  int _rentalAvailabilityRevision = 0;
   RentalQueueRemoteDataSource? _queueSource;
 
   RentalQueueRemoteDataSource get _rentalQueue =>
@@ -175,11 +185,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       widget.conversation.id,
     );
 
-    if (_conversation.otherUserId.isEmpty || _conversation.name == 'ห้องแชท') {
+    if (SupabaseConfig.isInitialized) {
       ChatRemoteDataSource().getConversationById(widget.conversation.id).then((
         fullConv,
       ) {
-        if (fullConv != null && mounted) {
+        if (fullConv != null && mounted && fullConv != _conversation) {
           setState(() {
             _conversation = fullConv;
           });
@@ -198,14 +208,16 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     if (!isCurrent || !AuthSession.isAuthenticated) return;
 
     unawaited(_refreshRentalQueueItems());
+    unawaited(_refreshRentalRequestAvailability());
     // รายการเช่าของคนอื่นไม่ส่งเหตุการณ์เข้ามาในห้องแชทนี้
-    _rentalQueueRefreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => unawaited(_refreshRentalQueueItems()),
-    );
+    _rentalQueueRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      unawaited(_refreshRentalQueueItems());
+      unawaited(_refreshRentalRequestAvailability());
+    });
   }
 
   Future<void> _showRentalSafetyReminder() async {
+    if (_conversation.isOtherUserUnavailable) return;
     final accountId = SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentUser?.id
         : null;
@@ -346,11 +358,12 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
 
   void _scrollToMessage(String messageId) {
     if (messageId.isEmpty || !mounted) return;
-    final messages = context.read<ChatDetailBloc>().state.messages;
-    final renderItems = _buildRenderItems(messages);
+    final state = context.read<ChatDetailBloc>().state;
+    final linkedRequests = _linkedInquiryRequests(state);
+    final targetMessageId = linkedRequests[messageId] ?? messageId;
+    final renderItems = _buildRenderItems(state.messages, linkedRequests);
     final targetIndex = renderItems.indexWhere(
-      (item) =>
-          item.message.id == messageId || item.messageIds.contains(messageId),
+      (item) => item.containsMessage(targetMessageId),
     );
     if (targetIndex == -1 || !_scrollController.hasClients) return;
 
@@ -583,7 +596,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
 
   Future<void> _refreshRentalQueueItems({bool afterAction = false}) async {
     final lifecycle = WidgetsBinding.instance.lifecycleState;
-    if (!AuthSession.isAuthenticated ||
+    if (_conversation.isOtherUserUnavailable ||
+        !AuthSession.isAuthenticated ||
         (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
       return;
     }
@@ -612,6 +626,49 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     }
   }
 
+  Future<void> _refreshRentalRequestAvailability({
+    bool onlyWhenItemsChange = false,
+  }) async {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (!_isCurrentRoute ||
+        !AuthSession.isAuthenticated ||
+        (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+      return;
+    }
+    final state = context.read<ChatDetailBloc>().state;
+    final itemIds = <int>{
+      for (final message in state.messages)
+        if (BookingRequestData.fromChatMessage(message.message)
+            case BookingRequestData(
+              isCustomerRequest: true,
+              rentalQueueMessageId: null,
+              status: 'pending',
+              item: BookingItemInfo(:final id),
+            ) when !state.failedMessageIds.contains(message.id))
+          id,
+    };
+    if (onlyWhenItemsChange && setEquals(itemIds, _rentalRequestItemIds)) {
+      return;
+    }
+    _rentalRequestItemIds = itemIds;
+    final revision = ++_rentalAvailabilityRevision;
+    try {
+      final unavailable = itemIds.isEmpty
+          ? const <int>{}
+          : await widget.getUnavailableRentalItemIds(itemIds);
+      if (mounted &&
+          revision == _rentalAvailabilityRevision &&
+          !setEquals(unavailable, _unavailableRentalRequestItemIds)) {
+        setState(() => _unavailableRentalRequestItemIds = unavailable);
+      }
+    } catch (_) {
+      // เก็บสถานะล่าสุดไว้ระหว่างที่โหลดสถานะใหม่ไม่ได้
+    }
+  }
+
+  bool _canRequestRentalQueueForItem(int itemId) =>
+      _rentalQueueItems.any((item) => item.id == itemId);
+
   Future<void> _requestRentalQueue() async {
     if (_selectingRentalQueueItem || _rentalQueueItems.isEmpty) return;
     _selectingRentalQueueItem = true;
@@ -635,6 +692,18 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
         ),
       );
       if (!mounted || itemId == null) return;
+      await _joinRentalQueueForItem(itemId);
+    } finally {
+      _selectingRentalQueueItem = false;
+    }
+  }
+
+  Future<void> _joinRentalQueueForItem(int itemId) async {
+    if (!_canRequestRentalQueueForItem(itemId) ||
+        !_requestingRentalQueueItemIds.add(itemId)) {
+      return;
+    }
+    try {
       await _rentalQueue.runAction(_conversation.id, 'request', itemId: itemId);
       if (!mounted) return;
       setState(() {
@@ -646,7 +715,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     } on RentalQueueRemoteException catch (error) {
       if (mounted) showAppPopup(context, content: Text(error.message));
     } finally {
-      _selectingRentalQueueItem = false;
+      _requestingRentalQueueItemIds.remove(itemId);
       if (mounted) unawaited(_refreshRentalQueueItems(afterAction: true));
     }
   }
@@ -661,6 +730,28 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     } finally {
       if (mounted) unawaited(_refreshRentalQueueItems(afterAction: true));
     }
+  }
+
+  VoidCallback? _queuedRentalRequestAction(
+    ChatMessage message,
+    RentalQueueCardData? queue,
+    ChatDetailState state,
+  ) {
+    if (_conversation.isOtherUserUnavailable ||
+        queue == null ||
+        queue.status != RentalQueueStatus.accepted ||
+        !_canSendQueuedRentalRequest(message.id, state)) {
+      return null;
+    }
+    return () => _openBookingRequest(
+      ItemInquiryData(
+        itemId: queue.itemId,
+        itemName: queue.name,
+        price: queue.price?.toDouble(),
+        unitLabel: queue.unitLabel,
+      ),
+      queueMessageId: message.id,
+    );
   }
 
   bool _canSendQueuedRentalRequest(String messageId, ChatDetailState state) {
@@ -698,6 +789,17 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       const {'cancelled', 'rejected', 'expired'}.contains(request.status) ||
       (request.status == 'pending' && request.hasCustomerRequestStartPassed);
 
+  ChatMessage? _latestRentalRequestForItem(ChatDetailState state, int itemId) {
+    return state.messages.reversed
+        .where(
+          (message) =>
+              !state.failedMessageIds.contains(message.id) &&
+              BookingRequestData.fromChatMessage(message.message)?.item.id ==
+                  itemId,
+        )
+        .firstOrNull;
+  }
+
   bool _canSendRentalRequest(ItemInquiryData inquiry) {
     final state = context.read<ChatDetailBloc>().state;
     if (inquiry.itemId == null || state.ownedItemIds.contains(inquiry.itemId)) {
@@ -733,16 +835,23 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   Future<void> _openBookingRequest(
     ItemInquiryData inquiry, {
     String? queueMessageId,
+    String? retryMessageId,
   }) async {
-    bool canSend() => queueMessageId == null
-        ? _canSendRentalRequest(inquiry)
-        : _canSendQueuedRentalRequest(
-            queueMessageId,
-            context.read<ChatDetailBloc>().state,
-          );
-
     final itemId = inquiry.itemId;
-    if (itemId == null || !canSend()) return;
+    if (itemId == null) return;
+    bool canSend() {
+      final state = context.read<ChatDetailBloc>().state;
+      if (queueMessageId != null) {
+        return _canSendQueuedRentalRequest(queueMessageId, state);
+      }
+      if (retryMessageId != null) {
+        final latest = _latestRentalRequestForItem(state, itemId);
+        return latest?.id == retryMessageId && latest?.isMine == true;
+      }
+      return _canSendRentalRequest(inquiry);
+    }
+
+    if (!canSend()) return;
 
     final itemSource = ItemDetailRemoteDataSource();
     final ItemDetail itemDetail;
@@ -852,6 +961,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
               children: [
                 BlocConsumer<ChatDetailBloc, ChatDetailState>(
                   listener: (context, state) {
+                    unawaited(
+                      _refreshRentalRequestAvailability(
+                        onlyWhenItemsChange: true,
+                      ),
+                    );
                     if (state.status == ChatDetailStatus.failure &&
                         state.errorMessage != null) {
                       showAppPopup(context, content: Text(state.errorMessage!));
@@ -879,10 +993,18 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                       return ChatEmptyView(conversation: _conversation);
                     }
 
-                    final renderItems = _buildRenderItems(state.messages);
+                    final linkedRequests = _linkedInquiryRequests(state);
+                    final linkedRequestIds = linkedRequests.values.toSet();
+                    final renderItems = _buildRenderItems(
+                      state.messages,
+                      linkedRequests,
+                    );
                     final messagesById = {
                       for (final message in state.messages) message.id: message,
                     };
+                    final initialMessageId =
+                        linkedRequests[widget.initialMessageId] ??
+                        widget.initialMessageId;
 
                     int lastMyMessageIndex = -1;
                     for (int k = renderItems.length - 1; k >= 0; k--) {
@@ -896,7 +1018,16 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                       key: const ValueKey('chat-message-list'),
                       reversed: true,
                       scrollController: _scrollController,
-                      initialMessageId: widget.initialMessageId,
+                      initialMessageId: initialMessageId == null
+                          ? null
+                          : renderItems
+                                .where(
+                                  (item) =>
+                                      item.containsMessage(initialMessageId),
+                                )
+                                .firstOrNull
+                                ?.message
+                                .id,
                       entries: [
                         for (final item in renderItems)
                           PackageChatEntry(
@@ -968,13 +1099,33 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                         final isOwner = booking == null
                             ? ownsInquiryItem
                             : item.message.isMine != booking.isCustomerRequest;
+                        final isUnqueuedCustomerRequest =
+                            booking != null &&
+                            booking.isCustomerRequest &&
+                            booking.rentalQueueMessageId == null;
+                        final canRequestQueueForItem =
+                            isUnqueuedCustomerRequest &&
+                            item.message.isMine &&
+                            _canRequestRentalQueueForItem(booking.item.id);
+                        final customerRequestBlockedByRental =
+                            isUnqueuedCustomerRequest &&
+                            (_unavailableRentalRequestItemIds.contains(
+                                  booking.item.id,
+                                ) ||
+                                canRequestQueueForItem);
+                        final isLatestCustomerRequest =
+                            isUnqueuedCustomerRequest &&
+                            item.message.isMine &&
+                            _latestRentalRequestForItem(
+                                  state,
+                                  booking.item.id,
+                                )?.id ==
+                                item.message.id;
 
                         final rentalQueue = RentalQueueCardData.fromMessage(
                           item.message.message,
                         );
-                        final canSendQueuedRequest =
-                            rentalQueue?.status == RentalQueueStatus.accepted &&
-                            _canSendQueuedRentalRequest(item.message.id, state);
+                        final attachedQueue = item.attachedQueue;
 
                         return Container(
                           key: itemKey,
@@ -1014,6 +1165,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                 isRead: item.message.isRead,
                                 showDeliveryStatus: showDeliveryStatus,
                                 isHighlighted: isHighlighted,
+                                isReadOnly:
+                                    _conversation.isOtherUserUnavailable,
                                 isFailed: state.failedMessageIds.contains(
                                   item.message.id,
                                 ),
@@ -1039,26 +1192,49 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                       m.message.contains('คืนของสำเร็จ'),
                                 ),
                                 onSendBookingRequest:
-                                    inquiry != null &&
+                                    !_conversation.isOtherUserUnavailable &&
+                                        inquiry != null &&
                                         item.message.isMine &&
                                         _canSendRentalRequest(inquiry)
                                     ? _openBookingRequest
                                     : null,
-                                defaultItemId: _conversation.itemId,
-                                onQueueAction: (action) =>
-                                    _updateRentalQueue(item.message.id, action),
-                                onSendQueuedRequest:
-                                    canSendQueuedRequest && rentalQueue != null
+                                onRetryCustomerRequest:
+                                    !_conversation.isOtherUserUnavailable &&
+                                        isLatestCustomerRequest &&
+                                        linkedRequestIds.contains(
+                                          item.message.id,
+                                        )
                                     ? () => _openBookingRequest(
                                         ItemInquiryData(
-                                          itemId: rentalQueue.itemId,
-                                          itemName: rentalQueue.name,
-                                          price: rentalQueue.price?.toDouble(),
-                                          unitLabel: rentalQueue.unitLabel,
+                                          itemId: booking.item.id,
+                                          itemName: booking.item.title,
                                         ),
-                                        queueMessageId: item.message.id,
+                                        retryMessageId: item.message.id,
                                       )
                                     : null,
+                                customerRequestBlockedByRental:
+                                    customerRequestBlockedByRental,
+                                onRequestRentalQueue:
+                                    !_conversation.isOtherUserUnavailable &&
+                                        isLatestCustomerRequest &&
+                                        canRequestQueueForItem
+                                    ? () => _joinRentalQueueForItem(
+                                        booking.item.id,
+                                      )
+                                    : null,
+                                defaultItemId: _conversation.itemId,
+                                onQueueAction:
+                                    _conversation.isOtherUserUnavailable
+                                    ? null
+                                    : (action) => _updateRentalQueue(
+                                        item.message.id,
+                                        action,
+                                      ),
+                                onSendQueuedRequest: _queuedRentalRequestAction(
+                                  item.message,
+                                  rentalQueue,
+                                  state,
+                                ),
                                 onRetry: () {
                                   context.read<ChatDetailBloc>().add(
                                     ChatRetryMessageSent(
@@ -1067,8 +1243,12 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                     ),
                                   );
                                 },
-                                onReply: _handleReply,
-                                onEdit: item.message.isMine
+                                onReply: _conversation.isOtherUserUnavailable
+                                    ? null
+                                    : _handleReply,
+                                onEdit:
+                                    !_conversation.isOtherUserUnavailable &&
+                                        item.message.isMine
                                     ? _handleEdit
                                     : null,
                                 onQuotedTap: _scrollToMessage,
@@ -1089,6 +1269,29 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                   }
                                 },
                               ),
+                              if (attachedQueue != null)
+                                ChatMessageBubble(
+                                  key: ValueKey(attachedQueue.message.id),
+                                  message: attachedQueue.message,
+                                  isReadOnly:
+                                      _conversation.isOtherUserUnavailable,
+                                  queueAlignment: item.message.isMine
+                                      ? Alignment.centerRight
+                                      : Alignment.centerLeft,
+                                  onQueueAction:
+                                      _conversation.isOtherUserUnavailable
+                                      ? null
+                                      : (action) => _updateRentalQueue(
+                                          attachedQueue.message.id,
+                                          action,
+                                        ),
+                                  onSendQueuedRequest:
+                                      _queuedRentalRequestAction(
+                                        attachedQueue.message,
+                                        attachedQueue.data,
+                                        state,
+                                      ),
+                                ),
                               const SizedBox(height: 4),
                             ],
                           ),
@@ -1148,7 +1351,10 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
             buildWhen: (prev, curr) =>
                 prev.isOtherUserTyping != curr.isOtherUserTyping,
             builder: (context, state) {
-              if (!state.isOtherUserTyping) return const SizedBox.shrink();
+              if (_conversation.isOtherUserUnavailable ||
+                  !state.isOtherUserTyping) {
+                return const SizedBox.shrink();
+              }
               return ChatTypingIndicatorBubble(
                 avatarAsset: _conversation.avatarAsset,
               );
@@ -1184,29 +1390,76 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
               );
             },
           ),
-          ChatMessageComposer(
-            controller: _messageController,
-            onSend: _sendMessage,
-            onCamera: _handleCameraPick,
-            onGallery: _handleGalleryPick,
-            onRequestRentalQueue: _rentalQueueItems.isNotEmpty
-                ? _requestRentalQueue
-                : null,
-            replyingMessage: _replyingMessage,
-            editingMessage: _editingMessage,
-            onCancelReplyOrEdit: _cancelReplyOrEdit,
-          ),
+          if (!_conversation.isOtherUserUnavailable)
+            ChatMessageComposer(
+              controller: _messageController,
+              onSend: _sendMessage,
+              onCamera: _handleCameraPick,
+              onGallery: _handleGalleryPick,
+              onRequestRentalQueue: _rentalQueueItems.isNotEmpty
+                  ? _requestRentalQueue
+                  : null,
+              replyingMessage: _replyingMessage,
+              editingMessage: _editingMessage,
+              onCancelReplyOrEdit: _cancelReplyOrEdit,
+            ),
         ],
       ),
     );
   }
 
-  List<_ChatRenderItem> _buildRenderItems(List<ChatMessage> messages) {
+  Map<String, String> _linkedInquiryRequests(ChatDetailState state) {
+    final nextRequest = <(String, int), String>{};
+    final links = <String, String>{};
+    for (final message in state.messages.reversed) {
+      if (message.id.startsWith('temp_') ||
+          state.failedMessageIds.contains(message.id)) {
+        continue;
+      }
+      final booking = BookingRequestData.fromChatMessage(message.message);
+      if (booking != null && booking.isCustomerRequest) {
+        nextRequest[(message.senderId, booking.item.id)] = message.id;
+        continue;
+      }
+      final inquiry = ItemInquiryData.fromChatMessage(
+        message.message,
+        defaultItemId: _conversation.itemId,
+      );
+      final itemId = inquiry?.itemId;
+      if (itemId == null) continue;
+      final requestId = nextRequest[(message.senderId, itemId)];
+      if (requestId != null) links[message.id] = requestId;
+    }
+    return links;
+  }
+
+  List<_ChatRenderItem> _buildRenderItems(
+    List<ChatMessage> messages,
+    Map<String, String> linkedRequests,
+  ) {
+    final messageIds = {for (final message in messages) message.id};
+    final queuesByNoticeId = <String, _AttachedRentalQueue>{};
+    final relocatedQueueIds = <String>{};
+    for (final message in messages) {
+      final queue = RentalQueueCardData.fromMessage(message.message);
+      final noticeId = queue?.readyMessageId;
+      if (queue == null ||
+          noticeId == null ||
+          noticeId == message.id ||
+          !messageIds.contains(noticeId)) {
+        continue;
+      }
+      queuesByNoticeId[noticeId] = (message: message, data: queue);
+      relocatedQueueIds.add(message.id);
+    }
+
     final List<_ChatRenderItem> items = [];
     int i = 0;
     while (i < messages.length) {
       final msg = messages[i];
-      if (msg.message.trimLeft().startsWith('📞')) {
+      if (msg.message.trimLeft().startsWith('📞') ||
+          linkedRequests.containsKey(msg.id) ||
+          relocatedQueueIds.contains(msg.id)) {
         i++;
         continue;
       }
@@ -1271,6 +1524,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                 : const [],
             messageIds: [msg.id],
             isStacked: false,
+            attachedQueue: queuesByNoticeId[msg.id],
           ),
         );
         i++;
@@ -1360,16 +1614,28 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   }
 }
 
+typedef _AttachedRentalQueue = ({
+  ChatMessage message,
+  RentalQueueCardData data,
+});
+
 class _ChatRenderItem {
   const _ChatRenderItem({
     required this.message,
     required this.imageUrls,
     this.messageIds = const [],
     this.isStacked = false,
+    this.attachedQueue,
   });
 
   final ChatMessage message;
   final List<String> imageUrls;
   final List<String> messageIds;
   final bool isStacked;
+  final _AttachedRentalQueue? attachedQueue;
+
+  bool containsMessage(String id) =>
+      message.id == id ||
+      messageIds.contains(id) ||
+      attachedQueue?.message.id == id;
 }

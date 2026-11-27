@@ -31,14 +31,19 @@ class ChatMessageBubble extends StatelessWidget {
     this.showDeliveryStatus = false,
     this.isFailed = false,
     this.isHighlighted = false,
+    this.isReadOnly = false,
     this.onRetry,
     this.onReply,
     this.onEdit,
     this.onDelete,
     this.onQuotedTap,
     this.onSendBookingRequest,
+    this.onRetryCustomerRequest,
+    this.customerRequestBlockedByRental = false,
+    this.onRequestRentalQueue,
     this.defaultItemId,
     this.onQueueAction,
+    this.queueAlignment,
     this.canJoinInvitedQueue = true,
     this.onSendQueuedRequest,
     this.isHandoverCompleted = false,
@@ -57,13 +62,18 @@ class ChatMessageBubble extends StatelessWidget {
   final bool showDeliveryStatus;
   final bool isFailed;
   final bool isHighlighted;
+  final bool isReadOnly;
   final bool isHandoverCompleted;
   final bool isReturnCompleted;
   final VoidCallback? onRetry;
   final ValueChanged<ChatMessage>? onReply;
   final void Function(ItemInquiryData)? onSendBookingRequest;
+  final VoidCallback? onRetryCustomerRequest;
+  final bool customerRequestBlockedByRental;
+  final VoidCallback? onRequestRentalQueue;
   final int? defaultItemId;
   final Future<void> Function(String action)? onQueueAction;
+  final Alignment? queueAlignment;
   final bool canJoinInvitedQueue;
   final VoidCallback? onSendQueuedRequest;
   final ValueChanged<ChatMessage>? onEdit;
@@ -81,7 +91,7 @@ class ChatMessageBubble extends StatelessWidget {
       context,
       message: message,
       imageUrls: effectiveImages,
-      onReply: () => onReply?.call(message),
+      onReply: isReadOnly ? null : () => onReply?.call(message),
       onEdit: onEdit != null ? () => onEdit?.call(message) : null,
       onDelete: () => onDelete?.call(message),
     );
@@ -92,9 +102,11 @@ class ChatMessageBubble extends StatelessWidget {
     final isMine = message.isMine;
     final queue = RentalQueueCardData.fromMessage(message.message);
     final queueAction = onQueueAction;
-    if (queue != null && queueAction != null) {
+    if (queue != null && (queueAction != null || isReadOnly)) {
       return Align(
-        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+        alignment:
+            queueAlignment ??
+            (isMine ? Alignment.centerRight : Alignment.centerLeft),
         child: RentalQueueCard(
           data: queue,
           isOwner: !queue.isRenterView(isSender: isMine),
@@ -120,7 +132,7 @@ class ChatMessageBubble extends StatelessWidget {
         final bookingCard = GestureDetector(
           onLongPress: () => _showActions(context),
           child: IgnorePointer(
-            ignoring: message.id.startsWith('temp_'),
+            ignoring: isReadOnly || message.id.startsWith('temp_'),
             child: BookingRequestBubbleCard(
               message: message,
               bookingData: bookingData,
@@ -128,6 +140,9 @@ class ChatMessageBubble extends StatelessWidget {
               isOwner: isOwner,
               isHandoverCompleted: isHandoverCompleted,
               isReturnCompleted: isReturnCompleted,
+              onRetryCustomerRequest: onRetryCustomerRequest,
+              customerRequestBlockedByRental: customerRequestBlockedByRental,
+              onRequestRentalQueue: onRequestRentalQueue,
             ),
           ),
         );
@@ -646,6 +661,10 @@ class ChatMessageBubble extends StatelessWidget {
                 originalMessage: quotedMessage,
                 isMine: isMine,
                 otherUserName: otherUserName,
+                replyTarget:
+                    isReadOnly && isMine && replyData.target != 'ตัวเอง'
+                    ? otherUserName
+                    : null,
                 onTap: replyData.quotedMessageId == null || onQuotedTap == null
                     ? null
                     : () => onQuotedTap!(replyData.quotedMessageId!),

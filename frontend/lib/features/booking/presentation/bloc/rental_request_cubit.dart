@@ -72,6 +72,7 @@ class RentalRequestCubit extends Cubit<RentalRequestState> {
     required String offerMessageId,
     required String paymentMethod,
     int? rentalId,
+    int? requestRevision,
   }) async {
     final id = rentalId ?? state.rentalId;
     if (id == null ||
@@ -91,6 +92,7 @@ class RentalRequestCubit extends Cubit<RentalRequestState> {
         rentalId: id,
         offerMessageId: offerMessageId,
         paymentMethod: paymentMethod,
+        requestRevision: requestRevision,
       );
       if (isClosed) return false;
       emit(

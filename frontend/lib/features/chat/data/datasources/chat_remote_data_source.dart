@@ -241,6 +241,22 @@ class ChatRemoteDataSource {
     };
   }
 
+  Future<Set<int>> getUnavailableRentalItemIds(Set<int> itemIds) async {
+    if (itemIds.isEmpty || (!SupabaseConfig.isInitialized && _client == null)) {
+      return {};
+    }
+    final rows = await _supabaseClient
+        .from('item_tb')
+        .select('id,is_rental_occupied,is_rental_queue_held')
+        .inFilter('id', itemIds.toList(growable: false));
+    return {
+      for (final row in rows)
+        if (row['is_rental_occupied'] == true ||
+            row['is_rental_queue_held'] == true)
+          if (row['id'] case final int id) id,
+    };
+  }
+
   Future<List<ChatConversation>> getConversations() async {
     if (!SupabaseConfig.isInitialized && _client == null) {
       return const [];
@@ -268,9 +284,7 @@ class ChatRemoteDataSource {
         final renterId = conv['renter_id']?.toString() ?? '';
         final ownerId = conv['owner_id']?.toString() ?? '';
         final otherId = currentUserId == renterId ? ownerId : renterId;
-        if (otherId.isEmpty) continue;
-        if (!seenOtherUserIds.contains(otherId)) {
-          seenOtherUserIds.add(otherId);
+        if (otherId.isEmpty || seenOtherUserIds.add(otherId)) {
           conversations.add(conv);
         }
       }
@@ -295,6 +309,7 @@ class ChatRemoteDataSource {
 
       // ดึงโปรไฟล์ทั้งหมด (พร้อม try-catch ป้องกัน sub-query error)
       final profilesMap = <String, Map<String, dynamic>>{};
+      var profileLookupSucceeded = true;
       if (otherUserIds.isNotEmpty) {
         try {
           final profiles = await client
@@ -309,6 +324,7 @@ class ChatRemoteDataSource {
             if (uid != null) profilesMap[uid] = p;
           }
         } catch (e) {
+          profileLookupSucceeded = false;
           debugPrint('getConversations profiles sub-query error: $e');
         }
       }
@@ -339,7 +355,7 @@ class ChatRemoteDataSource {
             .schema('messaging')
             .from('chat_message_tb')
             .select('conversation_id')
-            .neq('sender_id', currentUserId)
+            .or('sender_id.neq.$currentUserId,sender_id.is.null')
             .eq('is_read', false);
         unreadConvIds = (unreadRows as List)
             .map((r) => r['conversation_id']?.toString())
@@ -367,6 +383,7 @@ class ChatRemoteDataSource {
               item: itemId != null ? itemsMap[itemId] : null,
               currentUserId: currentUserId,
               hasUnreadMessage: unreadConvIds.contains(convId),
+              profileLookupSucceeded: profileLookupSucceeded,
             );
           })
           .toList(growable: false);
@@ -458,7 +475,7 @@ class ChatRemoteDataSource {
           .from('chat_message_tb')
           .update({'is_read': true})
           .eq('conversation_id', conversationId)
-          .neq('sender_id', currentUserId);
+          .or('sender_id.neq.$currentUserId,sender_id.is.null');
       // Trigger ซิงก์ประวัติแจ้งเตือนให้ทุกเครื่องจากสถานะอ่านของข้อความจริง
     } catch (_) {}
   }
@@ -538,7 +555,11 @@ class ChatRemoteDataSource {
           latestMessages.map((message) {
             final booking = BookingRequestData.fromChatMessage(message.message);
             final status = bookingStatuses[booking?.bookingId];
-            if (booking == null || status == null) return message;
+            if (booking == null ||
+                status == null ||
+                (status == 'pending' && booking.status == 'confirmed')) {
+              return message;
+            }
             return ChatMessage(
               id: message.id,
               conversationId: message.conversationId,
@@ -1296,7 +1317,9 @@ class ChatRemoteDataSource {
             final renterId = conv['renter_id']?.toString() ?? '';
             final ownerId = conv['owner_id']?.toString() ?? '';
 
-            if (renterId != currentUserId && ownerId != currentUserId) {
+            if (renterId.isEmpty ||
+                ownerId.isEmpty ||
+                (renterId != currentUserId && ownerId != currentUserId)) {
               continue;
             }
 
@@ -1343,6 +1366,7 @@ class ChatRemoteDataSource {
                   )
                   .eq('user_id', otherId)
                   .maybeSingle();
+              if (profile == null) continue;
 
               Map<String, dynamic>? item;
               if (conv['item_id'] != null) {
