@@ -114,6 +114,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (_errorMessage != null) setState(() => _errorMessage = null);
   }
 
+  Future<void> _showEmailConfirmation(String email) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('ยืนยันอีเมลของคุณ'),
+        content: Text(
+          'ตรวจสอบกล่องจดหมายของ $email แล้วกดลิงก์ในอีเมลยืนยัน '
+          'หากไม่พบ ให้ตรวจสอบโฟลเดอร์สแปม',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('เข้าใจแล้ว'),
+          ),
+        ],
+      ),
+    );
+    if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+      AppRoutes.pop(context, true);
+    }
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -134,11 +156,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             _errorMessage = null;
           });
         } else if (state is RegisterSuccess) {
-          setState(() {
-            _isLoading = false;
-          });
-
-          AppRoutes.pop(context, true);
+          _showEmailConfirmation(state.email);
         } else if (state is RegisterFailure) {
           setState(() {
             _isLoading = false;
@@ -176,13 +194,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 24),
                 // Name Field
                 AppTextFormField(
-                  label: 'ชื่อ - นามสกุล',
-                  hintText: 'กรุณากรอกชื่อ - นามสกุล',
+                  label: 'ชื่อโปรไฟล์',
+                  hintText: 'กรุณากรอกชื่อโปรไฟล์',
                   controller: _nameController,
                   onChanged: (_) => _clearFormError(),
-                  validator: AppFormValidators.required(
-                    'กรุณากรอกชื่อ - นามสกุล',
-                  ),
+                  validator: AppFormValidators.required('กรุณากรอกชื่อโปรไฟล์'),
                 ),
                 const SizedBox(height: 16),
                 // Email Field

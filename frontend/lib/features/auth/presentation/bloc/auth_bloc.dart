@@ -168,7 +168,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         imageBytes: event.imageBytes,
         imageFileName: event.imageFileName,
       );
-      emit(const RegisterSuccess());
+      emit(RegisterSuccess(email: event.email));
     } on AuthApiException catch (error) {
       emit(RegisterFailure(message: error.message));
     } catch (error) {

@@ -3,6 +3,7 @@ package supabase_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,78 @@ import (
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	supabaseclient "github.com/nedpals/supabase-go"
 )
+
+func TestRegisterUsesSupabaseEmailConfirmation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/auth/v1/settings":
+			_, _ = w.Write([]byte(`{"mailer_autoconfirm":false}`))
+		case "/auth/v1/signup":
+			var body struct {
+				Email    string            `json:"email"`
+				Password string            `json:"password"`
+				Phone    string            `json:"phone"`
+				Data     map[string]string `json:"data"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode signup request: %v", err)
+			}
+			if r.Method != http.MethodPost || r.URL.Query().Get("redirect_to") != "yuemnoi://login-callback/" ||
+				body.Email != "new@example.com" || body.Password != "test-password" || body.Phone != "" ||
+				body.Data["display_name"] != "Test name" || body.Data["phone"] != "+66812345678" {
+				t.Error("signup should send email credentials and keep the contact phone in profile metadata")
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":                 "new-user",
+				"email_confirmed_at": nil,
+				"identities":         []map[string]string{{"provider": "email"}},
+				"user_metadata":      body.Data,
+			})
+		default:
+			t.Errorf("unexpected request: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	repository := supabase.NewSupabaseUserRepository(supabaseclient.CreateClient(server.URL, "test-key"), "test-key")
+
+	result, err := repository.Register(context.Background(), domain.RegisterUser{
+		Email: "new@example.com", Password: "test-password", DisplayName: "Test name", Phone: "+66812345678",
+	})
+	if err != nil || result == nil || result.UserID != "new-user" {
+		t.Fatalf("Register() = %v, %v", result, err)
+	}
+}
+
+func TestRegisterStopsWhenSupabaseAutoConfirmsEmail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/v1/settings" {
+			t.Errorf("request with auto-confirm enabled: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"mailer_autoconfirm":true}`))
+	}))
+	defer server.Close()
+	repository := supabase.NewSupabaseUserRepository(supabaseclient.CreateClient(server.URL, "test-key"), "test-key")
+
+	result, err := repository.Register(context.Background(), domain.RegisterUser{})
+	if result != nil || err == nil {
+		t.Fatalf("Register() = %v, %v, want an error without creating a user", result, err)
+	}
+}
+
+func TestLoginDistinguishesUnconfirmedEmail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error_code":"email_not_confirmed","msg":"Email not confirmed"}`))
+	}))
+	defer server.Close()
+	repository := supabase.NewSupabaseUserRepository(supabaseclient.CreateClient(server.URL, "test-key"), "test-key")
+
+	_, err := repository.Login(context.Background(), "pending@example.com", "test-password")
+	if !errors.Is(err, domain.ErrEmailNotConfirmed) {
+		t.Fatalf("Login() error = %v, want email not confirmed", err)
+	}
+}
 
 func TestAppTokenAccessUsesCurrentTrustedMetadata(t *testing.T) {
 	dashboardOnly := false

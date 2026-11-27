@@ -92,9 +92,14 @@ class RegisterLoading extends AuthState {
   const RegisterLoading();
 }
 
-/// สมัครสมาชิกสำเร็จ
+/// รับคำขอสมัครแล้วและรอผู้ใช้ยืนยันอีเมล
 class RegisterSuccess extends AuthState {
-  const RegisterSuccess();
+  final String email;
+
+  const RegisterSuccess({required this.email});
+
+  @override
+  List<Object?> get props => [email];
 }
 
 /// สมัครสมาชิกไม่สำเร็จ

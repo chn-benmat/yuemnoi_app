@@ -43,7 +43,7 @@ class AuthRemoteDataSource {
 
   final ApiClient _client;
 
-  Future<String> register({
+  Future<void> register({
     required String displayName,
     required String email,
     required String phone,
@@ -76,13 +76,12 @@ class AuthRemoteDataSource {
       final body = _map(response.data);
 
       if (response.statusCode == 201) {
-        final userId = body['user_id'];
-        if (userId is String && userId.isNotEmpty) {
-          return userId;
+        if (body['confirmation_required'] == true) {
+          return;
         }
 
         throw const AuthApiException(
-          'เซิร์ฟเวอร์ตอบกลับสำเร็จ แต่ไม่พบรหัสผู้ใช้',
+          'ระบบยังไม่พร้อมส่งอีเมลยืนยัน กรุณาลองใหม่ภายหลัง',
         );
       }
 

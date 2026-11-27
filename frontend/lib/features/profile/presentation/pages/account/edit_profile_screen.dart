@@ -1,5 +1,4 @@
 import 'package:frontend/core/widgets/app_popup.dart';
-import '../../widgets/account/account_page_intro.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -22,6 +21,7 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  static final _invalidUsernameCharacters = RegExp(r'[^A-Za-z0-9._]');
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _displayNameCtrl;
   late final TextEditingController _usernameCtrl;
@@ -50,10 +50,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   '')
               .toString(),
     );
-    _usernameCtrl = TextEditingController(
-      text: (meta['username'] ?? user?.email?.split('@').first ?? '')
-          .toString(),
-    );
+    _usernameCtrl = TextEditingController();
     _bioCtrl = TextEditingController(text: (meta['bio'] ?? '').toString());
     _avatarUrl =
         (meta['user_image_url'] ?? meta['avatar_url'] ?? meta['picture'] ?? '')
@@ -113,7 +110,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     await _cubit.updateProfileData(
       accessToken: accessToken,
       displayName: _displayNameCtrl.text.trim(),
-      username: _usernameCtrl.text.trim(),
+      username: _usernameCtrl.text,
       bio: _bioCtrl.text.trim(),
       imageBytes: _pickedImageBytes,
       imageName: _pickedImageName,
@@ -262,8 +259,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     const SizedBox(height: 12),
                     EditProfileFormField(
                       controller: _displayNameCtrl,
-                      label: 'ชื่อแสดงตัวตน',
-                      hint: 'กรอกชื่อที่ต้องการแสดง',
+                      label: 'ชื่อโปรไฟล์',
+                      hint: 'กรอกชื่อที่ต้องการเปลี่ยน',
                       icon: Icons.badge_outlined,
                       validator: (v) => (v == null || v.trim().isEmpty)
                           ? 'กรุณากรอกชื่อ'
@@ -275,11 +272,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       label: 'ชื่อผู้ใช้',
                       hint: 'username',
                       icon: Icons.alternate_email_rounded,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'กรุณากรอกชื่อผู้ใช้';
+                        }
+                        if (value.length > 100) {
+                          return 'ชื่อผู้ใช้ต้องมีไม่เกิน 100 ตัวอักษร';
+                        }
+                        if (_invalidUsernameCharacters.hasMatch(value)) {
+                          return 'ใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข จุด (.) และขีดล่าง (_)';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'ใช้ A–Z, a–z, 0–9, จุด (.) และขีดล่าง (_) เปลี่ยนได้ทุก 30 วัน',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF665D73)),
                     ),
                     const SizedBox(height: 14),
                     EditProfileFormField(
                       controller: _bioCtrl,
-                      label: 'ชีวประวัติ / แนะนำตัว',
+                      label: 'แนะนำตัว',
                       hint: 'เขียนอะไรสักอย่างเกี่ยวกับตัวคุณ...',
                       icon: Icons.info_outline_rounded,
                       maxLines: 3,

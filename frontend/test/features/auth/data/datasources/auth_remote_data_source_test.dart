@@ -29,6 +29,41 @@ void main() {
     ).thenAnswer((_) async => response);
   }
 
+  group('signup requires email confirmation', () {
+    Future<void> register() => dataSource.register(
+      displayName: 'Test name',
+      email: 'test@example.com',
+      phone: '0812345678',
+      password: 'test-password',
+      confirmPassword: 'test-password',
+    );
+
+    void stubRegister(Map<String, dynamic> body) {
+      when(
+        () => client.postMultipart(
+          '/api/auth/register',
+          fields: any(named: 'fields'),
+          files: any(named: 'files'),
+        ),
+      ).thenAnswer((_) async => ApiResponse(statusCode: 201, data: body));
+    }
+
+    test('accepts a confirmation response without a user ID', () async {
+      stubRegister({'confirmation_required': true});
+
+      await register();
+    });
+
+    test(
+      'rejects a legacy response that does not require confirmation',
+      () async {
+        stubRegister({'user_id': 'legacy-user'});
+
+        await expectLater(register(), throwsA(isA<AuthApiException>()));
+      },
+    );
+  });
+
   test('verifyOtp shows an invalid message when the OTP is wrong', () async {
     stubPost(
       const ApiResponse(statusCode: 400, data: {'error': 'invalid OTP code'}),

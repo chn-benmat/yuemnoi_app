@@ -125,7 +125,7 @@ Supabase Storage ใช้ HTTP adapter ที่ส่ง context และค�
 | RPC            | `check_email_exists(search_email)` → boolean                                                          |
 | RPC            | `create_rental_request(p_user_id, p_item_id, p_start_at, p_end_at, p_rental_type, p_pickup_location)` |
 | Storage        | `item_bk` และ `profile_bk` รองรับรูปแบบ URL ที่ adapters ใช้                                          |
-| Auth → Profile | Trigger สร้างแถว `profiles.profile_tb` เมื่อสร้าง Auth user เพราะ registration flow ปัจจุบันอัปเดตแถวที่มีอยู่ |
+| Auth → Profile | Trigger สร้างแถว `profiles.profile_tb` เมื่อสร้าง Auth user และฐานข้อมูลกำหนดชื่อผู้ใช้เริ่มต้น |
 | Permissions    | grants / RLS / Storage policies ให้ตรงกับทั้ง Backend และ Flutter ที่เข้าถึงโดยตรง                    |
 
 ใช้ [migration แยก schema ตามโมดูล](../supabase/README.md) พร้อม Backend และ Flutter รุ่นนี้ โดย notification tables อยู่ใน `notifications` และ RPC คงชื่อเดิมใน `public`
@@ -133,6 +133,10 @@ Supabase Storage ใช้ HTTP adapter ที่ส่ง context และค�
 Backend ใช้ตัวแปรชื่อ `SUPABASE_SERVICE_ROLE_KEY` และ SDK / adapters ตามเวอร์ชันในตาราง ให้ใช้ server credential ที่ตรงกับ integration นี้และเก็บไว้ฝั่งเซิร์ฟเวอร์ ดู [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys) ก่อนเลือกหรือเปลี่ยนชนิดคีย์; README นี้ไม่ได้เปลี่ยน implementation ให้รองรับการย้ายคีย์แบบใหม่
 
 OTP flow ปัจจุบันใช้ Supabase email OTP ผ่าน Magic Link template หากต้องการให้ผู้ใช้กรอกรหัสหกหลัก ต้องตั้ง template ให้แสดง `{{ .Token }}` ตาม flow ที่แอปใช้ Google login เริ่มจาก Supabase OAuth ใน Flutter ส่วน Backend ซิงค์รูปของผู้ใช้ที่ login แล้ว
+
+การสมัครด้วยอีเมลและรหัสผ่านต้องเปิด **Confirm email** ใน Supabase Auth และใช้ลิงก์ `{{ .ConfirmationURL }}` ในเทมเพลต **Confirm signup** เพิ่ม `yuemnoi://login-callback/` ในรายการ Redirect URLs เพื่อเปิดแอปจากลิงก์ยืนยัน สำหรับการส่งถึงผู้ใช้ทั่วไป ให้ตั้ง Custom SMTP ของโปรเจกต์ด้วย [การยืนยันอีเมล](https://supabase.com/docs/guides/auth/passwords) · [Custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp)
+
+ใช้ [migration บังคับกฎชื่อผู้ใช้](../supabase/migrations/20261127034456_enforce_profile_usernames.sql) ก่อนเผยแพร่ Backend และ Flutter รุ่นนี้ ฐานข้อมูลเติมชื่อเริ่มต้นให้โปรไฟล์ที่ยังไม่มีชื่อผู้ใช้ ตรวจชื่อซ้ำโดยไม่แยกตัวพิมพ์ และอนุญาตให้เปลี่ยนได้ทุก 30 วันนับจากการเปลี่ยนครั้งล่าสุด สำหรับฐานข้อมูลอื่น ให้ตรวจชื่อเดิมที่ไม่ว่างว่าตรงรูปแบบ `^[A-Za-z0-9._]{1,100}$` และไม่ซ้ำกันเมื่อเทียบแบบพิมพ์เล็กก่อนรัน migration
 
 ### 3. สร้างไฟล์ `.env`
 
