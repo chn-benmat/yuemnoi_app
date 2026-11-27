@@ -81,10 +81,20 @@ func TestProfileImageStorageUsesOwnerFolder(t *testing.T) {
 					}
 				}
 				switch {
-				case r.URL.Path == "/rest/v1/rpc/check_email_exists":
-					_, _ = w.Write([]byte(`false`))
-				case r.URL.Path == "/auth/v1/admin/users":
-					_, _ = w.Write([]byte(`{"id":"profile-owner"}`))
+				case r.URL.Path == "/auth/v1/settings":
+					_, _ = w.Write([]byte(`{"mailer_autoconfirm":false}`))
+				case r.URL.Path == "/auth/v1/signup":
+					var signup struct {
+						Data map[string]string `json:"data"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&signup); err != nil {
+						t.Error(err)
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"id":            "profile-owner",
+						"identities":    []map[string]string{{"provider": "email"}},
+						"user_metadata": signup.Data,
+					})
 				case strings.HasPrefix(r.URL.Path, "/storage/v1/object/profile_bk/"):
 					uploadPath = r.URL.Path
 					_ = json.NewEncoder(w).Encode(map[string]string{"Key": uploadPath})

@@ -7,10 +7,16 @@ import (
 
 var ErrInvalidAccessToken = errors.New("invalid access token")
 var ErrDashboardOnly = errors.New("dashboard_only")
+var ErrEmailNotConfirmed = errors.New("email_not_confirmed")
+var ErrRegistrationConfirmationUnavailable = errors.New("registration email confirmation unavailable")
+var ErrRegistrationEmailTaken = errors.New("registration email already taken")
+var ErrRegistrationInputInvalid = errors.New("registration input invalid")
+var ErrRegistrationPasswordWeak = errors.New("registration password too weak")
+var ErrRegistrationRateLimited = errors.New("registration rate limited")
+var ErrUsernameTaken = errors.New("username_taken")
+var ErrUsernameChangeCooldown = errors.New("username_change_cooldown")
 
-// RegisterUser contains all data required to create an Auth user and an
-// optional profile image. DisplayName is stored as Auth user metadata, Phone
-// is stored in both Auth and metadata, and ProfileImage goes to Storage.
+// RegisterUser ใช้อีเมลสำหรับยืนยันบัญชี ส่วนเบอร์โทรเป็นข้อมูลติดต่อในโปรไฟล์
 type RegisterUser struct {
 	DisplayName  string
 	Email        string

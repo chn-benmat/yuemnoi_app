@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"regexp"
@@ -25,6 +26,7 @@ var (
 	phoneLocalPattern = regexp.MustCompile(`^0[0-9]{9}$`)
 	phoneIntlPattern  = regexp.MustCompile(`^\+66[0-9]{9}$`)
 	phoneAltPattern   = regexp.MustCompile(`^66[0-9]{9}$`)
+	usernamePattern   = regexp.MustCompile(`^[A-Za-z0-9._]{1,100}$`)
 )
 
 func NewUserHandler(gateway domain.AuthGateway) *UserHandler {
@@ -81,6 +83,12 @@ func (h *UserHandler) Login(c fiber.Ctx) error {
 
 	tokens, err := h.repo.Login(c.Context(), req.Email, req.Password)
 	if err != nil {
+		if errors.Is(err, domain.ErrEmailNotConfirmed) {
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{
+				"code":  "email_not_confirmed",
+				"error": "กรุณากดลิงก์ยืนยันอีเมลก่อนเข้าสู่ระบบ",
+			})
+		}
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "อีเมลหรือรหัสผ่านไม่ถูกต้อง"})
 	}
 	if _, err := h.verifier.UserIDFromToken(c.Context(), tokens.AccessToken); err != nil {
@@ -145,7 +153,7 @@ func (h *UserHandler) Register(c fiber.Ctx) error {
 	req.Email = strings.TrimSpace(req.Email)
 	phone, validPhone := normalizePhone(req.Phone)
 	if req.DisplayName == "" {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ชื่อ-นามสกุลไม่ถูกต้อง"})
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ชื่อโปรไฟล์ไม่ถูกต้อง"})
 	}
 	if !validPhone {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0"})
@@ -169,17 +177,31 @@ func (h *UserHandler) Register(c fiber.Ctx) error {
 		ProfileImage: profileImage,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "email already registered") {
+		c.Set("Cache-Control", "private, no-store")
+		switch {
+		case errors.Is(err, domain.ErrRegistrationEmailTaken):
 			return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "อีเมลนี้ถูกใช้งานในระบบแล้ว โปรดใช้อีเมลอื่น"})
+		case errors.Is(err, domain.ErrRegistrationInputInvalid):
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาตรวจสอบอีเมลและรหัสผ่าน"})
+		case errors.Is(err, domain.ErrRegistrationPasswordWeak):
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "รหัสผ่านไม่ผ่านเงื่อนไขความปลอดภัย กรุณาใช้รหัสผ่านที่คาดเดายากขึ้น"})
+		case errors.Is(err, domain.ErrRegistrationRateLimited):
+			return c.Status(http.StatusTooManyRequests).JSON(fiber.Map{"error": "ส่งอีเมลบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่"})
+		case errors.Is(err, domain.ErrRegistrationConfirmationUnavailable):
+			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "ระบบส่งอีเมลยืนยันยังไม่พร้อม กรุณาลองใหม่ภายหลัง"})
+		default:
+			slog.Warn("สมัครสมาชิกผ่านระบบยืนยันอีเมลไม่สำเร็จ", "error", err)
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถสมัครสมาชิกได้"})
 		}
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถสมัครสมาชิกได้"})
 	}
 
+	c.Set("Cache-Control", "private, no-store")
 	return c.Status(http.StatusCreated).JSON(fiber.Map{
-		"status":         http.StatusCreated,
-		"message":        "สมัครสมาชิกสำเร็จ",
-		"user_id":        result.UserID,
-		"user_image_url": result.UserImageURL,
+		"status":                http.StatusCreated,
+		"message":               "กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชี",
+		"confirmation_required": true,
+		"user_id":               result.UserID,
+		"user_image_url":        result.UserImageURL,
 	})
 }
 
@@ -378,6 +400,12 @@ func (h *UserHandler) UpdateProfile(c fiber.Ctx) error {
 		}
 	}
 
+	if req.Username != nil && !usernamePattern.MatchString(*req.Username) {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"error": "ชื่อผู้ใช้ต้องมี 1–100 ตัว ใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข จุด (.) และขีดล่าง (_)",
+		})
+	}
+
 	profileImage, err := profileImageFromRequest(c)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
@@ -391,6 +419,12 @@ func (h *UserHandler) UpdateProfile(c fiber.Ctx) error {
 
 	profile, err := h.repo.UpdateProfile(c.Context(), userID, domainReq, profileImage)
 	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrUsernameTaken):
+			return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "ชื่อผู้ใช้นี้ถูกใช้แล้ว กรุณาเลือกชื่ออื่น"})
+		case errors.Is(err, domain.ErrUsernameChangeCooldown):
+			return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "เปลี่ยนชื่อผู้ใช้ได้ทุก 30 วัน กรุณารอให้ครบกำหนด"})
+		}
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถแก้ไขโปรไฟล์ได้"})
 	}
 

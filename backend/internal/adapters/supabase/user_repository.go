@@ -3,19 +3,24 @@ package supabase
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/nedpals/supabase-go"
+	postgrest "github.com/nedpals/supabase-go/postgrest/pkg"
 )
 
 const profileBucket = "profile_bk"
+const signupRedirect = "yuemnoi://login-callback/"
 
 type supabaseUserRepository struct {
 	client     *supabase.Client
@@ -144,6 +149,9 @@ func (r *supabaseUserRepository) Login(ctx context.Context, email, password stri
 		Password: password,
 	})
 	if err != nil {
+		if strings.HasPrefix(err.Error(), "email_not_confirmed:") {
+			return nil, domain.ErrEmailNotConfirmed
+		}
 		return nil, fmt.Errorf("supabase login failed: %w", err)
 	}
 
@@ -161,45 +169,124 @@ func (r *supabaseUserRepository) Login(ctx context.Context, email, password stri
 	}, nil
 }
 
-// Register creates the Auth user, uploads an optional profile image, and stores
-// its public URL in profile_tb.
+// Register ส่งคำขอสมัครผ่าน Auth เพื่อให้ Supabase ส่งอีเมลยืนยันเอง
 func (r *supabaseUserRepository) Register(ctx context.Context, user domain.RegisterUser) (*domain.RegisterResult, error) {
-	emailExists, err := r.IsEmailExists(ctx, user.Email)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check whether email is already registered: %w", err)
-	}
-	if emailExists {
-		return nil, fmt.Errorf("email already registered")
+	authURL := strings.TrimRight(r.client.BaseURL, "/") + "/" + supabase.AuthEndpoint
+	if err := r.requireEmailConfirmation(ctx, authURL); err != nil {
+		return nil, err
 	}
 
-	password := user.Password
-	resp, err := r.client.Admin.CreateUser(ctx, supabase.AdminUserParams{
-		Email:        user.Email,
-		Phone:        user.Phone,
-		Password:     &password,
-		EmailConfirm: true,
-		PhoneConfirm: true,
-		UserMetadata: supabase.JSONMap{
-			"display_name": user.DisplayName,
-			"phone":        user.Phone,
+	registrationID := rand.Text()
+	payload, err := json.Marshal(map[string]any{
+		"email":    user.Email,
+		"password": user.Password,
+		"data": map[string]string{
+			"display_name":    user.DisplayName,
+			"phone":           user.Phone,
+			"registration_id": registrationID,
 		},
 	})
-
 	if err != nil {
-		// ดักจับ Error ที่เกิดจากการพยายามลงทะเบียนด้วยอีเมลที่มีอยู่แล้วในระบบ
-		if strings.Contains(strings.ToLower(err.Error()), "already registered") ||
-			strings.Contains(strings.ToLower(err.Error()), "already exists") {
-			return nil, fmt.Errorf("email already registered") // ส่ง Error Code เฉพาะของเรากลับไป
-		}
-
-		return nil, fmt.Errorf("supabase registration failed: %w", err)
+		return nil, fmt.Errorf("encode Auth signup request: %w", err)
 	}
 
-	if resp == nil || resp.ID == "" {
-		return nil, fmt.Errorf("registration succeeded but no user ID returned")
+	endpoint := authURL + "/signup?redirect_to=" + url.QueryEscape(signupRedirect)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("create Auth signup request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("apikey", r.authAPIKey)
+	response, err := r.client.HTTPClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("request Auth signup: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return nil, signupResponseError(response)
 	}
 
-	return r.completeRegistration(ctx, user, resp.ID)
+	var signup struct {
+		ID               string     `json:"id"`
+		AccessToken      string     `json:"access_token"`
+		EmailConfirmedAt *time.Time `json:"email_confirmed_at"`
+		Identities       []struct{} `json:"identities"`
+		UserMetadata     struct {
+			RegistrationID string `json:"registration_id"`
+		} `json:"user_metadata"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&signup); err != nil {
+		return nil, fmt.Errorf("decode Auth signup response: %w", err)
+	}
+	if signup.AccessToken != "" || signup.EmailConfirmedAt != nil {
+		return nil, domain.ErrRegistrationConfirmationUnavailable
+	}
+	if signup.ID == "" {
+		return nil, fmt.Errorf("Auth signup response is missing a user ID")
+	}
+	// Supabase คืนบัญชีเดิมเมื่อส่งลิงก์ซ้ำ และคืนข้อมูลจำลองสำหรับบัญชีที่ยืนยันแล้ว
+	if len(signup.Identities) == 0 || signup.UserMetadata.RegistrationID != registrationID {
+		return &domain.RegisterResult{}, nil
+	}
+
+	result, err := r.completeRegistration(ctx, user, signup.ID)
+	if err != nil {
+		// ส่งลิงก์ยืนยันแล้ว ผู้ใช้ยังเข้าสู่ระบบและเพิ่มรูปภายหลังได้
+		slog.Warn("บันทึกรูปโปรไฟล์ขณะสมัครไม่สำเร็จ")
+		return &domain.RegisterResult{UserID: signup.ID}, nil
+	}
+	return result, nil
+}
+
+func (r *supabaseUserRepository) requireEmailConfirmation(ctx context.Context, authURL string) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, authURL+"/settings", nil)
+	if err != nil {
+		return fmt.Errorf("create Auth settings request: %w", err)
+	}
+	request.Header.Set("apikey", r.authAPIKey)
+	response, err := r.client.HTTPClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("load Auth settings: %w", err)
+	}
+	defer response.Body.Close()
+
+	var settings struct {
+		MailerAutoconfirm *bool `json:"mailer_autoconfirm"`
+	}
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("load Auth settings: HTTP %d", response.StatusCode)
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&settings); err != nil {
+		return fmt.Errorf("decode Auth settings: %w", err)
+	}
+	if settings.MailerAutoconfirm == nil || *settings.MailerAutoconfirm {
+		return domain.ErrRegistrationConfirmationUnavailable
+	}
+	return nil
+}
+
+func signupResponseError(response *http.Response) error {
+	var authError struct {
+		Code string `json:"error_code"`
+	}
+	_ = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&authError)
+	switch {
+	case authError.Code == "user_already_exists" || authError.Code == "email_exists":
+		return domain.ErrRegistrationEmailTaken
+	case authError.Code == "email_address_invalid" || authError.Code == "validation_failed":
+		return domain.ErrRegistrationInputInvalid
+	case authError.Code == "weak_password":
+		return domain.ErrRegistrationPasswordWeak
+	case authError.Code == "email_address_not_authorized",
+		authError.Code == "signup_disabled",
+		authError.Code == "email_provider_disabled":
+		return domain.ErrRegistrationConfirmationUnavailable
+	case response.StatusCode == http.StatusTooManyRequests:
+		return domain.ErrRegistrationRateLimited
+	default:
+		return fmt.Errorf("Auth signup failed: HTTP %d (%s)", response.StatusCode, authError.Code)
+	}
 }
 
 func (r *supabaseUserRepository) completeRegistration(ctx context.Context, user domain.RegisterUser, userID string) (*domain.RegisterResult, error) {
@@ -220,6 +307,7 @@ func (r *supabaseUserRepository) completeRegistration(ctx context.Context, user 
 	err = schemaDatabase(r.client, profilesSchema).From("profile_tb").
 		Update(map[string]interface{}{"user_image_url": publicURL}).
 		Eq("user_id", userID).
+		Is("user_image_url", "null").
 		ExecuteWithContext(ctx, &updated)
 	if err != nil {
 		r.removeProfileImage(ctx, objectPath)
@@ -227,7 +315,7 @@ func (r *supabaseUserRepository) completeRegistration(ctx context.Context, user 
 	}
 	if len(updated) == 0 {
 		r.removeProfileImage(ctx, objectPath)
-		return nil, fmt.Errorf("profile row was not created for the registered user")
+		return nil, fmt.Errorf("registered profile has no available image field")
 	}
 
 	result.UserImageURL = publicURL
@@ -518,9 +606,8 @@ func (r *supabaseUserRepository) UpdateProfile(
 		metadata["display_name"] = trimmed
 	}
 	if req.Username != nil {
-		trimmed := strings.TrimSpace(*req.Username)
-		fields["username"] = trimmed
-		metadata["username"] = trimmed
+		fields["username"] = *req.Username
+		metadata["username"] = *req.Username
 	}
 	if req.Bio != nil {
 		trimmed := strings.TrimSpace(*req.Bio)
@@ -549,6 +636,15 @@ func (r *supabaseUserRepository) UpdateProfile(
 		if err != nil {
 			if uploadedPath != "" {
 				r.removeProfileImage(ctx, uploadedPath)
+			}
+			var requestErr *postgrest.RequestError
+			if errors.As(err, &requestErr) {
+				switch {
+				case requestErr.Code == "23505" && strings.Contains(requestErr.Message, "profile_tb_username_ci_key"):
+					return nil, domain.ErrUsernameTaken
+				case requestErr.Code == "P0001" && requestErr.Message == domain.ErrUsernameChangeCooldown.Error():
+					return nil, domain.ErrUsernameChangeCooldown
+				}
 			}
 			return nil, fmt.Errorf("update profile_tb failed: %w", err)
 		}
@@ -580,6 +676,9 @@ func (r *supabaseUserRepository) UpdateContact(ctx context.Context, userID strin
 		ExecuteWithContext(ctx, &updated)
 	if err != nil {
 		return fmt.Errorf("update contact in profile_tb failed: %w", err)
+	}
+	if len(updated) == 0 {
+		return fmt.Errorf("profile was not found for contact update")
 	}
 
 	_, _ = r.client.Admin.UpdateUser(ctx, userID, supabase.AdminUserParams{

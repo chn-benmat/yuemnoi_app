@@ -1,9 +1,9 @@
 import 'package:frontend/core/widgets/app_popup.dart';
-import '../../widgets/account/account_page_intro.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../core/constants/colors.dart';
+import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/utils/app_form_validators.dart';
@@ -64,7 +64,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
     final rawInput = _phoneCtrl.text;
     final phoneForSupabase = PhoneFormatter.formatForSupabase(rawInput);
-    final phoneForDisplay = PhoneFormatter.formatForDisplay(rawInput);
 
     final session = SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentSession
@@ -80,8 +79,8 @@ class _EditContactScreenState extends State<EditContactScreen> {
       phone: phoneForSupabase,
     );
 
-    if (success && mounted) {
-      _phoneCtrl.text = phoneForDisplay;
+    if (success && mounted && ModalRoute.of(context)?.isCurrent == true) {
+      AppRoutes.pop(context);
     }
   }
 
