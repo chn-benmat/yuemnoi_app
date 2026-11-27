@@ -82,6 +82,89 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     BookingConfirmationTracker.clearMemoryCache();
   });
+
+  testWidgets('a blocked rental opens the checklist and its contact page', (
+    tester,
+  ) async {
+    final client = MockRentalApiClient();
+    AuthSession.saveAccessToken('test-token');
+    addTearDown(AuthSession.clear);
+    when(
+      () => client.post(
+        '/api/rentals',
+        data: any(named: 'data'),
+        headers: any(named: 'headers'),
+      ),
+    ).thenAnswer(
+      (_) async => const ApiResponse(
+        statusCode: 403,
+        data: {
+          'code': 'rental_verification_required',
+          'error': 'กรุณายืนยันข้อมูลก่อนทำรายการ',
+          'rental_verification': {
+            'id_card_approved': false,
+            'contact_phone_saved': false,
+            'identity_pending': true,
+          },
+        },
+      ),
+    );
+    final cubit = buildCubit(
+      RentalRequestRepositoryImpl(
+        RentalRequestRemoteDataSource(client: client),
+      ),
+    );
+    addTearDown(cubit.close);
+    final booking = BookingRequestData(
+      item: const BookingItemInfo(
+        id: 7,
+        title: 'อุปกรณ์ทดสอบ',
+        imageUrl: '',
+        rating: 0,
+        reviewCount: 0,
+        hourlyRate: 100,
+        dailyRate: 500,
+        defaultLocation: 'บางแค',
+      ),
+      startDate: draft.startAt,
+      endDate: draft.endAt,
+      startTime: const TimeOfDay(hour: 9, minute: 0),
+      endTime: const TimeOfDay(hour: 17, minute: 0),
+      location: draft.pickupLocation,
+    );
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => BlocProvider.value(
+            value: cubit,
+            child: BookingConfirmationPage(bookingData: booking),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.editContact,
+          builder: (_, _) => const Scaffold(body: Text('หน้าบันทึกเบอร์')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.tap(
+      find.byKey(const ValueKey('submit-rental-request-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('บัตรประชาชนอยู่ระหว่างตรวจสอบ'), findsOneWidget);
+    expect(find.text('เพิ่มเบอร์โทรศัพท์'), findsOneWidget);
+    expect(cubit.state.rentalId, isNull);
+
+    await tester.tap(find.text('เพิ่มเบอร์โทรศัพท์'));
+    await tester.pumpAndSettle();
+    expect(find.text('หน้าบันทึกเบอร์'), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(BookingConfirmationPage), findsOneWidget);
+  });
+
   blocTest<RentalRequestCubit, RentalRequestState>(
     'emits submitting and success when request is created',
     build: () {

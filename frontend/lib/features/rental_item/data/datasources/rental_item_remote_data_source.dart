@@ -1,5 +1,6 @@
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
+import '../../../identity/domain/rental_verification.dart';
 import '../../domain/entities/rental_item.dart';
 import '../models/rental_item_model.dart';
 
@@ -60,6 +61,8 @@ class RentalItemRemoteDataSource {
         }
       }
 
+      final blocked = RentalVerificationRequired.fromJson(response.data);
+      if (blocked != null) throw blocked;
       final serverMessage = response.data['error'];
       if (serverMessage is String && serverMessage.trim().isNotEmpty) {
         throw RentalItemRemoteException(serverMessage);

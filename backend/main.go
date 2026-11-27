@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"encoding/base64"
-	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"log"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -13,10 +13,12 @@ import (
 	"time"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/aiservice"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/emaildns"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/geocoding"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/logging"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/config"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
 	"github.com/gofiber/fiber/v3"
 	"github.com/mattn/go-colorable"
@@ -43,7 +45,10 @@ func main() {
 	// สร้าง Supabase Client และ Repositories
 	supabaseClient := supabase.InitSupabaseClient(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey)
 	itemRepo := supabase.NewSupabaseItemRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
-	authGateway := supabase.NewSupabaseUserRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
+	emailChecker := emaildns.NewChecker(&net.Resolver{PreferGo: true, StrictErrors: true})
+	authGateway := domain.WithRegistrationEmailCheck(
+		supabase.NewSupabaseUserRepository(supabaseClient, cfg.SupabaseServiceRoleKey), emailChecker,
+	)
 	contactRepository := supabase.NewSupabaseConversationContactRepository(supabaseClient)
 	identityEncryption, identityKeyErr := base64.StdEncoding.DecodeString(cfg.IdentityEncryptionKey)
 	if identityKeyErr != nil || len(identityEncryption) != 32 {

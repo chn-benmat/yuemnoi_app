@@ -682,6 +682,16 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
         if (state.status == RentalRequestStatus.success) {
           unawaited(_showConfirmation(state.rentalId));
         }
+        if (state.verification case final verification?) {
+          unawaited(
+            AppRoutes.openRentalVerification(
+              context,
+              verification,
+              action: 'ส่งคำขอเช่า',
+            ),
+          );
+          return;
+        }
         final errorMessage = state.errorMessage;
         if (!_isConfirmationSheetOpen &&
             errorMessage != null &&

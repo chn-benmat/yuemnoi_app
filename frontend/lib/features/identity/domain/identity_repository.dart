@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'rental_verification.dart';
+
 const identityCardRetentionConsentVersion = 'identity-v2';
 
 bool identityValidBirthDate(String value, {DateTime? today}) {
@@ -33,6 +35,8 @@ class IdentityStatus {
       Map<String, dynamic>.from(data['profile'] as Map? ?? {});
   bool get canList => data['can_list'] == true;
   bool get enforcement => data['enforcement'] == true;
+  RentalVerification? get rentalVerification =>
+      RentalVerification.fromJson(data['rental_verification']);
   bool get restricted {
     final control = data['control'] as Map?;
     return control?['suspended'] == true;

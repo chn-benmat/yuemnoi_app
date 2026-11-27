@@ -8,14 +8,17 @@ import 'item_detail_route_args.dart';
 import '../../features/identity/data/identity_api_repository.dart';
 import '../../features/identity/data/identity_consent_preferences.dart';
 import '../../features/identity/domain/identity_repository.dart';
+import '../../features/identity/domain/rental_verification.dart';
 import '../../features/identity/presentation/identity_account_cubit.dart';
 import '../../features/identity/presentation/pages/identity_account_page.dart';
+import '../../features/identity/presentation/widgets/rental_verification_dialog.dart';
 
 import '../../features/auth/presentation/pages/change_password.dart';
 import '../../features/auth/presentation/pages/forget_password.dart';
 import '../../features/auth/presentation/pages/login.dart';
 import '../../features/auth/presentation/pages/one_time_verification.dart';
 import '../../features/auth/presentation/pages/register.dart';
+import '../network/api_client.dart';
 import '../network/auth_session.dart';
 import '../utils/auth_guard.dart';
 import '../../features/booking/presentation/pages/booking.dart';
@@ -880,7 +883,10 @@ abstract final class AppRoutes {
     );
   }
 
-  static Future<void> openAddRentalItem(BuildContext context) async {
+  static Future<void> openAddRentalItem(
+    BuildContext context, {
+    IdentityRepository? identityRepository,
+  }) async {
     final authed = await AuthGuard.requireAuth(
       context,
       title: 'เข้าสู่ระบบเพื่อปล่อยเช่าอุปกรณ์',
@@ -888,23 +894,64 @@ abstract final class AppRoutes {
           'กรุณาเข้าสู่ระบบหรือสมัครสมาชิกก่อนลงประกาศปล่อยเช่าอุปกรณ์ของคุณ เพื่อความปลอดภัยและการติดต่อกับผู้เช่า',
     );
     if (!authed || !context.mounted) return;
-    final repository = IdentityApiRepository();
+    final repository =
+        identityRepository ?? IdentityApiRepository(client: DioApiClient());
+    final IdentityStatus status;
     try {
-      final status = await repository.status();
-      if (!context.mounted) return;
-      if (status.restricted || (status.enforcement && !status.canList)) {
-        await openIdentity(context);
-        return;
-      }
+      status = await repository.status();
     } on IdentityFailure catch (e) {
       if (context.mounted) {
         showAppPopup(context, content: Text(e.message));
       }
       return;
     } finally {
-      repository.close();
+      if (identityRepository == null) repository.close();
+    }
+    if (!context.mounted || ModalRoute.of(context)?.isCurrent == false) return;
+    if (status.restricted) {
+      showAppPopup(
+        context,
+        content: const Text('บัญชีนี้ถูกจำกัดการทำธุรกรรมใหม่'),
+      );
+      return;
+    }
+    final verification = status.rentalVerification;
+    if (verification == null) {
+      showAppPopup(
+        context,
+        content: const Text('ระบบตรวจสอบข้อมูลยังไม่พร้อม กรุณาลองใหม่'),
+      );
+      return;
+    }
+    if (!verification.isComplete) {
+      return openRentalVerification(
+        context,
+        verification,
+        action: 'เพิ่มสินค้า',
+      );
     }
     return context.push<void>(addRentalItem);
+  }
+
+  static Future<void> openRentalVerification(
+    BuildContext context,
+    RentalVerification verification, {
+    required String action,
+  }) async {
+    final step = await showRentalVerificationDialog(
+      context,
+      verification: verification,
+      action: action,
+    );
+    if (!context.mounted) return;
+    switch (step) {
+      case RentalVerificationStep.idCard:
+        await openIdentityAccount(context);
+      case RentalVerificationStep.contactPhone:
+        await openEditContact(context);
+      case null:
+        break;
+    }
   }
 
   static Future<void> openIdentity(BuildContext context) =>

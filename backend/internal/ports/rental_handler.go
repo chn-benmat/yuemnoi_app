@@ -216,7 +216,10 @@ func writeRentalStatusError(c fiber.Ctx, err error) error {
 }
 
 func writeRentalError(c fiber.Ctx, err error) error {
+	var verification *domain.RentalVerificationRequired
 	switch {
+	case errors.As(err, &verification):
+		return writeRentalVerificationRequired(c, verification.Verification)
 	case errors.Is(err, domain.ErrRentalForbidden):
 		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "ยืนยันได้เฉพาะข้อเสนอที่เจ้าของอุปกรณ์ส่งให้คุณเท่านั้น"})
 	case errors.Is(err, domain.ErrRentalNotFound), errors.Is(err, domain.ErrItemNotFound):

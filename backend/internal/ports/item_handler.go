@@ -81,7 +81,10 @@ func isHourlyItemType(rentalType string) bool {
 }
 
 func writeItemError(c fiber.Ctx, err error) error {
+	var verification *domain.RentalVerificationRequired
 	switch {
+	case errors.As(err, &verification):
+		return writeRentalVerificationRequired(c, verification.Verification)
 	case errors.Is(err, domain.ErrItemNotFound):
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบอุปกรณ์ หรือคุณไม่ใช่เจ้าของอุปกรณ์นี้"})
 	case errors.Is(err, domain.ErrItemInUse):

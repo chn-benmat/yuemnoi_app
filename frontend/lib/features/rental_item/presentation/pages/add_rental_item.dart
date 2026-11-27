@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -49,7 +51,17 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
   @override
   Widget build(BuildContext context) =>
       BlocConsumer<RentalItemBloc, RentalItemState>(
+        listenWhen: (previous, current) => previous.status != current.status,
         listener: (context, state) {
+          if (state.verification case final verification?) {
+            unawaited(
+              AppRoutes.openRentalVerification(
+                context,
+                verification,
+                action: 'เพิ่มสินค้า',
+              ),
+            );
+          }
           if (state.status == RentalItemSubmissionStatus.success) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
@@ -85,7 +97,9 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
           ),
           isSaving: state.status == RentalItemSubmissionStatus.submitting,
           didSave: state.status == RentalItemSubmissionStatus.success,
-          errorMessage: state.status == RentalItemSubmissionStatus.failure
+          errorMessage:
+              state.status == RentalItemSubmissionStatus.failure &&
+                  state.verification == null
               ? state.errorMessage ?? 'เพิ่มอุปกรณ์ไม่สำเร็จ กรุณาลองใหม่'
               : null,
           onSubmit: (value) => context.read<RentalItemBloc>().add(

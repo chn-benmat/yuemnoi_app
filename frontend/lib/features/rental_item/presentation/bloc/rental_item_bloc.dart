@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/services/item_catalog_service.dart';
+import '../../../identity/domain/rental_verification.dart';
 import '../../domain/repositories/rental_item_repository.dart';
 import '../../domain/usecases/create_rental_item_usecase.dart';
 import 'rental_item_event.dart';
@@ -52,6 +53,7 @@ class RentalItemBloc extends Bloc<RentalItemEvent, RentalItemState> {
       emit(
         state.copyWith(
           status: RentalItemSubmissionStatus.failure,
+          clearError: true,
           errorMessage: imageCount < minImages
               ? 'กรุณาเพิ่มรูปภาพอย่างน้อย $minImages รูป'
               : 'เพิ่มรูปภาพได้ไม่เกิน $maxImages รูป',
@@ -75,6 +77,13 @@ class RentalItemBloc extends Bloc<RentalItemEvent, RentalItemState> {
         ),
       );
       ItemCatalogService.instance.notifyChanged();
+    } on RentalVerificationRequired catch (error) {
+      emit(
+        state.copyWith(
+          status: RentalItemSubmissionStatus.failure,
+          verification: error.verification,
+        ),
+      );
     } on RentalItemException catch (error) {
       emit(
         state.copyWith(

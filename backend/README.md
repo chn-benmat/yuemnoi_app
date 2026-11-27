@@ -138,6 +138,8 @@ OTP flow ปัจจุบันใช้ Supabase email OTP ผ่าน Magic
 
 ใช้ [migration บังคับกฎชื่อผู้ใช้](../supabase/migrations/20261127034456_enforce_profile_usernames.sql) ก่อนเผยแพร่ Backend และ Flutter รุ่นนี้ ฐานข้อมูลเติมชื่อเริ่มต้นให้โปรไฟล์ที่ยังไม่มีชื่อผู้ใช้ ตรวจชื่อซ้ำโดยไม่แยกตัวพิมพ์ และอนุญาตให้เปลี่ยนได้ทุก 30 วันนับจากการเปลี่ยนครั้งล่าสุด สำหรับฐานข้อมูลอื่น ให้ตรวจชื่อเดิมที่ไม่ว่างว่าตรงรูปแบบ `^[A-Za-z0-9._]{1,100}$` และไม่ซ้ำกันเมื่อเทียบแบบพิมพ์เล็กก่อนรัน migration
 
+ใช้ [migration สร้างชื่อผู้ใช้จากอีเมล](../supabase/migrations/20261127041408_derive_username_from_email.sql) ต่อ เพื่อใช้ส่วนก่อน `@` เป็นชื่อเริ่มต้น ระบบเติมเลขท้ายเมื่อชื่อซ้ำ และอัปเดตชื่อสุ่มของบัญชีที่ยังไม่เคยเปลี่ยนชื่อเอง
+
 ### 3. สร้างไฟล์ `.env`
 
 สร้างในโฟลเดอร์ `backend/` แล้วแทนค่า `replace-with-...` ด้วยค่าของ environment จริง ไม่มีไฟล์ `.env.example` ให้ copy ใน checkout นี้
@@ -390,7 +392,9 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 
 ตารางภายในแยกเป็น `identity_private` และ `ops_private` โดย Go ยังเรียก RPC ชื่อเดิมใน `public` ด้วย service role ดู [migration และการตรวจสอบฐานข้อมูล](../supabase/README.md)
 
-ติดตั้ง [migration เปิดยืนยันตัวตนทุกบัญชี](../supabase/migrations/20261125175317_remove_identity_pilot.sql) ก่อนใช้งาน Backend และ Admin รุ่นนี้ ผู้ใช้ที่เข้าสู่ระบบเริ่มยืนยันตัวตนได้ทุกบัญชีที่ไม่ถูกระงับ `GET /api/identity/status` และ `status` ใน `GET /api/identity/account` ยังส่ง `available: true` สำหรับแอปรุ่นเดิม ส่วน `control.suspended` ระบุสถานะระงับบัญชี `POST /api/admin/actions/settings/identity` รับ `enforce_identity` เป็น boolean พร้อม `reason` เพื่อกำหนดการยืนยันตัวตนก่อนปล่อยเช่า หากขาดค่าหรือส่งชนิดข้อมูลไม่ถูกต้องจะได้ HTTP 400 พร้อม `code: invalid_settings`
+ติดตั้ง [migration เปิดยืนยันตัวตนทุกบัญชี](../supabase/migrations/20261125175317_remove_identity_pilot.sql) ก่อนใช้งาน Backend และ Admin รุ่นนี้ ผู้ใช้ที่เข้าสู่ระบบเริ่มยืนยันตัวตนได้ทุกบัญชีที่ไม่ถูกระงับ `GET /api/identity/status` และ `status` ใน `GET /api/identity/account` ยังส่ง `available: true` สำหรับแอปรุ่นเดิม ส่วน `control.suspended` ระบุสถานะระงับบัญชี
+
+ติดตั้ง [migration ตรวจข้อมูลก่อนทำรายการเช่า](../supabase/migrations/20261127041257_require_rental_verification.sql) และเปิด `OPERATIONS_ENABLED` ก่อนเผยแพร่ Go และ Flutter รุ่นนี้ `POST /api/items` และ `POST /api/rentals` ตรวจว่าบัตรของผู้ทำรายการได้รับอนุมัติและมีเบอร์ติดต่อที่บันทึกในโปรไฟล์ หากขาดข้อมูลจะตอบ HTTP 403 พร้อม `code: rental_verification_required` และสถานะ `rental_verification` แบบเดียวกับ `GET /api/identity/status` ฐานข้อมูลตรวจซ้ำตอนเพิ่มแถว `POST /api/admin/actions/settings/identity` ยังรับ `enforce_identity` แบบ boolean พร้อม `reason` สำหรับตรวจเจ้าของประกาศที่รับการจองใหม่ หากส่งค่าผิดชนิดจะได้ HTTP 400 พร้อม `code: invalid_settings`
 
 <a id="troubleshooting"></a>
 

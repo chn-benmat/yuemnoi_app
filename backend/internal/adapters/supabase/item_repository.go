@@ -56,7 +56,7 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 
 	err := r.client.DB.From("item_tb").Insert(payload).ExecuteWithContext(ctx, &items)
 	if err != nil {
-		return nil, fmt.Errorf("supabase insert failed: %w", err)
+		return nil, fmt.Errorf("supabase insert failed: %w", mapRentalVerificationError(err))
 	}
 	if len(items) == 0 {
 		return nil, fmt.Errorf("supabase insert returned no item")
@@ -137,6 +137,7 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 			"rating",
 			"review_count",
 			"paid_booking_count",
+			"pickup_location",
 		).
 		OrderBy("rank_position", "asc").
 		ExecuteWithContext(ctx, &items)
