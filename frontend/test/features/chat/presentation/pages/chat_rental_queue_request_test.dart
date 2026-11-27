@@ -25,6 +25,156 @@ class _MockSendMessage extends Mock implements SendChatMessageUseCase {}
 class _MockRentalQueue extends Mock implements RentalQueueRemoteDataSource {}
 
 void main() {
+  for (final (hasInquiry, hasConfirmedRental) in [
+    (true, false),
+    (false, false),
+    (true, true),
+  ]) {
+    testWidgets(
+      hasConfirmedRental
+          ? 'the confirmed renter keeps their booking without a queue prompt'
+          : 'another renter has the item (existing inquiry: $hasInquiry)',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        AuthSession.saveAccessToken('test-token');
+        addTearDown(AuthSession.clear);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        tester.view.physicalSize = Size(400, hasConfirmedRental ? 1500 : 850);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final conversation = ChatConversation(
+          id: hasConfirmedRental ? 'customer-a-room' : 'customer-b-room',
+          otherUserId: 'item-owner',
+          name: 'ผู้ปล่อยเช่า',
+          role: ChatParticipantRole.owner,
+          avatarAsset: '',
+          preview: '',
+          timeLabel: '',
+          itemId: 1,
+          itemName: 'โต๊ะ',
+        );
+        final stream = StreamController<List<ChatMessage>>();
+        addTearDown(stream.close);
+        final messages = _MockStreamMessages();
+        when(() => messages(conversation.id)).thenAnswer((_) => stream.stream);
+        final bloc = ChatDetailBloc(
+          streamMessages: messages,
+          sendMessage: _MockSendMessage(),
+        );
+        addTearDown(bloc.close);
+        final queue = _MockRentalQueue();
+        var occupied = hasConfirmedRental || !hasInquiry;
+        var joined = false;
+        when(() => queue.listItems(conversation.id)).thenAnswer(
+          (_) async => occupied && !joined && !hasConfirmedRental
+              ? [(id: 1, name: 'โต๊ะ')]
+              : [],
+        );
+        when(
+          () => queue.runAction(conversation.id, 'request', itemId: 1),
+        ).thenAnswer((_) async {
+          joined = true;
+          return {'message_id': 20};
+        });
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatDetailScreen(
+              conversation: conversation,
+              chatDetailBloc: bloc,
+              rentalQueueSource: queue,
+              getUnavailableRentalItemIds: (ids) async => {
+                if (occupied && ids.contains(1)) 1,
+              },
+            ),
+          ),
+        );
+        final start = DateTime.now().add(const Duration(days: 1));
+        stream.add([
+          if (hasInquiry)
+            for (final (id, name) in [(1, 'โต๊ะ'), (2, 'เลนส์')])
+              ChatMessage(
+                id: '$id',
+                conversationId: conversation.id,
+                senderId: hasConfirmedRental ? 'customer-a' : 'customer-b',
+                message: ItemInquiryData(
+                  itemId: id,
+                  itemName: name,
+                ).toChatMessagePayload(),
+                createdAt: DateTime.utc(2026, 11, 27, 10, id),
+                isMine: true,
+              ),
+          if (hasConfirmedRental)
+            ChatMessage(
+              id: '3',
+              conversationId: conversation.id,
+              senderId: conversation.otherUserId,
+              message: BookingRequestData(
+                item: BookingItemInfo.defaultMockItem.copyWith(
+                  id: 1,
+                  title: 'โต๊ะ',
+                  imageUrl: '',
+                ),
+                startDate: start,
+                endDate: start.add(const Duration(days: 1)),
+                startTime: const TimeOfDay(hour: 9, minute: 0),
+                endTime: const TimeOfDay(hour: 9, minute: 0),
+                location: 'จุดนัดรับ',
+                bookingId: 25,
+                status: 'confirmed',
+              ).toChatMessagePayload(),
+              createdAt: DateTime.utc(2026, 11, 27, 10, 3),
+              isMine: false,
+            ),
+        ]);
+        await tester.pumpAndSettle();
+        final tableInquiry = find.byWidgetPredicate(
+          (widget) =>
+              widget is ItemInquiryBubbleCard && widget.inquiryData.itemId == 1,
+        );
+        if (hasConfirmedRental) {
+          expect(tableInquiry, findsOneWidget);
+          expect(find.text('ยืนยันคำขอเช่าเรียบร้อยแล้ว'), findsOneWidget);
+          expect(find.text('ขอคิวเช่าต่อ'), findsNothing);
+          expect(find.textContaining('กรุณาต่อคิวเพื่อเช่าต่อ'), findsNothing);
+          await tester.pumpWidget(const SizedBox.shrink());
+          return;
+        }
+        if (hasInquiry) {
+          expect(tableInquiry, findsOneWidget);
+          occupied = true;
+          await tester.pump(const Duration(seconds: 30));
+          await tester.pumpAndSettle();
+          expect(find.byType(ItemInquiryBubbleCard), findsOneWidget);
+          expect(find.text('เลนส์'), findsOneWidget);
+        }
+
+        expect(tableInquiry, findsNothing);
+        expect(find.textContaining('กรุณาต่อคิวเพื่อเช่าต่อ'), findsOneWidget);
+        await tester.tap(find.text('ขอคิวเช่าต่อ'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(ListTile, 'โต๊ะ'));
+        await tester.pumpAndSettle();
+        verify(
+          () => queue.runAction(conversation.id, 'request', itemId: 1),
+        ).called(1);
+        expect(tableInquiry, findsNothing);
+        expect(find.text('ขอคิวเช่าต่อ'), findsNothing);
+
+        if (hasInquiry) {
+          occupied = false;
+          await tester.pump(const Duration(seconds: 30));
+          await tester.pumpAndSettle();
+          expect(tableInquiry, findsOneWidget);
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
   testWidgets('the promoted queue card moves below its ready notice', (
     tester,
   ) async {
