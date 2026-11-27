@@ -33,6 +33,9 @@ class FakeUserItemsRepository implements UserItemsRepository {
   }
 
   @override
+  Stream<void> watchMyItemChanges(String userId) => const Stream.empty();
+
+  @override
   Future<List<FavoriteItem>> getFavorites() async {
     return favorites;
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/network/api_client.dart';
@@ -23,6 +25,51 @@ class UserItemsRemoteDataSource {
 
   final SupabaseClient? _client;
   static const _pageSize = 500;
+  static final _changesByClient = Expando<Map<String, Stream<void>>>();
+
+  Stream<void> watchMyItemChanges(String userId) {
+    final client =
+        _client ??
+        (SupabaseConfig.isInitialized ? SupabaseConfig.client : null);
+    if (client == null || userId.isEmpty) return const Stream.empty();
+
+    final streams = _changesByClient[client] ??= {};
+    return streams.putIfAbsent(userId, () => _watchChanges(client, userId));
+  }
+
+  static Stream<void> _watchChanges(SupabaseClient client, String userId) {
+    RealtimeChannel? channel;
+    late final StreamController<void> changes;
+    changes = StreamController<void>.broadcast(
+      onListen: () {
+        final subscription = client.channel(
+          'my_items:$userId',
+          opts: const RealtimeChannelConfig(private: true),
+        );
+        channel = subscription;
+
+        void notifyChanged() {
+          if (channel == subscription) changes.add(null);
+        }
+
+        subscription
+            .onBroadcast(
+              event: 'items_changed',
+              callback: (_) => notifyChanged(),
+            )
+            .subscribe((status, _) {
+              // โหลดข้อมูลหลังเชื่อมต่อเพื่อเก็บการเปลี่ยนแปลงที่เกิดระหว่างหลุด
+              if (status == RealtimeSubscribeStatus.subscribed) notifyChanged();
+            });
+      },
+      onCancel: () {
+        final subscription = channel;
+        channel = null;
+        if (subscription != null) unawaited(client.removeChannel(subscription));
+      },
+    );
+    return changes.stream;
+  }
 
   Future<List<UserItemModel>> getMyItems(String userId) async {
     if (userId.isEmpty) throw ArgumentError.value(userId, 'userId');

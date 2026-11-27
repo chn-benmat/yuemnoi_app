@@ -17,6 +17,10 @@ class UserItemsRepositoryImpl implements UserItemsRepository {
   }
 
   @override
+  Stream<void> watchMyItemChanges(String userId) =>
+      remoteDataSource.watchMyItemChanges(userId);
+
+  @override
   Future<List<FavoriteItem>> getFavorites() async {
     final models = await remoteDataSource.getFavorites();
     return models.map((m) => m.toEntity()).toList();

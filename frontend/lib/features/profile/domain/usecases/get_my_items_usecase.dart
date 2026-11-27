@@ -10,4 +10,7 @@ class GetMyItemsUseCase {
   Future<List<UserItem>> execute(String userId) {
     return repository.getMyItems(userId);
   }
+
+  Stream<void> watchChanges(String userId) =>
+      repository.watchMyItemChanges(userId);
 }

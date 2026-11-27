@@ -345,7 +345,12 @@ $tag$jsonString$metaEndTag''';
   );
 
   bool get hasQueueOfferStartPassed =>
-      rentalQueueMessageId != null && !startDateTime.isAfter(DateTime.now());
+      rentalQueueMessageId != null && _hasStartPassed(startDateTime);
+
+  static const _bangkokOffset = Duration(hours: 7);
+
+  static DateTime get todayInBangkok =>
+      DateUtils.dateOnly(DateTime.now().toUtc().add(_bangkokOffset));
 
   DateTime get requestStartAt => _bangkokToUtc(startDate, startTime);
 
@@ -355,7 +360,14 @@ $tag$jsonString$metaEndTag''';
   );
 
   bool get hasCustomerRequestStartPassed =>
-      isCustomerRequest && !requestStartAt.isAfter(DateTime.now());
+      isCustomerRequest && _hasStartPassed(requestStartAt);
+
+  bool _hasStartPassed(DateTime startAt) {
+    if (rentalType == BookingRentalType.daily) {
+      return DateUtils.dateOnly(startDate).isBefore(todayInBangkok);
+    }
+    return !startAt.isAfter(DateTime.now());
+  }
 
   DateTime _bangkokToUtc(DateTime day, TimeOfDay time) => DateTime.utc(
     day.year,
@@ -363,7 +375,7 @@ $tag$jsonString$metaEndTag''';
     day.day,
     time.hour,
     time.minute,
-  ).subtract(const Duration(hours: 7));
+  ).subtract(_bangkokOffset);
 
   DateTime get endDateTime {
     final date = _rentalEndDate;

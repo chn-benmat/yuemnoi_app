@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,72 @@ import 'package:mocktail/mocktail.dart';
 class _MockApiClient extends Mock implements ApiClient {}
 
 void main() {
+  test('receives owner broadcasts and resyncs after reconnecting', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final joins = StreamController<(WebSocket, List<dynamic>)>();
+    final sockets = <WebSocket>[];
+    final left = Completer<void>();
+    server.listen((request) async {
+      final socket = await WebSocketTransformer.upgrade(request);
+      sockets.add(socket);
+      socket.listen((message) {
+        final frame = jsonDecode(message as String) as List<dynamic>;
+        socket.add(
+          jsonEncode([
+            frame[0],
+            frame[1],
+            frame[2],
+            'phx_reply',
+            {'status': 'ok', 'response': <String, dynamic>{}},
+          ]),
+        );
+        if (frame[3] == 'phx_join') joins.add((socket, frame));
+        if (frame[3] == 'phx_leave') left.complete();
+      });
+    });
+    final client = SupabaseClient(
+      'http://127.0.0.1:${server.port}',
+      'sb_publishable_test',
+    );
+    final connection = StreamIterator(joins.stream);
+    final source = UserItemsRemoteDataSource(client: client);
+    final changes = StreamIterator(source.watchMyItemChanges('owner'));
+    addTearDown(() async {
+      await changes.cancel();
+      await connection.cancel();
+      await client.dispose();
+      await Future.wait(sockets.map((socket) => socket.close()));
+      await server.close(force: true);
+      await joins.close();
+    });
+
+    final initialSync = changes.moveNext();
+    expect(await connection.moveNext(), isTrue);
+    final (socket, join) = connection.current;
+    expect(join[2], 'realtime:my_items:owner');
+    expect(join[4]['config']['private'], isTrue);
+    expect(await initialSync, isTrue);
+
+    final changed = changes.moveNext();
+    socket.add(
+      jsonEncode([
+        join[0],
+        null,
+        join[2],
+        'broadcast',
+        {'type': 'broadcast', 'event': 'items_changed', 'payload': {}},
+      ]),
+    );
+    expect(await changed, isTrue);
+
+    final reconnectSync = changes.moveNext();
+    await socket.close();
+    expect(await connection.moveNext(), isTrue);
+    expect(await reconnectSync, isTrue);
+    await changes.cancel();
+    await left.future;
+  });
+
   test(
     'reads every owner page with status/unit and propagates query failures',
     () async {
