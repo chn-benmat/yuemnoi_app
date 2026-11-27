@@ -600,6 +600,27 @@ void main() {
     expect(find.byType(CheckboxListTile), findsOneWidget);
   });
 
+  testWidgets('สลับไปบัญชีที่ยังไม่ส่งคำขอแล้วต้องติ๊กยินยอม', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'identity_consent.identity-v2.account-b': true,
+    });
+    await open(tester, AccountRepository());
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    final accountB = AccountRepository()..hasIdentity = false;
+    accountB.fields.clear();
+    await open(tester, accountB, acceptConsent: false, userId: 'account-b');
+
+    final dialog = find.byKey(const ValueKey('identity_consent_dialog'));
+    final checkbox = find.descendant(
+      of: dialog,
+      matching: find.byType(CheckboxListTile),
+    );
+    expect(dialog, findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(checkbox).value, isFalse);
+  });
+
   testWidgets('ยืนยันก่อนส่ง ใช้รูปเดิม และล็อกฟอร์มเมื่อส่งสำเร็จ', (
     tester,
   ) async {

@@ -43,7 +43,9 @@ class IdentityAccountCubit extends Cubit<IdentityAccountState> {
     try {
       final details = await repository.accountDetails();
       final hasConsent =
-          details.hasAcceptedCardRetentionConsent || await _hasSavedConsent();
+          details.hasAcceptedCardRetentionConsent ||
+          ((details.status.verified || details.pending) &&
+              await _hasSavedConsent());
       if (isClosed) return;
       if (onDetailsLoaded != null || details.evidence.isNotEmpty) {
         emit(IdentityAccountState(details: details, busy: true, loading: true));
