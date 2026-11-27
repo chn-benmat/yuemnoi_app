@@ -46,7 +46,6 @@ class IdentityCameraPage extends StatefulWidget {
 
 class _IdentityCameraPageState extends State<IdentityCameraPage>
     with WidgetsBindingObserver {
-  final _cardPreviewKey = GlobalKey();
   CameraController? _camera;
   Uint8List? _preview;
   String? _error;
@@ -163,8 +162,6 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
   Future<void> _take() async {
     final camera = _camera;
     if (_taking || camera == null || !camera.value.isInitialized) return;
-    final cardPreview = _face ? null : _cardPreviewKey.currentContext?.size;
-    if (!_face && (cardPreview == null || cardPreview.isEmpty)) return;
     final generation = _generation;
     setState(() {
       _taking = true;
@@ -174,20 +171,18 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
       final file = await camera.takePicture();
       Uint8List data;
       try {
-        final raw = await file.readAsBytes();
-        data = cardPreview == null
+        data = _face
             ? await FlutterImageCompress.compressWithList(
-                raw,
+                await file.readAsBytes(),
                 minWidth: 1800,
                 minHeight: 1800,
                 quality: 90,
                 keepExif: false,
               )
-            : await cropIdentityCardPhoto((
-                bytes: raw,
-                preview: cardPreview,
-                frame: _cardFrame(cardPreview),
-              ));
+            : await prepareIdentityCardPhoto(
+                file.path,
+                previewAspectRatio: 1 / camera.value.aspectRatio,
+              );
       } finally {
         await clearCameraFile(file.path);
       }
@@ -208,31 +203,44 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
     }
   }
 
-  Widget _cardCameraPreview(CameraController camera) => Center(
-    child: CameraPreview(
-      camera,
-      child: LayoutBuilder(
-        key: _cardPreviewKey,
-        builder: (context, constraints) {
-          final frame = _cardFrame(constraints.biggest);
-          return IgnorePointer(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CustomPaint(painter: _CardFrameMask(frame)),
-                Positioned.fromRect(
-                  rect: frame,
-                  child: const CustomPaint(
-                    key: ValueKey('identity_card_capture_frame'),
-                    painter: _CardAlignmentGuides(),
+  Widget _cardCameraPreview(CameraController camera) => LayoutBuilder(
+    builder: (context, constraints) {
+      final previewSize = applyBoxFit(
+        BoxFit.contain,
+        Size(1, camera.value.aspectRatio),
+        constraints.biggest,
+      ).destination;
+      final frameSize = applyBoxFit(
+        BoxFit.contain,
+        const Size(identityCardAspectRatio, 1),
+        previewSize * 0.94,
+      ).destination;
+      return Center(
+        child: SizedBox.fromSize(
+          size: frameSize,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ClipRect(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox.fromSize(
+                    size: previewSize,
+                    child: CameraPreview(camera),
                   ),
                 ),
-              ],
-            ),
-          );
-        },
-      ),
-    ),
+              ),
+              const IgnorePointer(
+                child: CustomPaint(
+                  key: ValueKey('identity_card_capture_frame'),
+                  painter: _CardAlignmentGuides(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
   );
 
   Widget _livePreview(CameraController camera) {
@@ -441,33 +449,6 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
       ),
     ),
   );
-}
-
-Rect _cardFrame(Size preview) => Alignment.center.inscribe(
-  applyBoxFit(
-    BoxFit.contain,
-    const Size(85.6, 53.98),
-    preview * 0.94,
-  ).destination,
-  Offset.zero & preview,
-);
-
-class _CardFrameMask extends CustomPainter {
-  const _CardFrameMask(this.frame);
-
-  final Rect frame;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final outside = Path()
-      ..fillType = PathFillType.evenOdd
-      ..addRect(Offset.zero & size)
-      ..addRect(frame);
-    canvas.drawPath(outside, Paint()..color = const Color(0x99000000));
-  }
-
-  @override
-  bool shouldRepaint(_CardFrameMask oldDelegate) => frame != oldDelegate.frame;
 }
 
 class _CardAlignmentGuides extends CustomPainter {
