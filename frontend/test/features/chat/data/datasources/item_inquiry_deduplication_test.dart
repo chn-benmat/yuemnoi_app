@@ -17,6 +17,7 @@ class _ChatFixture {
   final bookings = <Map<String, dynamic>>[];
   bool failHistory = false;
   bool failNextInsert = false;
+  bool hasPickupDeadlineColumn = true;
   int inquirySubmissions = 0;
   late final SupabaseClient client;
   late final SupabaseClient authenticated;
@@ -73,7 +74,6 @@ class _ChatFixture {
               400,
               request: request,
             );
-          expect(request.url.queryParameters['sender_id'], 'eq.customer');
           final query = request.url.queryParameters;
           final offset = int.tryParse(query['offset'] ?? '') ?? 0;
           final limit = int.tryParse(query['limit'] ?? '') ?? 100;
@@ -96,16 +96,22 @@ class _ChatFixture {
               .toList();
         } else if (request.method == 'GET' &&
             request.url.path.endsWith('/booking_tb')) {
-          expect(request.url.queryParameters['user_id'], 'eq.customer');
-          expect(
-            request.url.queryParameters['order'],
-            contains('created_at.desc'),
-          );
+          final query = request.url.queryParameters;
+          if (!hasPickupDeadlineColumn &&
+              query['select']!.split(',').contains('pickup_deadline_expired')) {
+            return http.Response(
+              '{"message":"column booking_tb.pickup_deadline_expired does not exist",'
+              '"code":"42703"}',
+              400,
+              request: request,
+            );
+          }
+          expect(query['order'], contains('created_at.desc'));
           response = bookings.reversed
               .where(
                 (booking) =>
-                    'eq.${booking['item_id']}' ==
-                    request.url.queryParameters['item_id'],
+                    'eq.${booking['item_id']}' == query['item_id'] &&
+                    'eq.${booking['user_id']}' == query['user_id'],
               )
               .take(1)
               .toList();
@@ -120,12 +126,16 @@ class _ChatFixture {
         );
       }),
     );
-    authenticated = _AuthenticatedClient();
+    authenticated = authenticate('customer');
+  }
+
+  SupabaseClient authenticate(String userId) {
+    final authenticated = _AuthenticatedClient();
     final auth = _Auth();
     when(() => authenticated.auth).thenReturn(auth);
     when(() => auth.currentUser).thenReturn(
       User(
-        id: 'customer',
+        id: userId,
         appMetadata: {},
         userMetadata: {},
         aud: 'authenticated',
@@ -138,6 +148,7 @@ class _ChatFixture {
     when(() => authenticated.from(any())).thenAnswer(
       (call) => client.from(call.positionalArguments.single as String),
     );
+    return authenticated;
   }
 
   Future<String?> openItemChat({
@@ -160,6 +171,40 @@ class _ChatFixture {
 }
 
 void main() {
+  test(
+    'both customers can inquire when the pickup expiry column is absent',
+    () async {
+      final fixture = _ChatFixture()..hasPickupDeadlineColumn = false;
+      addTearDown(fixture.client.dispose);
+      final secondCustomer = ChatRemoteDataSource(
+        client: fixture.authenticate('customer-b'),
+      );
+      Future<String?> openSecondItemChat() =>
+          secondCustomer.sendItemInquiryIfNeeded(
+            conversationId: 'room-b',
+            inquiry: const ItemInquiryData(
+              itemId: 1,
+              itemName: 'Canon EOS R50',
+            ),
+          );
+
+      await Future.wait([fixture.openItemChat(), openSecondItemChat()]);
+      await Future.wait([fixture.openItemChat(), openSecondItemChat()]);
+
+      expect(fixture.messages, hasLength(2));
+      expect(
+        fixture.messages.map(
+          (message) => (message['conversation_id'], message['sender_id']),
+        ),
+        unorderedEquals([('room', 'customer'), ('room-b', 'customer-b')]),
+      );
+      for (final message in fixture.messages) {
+        expect(message['message'], contains('ฉันสนใจเช่าอุปกรณ์ของคุณ'));
+        expect(message['message'], contains('"itemId":1'));
+      }
+    },
+  );
+
   test('reopening the same item chat saves only one inquiry', () async {
     final fixture = _ChatFixture();
     addTearDown(fixture.client.dispose);
