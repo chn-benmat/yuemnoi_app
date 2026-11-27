@@ -222,16 +222,13 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       );
 
       final chatDataSource = ChatRemoteDataSource();
-      String? initialMessageId;
-      try {
-        initialMessageId = await chatDataSource.sendItemInquiryIfNeeded(
-          conversationId: conversation.id,
-          inquiry: inquiryData,
-          imageUrl: firstImageUrl.isNotEmpty ? firstImageUrl : null,
-          onlyIfPickupDeadlineExpired:
-              item.isRentalOccupied || item.isRentalQueueHeld,
-        );
-      } catch (_) {}
+      final initialMessageId = await chatDataSource.sendItemInquiryIfNeeded(
+        conversationId: conversation.id,
+        inquiry: inquiryData,
+        imageUrl: firstImageUrl.isNotEmpty ? firstImageUrl : null,
+        onlyIfPickupDeadlineExpired:
+            item.isRentalOccupied || item.isRentalQueueHeld,
+      );
 
       if (mounted) {
         setState(() => _isChatLoading = false);

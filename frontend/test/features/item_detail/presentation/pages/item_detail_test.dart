@@ -334,9 +334,7 @@ void main() {
         await pumpDetail(tester, isOwner: isOwner, longContent: true);
 
         final location = find.text(
-          isOwner
-              ? 'หน้ามหาวิทยาลัยบริเวณประตูทางเข้าฝั่งสถานีรถไฟฟ้า\nกรุงเทพมหานคร'
-              : 'หน้ามหาวิทยาลัยบริเวณประตูทางเข้าฝั่งสถานีรถไฟฟ้า',
+          'หน้ามหาวิทยาลัยบริเวณประตูทางเข้าฝั่งสถานีรถไฟฟ้า',
         );
         await tester.ensureVisible(location);
         await tester.pumpAndSettle();

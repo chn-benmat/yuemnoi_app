@@ -677,9 +677,16 @@ class _ChatDetailViewState extends State<_ChatDetailView>
             case BookingRequestData(
               isCustomerRequest: true,
               rentalQueueMessageId: null,
-              status: 'pending',
+              :final status,
               item: BookingItemInfo(:final id),
-            ) when !state.failedMessageIds.contains(message.id))
+            )
+            when const {
+                  'pending',
+                  'cancelled',
+                  'expired',
+                  'rejected',
+                }.contains(status) &&
+                !state.failedMessageIds.contains(message.id))
           id,
       for (final message in state.messages)
         if (message.isMine && !state.failedMessageIds.contains(message.id))
@@ -1236,11 +1243,12 @@ class _ChatDetailViewState extends State<_ChatDetailView>
                             isUnqueuedCustomerRequest &&
                             item.message.isMine &&
                             _canRequestRentalQueueForItem(booking.item.id);
+                        final customerRequestAvailabilityPending =
+                            isUnqueuedCustomerRequest &&
+                            !_hasRentalAvailability(booking.item.id);
                         final customerRequestBlockedByRental =
                             isUnqueuedCustomerRequest &&
                             (_rentalAvailability[booking.item.id] == false ||
-                                (booking.status == 'pending' &&
-                                    !_hasRentalAvailability(booking.item.id)) ||
                                 canRequestQueueForItem);
                         final isLatestCustomerRequest =
                             isUnqueuedCustomerRequest &&
@@ -1343,6 +1351,8 @@ class _ChatDetailViewState extends State<_ChatDetailView>
                                     : null,
                                 customerRequestBlockedByRental:
                                     customerRequestBlockedByRental,
+                                customerRequestAvailabilityPending:
+                                    customerRequestAvailabilityPending,
                                 onRequestRentalQueue:
                                     !_conversation.isOtherUserUnavailable &&
                                         isLatestCustomerRequest &&

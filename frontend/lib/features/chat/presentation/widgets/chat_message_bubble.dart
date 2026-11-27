@@ -40,6 +40,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.onSendBookingRequest,
     this.onRetryCustomerRequest,
     this.customerRequestBlockedByRental = false,
+    this.customerRequestAvailabilityPending = false,
     this.onRequestRentalQueue,
     this.defaultItemId,
     this.onQueueAction,
@@ -70,6 +71,7 @@ class ChatMessageBubble extends StatelessWidget {
   final void Function(ItemInquiryData)? onSendBookingRequest;
   final VoidCallback? onRetryCustomerRequest;
   final bool customerRequestBlockedByRental;
+  final bool customerRequestAvailabilityPending;
   final VoidCallback? onRequestRentalQueue;
   final int? defaultItemId;
   final Future<void> Function(String action)? onQueueAction;
@@ -142,6 +144,8 @@ class ChatMessageBubble extends StatelessWidget {
               isReturnCompleted: isReturnCompleted,
               onRetryCustomerRequest: onRetryCustomerRequest,
               customerRequestBlockedByRental: customerRequestBlockedByRental,
+              customerRequestAvailabilityPending:
+                  customerRequestAvailabilityPending,
               onRequestRentalQueue: onRequestRentalQueue,
             ),
           ),

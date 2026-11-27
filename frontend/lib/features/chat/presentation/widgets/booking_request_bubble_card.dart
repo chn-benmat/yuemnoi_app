@@ -26,6 +26,7 @@ class BookingRequestBubbleCard extends StatefulWidget {
     this.onTap,
     this.onRetryCustomerRequest,
     this.customerRequestBlockedByRental = false,
+    this.customerRequestAvailabilityPending = false,
     this.onRequestRentalQueue,
   });
 
@@ -39,6 +40,7 @@ class BookingRequestBubbleCard extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onRetryCustomerRequest;
   final bool customerRequestBlockedByRental;
+  final bool customerRequestAvailabilityPending;
   final VoidCallback? onRequestRentalQueue;
 
   @override
@@ -62,8 +64,12 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   String? get _sharedStatus =>
       widget.bookingData.status ?? widget.initialStatus;
 
+  bool get _hasSharedCancellation =>
+      _sharedStatus == 'cancelled' && _rentalStatus == 'cancelled';
+
   bool get _shouldCheckInitialStatus =>
       _rentalStatus != 'completed' &&
+      !_hasSharedCancellation &&
       ((_bookingId ?? 0) > 0 || _isConfirmed) &&
       SupabaseConfig.isInitialized &&
       SupabaseConfig.client.auth.currentUser != null;
@@ -133,6 +139,12 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
       }.contains(status);
     }
     _bookingId = widget.bookingData.bookingId ?? _bookingId;
+    if (_hasSharedCancellation) {
+      _isCheckingBookingStatus = false;
+      _bookingStatusUnavailable = false;
+      _pendingBookingAction = null;
+      _countdownTimer?.cancel();
+    }
   }
 
   @override
@@ -262,6 +274,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   Future<void> _checkConfirmedStatus() async {
     final message = widget.message;
     final revision = ++_statusCheckRevision;
+    // สถานะยกเลิกที่มากับข้อความใช้แสดงปุ่มได้ทันที ส่วนการเปิดฟอร์มเช่าเช็กอุปกรณ์อีกครั้ง
+    if (_hasSharedCancellation) return;
+
     bool isCurrentCheck() => mounted && revision == _statusCheckRevision;
     // 1. ตรวจสอบสถานะการยืนยันจาก Local Tracker ทันที (เฉพาะ messageId)
     final isLocallyConfirmed = await BookingConfirmationTracker.isConfirmed(
@@ -486,6 +501,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   bool get _isPendingCustomerRequest =>
       widget.bookingData.isCustomerRequest &&
       !widget.customerRequestBlockedByRental &&
+      !widget.customerRequestAvailabilityPending &&
       _rentalStatus == 'pending' &&
       (_bookingId ?? 0) > 0 &&
       !widget.bookingData.hasCustomerRequestStartPassed;
@@ -1129,7 +1145,8 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                 child: const Text('ชวนเข้าคิวเช่าต่อ'),
               )
             else if (canUseBookingActions &&
-                !widget.customerRequestBlockedByRental &&
+                (!widget.customerRequestBlockedByRental ||
+                    widget.customerRequestAvailabilityPending) &&
                 widget.onRetryCustomerRequest != null &&
                 (const {
                       'cancelled',
@@ -1139,7 +1156,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     (_rentalStatus == 'pending' &&
                         widget.bookingData.hasCustomerRequestStartPassed)))
               TextButton(
-                onPressed: widget.onRetryCustomerRequest,
+                onPressed: widget.customerRequestAvailabilityPending
+                    ? null
+                    : widget.onRetryCustomerRequest,
                 child: const Text('ส่งคำขอเช่าใหม่'),
               ),
             if (bookingStatusMessage != null && _bookingStatusUnavailable) ...[

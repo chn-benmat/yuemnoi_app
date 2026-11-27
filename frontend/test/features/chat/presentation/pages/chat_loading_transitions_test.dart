@@ -88,8 +88,8 @@ void main() {
     return stream;
   }
 
-  ChatMessage message(String body) => ChatMessage(
-    id: 'message-id',
+  ChatMessage message(String body, {String id = 'message-id'}) => ChatMessage(
+    id: id,
     conversationId: 'room',
     senderId: 'viewer',
     message: body,
@@ -194,6 +194,60 @@ void main() {
     expect(edit, findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  for (final occupied in [false, true]) {
+    testWidgets(
+      'cancelled request keeps its retry row while checking eligibility (occupied: $occupied)',
+      (tester) async {
+        final availability = Completer<Set<int>>();
+        final queue = Completer<List<({int id, String name})>>();
+        final stream = await openChat(
+          tester,
+          availability: (_) => availability.future,
+          listQueue: () => queue.future,
+        );
+        final request = BookingRequestData(
+          item: BookingItemInfo.defaultMockItem.copyWith(
+            id: 1,
+            title: 'โต๊ะ',
+            imageUrl: '',
+          ),
+          startDate: DateTime(2099, 11, 27),
+          endDate: DateTime(2099, 11, 28),
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 9, minute: 0),
+          location: 'จุดนัดรับ',
+          bookingId: 36,
+          status: 'cancelled',
+          isCustomerRequest: true,
+        );
+        stream.add([
+          message(inquiry.toChatMessagePayload(), id: 'inquiry'),
+          message(request.toChatMessagePayload()),
+        ]);
+        await tester.pumpAndSettle();
+        final retry = find.widgetWithText(TextButton, 'ส่งคำขอเช่าใหม่');
+        expect(tester.widget<TextButton>(retry).enabled, isFalse);
+        final retrySize = tester.getSize(retry);
+
+        availability.complete(occupied ? {1} : {});
+        await tester.pumpAndSettle();
+        expect(tester.widget<TextButton>(retry).enabled, isFalse);
+        expect(tester.getSize(retry), retrySize);
+
+        queue.complete(occupied ? [(id: 1, name: 'โต๊ะ')] : []);
+        await tester.pumpAndSettle();
+        if (occupied) {
+          expect(retry, findsNothing);
+          expect(find.text('ชวนเข้าคิวเช่าต่อ'), findsOneWidget);
+        } else {
+          expect(tester.widget<TextButton>(retry).enabled, isTrue);
+          expect(tester.getSize(retry), retrySize);
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
 
   testWidgets(
     'queue stays visible after a refresh failure until eligibility changes',

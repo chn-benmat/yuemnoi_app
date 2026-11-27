@@ -86,6 +86,7 @@ void main() {
     WidgetTester tester, {
     String? status,
     bool legacy = false,
+    VoidCallback? onRetryCustomerRequest,
   }) async {
     final bookingData = BookingRequestData(
       item: const BookingItemInfo(
@@ -113,7 +114,7 @@ void main() {
       senderId: 'renter',
       message: bookingData.toChatMessagePayload(),
       createdAt: DateTime(2099, 11, 26),
-      isMine: false,
+      isMine: onRetryCustomerRequest != null,
       isRead: true,
     );
 
@@ -124,7 +125,8 @@ void main() {
             child: BookingRequestBubbleCard(
               message: message,
               bookingData: bookingData,
-              isOwner: true,
+              isOwner: onRetryCustomerRequest == null,
+              onRetryCustomerRequest: onRetryCustomerRequest,
             ),
           ),
         ),
@@ -226,27 +228,52 @@ void main() {
     });
   }
 
-  testWidgets('a cancelled booking keeps its status visible during refresh', (
-    tester,
-  ) async {
-    final response = Completer<Map<String, Object>>();
-    bookingResponse = response;
-    addTearDown(() {
-      if (!response.isCompleted) {
-        response.complete({'id': 36, 'status': 'cancelled'});
-      }
-      bookingResponse = null;
-    });
+  for (final startsPending in [false, true]) {
+    testWidgets(
+      'retry appears with the cancellation status (starts pending: $startsPending)',
+      (tester) async {
+        final response = Completer<Map<String, Object>>();
+        bookingResponse = response;
+        final responseStatus = startsPending ? 'pending' : 'cancelled';
+        addTearDown(() {
+          if (!response.isCompleted) {
+            response.complete({'id': 36, 'status': responseStatus});
+          }
+          bookingResponse = null;
+        });
+        var retries = 0;
+        void onRetry() => retries++;
+        final retry = find.widgetWithText(TextButton, 'ส่งคำขอเช่าใหม่');
+        final cancelled = find.text('ยกเลิกการเช่าแล้ว');
+        if (startsPending) {
+          await pumpCard(
+            tester,
+            status: 'pending',
+            onRetryCustomerRequest: onRetry,
+          );
+          await tester.pump();
+          expect(retry, findsNothing);
+        }
 
-    await pumpCard(tester, status: 'cancelled');
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('ยกเลิกการเช่าแล้ว'), findsOneWidget);
+        await pumpCard(
+          tester,
+          status: 'cancelled',
+          onRetryCustomerRequest: onRetry,
+        );
+        expect(cancelled, findsOneWidget);
+        expect(retry, findsOneWidget);
+        await tester.ensureVisible(retry);
+        await tester.tap(retry);
+        expect(retries, 1);
 
-    response.complete({'id': 36, 'status': 'cancelled'});
-    await tester.pumpAndSettle();
-    expect(find.text('ยกเลิกการเช่าแล้ว'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+        response.complete({'id': 36, 'status': responseStatus});
+        await tester.pumpAndSettle();
+        expect(cancelled, findsOneWidget);
+        expect(retry, findsOneWidget);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
 
   testWidgets('a stale chat update does not replace a completed status', (
     tester,
