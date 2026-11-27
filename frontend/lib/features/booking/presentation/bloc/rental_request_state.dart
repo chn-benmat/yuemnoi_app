@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../identity/domain/rental_verification.dart';
+
 enum RentalRequestStatus {
   initial,
   submitting,
@@ -15,13 +17,21 @@ class RentalRequestState extends Equatable {
     this.rentalId,
     this.rentalStatus,
     this.errorMessage,
+    this.verification,
   });
 
   final RentalRequestStatus status;
   final int? rentalId;
   final String? rentalStatus;
   final String? errorMessage;
+  final RentalVerification? verification;
 
   @override
-  List<Object?> get props => [status, rentalId, rentalStatus, errorMessage];
+  List<Object?> get props => [
+    status,
+    rentalId,
+    rentalStatus,
+    errorMessage,
+    verification,
+  ];
 }

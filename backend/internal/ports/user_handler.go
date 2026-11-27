@@ -181,6 +181,8 @@ func (h *UserHandler) Register(c fiber.Ctx) error {
 		switch {
 		case errors.Is(err, domain.ErrRegistrationEmailTaken):
 			return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "อีเมลนี้ถูกใช้งานในระบบแล้ว โปรดใช้อีเมลอื่น"})
+		case errors.Is(err, domain.ErrRegistrationEmailDomainUndeliverable):
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "โดเมนนี้รับอีเมลไม่ได้ กรุณาตรวจสอบส่วนหลัง @"})
 		case errors.Is(err, domain.ErrRegistrationInputInvalid):
 			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาตรวจสอบอีเมลและรหัสผ่าน"})
 		case errors.Is(err, domain.ErrRegistrationPasswordWeak):

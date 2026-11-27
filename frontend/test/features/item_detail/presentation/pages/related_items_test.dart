@@ -35,6 +35,9 @@ void main() {
       category: 'กล้อง',
       price: 1200,
       rentalType: 'รายวัน',
+      locationName: 'สยาม',
+      paidBookingCount: 4,
+      isRentalOccupied: true,
     ),
     RelatedItem(
       id: 9,
@@ -42,6 +45,13 @@ void main() {
       category: 'กล้อง',
       price: 1500,
       rentalType: 'รายชั่วโมง',
+    ),
+    RelatedItem(
+      id: 10,
+      name: 'Nikon Z50',
+      category: 'กล้อง',
+      price: 900,
+      rentalType: 'รายวัน',
     ),
   ];
   const item = ItemDetail(
@@ -122,8 +132,8 @@ void main() {
       await tester.pumpAndSettle();
       double top(String text) => tester.getTopLeft(find.text(text)).dy;
       expect(top('รายละเอียดสินค้า'), lessThan(top('ปล่อยเช่าโดย')));
-      expect(top('ปล่อยเช่าโดย'), lessThan(top('รีวิวล่าสุด')));
-      expect(top('รีวิวล่าสุด'), lessThan(top('สินค้าใกล้เคียง')));
+      expect(top('ปล่อยเช่าโดย'), lessThan(top('รีวิวจากคนที่เช่า')));
+      expect(top('รีวิวจากคนที่เช่า'), lessThan(top('สินค้าใกล้เคียง')));
       await tester.ensureVisible(find.byKey(const ValueKey('related-item-8')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('related-item-8')));
@@ -131,6 +141,40 @@ void main() {
       expect(find.text('สินค้า 8'), findsOneWidget);
     },
   );
+
+  testWidgets('wraps related items into two columns with an odd count', (
+    tester,
+  ) async {
+    await pumpDetail(tester, _RelatedRepository(() async => related));
+    await tester.pumpAndSettle();
+
+    final first = find.byKey(const ValueKey('related-item-8'));
+    final second = find.byKey(const ValueKey('related-item-9'));
+    final third = find.byKey(const ValueKey('related-item-10'));
+    expect(tester.getTopLeft(first).dy, tester.getTopLeft(second).dy);
+    expect(tester.getTopLeft(first).dx, lessThan(tester.getTopLeft(second).dx));
+    expect(tester.getTopLeft(third).dx, tester.getTopLeft(first).dx);
+    expect(
+      tester.getTopLeft(third).dy,
+      greaterThanOrEqualTo(tester.getBottomLeft(first).dy),
+    );
+    expect(tester.getSize(third).width, tester.getSize(first).width);
+  });
+
+  testWidgets('shows the same rental information as the home cards', (
+    tester,
+  ) async {
+    await pumpDetail(tester, _RelatedRepository(() async => related));
+    await tester.pumpAndSettle();
+
+    final card = find.byKey(const ValueKey('related-item-8'));
+    for (final text in ['฿1,200', 'เช่าแล้ว 4 ครั้ง', 'กำลังถูกเช่า', 'สยาม']) {
+      expect(
+        find.descendant(of: card, matching: find.text(text)),
+        findsOneWidget,
+      );
+    }
+  });
 
   testWidgets('keeps details and chat available while recommendations load', (
     tester,

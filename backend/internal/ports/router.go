@@ -41,7 +41,6 @@ func SetupRouterWithOperations(
 	router.Use(corsMiddleware())
 	router.Use(verifyAppSecret(appSecretKey))
 	appGateway := appTokenVerifier{authGateway}
-	router.Use(operationsBusinessGuard(operations, appGateway))
 
 	// Health check สำหรับ Docker และระบบเฝ้าระวัง โดยไม่เปิดเผยข้อมูลภายใน
 	router.Get("/health", func(c fiber.Ctx) error {
@@ -102,7 +101,7 @@ func SetupRouterWithOperations(
 			// GET /api/items
 			items.Get("", itemController.GetAllItems)
 			// POST /api/items
-			items.Post("", itemController.CreateItem)
+			items.Post("", operationsBusinessGuard(operations, appGateway, true), itemController.CreateItem)
 			items.Get("/:id/auto-reply", itemController.GetAutoReply)
 			items.Put("/:id/auto-reply", itemController.SaveAutoReply)
 			// GET /api/items/:id
@@ -117,7 +116,7 @@ func SetupRouterWithOperations(
 		rentals := api.Group("/rentals")
 		{
 			rentals.Get("/income", rentalController.RentalIncome)
-			rentals.Post("", rentalController.CreateRentalOrder)
+			rentals.Post("", operationsBusinessGuard(operations, appGateway, false), rentalController.CreateRentalOrder)
 			rentals.Post("/queue", rentalController.RentalQueue)
 			rentals.Post("/:id/confirm", rentalController.ConfirmRentalOrder)
 			rentals.Get("/:id/handover-payment", rentalController.GetHandoverPayment)
@@ -267,7 +266,7 @@ func verifyAppSecret(expectedSecret string) fiber.Handler {
 	}
 }
 
-// SetupRouter คง constructor เดิมสำหรับบริการที่ยังไม่เปิดใช้งานระบบเจ้าหน้าที่
+// SetupRouter ใช้สำหรับเส้นทางที่ดำเนินการได้โดยไม่ต้องเปิดระบบยืนยันตัวตน
 func SetupRouter(itemRepo domain.ItemRepository, authGateway domain.AuthGateway, contactRepository domain.ConversationContactRepository, rentalRepository domain.RentalRepository, aiGateway domain.AIChatbotGateway, appSecretKey string, options ...fiber.Config) *fiber.App {
 	return SetupRouterWithOperations(domain.OperationsOptions{}, itemRepo, authGateway, contactRepository, rentalRepository, aiGateway, appSecretKey, options...)
 }

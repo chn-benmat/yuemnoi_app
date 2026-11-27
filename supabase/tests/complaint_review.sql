@@ -19,8 +19,12 @@ declare
   verified jsonb := '{"status":"resolved","outcome":"confirmed","reason":"แก้ราคาในประกาศ"}';
 begin
   insert into auth.users(id, email) select id, id || '@example.invalid' from unnest(array[staff_id, owner_id, reporter]) id;
+  update profiles.profile_tb set phone = '+66812345678' where user_id = owner_id;
+  update profiles.profile_tb set phone = '+66823456789' where user_id = reporter;
   insert into identity_private.identity_profiles(user_id, status, legal_name, masked_id, citizen_hmac, is_minor)
-  values (owner_id, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(owner_id::text) || md5(reporter::text), false);
+  values
+    (owner_id, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(owner_id::text) || md5(reporter::text), false),
+    (reporter, 'approved', 'ผู้เช่าทดสอบ', '*********4321', md5(reporter::text) || md5(owner_id::text), false);
   insert into ops_private.staff_accounts(user_id) values (staff_id);
   insert into public.item_tb(user_id, item_name, description, price, status, type,
     pickup_location, pickup_address, pickup_note, pickup_latitude, pickup_longitude)

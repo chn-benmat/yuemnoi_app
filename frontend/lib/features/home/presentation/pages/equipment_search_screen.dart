@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/recommendation_location_service.dart';
+import '../../../../core/widgets/product_card_grid.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../data/repositories/home_repository_impl.dart';
 import '../../domain/entities/feed_category.dart';
@@ -13,7 +14,6 @@ import '../../domain/repositories/home_repository.dart';
 import '../../domain/usecases/rank_items_by_distance.dart';
 import '../widgets/category_filter_sheet.dart';
 import '../widgets/category_filter_chips.dart';
-import '../widgets/product_card_grid.dart';
 import '../widgets/shopee_product_card.dart';
 
 /// หน้าค้นหาอุปกรณ์สไตล์ Shopee ผสาน Swiss Style / Clean SaaS

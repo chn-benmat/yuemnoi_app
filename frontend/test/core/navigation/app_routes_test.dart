@@ -7,10 +7,14 @@ import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/features/auth/presentation/pages/login.dart';
 import 'package:frontend/features/chatbot/presentation/pages/chat_bot.dart';
 import 'package:frontend/features/home/presentation/pages/home.dart';
+import 'package:frontend/features/identity/domain/identity_repository.dart';
 import 'package:frontend/features/profile/presentation/pages/account/promptpay_account_screen.dart';
 import 'package:frontend/features/profile/presentation/pages/account/setting_account_screen.dart';
 import 'package:frontend/features/rental_item/presentation/pages/add_rental_item.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mocktail/mocktail.dart';
+
+class _MockIdentityRepository extends Mock implements IdentityRepository {}
 
 void main() {
   setUpAll(() {
@@ -80,14 +84,40 @@ void main() {
     expect(find.byType(ChatBotScreen), findsOneWidget);
   });
 
-  testWidgets('home add button opens the add rental item screen', (
+  testWidgets('adding an item requires the approved card and saved phone', (
     tester,
   ) async {
+    AuthSession.saveAccessToken('user-token');
+    addTearDown(AuthSession.clear);
+    final repository = _MockIdentityRepository();
+    var phoneSaved = false;
+    when(repository.status).thenAnswer(
+      (_) async => IdentityStatus({
+        'rental_verification': {
+          'id_card_approved': true,
+          'contact_phone_saved': phoneSaved,
+          'identity_pending': false,
+        },
+      }),
+    );
     await tester.pumpWidget(const YuemnoiApp(initialRoute: AppRoutes.home));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    AppRoutes.openAddRentalItem(tester.element(find.byType(HomeScreen)));
+    final context = tester.element(find.byType(HomeScreen));
+    AppRoutes.openAddRentalItem(context, identityRepository: repository);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('ยืนยันข้อมูลก่อนเพิ่มสินค้า'), findsOneWidget);
+    expect(find.text('เพิ่มเบอร์โทรศัพท์'), findsOneWidget);
+    expect(find.text('ยืนยันบัตรประชาชน'), findsNothing);
+    expect(find.byType(AddRentalItemScreen), findsNothing);
+    await tester.tap(find.text('ปิด'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    phoneSaved = true;
+    AppRoutes.openAddRentalItem(context, identityRepository: repository);
     await tester.pumpAndSettle();
 
     expect(find.byType(AddRentalItemScreen), findsOneWidget);

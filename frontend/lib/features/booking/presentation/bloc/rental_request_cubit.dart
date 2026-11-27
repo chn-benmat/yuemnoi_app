@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../identity/domain/rental_verification.dart';
 import '../../domain/entities/rental_request.dart';
 import '../../domain/repositories/rental_request_repository.dart';
 import '../../domain/usecases/confirm_rental_request_usecase.dart';
@@ -28,6 +29,7 @@ class RentalRequestCubit extends Cubit<RentalRequestState> {
     emit(const RentalRequestState(status: RentalRequestStatus.submitting));
     try {
       final result = await _submitRentalRequest.execute(draft);
+      if (isClosed) return false;
       emit(
         RentalRequestState(
           status: RentalRequestStatus.success,
@@ -36,7 +38,17 @@ class RentalRequestCubit extends Cubit<RentalRequestState> {
         ),
       );
       return true;
+    } on RentalVerificationRequired catch (error) {
+      if (isClosed) return false;
+      emit(
+        RentalRequestState(
+          status: RentalRequestStatus.failure,
+          verification: error.verification,
+        ),
+      );
+      return false;
     } on RentalRequestException catch (error) {
+      if (isClosed) return false;
       emit(
         RentalRequestState(
           status: RentalRequestStatus.failure,
@@ -45,6 +57,7 @@ class RentalRequestCubit extends Cubit<RentalRequestState> {
       );
       return false;
     } catch (_) {
+      if (isClosed) return false;
       emit(
         const RentalRequestState(
           status: RentalRequestStatus.failure,

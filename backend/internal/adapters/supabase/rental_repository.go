@@ -79,6 +79,7 @@ func (r *supabaseRentalRepository) UpdateRentalStatus(
 }
 
 func mapRentalRepositoryError(operation string, err error) error {
+	err = mapRentalVerificationError(err)
 	var requestErr *postgrest.RequestError
 	if !errors.As(err, &requestErr) {
 		return fmt.Errorf("%s: %w", operation, err)

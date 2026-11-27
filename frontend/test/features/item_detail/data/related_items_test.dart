@@ -77,6 +77,29 @@ void main() {
   );
 
   test(
+    'reads the real location, rental count, and occupancy from the feed',
+    () async {
+      respond([
+        {
+          ...row(8),
+          'pickup_location': '  สยาม  ',
+          'paid_booking_count': 4,
+          'is_rental_occupied': true,
+        },
+        row(9),
+      ]);
+
+      final related = await useCase.execute(item);
+      expect(related.first.locationName, 'สยาม');
+      expect(related.first.paidBookingCount, 4);
+      expect(related.first.isRentalOccupied, isTrue);
+      expect(related.last.locationName, 'ไม่ระบุตำแหน่ง');
+      expect(related.last.paidBookingCount, 0);
+      expect(related.last.isRentalOccupied, isFalse);
+    },
+  );
+
+  test(
     'missing images retain the real listing with an empty image URL',
     () async {
       respond([

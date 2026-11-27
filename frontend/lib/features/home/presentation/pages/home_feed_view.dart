@@ -6,6 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/recommendation_location_service.dart';
+import '../../../../core/widgets/product_card_grid.dart';
+import '../../../../core/widgets/product_listing_card.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../domain/entities/feed_item.dart';
 import '../../domain/usecases/rank_items_by_distance.dart';
@@ -15,7 +17,6 @@ import '../bloc/home_state.dart';
 import '../widgets/category_filter_chips.dart';
 import '../widgets/home_empty_state.dart';
 import '../widgets/home_search_bar.dart';
-import '../widgets/product_card_grid.dart';
 import '../widgets/shopee_product_card.dart';
 
 /// หน้า Home Feed หลักของแอป Yuemnoi (Shopee 2-Column Grid)
@@ -422,52 +423,11 @@ class _HomeLoadingView extends StatelessWidget {
             slivers: [
               ProductCardGrid(
                 itemCount: 6,
-                itemBuilder: (context, index) => const _ProductCardSkeleton(),
+                itemBuilder: (context, index) => const ProductCardSkeleton(),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ProductCardSkeleton extends StatelessWidget {
-  const _ProductCardSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: SkeletonBox(
-              width: double.infinity,
-              height: double.infinity,
-              borderRadius: 0,
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(10, 8, 10, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SkeletonBox(width: 116, height: 16, borderRadius: 4),
-                SizedBox(height: 6),
-                SkeletonBox(width: 76, height: 20, borderRadius: 4),
-                SizedBox(height: 4),
-                SkeletonBox(width: 96, height: 14, borderRadius: 4),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

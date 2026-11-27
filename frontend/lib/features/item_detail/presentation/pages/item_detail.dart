@@ -16,6 +16,8 @@ import '../../../../core/network/supabase_client.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/utils/auth_guard.dart';
 import '../../../../core/navigation/item_deep_link.dart';
+import '../../../../core/widgets/product_card_grid.dart';
+import '../../../../core/widgets/product_listing_card.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../../chat/data/datasources/chat_remote_data_source.dart';
 import '../../../chat/data/repositories/chat_repository_impl.dart';
@@ -1469,176 +1471,32 @@ class _RelatedItemsSection extends StatelessWidget {
             ],
           ),
         )
+      else if (status == RelatedItemsStatus.loading)
+        SkeletonShimmer(
+          child: ProductCardGrid.box(
+            itemCount: 2,
+            itemBuilder: (_, _) => const ProductCardSkeleton(),
+          ),
+        )
       else
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final width = (constraints.maxWidth * .54).clamp(144.0, 180.0);
-            final scaler = MediaQuery.textScalerOf(context);
-            final nameHeight = scaler.scale(13) * 1.4 * 2;
-            final priceHeight = scaler.scale(17) * 1.4;
-            final height = width + nameHeight + priceHeight + 36;
-            if (status == RelatedItemsStatus.loading) {
-              return SkeletonShimmer(
-                child: SizedBox(
-                  height: height,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: 2,
-                    separatorBuilder: (_, _) => const SizedBox(width: 12),
-                    itemBuilder: (_, _) => SizedBox(
-                      width: width,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SkeletonBox(height: width, borderRadius: 16),
-                          const SizedBox(height: 12),
-                          const SkeletonBox(
-                            width: 120,
-                            height: 14,
-                            borderRadius: 6,
-                          ),
-                          const SizedBox(height: 8),
-                          const SkeletonBox(
-                            width: 80,
-                            height: 18,
-                            borderRadius: 6,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }
-            return SizedBox(
-              height: height,
-              child: ListView.separated(
-                key: const ValueKey('related-items-list'),
-                scrollDirection: Axis.horizontal,
-                itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return SizedBox(
-                    width: width,
-                    child: _RelatedItemCard(
-                      item: item,
-                      nameHeight: nameHeight,
-                      priceHeight: priceHeight,
-                    ),
-                  );
-                },
-              ),
+        ProductCardGrid.box(
+          key: const ValueKey('related-items-list'),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return ProductListingCard(
+              key: ValueKey('related-item-${item.id}'),
+              title: item.name,
+              imageUrl: item.imageUrl,
+              price: item.price,
+              locationName: item.locationName,
+              paidBookingCount: item.paidBookingCount,
+              isRentalOccupied: item.isRentalOccupied,
+              onTap: () => AppRoutes.openItemDetail(context, itemId: item.id),
             );
           },
         ),
     ],
-  );
-}
-
-class _RelatedItemCard extends StatelessWidget {
-  const _RelatedItemCard({
-    required this.item,
-    required this.nameHeight,
-    required this.priceHeight,
-  });
-  final RelatedItem item;
-  final double nameHeight;
-  final double priceHeight;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    key: ValueKey('related-item-${item.id}'),
-    color: _DetailStyle.surface,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-      side: const BorderSide(color: _DetailStyle.rule),
-    ),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: () => AppRoutes.openItemDetail(context, itemId: item.id),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: item.imageUrl.isEmpty
-                ? const ColoredBox(
-                    color: _DetailStyle.softSurface,
-                    child: Icon(
-                      Icons.image_outlined,
-                      color: _DetailStyle.secondary,
-                      size: 32,
-                    ),
-                  )
-                : CachedNetworkImage(
-                    imageUrl: item.imageUrl,
-                    fit: BoxFit.contain,
-                    placeholder: (_, _) =>
-                        const ColoredBox(color: _DetailStyle.softSurface),
-                    errorWidget: (_, _, _) => const Icon(
-                      Icons.image_outlined,
-                      color: _DetailStyle.secondary,
-                      size: 32,
-                    ),
-                  ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  height: nameHeight,
-                  child: Text(
-                    item.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _DetailStyle.ink,
-                      fontSize: 13,
-                      height: 1.4,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: priceHeight,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          '฿${NumberFormat.decimalPattern().format(item.price)}',
-                          style: const TextStyle(
-                            color: _DetailStyle.accent,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '/ ${item.unitLabel}',
-                          style: const TextStyle(
-                            color: _DetailStyle.secondary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
   );
 }
 

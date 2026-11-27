@@ -1,5 +1,6 @@
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
+import '../../../identity/domain/rental_verification.dart';
 import '../../domain/entities/rental_request.dart';
 
 class RentalRequestRemoteException implements Exception {
@@ -39,6 +40,8 @@ class RentalRequestRemoteDataSource {
       );
 
       if (response.statusCode != 201) {
+        final blocked = RentalVerificationRequired.fromJson(response.data);
+        if (blocked != null) throw blocked;
         throw RentalRequestRemoteException(_serverMessage(response));
       }
       final data = _map(response.data);

@@ -23,10 +23,15 @@ func (offerConfirmationVerifier) UserIDFromToken(context.Context, string) (strin
 	return "renter", nil
 }
 
-func TestOccupiedItemReturnsConflict(t *testing.T) {
-	for _, failure := range []string{
-		`{"code":"23P01","message":"item_rental_occupied"}`,
-		`{"code":"23505","message":"duplicate key value violates unique constraint \"booking_tb_one_open_rental_per_item\""}`,
+func TestRentalCreationMapsDatabaseRejections(t *testing.T) {
+	for _, tc := range []struct {
+		failure, code string
+		status        int
+		verification  *domain.RentalVerification
+	}{
+		{`{"code":"23P01","message":"item_rental_occupied"}`, "item_rental_occupied", http.StatusConflict, nil},
+		{`{"code":"23505","message":"duplicate key value violates unique constraint \"booking_tb_one_open_rental_per_item\""}`, "item_rental_occupied", http.StatusConflict, nil},
+		{`{"code":"P0001","message":"rental_verification_required","details":"{\"id_card_approved\":false,\"contact_phone_saved\":true,\"identity_pending\":true}"}`, "rental_verification_required", http.StatusForbidden, &domain.RentalVerification{ContactPhoneSaved: true, IdentityPending: true}},
 	} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/rest/v1/rpc/create_rental_request" {
@@ -34,7 +39,7 @@ func TestOccupiedItemReturnsConflict(t *testing.T) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusConflict)
-			fmt.Fprint(w, failure)
+			fmt.Fprint(w, tc.failure)
 		}))
 		defer server.Close()
 
@@ -51,11 +56,17 @@ func TestOccupiedItemReturnsConflict(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var body map[string]string
+		var body struct {
+			Code         string                     `json:"code"`
+			Verification *domain.RentalVerification `json:"rental_verification"`
+		}
 		err = json.NewDecoder(response.Body).Decode(&body)
 		response.Body.Close()
-		if err != nil || response.StatusCode != http.StatusConflict || body["code"] != "item_rental_occupied" {
+		if err != nil || response.StatusCode != tc.status || body.Code != tc.code {
 			t.Fatalf("status=%d body=%v err=%v", response.StatusCode, body, err)
+		}
+		if tc.verification != nil && (body.Verification == nil || *body.Verification != *tc.verification) {
+			t.Fatalf("verification=%+v, want %+v", body.Verification, tc.verification)
 		}
 	}
 }
