@@ -957,14 +957,27 @@ class ChatRemoteDataSource {
     required bool onlyIfPickupDeadlineExpired,
     String? imageUrl,
   }) async {
-    final bookings = await _supabaseClient
-        .from('booking_tb')
-        .select('id,status,pickup_deadline_expired')
-        .eq('user_id', userId)
-        .eq('item_id', inquiry.itemId!)
-        .order('created_at', ascending: false)
-        .order('id', ascending: false)
-        .limit(1);
+    Future<List<Map<String, dynamic>>> fetchLatestBooking(String columns) =>
+        _supabaseClient
+            .from('booking_tb')
+            .select(columns)
+            .eq('user_id', userId)
+            .eq('item_id', inquiry.itemId!)
+            .order('created_at', ascending: false)
+            .order('id', ascending: false)
+            .limit(1);
+
+    List<Map<String, dynamic>> bookings;
+    try {
+      bookings = await fetchLatestBooking('id,status,pickup_deadline_expired');
+    } on PostgrestException catch (error) {
+      if (error.code != '42703' ||
+          !error.message.contains('pickup_deadline_expired')) {
+        rethrow;
+      }
+      // ฐานข้อมูลรุ่นเดิมยังใช้รายการเช่าล่าสุดเพื่อตรวจการส่งซ้ำได้
+      bookings = await fetchLatestBooking('id,status');
+    }
     final latestBooking = bookings.isEmpty ? null : bookings.first;
     final bookingId = latestBooking == null
         ? null

@@ -165,7 +165,9 @@ class RentalReturnRemoteDataSource {
         headers: _headers,
       ),
     );
-    return RentalReturnPenaltyReport.fromJson(result);
+    final report = RentalReturnPenaltyReport.fromJson(result);
+    if (report.damaged) ItemCatalogService.instance.notifyChanged();
+    return report;
   }
 
   Future<String> getPenaltyQr(int rentalId) async {

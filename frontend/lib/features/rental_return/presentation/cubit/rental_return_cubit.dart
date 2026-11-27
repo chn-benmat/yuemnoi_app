@@ -145,7 +145,7 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
   }
 
   /// ร้านค้าตรวจรับอุปกรณ์และยืนยันว่ารายการคืนเสร็จแล้ว
-  Future<void> confirmMerchantReceipt({bool pauseItem = false}) async {
+  Future<void> confirmMerchantReceipt() async {
     if (state.isRenter ||
         state.isSubmitting ||
         state.session.step == RentalReturnStep.completed) {
@@ -156,7 +156,6 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
     try {
       await _repository.confirmMerchantReceipt(
         rentalId: state.session.rentalId,
-        pauseItem: pauseItem,
       );
       if (isClosed) return;
       emit(

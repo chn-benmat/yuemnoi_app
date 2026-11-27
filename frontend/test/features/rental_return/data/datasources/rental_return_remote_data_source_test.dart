@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/network/api_client.dart';
+import 'package:frontend/core/services/item_catalog_service.dart';
 import 'package:frontend/features/rental_return/data/datasources/rental_return_remote_data_source.dart';
 import 'package:frontend/features/rental_return/data/repositories/rental_return_repository_impl.dart';
 import 'package:frontend/features/rental_return/domain/entities/rental_return_session.dart';
@@ -64,6 +65,45 @@ void main() {
         ),
       );
       await expectLater(source.confirmReceipt(73), throwsStateError);
+    },
+  );
+
+  test(
+    'saving a damage report refreshes the catalog even with a zero penalty',
+    () async {
+      when(
+        () => api.post(
+          '/api/rentals/73/return-penalty',
+          data: {'damaged': true, 'late': false, 'details': 'เลนส์แตก'},
+          headers: {'Authorization': 'Bearer session-token'},
+        ),
+      ).thenAnswer(
+        (_) async => const ApiResponse(
+          statusCode: 200,
+          data: {
+            'damaged': true,
+            'late': false,
+            'details': 'เลนส์แตก',
+            'amount_satang': 0,
+          },
+        ),
+      );
+      var catalogChanges = 0;
+      final subscription = ItemCatalogService.instance.changes.listen((_) {
+        catalogChanges++;
+      });
+      addTearDown(subscription.cancel);
+
+      final report = await source.savePenaltyReport(
+        rentalId: 73,
+        damaged: true,
+        late: false,
+        details: 'เลนส์แตก',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(report.amountSatang, 0);
+      expect(catalogChanges, 1);
     },
   );
 
