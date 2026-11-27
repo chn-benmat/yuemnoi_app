@@ -1532,13 +1532,16 @@ class _ChatDetailViewState extends State<_ChatDetailView>
           if (!_conversation.isOtherUserUnavailable && currentQueueItem != null)
             BlocBuilder<ChatDetailBloc, ChatDetailState>(
               builder: (context, state) {
-                final completedRentals = _completedRentals(state);
-                if (completedRentals.containsKey((true, currentQueueItem.id))) {
+                final rentalHistory = _rentalHistory(state);
+                if (rentalHistory.completed.containsKey((
+                  true,
+                  currentQueueItem.id,
+                ))) {
                   return const SizedBox.shrink();
                 }
                 final inquiryReplacements = _inquiryReplacements(
                   state,
-                  completedRentals: completedRentals,
+                  rentalHistory: rentalHistory,
                 );
                 final hasInquiry = state.messages.any(
                   (message) =>
@@ -1574,38 +1577,39 @@ class _ChatDetailViewState extends State<_ChatDetailView>
     );
   }
 
-  Map<(bool, int), ({String messageId, int? bookingId})> _completedRentals(
-    ChatDetailState state,
-  ) {
+  _RentalHistory _rentalHistory(ChatDetailState state) {
     final completed = <(bool, int), ({String messageId, int? bookingId})>{};
+    final retainedBookingIds = <int>{};
     for (final message in state.messages) {
       if (message.id.startsWith('temp_') ||
           state.failedMessageIds.contains(message.id)) {
         continue;
       }
       final booking = BookingRequestData.fromChatMessage(message.message);
-      if (booking == null ||
-          !_completedRentalStatuses.contains(booking.status)) {
-        continue;
-      }
+      if (booking == null) continue;
+      final bookingId =
+          booking.bookingId ??
+          BookingConfirmationTracker.getCachedBookingId(message.id);
+      if (bookingId != null) retainedBookingIds.add(bookingId);
+      if (!_completedRentalStatuses.contains(booking.status)) continue;
+
       // คำขอมาจากผู้เช่า ส่วนข้อเสนอแบบเดิมมาจากผู้ปล่อยเช่า
       final renterIsViewer = message.isMine == booking.isCustomerRequest;
       completed[(renterIsViewer, booking.item.id)] = (
         messageId: message.id,
-        bookingId:
-            booking.bookingId ??
-            BookingConfirmationTracker.getCachedBookingId(message.id),
+        bookingId: bookingId,
       );
     }
-    return completed;
+    return (completed: completed, retainedBookingIds: retainedBookingIds);
   }
 
   Map<String, String> _inquiryReplacements(
     ChatDetailState state, {
-    Map<(bool, int), ({String messageId, int? bookingId})>? completedRentals,
+    _RentalHistory? rentalHistory,
   }) {
-    final completed = completedRentals ?? _completedRentals(state);
+    final history = rentalHistory ?? _rentalHistory(state);
     final nextRequest = <(String, int), String>{};
+    final renewedInquiries = <(String, int), String>{};
     final replacements = <String, String>{};
     for (final message in state.messages.reversed) {
       if (message.id.startsWith('temp_') ||
@@ -1620,18 +1624,28 @@ class _ChatDetailViewState extends State<_ChatDetailView>
       final inquiry = _itemInquiry(message);
       final itemId = inquiry?.itemId;
       if (inquiry == null || itemId == null) continue;
-      final requestId = nextRequest[(message.senderId, itemId)];
+      final key = (message.senderId, itemId);
+      final requestId = nextRequest[key];
       if (requestId != null) {
         replacements[message.id] = requestId;
         continue;
       }
-      final previous = completed[(message.isMine, itemId)];
-      if (previous == null) continue;
-
-      final previousBookingId = previous.bookingId;
-      if (previousBookingId == null ||
-          !inquiry.followsBooking(previousBookingId)) {
+      final previous = history.completed[(message.isMine, itemId)];
+      final previousBookingId = previous?.bookingId;
+      if (previous != null &&
+          (previousBookingId == null ||
+              !inquiry.followsBooking(previousBookingId))) {
         replacements[message.id] = previous.messageId;
+        continue;
+      }
+
+      // เมื่อคำขอหมดเวลาถูกลบ ให้การ์ดสอบถามรอบใหม่แทนการ์ดเดิมของรายการเดียวกัน
+      final renewedId = renewedInquiries[key];
+      if (renewedId != null) {
+        replacements[message.id] = renewedId;
+      } else if (inquiry.previousBookingId case final int bookingId
+          when !history.retainedBookingIds.contains(bookingId)) {
+        renewedInquiries[key] = message.id;
       }
     }
     return replacements;
@@ -1812,6 +1826,11 @@ class _ChatDetailViewState extends State<_ChatDetailView>
     return '$timeStr น.';
   }
 }
+
+typedef _RentalHistory = ({
+  Map<(bool, int), ({String messageId, int? bookingId})> completed,
+  Set<int> retainedBookingIds,
+});
 
 typedef _AttachedRentalQueue = ({
   ChatMessage message,
