@@ -378,7 +378,6 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     required int index,
     required String id,
     required String label,
-    String? unit,
     required TextEditingController controller,
     TextEditingController? fallbackPrice,
     required TextInputAction action,
@@ -397,19 +396,12 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
         decoration: _decoration('0').copyWith(
           prefixIconConstraints: const BoxConstraints.tightFor(width: 26),
           prefixIcon: const Center(child: Text('฿')),
-          suffixIconConstraints: BoxConstraints.tightFor(
-            width: unit == 'ชั่วโมง'
-                ? 65
-                : unit == null
-                ? 35
-                : 48,
-          ),
           suffixIcon: Padding(
             padding: const EdgeInsetsDirectional.only(end: 7),
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-                unit == null ? 'บาท' : 'บาท / $unit',
+                'บาท',
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppFormFieldStyles.outlinedHintColor,
@@ -434,8 +426,8 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     ),
   );
 
-  Widget _section(String title, String subtitle) => Padding(
-    padding: const EdgeInsets.only(bottom: 20),
+  Widget _section(String title, {String? subtitle}) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -443,23 +435,22 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
           title,
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 5),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            color: AppFormFieldStyles.outlinedHintColor,
-            fontSize: 13,
-            height: 1.6,
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: AppFormFieldStyles.outlinedHintColor,
+              fontSize: 13,
+            ),
           ),
-        ),
+        ],
       ],
     ),
   );
 
-  Widget get _separator => const Padding(
-    padding: EdgeInsets.symmetric(vertical: 8),
-    child: Divider(height: 1, color: AppFormFieldStyles.outlinedDisabledColor),
-  );
+  Widget get _separator =>
+      const Padding(padding: EdgeInsets.symmetric(vertical: 8));
 
   Widget _form() => Form(
     key: _formKey,
@@ -495,10 +486,7 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
               ),
             ),
             _separator,
-            _section(
-              'ข้อมูลอุปกรณ์',
-              'บอกให้ผู้เช่ารู้ว่าอุปกรณ์ของคุณมีอะไรน่าสนใจ',
-            ),
+            _section('ข้อมูลอุปกรณ์'),
             _textField(
               index: 0,
               id: 'name',
@@ -549,7 +537,6 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
               lines: 4,
             ),
             _separator,
-            _section('ราคาและการให้เช่า', 'ระบุราคาอย่างน้อยหนึ่งแบบ'),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               spacing: 12,
@@ -559,7 +546,6 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
                     index: 3,
                     id: 'hourly-price',
                     label: 'ราคาต่อชั่วโมง',
-                    unit: 'ชั่วโมง',
                     controller: _hourlyPrice,
                     fallbackPrice: _dailyPrice,
                     action: TextInputAction.next,
@@ -570,7 +556,6 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
                     index: 4,
                     id: 'daily-price',
                     label: 'ราคาต่อวัน',
-                    unit: 'วัน',
                     controller: _dailyPrice,
                     action: TextInputAction.next,
                   ),
@@ -578,22 +563,36 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
               ],
             ),
             _separator,
-            _section(
-              'ค่าปรับ',
-              'ระบุจำนวนบาทต่อครั้ง เว้นว่างได้หากไม่มีค่าปรับ',
-            ),
-            _priceField(
-              index: 5,
-              id: 'damage-fee',
-              label: 'ค่าปรับกรณีชำรุด',
-              controller: _damageFee,
-              action: TextInputAction.next,
+            _section('ค่าปรับ', subtitle: 'เว้นว่างได้หากไม่มีค่าปรับ'),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 12,
+              children: [
+                Expanded(
+                  child: _priceField(
+                    index: 5,
+                    id: 'damage-fee',
+                    label: 'ค่าปรับกรณีชำรุด',
+                    controller: _damageFee,
+                    action: TextInputAction.next,
+                  ),
+                ),
+                Expanded(
+                  child: _priceField(
+                    index: 6,
+                    id: 'late-return-fee',
+                    label: 'ค่าปรับคืนเกินกำหนด',
+                    controller: _lateReturnFee,
+                    action: TextInputAction.next,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             _label(
               'เงื่อนไขกรณีชำรุด',
               TextFormField(
-                key: _fieldKeys[6],
+                key: _fieldKeys[7],
                 controller: _damageTerms,
                 maxLength: 500,
                 minLines: 2,
@@ -608,19 +607,7 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
                     : null,
               ),
             ),
-            const SizedBox(height: 8),
-            _priceField(
-              index: 7,
-              id: 'late-return-fee',
-              label: 'ค่าปรับคืนเกินกำหนด',
-              controller: _lateReturnFee,
-              action: TextInputAction.done,
-            ),
             _separator,
-            _section(
-              'การรับอุปกรณ์',
-              'เลือกสถานที่ที่สะดวกสำหรับนัดรับและคืนอุปกรณ์',
-            ),
             KeyedSubtree(
               key: _pickupKey,
               child: PickupLocationField(
