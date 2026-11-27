@@ -208,51 +208,39 @@ void main() {
       },
     );
   }
-  late Map<String, dynamic> fixture;
-  setUpAll(() {
-    fixture =
-        jsonDecode(
-              File(
-                '../ai_service/tests/fixtures/chat_contract.json',
-              ).readAsStringSync(),
-            )
-            as Map<String, dynamic>;
-  });
-
+  const fixtureDirectory = 'test/features/chatbot/fixtures';
   for (final stream in [false, true]) {
     test(
-      'shared Python and Go contract preserves context, IDs, sources: stream=$stream',
+      'chat client preserves context, IDs and sources in the API contract: stream=$stream',
       () async {
+        final fixture =
+            jsonDecode(
+                  await File(
+                    '$fixtureDirectory/chat_contract.json',
+                  ).readAsString(),
+                )
+                as Map<String, dynamic>;
+        final request = fixture['request'] as Map<String, dynamic>;
+        final response = fixture['response'] as Map<String, dynamic>;
         final client = ContractApiClient();
         when(() => client.close()).thenReturn(null);
-        final response = Map<String, dynamic>.from(fixture['response'] as Map);
-        final request = Map<String, dynamic>.from(fixture['request'] as Map);
-        when(
-          () => client.post(
-            any(),
-            data: any(named: 'data'),
-            headers: any(named: 'headers'),
-          ),
-        ).thenAnswer(
-          (_) async => ApiResponse(
-            statusCode: 200,
-            data: {
-              ...response,
-              'answer': response['response'],
-              'recommended_items': response['items'],
-            },
-          ),
-        );
-        when(
-          () => client.postStream(
-            any(),
-            data: any(named: 'data'),
-            headers: any(named: 'headers'),
-          ),
-        ).thenAnswer(
-          (_) async =>
-              Stream.fromIterable((fixture['sse'] as String).split('\n')),
-        );
+        if (stream) {
+          final lines = await File(
+            '$fixtureDirectory/chat_contract.sse',
+          ).readAsLines();
+          when(
+            () => client.postStream(
+              '/api/chat-ai/stream',
+              data: any(named: 'data'),
+            ),
+          ).thenAnswer((_) async => Stream.fromIterable(lines));
+        } else {
+          when(
+            () => client.post('/api/chat-ai', data: any(named: 'data')),
+          ).thenAnswer(
+            (_) async => ApiResponse(statusCode: 200, data: response),
+          );
+        }
         final source = ChatbotRemoteDataSource(client: client);
         addTearDown(source.close);
         final context = ChatContextModel.fromJson(request['context'])!;
@@ -260,64 +248,82 @@ void main() {
           questionId: context.questions.single.id,
           optionId: 'outdoor',
         );
-        final replies = stream
-            ? await source
-                  .sendMessageStream(
-                    query: request['message'] as String,
-                    history: [],
-                    sessionId: context.sessionId,
-                    context: context,
-                    questionnaireAnswers: [answer],
-                    activeQuestionId: context.questions.single.id,
-                  )
-                  .toList()
-            : <ChatStreamEvent>[];
-        final result = stream
-            ? replies.whereType<ChatDoneEvent>().single
-            : await source.sendMessage(
-                query: request['message'] as String,
+        final query = request['query'] as String;
+        final ChatSessionContext? mappedContext;
+        final List<EvidenceReference> references;
+        final ChatUnderstanding? understanding;
+        final String? answerText;
+        if (stream) {
+          final events = await source
+              .sendMessageStream(
+                query: query,
                 history: [],
                 sessionId: context.sessionId,
                 context: context,
                 questionnaireAnswers: [answer],
                 activeQuestionId: context.questions.single.id,
-              );
-        final mappedContext = result is ChatDoneEvent
-            ? result.context
-            : (result as ChatResponse).context;
-        final references = result is ChatDoneEvent
-            ? result.references
-            : (result as ChatResponse).references;
-        expect(mappedContext, context);
-        expect(references.first.id, 'rental.request_in_chat');
-        final understanding = result is ChatDoneEvent
-            ? result.understanding
-            : (result as ChatResponse).understanding;
+              )
+              .toList();
+          expect(events.first, isA<ChatStatusEvent>());
+          final ready = events.whereType<ChatReadyEvent>().single;
+          final metadata = events.whereType<ChatMetadataEvent>().single;
+          final deltas = events.whereType<ChatDeltaEvent>();
+          expect(events.indexOf(ready), lessThan(events.indexOf(metadata)));
+          expect(
+            events.indexOf(metadata),
+            lessThan(events.indexOf(deltas.first)),
+          );
+          expect(deltas.map((delta) => delta.text).join(), response['answer']);
+          final done = events.whereType<ChatDoneEvent>().single;
+          expect(events.last, done);
+          expect(ready.response.answer, done.answer);
+          expect(ready.response.context, done.context);
+          expect(ready.response.references, done.references);
+          mappedContext = done.context;
+          references = done.references;
+          understanding = done.understanding;
+          answerText = done.answer;
+        } else {
+          final result = await source.sendMessage(
+            query: query,
+            history: [],
+            sessionId: context.sessionId,
+            context: context,
+            questionnaireAnswers: [answer],
+            activeQuestionId: context.questions.single.id,
+          );
+          mappedContext = result.context;
+          references = result.references;
+          understanding = result.understanding;
+          answerText = result.answer;
+        }
+        expect(answerText, response['answer']);
+        // Go ละฟิลด์สาขาที่ว่าง แต่ SSE จาก Python ส่งฟิลด์เหล่านั้นเป็นแผนที่ว่าง
+        expect(ChatContextModel.toJson(mappedContext!), request['context']);
+        expect(mappedContext.knownFacts.single.sourceMessageIds, [
+          'initial-user',
+        ]);
+        expect(mappedContext.questions.single.choices[1].id, 'outdoor');
+        expect(references.single.id, 'rental.request_in_chat');
         expect(understanding!.requestScope, 'broad');
         expect(understanding.informationSufficient, isFalse);
         expect(understanding.nextAction, 'clarify');
         expect(understanding.responseFlow, 'general');
+        expect(understanding.responseKind, 'clarification');
         final calls = stream
             ? verify(
                 () => client.postStream(
-                  any(),
+                  '/api/chat-ai/stream',
                   data: captureAny(named: 'data'),
-                  headers: any(named: 'headers'),
                 ),
               )
             : verify(
                 () => client.post(
-                  any(),
+                  '/api/chat-ai',
                   data: captureAny(named: 'data'),
-                  headers: any(named: 'headers'),
                 ),
               );
-        final data = calls.captured.single as Map;
-        expect(data['context'], ChatContextModel.toJson(context));
-        expect(data['active_question_id'], context.questions.single.id);
-        expect(data['questionnaire_answers'], [
-          {'question_id': context.questions.single.id, 'option_id': 'outdoor'},
-        ]);
+        expect(calls.captured.single, request);
       },
     );
   }

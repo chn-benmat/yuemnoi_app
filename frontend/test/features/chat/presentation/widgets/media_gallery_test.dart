@@ -106,12 +106,14 @@ void main() {
       (tester) async {
         final permission = Completer<bool>();
         var checks = 0;
+        var requests = 0;
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(const MethodChannel('gal'), (call) async {
               if (call.method == 'hasAccess') {
                 checks++;
                 return permission.future;
               }
+              if (call.method == 'requestAccess') requests++;
               return false;
             });
         await tester.pumpWidget(
@@ -128,22 +130,36 @@ void main() {
           tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
           isNull,
         );
+        await tester.tap(find.byType(FilledButton));
+        await tester.pump();
         expect(checks, 1);
         permission.complete(false);
         await tester.pump();
         await tester.pump();
+        expect(requests, 1);
         expect(
           tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
           isNotNull,
         );
-        expect(find.textContaining('บันทึกไม่สำเร็จ'), findsOneWidget);
+        final popup = find.widgetWithText(
+          Dialog,
+          'บันทึกไม่สำเร็จ โปรดตรวจสอบสิทธิ์รูปภาพแล้วลองใหม่',
+        );
+        expect(popup, findsOneWidget);
         expect(find.byType(SnackBar), findsNothing);
-        expect(find.byType(AlertDialog), findsOneWidget);
         await tester.pump(const Duration(milliseconds: 300));
-        await tester.tap(find.text('ตกลง'));
+        await tester.tap(
+          find.descendant(of: popup, matching: find.text('ยืนยัน')),
+        );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
-        expect(find.byType(AlertDialog), findsNothing);
+        expect(popup, findsNothing);
+        await tester.tap(find.byType(FilledButton));
+        await tester.pump();
+        await tester.pump();
+        expect(checks, 2);
+        expect(requests, 2);
+        expect(popup, findsOneWidget);
         await tester.pumpWidget(const SizedBox.shrink());
       },
     );

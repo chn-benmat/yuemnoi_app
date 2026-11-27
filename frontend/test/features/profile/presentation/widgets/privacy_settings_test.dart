@@ -64,9 +64,19 @@ void main() {
     );
     await openDeletionDialog(tester);
 
-    expect(find.textContaining('30 วัน'), findsOneWidget);
+    final dialog = find.byType(AlertDialog);
     expect(
-      find.textContaining('โปรไฟล์และประกาศของคุณจะถูกซ่อน'),
+      find.descendant(
+        of: dialog,
+        matching: find.textContaining('บัญชีจะถูกลบถาวรหลัง 30 วัน'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.textContaining('เข้าสู่ระบบเพื่อกู้คืนบัญชี'),
+      ),
       findsOneWidget,
     );
     await tester.tap(find.text('ยกเลิก'));

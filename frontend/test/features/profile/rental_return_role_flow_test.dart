@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/widgets/login_required_dialog.dart';
 import 'package:frontend/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:frontend/features/auth/presentation/bloc/auth_state.dart';
 import 'package:frontend/features/profile/presentation/pages/profile/profile.dart';
@@ -247,7 +248,7 @@ void main() {
     });
 
     testWidgets(
-      'ProfileScreen safety section does NOT contain test return item',
+      'profile shows guarded rental status without a test return shortcut',
       (tester) async {
         tester.view.physicalSize = const Size(1080, 3200);
         tester.view.devicePixelRatio = 2.0;
@@ -261,13 +262,17 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        expect(find.byType(LoginRequiredDialog), findsOneWidget);
+        await tester.tap(find.byTooltip('ปิด'));
+        await tester.pumpAndSettle();
 
-        // Should NOT contain the old test item
         expect(find.text('การคืนอุปกรณ์ (ระบบป้องกันการโกง)'), findsNothing);
-
-        // Still contains the real security items
-        expect(find.text('หมวดหมู่ความปลอดภัย'), findsOneWidget);
-        expect(find.text('การยืนยันตัวตน'), findsOneWidget);
+        expect(find.text('ประวัติการเช่า'), findsOneWidget);
+        final rentalStatus = find.text('สถานะการเช่า');
+        expect(rentalStatus, findsOneWidget);
+        await tester.tap(rentalStatus);
+        await tester.pumpAndSettle();
+        expect(find.text('เข้าสู่ระบบเพื่อดูสถานะ'), findsOneWidget);
       },
     );
   });

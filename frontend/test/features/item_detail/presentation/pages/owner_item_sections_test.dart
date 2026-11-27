@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/network/supabase_client.dart';
 import 'package:frontend/features/item_detail/domain/entities/item_detail.dart';
 import 'package:frontend/features/item_detail/domain/repositories/item_detail_repository.dart';
 import 'package:frontend/features/item_detail/domain/usecases/get_item_detail_usecase.dart';
@@ -8,7 +11,11 @@ import 'package:frontend/features/item_detail/domain/usecases/update_item_usecas
 import 'package:frontend/features/item_detail/presentation/bloc/item_detail_bloc.dart';
 import 'package:frontend/features/item_detail/presentation/pages/edit_item.dart';
 import 'package:frontend/features/item_detail/presentation/widgets/owner_item_detail_view.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class _Repository extends Mock implements ItemDetailRepository {}
 
@@ -27,6 +34,43 @@ const _item = ItemDetail(
 );
 
 void main() {
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  const appLinksChannels = [
+    MethodChannel('com.llfbandit.app_links/events'),
+    MethodChannel('com.llfbandit.app_links/messages'),
+  ];
+  final previewRequests = <Uri>[];
+
+  setUpAll(() async {
+    dotenv.loadFromString(
+      envString:
+          'SUPABASE_URL=https://preview.example.invalid\n'
+          'SUPABASE_PUBLISHABLE_KEY=test-key',
+    );
+    SharedPreferences.setMockInitialValues({});
+    for (final channel in appLinksChannels) {
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        (_) async => null,
+      );
+    }
+    await http.runWithClient(
+      SupabaseConfig.initialize,
+      () => MockClient((request) async {
+        previewRequests.add(request.url);
+        throw StateError('Unexpected preview request: ${request.url.path}');
+      }),
+    );
+  });
+
+  tearDownAll(() async {
+    await Supabase.instance.dispose();
+    for (final channel in appLinksChannels) {
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+    }
+    dotenv.clean();
+  });
+
   testWidgets('preview uses unsaved edits and returns without saving', (
     tester,
   ) async {
@@ -56,7 +100,7 @@ void main() {
     expect(find.text('ชื่อใหม่ที่ยังไม่บันทึก'), findsOneWidget);
     expect(find.text('รายละเอียดสินค้า'), findsOneWidget);
     expect(bloc.state.item, _item);
-    await tester.tap(find.byIcon(Icons.arrow_back_rounded).last);
+    await tester.tap(find.byTooltip('ย้อนกลับ'));
     await tester.pumpAndSettle();
     expect(find.text('แก้ไขอุปกรณ์'), findsOneWidget);
     expect(
@@ -64,12 +108,15 @@ void main() {
       'ชื่อใหม่ที่ยังไม่บันทึก',
     );
     expect(find.text('ออกโดยไม่บันทึก?'), findsNothing);
+    verifyZeroInteractions(repo);
+    expect(previewRequests, isEmpty);
   });
 
   testWidgets(
     'hidden owner detail keeps visibility controls without a status badge',
     (tester) async {
       final item = _item.withVisibility(hidden: true);
+      final visibilityChanges = <bool>[];
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -78,7 +125,7 @@ void main() {
               busy: false,
               deleting: false,
               onRefresh: () async {},
-              onVisibilityChanged: (_) {},
+              onVisibilityChanged: visibilityChanges.add,
               onEditBasic: () {},
               onAutoReply: () {},
               onDelete: () {},
@@ -90,6 +137,11 @@ void main() {
       expect(find.text('แสดงในหน้าร้าน'), findsOneWidget);
       expect(find.text('เปิดให้เช่า'), findsNothing);
       expect(item.status, 'available');
+      final visibility = find.byKey(const ValueKey('owner-item-visibility'));
+      expect(tester.widget<SwitchListTile>(visibility).value, isFalse);
+      await tester.ensureVisible(visibility);
+      await tester.tap(visibility);
+      expect(visibilityChanges, [true]);
     },
   );
   testWidgets('basic info includes all equipment fields and save', (
