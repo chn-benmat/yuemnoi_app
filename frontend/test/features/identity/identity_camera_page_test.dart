@@ -167,22 +167,23 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('กรอบบัตรอยู่ในภาพกล้องและหน้าตรวจรูปแสดงเฉพาะภาพในกรอบ', (
+  testWidgets('ภาพกล้องพอดีกับกรอบและใช้ JPEG จากพื้นที่เดียวกัน', (
     tester,
   ) async {
     platform.failInitialization = false;
     platform.failDisposal = false;
-    final cameraImage = img.Image(width: 90, height: 160);
-    img.fill(cameraImage, color: img.ColorRgb8(220, 20, 20));
-    img.fillRect(
-      cameraImage,
-      x1: 3,
-      y1: 54,
-      x2: 86,
-      y2: 105,
-      color: img.ColorRgb8(20, 220, 20),
-    );
-    platform.picture = XFile.fromData(img.encodePng(cameraImage));
+    platform.picture = XFile('captured-card.jpg');
+    final card = img.Image(width: 86, height: 54);
+    img.fill(card, color: img.ColorRgb8(20, 220, 20));
+    final jpeg = img.encodeJpg(card);
+    final calls = <MethodCall>[];
+    const channel = MethodChannel('yuemnoi/identity_card_photo');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return jpeg;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(380, 790);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -194,17 +195,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final preview = find.byType(CameraPreview);
-    final frame = find.descendant(
-      of: preview,
-      matching: find.byKey(const ValueKey('identity_card_capture_frame')),
+    final preview = find.ancestor(
+      of: find.byType(CameraPreview),
+      matching: find.byType(ClipRect),
     );
+    final frame = find.byKey(const ValueKey('identity_card_capture_frame'));
+    expect(preview, findsOneWidget);
     expect(frame, findsOneWidget);
     final previewRect = tester.getRect(preview);
     final frameRect = tester.getRect(frame);
-    expect((frameRect.center - previewRect.center).distance, lessThan(0.01));
-    expect(frameRect.width, lessThan(previewRect.width));
-    expect(frameRect.height, lessThan(previewRect.height));
+    expect(frameRect, previewRect);
     expect(frameRect.width / frameRect.height, closeTo(85.6 / 53.98, 0.01));
 
     // รูปที่ตัดแล้วต้องแสดงได้แม้ CameraX ยังคืนกล้องไม่เสร็จ
@@ -222,11 +222,14 @@ void main() {
       }
     });
     expect(find.text('ใช้รูปนี้'), findsOneWidget);
+    expect(calls.single.method, 'prepare');
+    expect(calls.single.arguments, {
+      'path': 'captured-card.jpg',
+      'previewAspectRatio': 720 / 1280,
+      'cardAspectRatio': 85.6 / 53.98,
+    });
     final image = tester.widget<Image>(find.byType(Image)).image as MemoryImage;
-    final result = img.decodeJpg(image.bytes)!;
-    expect((result.width, result.height), (84, 52));
-    expect(result.getPixel(0, 0).g, greaterThan(180));
-    expect(result.getPixel(83, 51).g, greaterThan(180));
+    expect(image.bytes, jpeg);
 
     release.complete();
     await tester.pumpWidget(const SizedBox());

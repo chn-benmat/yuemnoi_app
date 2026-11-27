@@ -466,11 +466,8 @@ void main() {
       createdAt: now.add(Duration(minutes: minute)),
       isMine: true,
     );
-    final inquiry = message(
-      '10',
-      const ItemInquiryData(itemId: 1, itemName: 'โต๊ะ').toChatMessagePayload(),
-      0,
-    );
+    const tableInquiry = ItemInquiryData(itemId: 1, itemName: 'โต๊ะ');
+    final inquiry = message('10', tableInquiry.toChatMessagePayload(), 0);
     final otherInquiry = message(
       '11',
       const ItemInquiryData(
@@ -506,6 +503,11 @@ void main() {
     stream.add([inquiry, otherInquiry]);
     await tester.pumpAndSettle();
     expect(find.byType(ItemInquiryBubbleCard), findsNWidgets(2));
+    final renewedInquiry = message(
+      '13',
+      tableInquiry.withPreviousBookingId(25).toChatMessagePayload(),
+      3,
+    );
     stream.add([
       inquiry,
       otherInquiry,
@@ -523,12 +525,30 @@ void main() {
         request.copyWith(status: 'cancelled').toChatMessagePayload(),
         2,
       ),
-      message('13', inquiry.message, 3),
+      renewedInquiry,
     ]);
     await tester.pumpAndSettle();
     expect(find.byType(ItemInquiryBubbleCard), findsNWidgets(2));
     expect(find.text('แก้ไขรายละเอียด'), findsNothing);
     expect(find.text('ส่งคำขอเช่าใหม่'), findsOneWidget);
+
+    // เซิร์ฟเวอร์ลบคำขอที่หมดเวลาออกเมื่อส่งข้อความสอบถามรอบใหม่
+    stream.add([inquiry, otherInquiry, renewedInquiry]);
+    await tester.pumpAndSettle();
+    final visibleInquiries = tester
+        .widgetList<ItemInquiryBubbleCard>(find.byType(ItemInquiryBubbleCard))
+        .map((card) => card.message.id);
+    expect(visibleInquiries, unorderedEquals(['11', '13']));
+    expect(
+      find.descendant(
+        of: find.byWidgetPredicate(
+          (widget) =>
+              widget is ItemInquiryBubbleCard && widget.message.id == '13',
+        ),
+        matching: find.text('ส่งคำขอเช่าอุปกรณ์นี้'),
+      ),
+      findsOneWidget,
+    );
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
