@@ -63,6 +63,20 @@ void main() {
       expect(model.isVerified, true);
     });
 
+    test('keeps the username change time from a profile response', () {
+      final model = UserProfileModel.fromJson({
+        'user_id': 'u123',
+        'username': 'somchai',
+        'username_changed_at': '2026-11-27T12:00:00+07:00',
+      });
+
+      final profile = model.toEntity().copyWith(bio: 'New bio');
+      expect(
+        UserProfileModel.fromEntity(profile).toJson()['username_changed_at'],
+        '2026-11-27T05:00:00.000Z',
+      );
+    });
+
     test('toEntity converts correctly to UserProfile entity', () {
       const model = UserProfileModel(
         userId: 'u123',

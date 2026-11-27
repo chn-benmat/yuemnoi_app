@@ -1,14 +1,50 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/theme/app_theme.dart';
+import 'package:frontend/features/profile/data/datasources/profile_remote_data_source.dart';
+import 'package:frontend/features/profile/data/models/user_profile_model.dart';
+import 'package:frontend/features/profile/data/repositories/profile_repository_impl.dart';
+import 'package:frontend/features/profile/domain/entities/user_profile.dart';
+import 'package:frontend/features/profile/domain/usecases/get_user_profile_usecase.dart';
+import 'package:frontend/features/profile/presentation/bloc/profile_cubit.dart';
 import 'package:frontend/features/profile/presentation/pages/account/edit_profile_screen.dart';
 import 'package:frontend/features/profile/presentation/pages/account/setting_account_screen.dart';
 import 'package:frontend/features/profile/presentation/pages/legal/privacy_policy_screen.dart';
 import 'package:frontend/features/profile/presentation/pages/legal/terms_of_service_screen.dart';
 import 'package:frontend/features/profile/presentation/pages/account/edit_contact_screen.dart';
 import 'package:frontend/features/profile/presentation/pages/account/change_password_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
+import '../../domain/usecases/profile_usecases_test.dart';
+
+class _DelayedProfileRepository extends FakeProfileRepository {
+  final response = Completer<UserProfile>();
+
+  @override
+  Future<UserProfile> getProfile({
+    required String userId,
+    String? accessToken,
+  }) {
+    return response.future;
+  }
+}
+
+class _DelayedProfileDataSource extends ProfileRemoteDataSource {
+  var response = Completer<UserProfileModel>();
+
+  @override
+  Future<UserProfileModel> getProfile({
+    required String userId,
+    String? accessToken,
+  }) {
+    return response.future;
+  }
+}
 
 void main() {
+  setUpAll(() => initializeDateFormatting('th'));
   testWidgets('account settings has no location permission entry', (
     tester,
   ) async {
@@ -26,6 +62,82 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: EditProfileScreen()));
     expect(find.text('สิทธิ์ตำแหน่ง'), findsNothing);
   });
+
+  testWidgets('username stays read-only during loading and its cooldown', (
+    tester,
+  ) async {
+    final repository = _DelayedProfileRepository();
+    final cubit = ProfileCubit(
+      getUserProfile: GetUserProfileUseCase(repository),
+    );
+    addTearDown(cubit.close);
+    final loading = cubit.loadProfile(userId: 'u1');
+    await tester.pumpWidget(MaterialApp(home: EditProfileScreen(cubit: cubit)));
+    TextField usernameField() =>
+        tester.widget<TextField>(find.byType(TextField).at(1));
+
+    expect(usernameField().readOnly, isTrue);
+    repository.response.complete(
+      UserProfile(
+        userId: 'u1',
+        username: 'elle.com_',
+        usernameChangedAt: DateTime.now().toUtc(),
+      ),
+    );
+    await loading;
+    await tester.pump();
+
+    expect(usernameField().controller!.text, 'elle.com_');
+    expect(usernameField().readOnly, isTrue);
+    expect(find.textContaining('เปลี่ยนชื่อผู้ใช้ได้อีกครั้ง'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).readOnly,
+      isFalse,
+    );
+    expect(
+      tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
+      isNotNull,
+    );
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'cached username appears on the first frame and unlocks after 30 days',
+    (tester) async {
+      final source = _DelayedProfileDataSource();
+      final repository = ProfileRepositoryImpl(remoteDataSource: source);
+      final profile = UserProfileModel(
+        userId: 'cached-profile-user',
+        username: 'elle.com_',
+        usernameChangedAt: DateTime.now().toUtc().subtract(
+          const Duration(days: 30),
+        ),
+      );
+      source.response.complete(profile);
+      await repository.getProfile(userId: profile.userId, accessToken: 'token');
+      source.response = Completer<UserProfileModel>();
+      final cubit = ProfileCubit(
+        getUserProfile: GetUserProfileUseCase(repository),
+      );
+      addTearDown(cubit.close);
+      final loading = cubit.loadProfile(
+        userId: profile.userId,
+        accessToken: 'token',
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: EditProfileScreen(cubit: cubit)),
+      );
+
+      TextField usernameField() =>
+          tester.widget<TextField>(find.byType(TextField).at(1));
+      expect(usernameField().controller!.text, 'elle.com_');
+      expect(usernameField().readOnly, isTrue);
+      source.response.complete(profile);
+      await loading;
+      await tester.pump();
+      expect(usernameField().readOnly, isFalse);
+    },
+  );
 
   testWidgets('contact email cannot accept edits that the API cannot save', (
     tester,

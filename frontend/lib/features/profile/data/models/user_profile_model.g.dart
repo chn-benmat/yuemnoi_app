@@ -20,6 +20,9 @@ UserProfileModel _$UserProfileModelFromJson(
   username: json['username'] == null
       ? ''
       : UserProfileModel._string(json['username']),
+  usernameChangedAt: json['username_changed_at'] == null
+      ? null
+      : DateTime.parse(json['username_changed_at'] as String),
   email: json['email'] == null ? '' : UserProfileModel._string(json['email']),
   phone: json['phone'] == null ? '' : UserProfileModel._string(json['phone']),
   bio: json['bio'] == null ? '' : UserProfileModel._string(json['bio']),
@@ -37,6 +40,7 @@ Map<String, dynamic> _$UserProfileModelToJson(UserProfileModel instance) =>
       'user_id': instance.userId,
       'display_name': instance.displayName,
       'username': instance.username,
+      'username_changed_at': ?instance.usernameChangedAt?.toIso8601String(),
       'email': instance.email,
       'phone': instance.phone,
       'bio': instance.bio,

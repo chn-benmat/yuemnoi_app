@@ -1,20 +1,24 @@
-import 'package:frontend/core/widgets/app_popup.dart';
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/services/app_permission_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/widgets/app_popup.dart';
 import '../../bloc/profile_cubit.dart';
 import '../../bloc/profile_state.dart';
 import '../../widgets/account/edit_profile_widgets.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key});
+  const EditProfileScreen({super.key, this.cubit});
+
+  final ProfileCubit? cubit;
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -31,17 +35,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _avatarUrl;
   Uint8List? _pickedImageBytes;
   String? _pickedImageName;
+  Timer? _usernameUnlockTimer;
+
+  DateTime? get _usernameAvailableAt =>
+      _cubit.currentProfile?.usernameChangeAvailableAt;
+
+  bool get _usernameLocked =>
+      _usernameAvailableAt?.isAfter(DateTime.now()) ?? false;
+
+  bool get _canEditUsername =>
+      _cubit.state is! ProfileLoading &&
+      _cubit.currentProfile?.username.isNotEmpty == true &&
+      !_usernameLocked;
 
   @override
   void initState() {
     super.initState();
-    _cubit = ProfileCubit();
+    _cubit = widget.cubit ?? ProfileCubit();
 
     final user = SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentUser
         : null;
     final meta = user?.userMetadata ?? {};
-
+    final session = SupabaseConfig.isInitialized
+        ? SupabaseConfig.client.auth.currentSession
+        : null;
+    if (widget.cubit == null && user != null) {
+      unawaited(
+        _cubit.loadProfile(userId: user.id, accessToken: session?.accessToken),
+      );
+    }
     _displayNameCtrl = TextEditingController(
       text:
           (meta['display_name'] ??
@@ -50,28 +73,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   '')
               .toString(),
     );
-    _usernameCtrl = TextEditingController();
+    _usernameCtrl = TextEditingController(
+      text: _cubit.currentProfile?.username ?? meta['username']?.toString(),
+    );
     _bioCtrl = TextEditingController(text: (meta['bio'] ?? '').toString());
     _avatarUrl =
         (meta['user_image_url'] ?? meta['avatar_url'] ?? meta['picture'] ?? '')
             .toString();
     if (_avatarUrl!.isEmpty) _avatarUrl = null;
 
-    final session = SupabaseConfig.isInitialized
-        ? SupabaseConfig.client.auth.currentSession
-        : null;
-    final userId = user?.id ?? '';
-    if (userId.isNotEmpty) {
-      _cubit.loadProfile(userId: userId, accessToken: session?.accessToken);
+    _scheduleUsernameUnlock();
+  }
+
+  void _scheduleUsernameUnlock() {
+    _usernameUnlockTimer?.cancel();
+    final remaining = _usernameAvailableAt?.difference(DateTime.now());
+    if (remaining != null && remaining > Duration.zero) {
+      _usernameUnlockTimer = Timer(remaining, () => setState(() {}));
     }
   }
 
   @override
   void dispose() {
+    _usernameUnlockTimer?.cancel();
     _displayNameCtrl.dispose();
     _usernameCtrl.dispose();
     _bioCtrl.dispose();
-    _cubit.close();
+    if (widget.cubit == null) _cubit.close();
     super.dispose();
   }
 
@@ -110,7 +138,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     await _cubit.updateProfileData(
       accessToken: accessToken,
       displayName: _displayNameCtrl.text.trim(),
-      username: _usernameCtrl.text,
+      username:
+          _canEditUsername &&
+              _usernameCtrl.text != _cubit.currentProfile?.username
+          ? _usernameCtrl.text
+          : null,
       bio: _bioCtrl.text.trim(),
       imageBytes: _pickedImageBytes,
       imageName: _pickedImageName,
@@ -128,10 +160,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 state.profile.displayName.isNotEmpty) {
               _displayNameCtrl.text = state.profile.displayName;
             }
-            if (_usernameCtrl.text.isEmpty &&
-                state.profile.username.isNotEmpty) {
+            if (state.profile.username.isNotEmpty &&
+                _usernameCtrl.text != state.profile.username) {
               _usernameCtrl.text = state.profile.username;
             }
+            _scheduleUsernameUnlock();
             if (_bioCtrl.text.isEmpty && state.profile.bio.isNotEmpty) {
               _bioCtrl.text = state.profile.bio;
             }
@@ -154,6 +187,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         },
         builder: (context, state) {
           final isSaving = state is ProfileActionInProgress;
+          final isLoading = state is ProfileLoading;
+          final usernameReadOnly = isSaving || !_canEditUsername;
+          final unlockAt = _usernameLocked
+              ? _usernameAvailableAt!.toLocal()
+              : null;
 
           return Scaffold(
             backgroundColor: const Color(0xFFFAF9FD),
@@ -270,25 +308,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     EditProfileFormField(
                       controller: _usernameCtrl,
                       label: 'ชื่อผู้ใช้',
-                      hint: 'username',
+                      hint: isLoading ? 'กำลังโหลดชื่อผู้ใช้…' : 'username',
                       icon: Icons.alternate_email_rounded,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'กรุณากรอกชื่อผู้ใช้';
-                        }
-                        if (value.length > 100) {
-                          return 'ชื่อผู้ใช้ต้องมีไม่เกิน 100 ตัวอักษร';
-                        }
-                        if (_invalidUsernameCharacters.hasMatch(value)) {
-                          return 'ใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข จุด (.) และขีดล่าง (_)';
-                        }
-                        return null;
-                      },
+                      readOnly: usernameReadOnly,
+                      validator: usernameReadOnly ? null : _validateUsername,
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'ใช้ A–Z, a–z, 0–9, จุด (.) และขีดล่าง (_) เปลี่ยนได้ทุก 30 วัน',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF665D73)),
+                    Text(
+                      unlockAt == null
+                          ? 'ใช้ A–Z, a–z, 0–9, จุด (.) และขีดล่าง (_) เปลี่ยนได้ทุก 30 วัน'
+                          : 'เปลี่ยนชื่อผู้ใช้ได้อีกครั้ง ${DateFormat('d MMM yyyy เวลา HH:mm', 'th').format(unlockAt)} น.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF665D73),
+                      ),
                     ),
                     const SizedBox(height: 14),
                     EditProfileFormField(
@@ -302,7 +335,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                     // ── Save button ──────────────────────────────────
                     ElevatedButton(
-                      onPressed: isSaving ? null : _save,
+                      onPressed: isSaving || isLoading ? null : _save,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryColor,
                         foregroundColor: Colors.white,
@@ -340,5 +373,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         },
       ),
     );
+  }
+
+  String? _validateUsername(String? value) {
+    if (value == null || value.trim().isEmpty) return 'กรุณากรอกชื่อผู้ใช้';
+    if (value.length > 100) return 'ชื่อผู้ใช้ต้องมีไม่เกิน 100 ตัวอักษร';
+    if (_invalidUsernameCharacters.hasMatch(value)) {
+      return 'ใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข จุด (.) และขีดล่าง (_)';
+    }
+    return null;
   }
 }

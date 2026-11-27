@@ -18,6 +18,9 @@ class FakeProfileRepository implements ProfileRepository {
   bool passwordChanged = false;
 
   @override
+  UserProfile? readCachedProfile(String userId) => null;
+
+  @override
   Future<UserProfile> getProfile({
     required String userId,
     String? accessToken,

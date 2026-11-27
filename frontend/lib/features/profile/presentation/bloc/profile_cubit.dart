@@ -47,6 +47,9 @@ class ProfileCubit extends Cubit<ProfileState> {
     required String userId,
     String? accessToken,
   }) async {
+    if (accessToken != null && accessToken.isNotEmpty) {
+      _currentProfile = getUserProfile.repository.readCachedProfile(userId);
+    }
     emit(const ProfileLoading());
     try {
       final profile = await getUserProfile.execute(

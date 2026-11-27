@@ -32,6 +32,7 @@ class EditProfileFormField extends StatelessWidget {
   final String hint;
   final IconData icon;
   final int maxLines;
+  final bool readOnly;
   final String? Function(String?)? validator;
 
   const EditProfileFormField({
@@ -41,6 +42,7 @@ class EditProfileFormField extends StatelessWidget {
     required this.hint,
     required this.icon,
     this.maxLines = 1,
+    this.readOnly = false,
     this.validator,
   });
 
@@ -51,6 +53,8 @@ class EditProfileFormField extends StatelessWidget {
       label: label,
       hintText: hint,
       validator: validator,
+      readOnly: readOnly,
+      enabled: !readOnly,
       variant: AppFormFieldVariant.outlined,
       prefixIcon: icon,
       maxLines: maxLines,
