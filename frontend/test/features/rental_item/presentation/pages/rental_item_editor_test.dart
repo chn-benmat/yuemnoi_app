@@ -48,6 +48,57 @@ void main() {
     await tester.pump();
   }
 
+  testWidgets('edit form shows a heading above the two penalty inputs', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 3;
+    tester.view.physicalSize = const Size(1280, 2856);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RentalItemEditor(
+          initialValue: _initial,
+          isEditing: true,
+          onSubmit: (_) {},
+        ),
+      ),
+    );
+
+    final damageFee = find.descendant(
+      of: find.byKey(const Key('edit-item-damage-fee')),
+      matching: find.byType(TextFormField),
+    );
+    final lateFee = find.descendant(
+      of: find.byKey(const Key('edit-item-late-return-fee')),
+      matching: find.byType(TextFormField),
+    );
+    await tester.ensureVisible(damageFee);
+    await tester.pumpAndSettle();
+
+    final heading = find.text('ค่าปรับ');
+    final subtitle = find.text('เว้นว่างได้หากไม่มีค่าปรับ');
+    expect(heading.hitTestable(), findsOneWidget);
+    expect(subtitle.hitTestable(), findsOneWidget);
+    expect(damageFee.hitTestable(), findsOneWidget);
+    expect(lateFee.hitTestable(), findsOneWidget);
+    final damageBounds = tester.getRect(damageFee);
+    final lateBounds = tester.getRect(lateFee);
+
+    expect(
+      tester.getRect(heading).bottom,
+      lessThan(tester.getRect(subtitle).top),
+    );
+    expect(tester.getRect(subtitle).bottom, lessThan(damageBounds.top));
+    expect(damageBounds.top, lateBounds.top);
+    expect(damageBounds.right, lessThan(lateBounds.left));
+    expect(damageBounds.width, closeTo(lateBounds.width, 0.01));
+    expect(
+      tester.getTopLeft(find.text('เงื่อนไขกรณีชำรุด')).dy,
+      greaterThan(damageBounds.bottom),
+    );
+  });
+
   testWidgets('submits a separate hourly and daily rental price', (
     tester,
   ) async {
@@ -426,10 +477,13 @@ void main() {
       }.entries) {
         final price = find.byKey(ValueKey('rental-item-${entry.key}'));
         final currency = find.descendant(of: price, matching: find.text('฿'));
+        final baht = find.descendant(of: price, matching: find.text('บาท'));
+        final label = find.text('ราคาต่อ${entry.value}');
         await tester.ensureVisible(price);
         await tester.pumpAndSettle();
         expect(currency.hitTestable(), findsOneWidget);
-        expect(find.text('บาท / ${entry.value}').hitTestable(), findsOneWidget);
+        expect(baht.hitTestable(), findsOneWidget);
+        expect(label.hitTestable(), findsOneWidget);
         await tester.enterText(price, '250');
         FocusManager.instance.primaryFocus?.unfocus();
         await tester.pumpAndSettle();
@@ -437,7 +491,8 @@ void main() {
         FocusManager.instance.primaryFocus?.unfocus();
         await tester.pumpAndSettle();
         expect(currency.hitTestable(), findsOneWidget);
-        expect(find.text('บาท / ${entry.value}').hitTestable(), findsOneWidget);
+        expect(baht.hitTestable(), findsOneWidget);
+        expect(label.hitTestable(), findsOneWidget);
       }
     },
   );
