@@ -20,16 +20,20 @@ begin
   insert into auth.users(id, email)
     select id, id || '@example.invalid'
     from unnest(array[owner_id, customer_id, current_renter_id, next_customer_id]) id;
+  update profiles.profile_tb set phone = '0812345678' where user_id = owner_id;
+  update profiles.profile_tb set phone = '0823456789' where user_id = current_renter_id;
   insert into identity_private.identity_profiles(user_id, status, legal_name, masked_id, citizen_hmac, is_minor)
     select id, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(id::text) || md5(id::text), false
     from unnest(array[owner_id, customer_id, current_renter_id, next_customer_id]) id;
   insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-    values (owner_id, 'กล้องที่ถูกเช่า', 'ทดสอบ', 100, 'available', 'daily', 'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50)
+    pickup_location, pickup_address, pickup_note, pickup_latitude, pickup_longitude)
+    values (owner_id, 'กล้องที่ถูกเช่า', 'ทดสอบ', 100, 'available', 'daily',
+      'จุดรับ', 'ที่อยู่ทดสอบ', 'นัดรับ', 13.75, 100.50)
     returning id into rented_item;
   insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-    values (owner_id, 'กล้องที่ยังว่าง', 'ทดสอบ', 100, 'available', 'daily', 'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50)
+    pickup_location, pickup_address, pickup_note, pickup_latitude, pickup_longitude)
+    values (owner_id, 'กล้องที่ยังว่าง', 'ทดสอบ', 100, 'available', 'daily',
+      'จุดรับ', 'ที่อยู่ทดสอบ', 'นัดรับ', 13.75, 100.50)
     returning id into free_item;
   -- สลับช่อง owner_id กับ renter_id ในห้อง เพื่อทดสอบการตรวจเจ้าของจากประกาศ
   insert into messaging.conversation_tb(id, owner_id, renter_id, item_id) values

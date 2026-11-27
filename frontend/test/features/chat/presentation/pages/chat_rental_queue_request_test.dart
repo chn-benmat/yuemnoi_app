@@ -19,7 +19,7 @@ class _MockSendMessage extends Mock implements SendChatMessageUseCase {}
 class _MockRentalQueue extends Mock implements RentalQueueRemoteDataSource {}
 
 void main() {
-  testWidgets('the queue button follows eligibility in an open chat', (
+  testWidgets('queue prompts follow the eligibility of each item in chat', (
     tester,
   ) async {
     AuthSession.saveAccessToken('test-token');
@@ -63,13 +63,37 @@ void main() {
         ),
       ),
     );
+    stream.add([
+      ChatMessage(
+        id: '34',
+        conversationId: conversation.id,
+        senderId: conversation.otherUserId,
+        message:
+            '{"rentalQueue":{"itemId":9,"name":"เลนส์","status":"invited"}}',
+        createdAt: DateTime.utc(2026, 11, 27),
+        isMine: false,
+      ),
+    ]);
     await tester.pumpAndSettle();
     final requestQueue = find.text('ขอคิวเช่าต่อ');
+    final invitation = find.text('เจ้าของชวนคุณเข้าคิว');
     expect(requestQueue, findsNothing);
+    expect(invitation, findsNothing);
 
     items = [(id: 8, name: 'กล้องที่กำลังถูกเช่า')];
     await tester.pump(const Duration(seconds: 30));
     await tester.pumpAndSettle();
+    expect(invitation, findsNothing);
+
+    items = [...items, (id: 9, name: 'เลนส์')];
+    await tester.pump(const Duration(seconds: 30));
+    await tester.pumpAndSettle();
+    expect(invitation, findsOneWidget);
+
+    items = [(id: 8, name: 'กล้องที่กำลังถูกเช่า')];
+    await tester.pump(const Duration(seconds: 30));
+    await tester.pumpAndSettle();
+    expect(invitation, findsNothing);
     final field = find.byKey(const ValueKey('chat-message-field'));
     expect(requestQueue.hitTestable(), findsOneWidget);
     expect(

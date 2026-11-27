@@ -1047,12 +1047,6 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                 defaultItemId: _conversation.itemId,
                                 onQueueAction: (action) =>
                                     _updateRentalQueue(item.message.id, action),
-                                canJoinInvitedQueue:
-                                    rentalQueue?.status ==
-                                        RentalQueueStatus.invited &&
-                                    _rentalQueueItems.any(
-                                      (item) => item.id == rentalQueue?.itemId,
-                                    ),
                                 onSendQueuedRequest:
                                     canSendQueuedRequest && rentalQueue != null
                                     ? () => _openBookingRequest(
@@ -1213,6 +1207,15 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     while (i < messages.length) {
       final msg = messages[i];
       if (msg.message.trimLeft().startsWith('📞')) {
+        i++;
+        continue;
+      }
+
+      final queue = RentalQueueCardData.fromMessage(msg.message);
+      if (queue != null &&
+          queue.status == RentalQueueStatus.invited &&
+          queue.isRenterView(isSender: msg.isMine) &&
+          !_rentalQueueItems.any((item) => item.id == queue.itemId)) {
         i++;
         continue;
       }
