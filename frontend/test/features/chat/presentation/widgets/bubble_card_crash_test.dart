@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/navigation/app_routes.dart';
 import 'package:frontend/core/services/booking_confirmation_tracker.dart';
 import 'package:frontend/core/widgets/rental_countdown_timer_widget.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
 import 'package:frontend/features/chat/presentation/widgets/booking_request_bubble_card.dart';
 import 'package:frontend/features/profile/presentation/pages/rentals/rental_tracking_map_page.dart';
-import 'package:frontend/features/rental_return/presentation/pages/rental_return_page.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -90,7 +92,7 @@ void main() {
   });
 
   testWidgets(
-    'BookingRequestBubbleCard pumps and builds without crash or overflow',
+    'a handed-over rental shows the new deadline and opens its return route',
     (tester) async {
       final now = DateTime.now();
       // จำลองกรณีที่ผู้ใช้จองไว้เมื่อ 3 วันก่อน และเพิ่งกดยืนยันเริ่มเช่าวันนี้
@@ -110,91 +112,87 @@ void main() {
         startTime: const TimeOfDay(hour: 10, minute: 0),
         endTime: const TimeOfDay(hour: 18, minute: 0),
         location: 'Siam Paragon',
+        bookingId: 101,
+        status: 'confirmed',
       );
 
-      final message = ChatMessage(
+      ChatMessage messageFor(BookingRequestData data) => ChatMessage(
         id: 'msg-test-1',
         conversationId: 'conv-1',
         senderId: 'user-1',
-        message: bookingData.toChatMessagePayload(),
+        message: data.toChatMessagePayload(),
         createdAt: now.subtract(const Duration(days: 3)),
-        isMine: true,
+        isMine: false,
         isRead: true,
       );
 
-      await BookingConfirmationTracker.markConfirmed(
-        messageId: 'msg-test-1',
-        bookingId: 101,
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: SizedBox(
-                width: 320,
-                child: BookingRequestBubbleCard(
-                  message: message,
-                  bookingData: bookingData,
-                  senderName: 'Test User',
-                  isOwner: false,
+      final booking = ValueNotifier(bookingData);
+      addTearDown(booking.dispose);
+      String? returnRentalId;
+      Object? returnRole;
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => Scaffold(
+              body: SingleChildScrollView(
+                child: SizedBox(
+                  width: 320,
+                  child: ValueListenableBuilder<BookingRequestData>(
+                    valueListenable: booking,
+                    builder: (_, data, _) => BookingRequestBubbleCard(
+                      message: messageFor(data),
+                      bookingData: data,
+                      senderName: 'Test User',
+                      isOwner: false,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+          GoRoute(
+            path: AppRoutes.rentalReturn,
+            builder: (_, state) {
+              returnRentalId = state.pathParameters['rentalId'];
+              returnRole = state.extra;
+              return const Scaffold(body: Text('หน้าคืนอุปกรณ์ทดสอบ'));
+            },
+          ),
+        ],
       );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
 
       expect(find.byType(BookingRequestBubbleCard), findsOneWidget);
-      // ตรวจสอบว่าชิปจำลองสแกน/PIN ถูกนำออกแล้ว
       expect(find.textContaining('จำลองสแกน/PIN'), findsNothing);
       expect(find.text('รายละเอียดนัดรับ'), findsOneWidget);
-
-      // ทำความสะอาด widget แรก
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-
-      // ทดสอบสร้าง BookingRequestBubbleCard ในสถานะ active
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: SizedBox(
-                width: 320,
-                child: BookingRequestBubbleCard(
-                  message: message,
-                  bookingData: bookingData,
-                  senderName: 'Test User',
-                  isOwner: false,
-                  initialStatus: 'active',
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-
-      // ตรวจสอบว่าไม่มี RentalCountdownTimerWidget ใน Bubble card อีกต่อไป (เปลี่ยนไปแจ้งเตือนทาง notification แทน)
-      expect(find.byType(RentalCountdownTimerWidget), findsNothing);
-
-      // ตรวจสอบว่ามีข้อมูล "เวลาเช่า" และ "ครบกำหนดเมื่อ" ตามที่ต้องการ
       expect(find.text('เวลาเช่า'), findsOneWidget);
-      expect(find.text('ครบกำหนดเมื่อ'), findsOneWidget);
-      expect(
-        find.text('เริ่มการเช่าแล้ว • แจ้งเตือนเวลาผ่านการแจ้งเตือน'),
-        findsOneWidget,
-      );
 
-      // ตรวจสอบปุ่ม "ส่งคืนอุปกรณ์" กดแล้วนำทางไปยังหน้าการคืนอุปกรณ์
-      expect(find.text('ส่งคืนอุปกรณ์'), findsOneWidget);
-      await tester.tap(find.text('ส่งคืนอุปกรณ์'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.byType(RentalReturnPage), findsOneWidget);
+      final handoverAt = now.subtract(const Duration(hours: 1));
+      await BookingConfirmationTracker.markHandoverStarted(
+        bookingId: 101,
+        startTime: handoverAt,
+      );
+      booking.value = bookingData.copyWith(status: 'active');
+      await tester.pumpAndSettle();
+
+      expect(find.text('รายละเอียดนัดรับ'), findsNothing);
+      expect(find.text('ระยะเวลาการเช่าที่เหลือ'), findsOneWidget);
+      final returnDeadline = DateFormat(
+        'dd/MM/yyyy เวลา HH:mm น.',
+      ).format(handoverAt.add(const Duration(days: 1)));
+      expect(find.text('ครบกำหนดส่งคืน: $returnDeadline'), findsOneWidget);
+
+      final returnButton = find.text('ส่งคืนอุปกรณ์');
+      await tester.ensureVisible(returnButton);
+      await tester.tap(returnButton);
+      await tester.pumpAndSettle();
+      expect(find.text('หน้าคืนอุปกรณ์ทดสอบ'), findsOneWidget);
+      expect(returnRentalId, '101');
+      expect(returnRole, isFalse);
+      expect(tester.takeException(), isNull);
     },
   );
 

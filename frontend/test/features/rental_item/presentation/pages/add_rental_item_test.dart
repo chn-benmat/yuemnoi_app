@@ -21,7 +21,7 @@ void main() {
   setUp(() => AuthSession.saveAccessToken('test-token'));
   tearDown(AuthSession.clear);
 
-  testWidgets('searches categories and displays both rental units', (
+  testWidgets('searches categories and accepts hourly and daily prices', (
     tester,
   ) async {
     final bloc = RentalItemBloc(
@@ -60,8 +60,24 @@ void main() {
     expect(find.text('ดนตรีและเครื่องดนตรี'), findsOneWidget);
     expect(find.text('ราคาต่อชั่วโมง'), findsOneWidget);
     expect(find.text('ราคาต่อวัน'), findsOneWidget);
-    expect(find.text('บาท / ชั่วโมง'), findsOneWidget);
-    expect(find.text('บาท / วัน'), findsOneWidget);
+    final priceFields = {'hourly-price': '45', 'daily-price': '350'};
+    for (final entry in priceFields.entries) {
+      final section = find.byKey(ValueKey('rental-item-${entry.key}'));
+      final field = find.descendant(
+        of: section,
+        matching: find.byType(TextFormField),
+      );
+      await tester.ensureVisible(field);
+      await tester.enterText(field, entry.value);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: section, matching: find.text('บาท')),
+        findsOneWidget,
+      );
+    }
+    for (final value in priceFields.values) {
+      expect(find.text(value), findsOneWidget);
+    }
   });
 
   testWidgets('shows an error when submitting without an image', (

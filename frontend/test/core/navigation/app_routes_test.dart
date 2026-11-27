@@ -21,18 +21,23 @@ void main() {
     dotenv.loadFromString(envString: 'API_URL=https://api.example.com');
   });
 
-  testWidgets('app opens login without showing the Flutter splash', (
+  testWidgets('a guest opens the home feed from the default route', (
     tester,
   ) async {
+    AuthSession.clear();
     await tester.pumpWidget(const YuemnoiApp());
     await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
 
-    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
   });
 
   testWidgets('authenticated app opens home as its initial location', (
     tester,
   ) async {
+    AuthSession.saveAccessToken('user-token');
+    addTearDown(AuthSession.clear);
     await tester.pumpWidget(const YuemnoiApp(initialRoute: AppRoutes.home));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));

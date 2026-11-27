@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/auth/domain/repositories/auth_repository.dart';
 import 'package:frontend/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:frontend/features/auth/presentation/pages/one_time_verification.dart';
+import 'package:frontend/features/auth/presentation/widgets/auth_inline_error.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:pinput/pinput.dart';
 
@@ -80,14 +81,15 @@ void main() {
     await tester.ensureVisible(confirm);
     await tester.tap(confirm);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('กรุณากรอกรหัส OTP ให้ครบ 6 หลัก'), findsOneWidget);
+    final inlineError = find.descendant(
+      of: find.byType(AuthInlineError),
+      matching: find.text('กรุณากรอกรหัส OTP ให้ครบ 6 หลัก'),
+    );
+    expect(inlineError, findsOneWidget);
+    expect(find.byType(OneTimeVerificationScreen), findsOneWidget);
     expect(find.byType(SnackBar), findsNothing);
-    expect(find.byType(AlertDialog), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('ตกลง'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(Dialog), findsNothing);
+    expect(tester.widget<Pinput>(find.byType(Pinput)).controller!.text, '123');
     verifyNever(
       () => repository.verifyOtp(
         email: any(named: 'email'),
@@ -106,6 +108,7 @@ void main() {
       isEmpty,
     );
     expect(find.text('ส่งรหัส OTP ใหม่ในอีก 60s'), findsOneWidget);
+    expect(inlineError, findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

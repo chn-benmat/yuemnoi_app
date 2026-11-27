@@ -1,0 +1,147 @@
+{
+  "request": {
+    "query": "คำตอบเพิ่มเติม",
+    "session_id": "fixture-session",
+    "history": [],
+    "context": {
+      "session_id": "fixture-session",
+      "user_goal": "เลือกอุปกรณ์",
+      "budget_max": null,
+      "budget_unit": null,
+      "intended_use": null,
+      "categories": [],
+      "target_items": [],
+      "known_facts": [
+        {
+          "dimension": "weight",
+          "value": "ต้องเบา",
+          "source_message_ids": [
+            "initial-user"
+          ]
+        }
+      ],
+      "user_constraints": [],
+      "excluded_items": [],
+      "referenced_item_ids": [],
+      "clarification_declined": false,
+      "questions": [
+        {
+          "id": "4801f0683a7f438e826795b42ca88892:batch:q1",
+          "title": "ใช้ที่ไหน",
+          "options": [
+            "ในอาคาร",
+            "กลางแจ้ง"
+          ],
+          "step": 1,
+          "total_steps": 1,
+          "dimension": "location",
+          "choices": [
+            {
+              "id": "indoor",
+              "label": "ในอาคาร",
+              "action_value": "indoor"
+            },
+            {
+              "id": "outdoor",
+              "label": "กลางแจ้ง",
+              "action_value": "outdoor"
+            }
+          ]
+        }
+      ]
+    },
+    "questionnaire_answers": [
+      {
+        "question_id": "4801f0683a7f438e826795b42ca88892:batch:q1",
+        "option_id": "outdoor"
+      }
+    ],
+    "questionnaire_skipped": false,
+    "active_question_id": "4801f0683a7f438e826795b42ca88892:batch:q1"
+  },
+  "response": {
+    "request_scope": "broad",
+    "information_sufficient": false,
+    "next_action": "clarify",
+    "response_flow": "general",
+    "response_kind": "clarification",
+    "context": {
+      "session_id": "fixture-session",
+      "user_goal": "เลือกอุปกรณ์",
+      "known_facts": [
+        {
+          "dimension": "weight",
+          "value": "ต้องเบา",
+          "source_message_ids": [
+            "initial-user"
+          ]
+        }
+      ],
+      "clarification_declined": false,
+      "questions": [
+        {
+          "dimension": "location",
+          "choices": [
+            {
+              "id": "indoor",
+              "label": "ในอาคาร",
+              "action_value": "indoor"
+            },
+            {
+              "id": "outdoor",
+              "label": "กลางแจ้ง",
+              "action_value": "outdoor"
+            }
+          ],
+          "id": "4801f0683a7f438e826795b42ca88892:batch:q1",
+          "title": "ใช้ที่ไหน",
+          "options": [
+            "ในอาคาร",
+            "กลางแจ้ง"
+          ],
+          "step": 1,
+          "total_steps": 1
+        }
+      ]
+    },
+    "references": [
+      {
+        "id": "rental.request_in_chat",
+        "kind": "app_knowledge",
+        "title": "เปิดคำขอเช่าจากแชท",
+        "reference": "frontend/lib/features/chat/presentation/pages/chat_detail.dart",
+        "reviewed_at": "2026-10-03",
+        "content_sha256": "4adbd59ff23782e151cf06cba1686ee0cff11f7eb7f5de2dcfb979cf39f28c36"
+      }
+    ],
+    "status": "success",
+    "answer": "ขอทราบอีกนิดว่าใช้อุปกรณ์ที่ไหน",
+    "recommended_items": [],
+    "questions": [
+      {
+        "dimension": "location",
+        "choices": [
+          {
+            "id": "indoor",
+            "label": "ในอาคาร",
+            "action_value": "indoor"
+          },
+          {
+            "id": "outdoor",
+            "label": "กลางแจ้ง",
+            "action_value": "outdoor"
+          }
+        ],
+        "id": "4801f0683a7f438e826795b42ca88892:batch:q1",
+        "title": "ใช้ที่ไหน",
+        "options": [
+          "ในอาคาร",
+          "กลางแจ้ง"
+        ],
+        "step": 1,
+        "total_steps": 1
+      }
+    ],
+    "suggested_replies": []
+  }
+}

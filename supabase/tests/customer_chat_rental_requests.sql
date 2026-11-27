@@ -183,6 +183,16 @@ begin
   assert exists (select 1 from public.booking_tb where id = expired.id), 'another user removed the request';
 
   perform set_config('request.jwt.claim.sub', renter::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+  set local role authenticated;
+  begin
+    delete from public.booking_tb where id = expired.id;
+    if found then raise exception 'renter deleted an expired request directly'; end if;
+  exception when insufficient_privilege then
+    null;
+  end;
+  reset role;
+  assert exists (select 1 from public.booking_tb where id = expired.id);
   set local role authenticated;
   insert into messaging.chat_message_tb(conversation_id, sender_id, message)
     select room, renter, format(E'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:\n[ITEM_INQUIRY:{"itemId":%s,"previousBookingId":%s}]', equipment_id, expired.id)
@@ -196,6 +206,7 @@ begin
     and message like 'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:%'), 'retry must send one inquiry without creating a booking';
   assert not exists (select 1 from public.booking_tb where item_id = equipment_id and status = 'pending');
   perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claim.role', '', true);
 
   expired := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 day',
     'daily', 'กรุงเทพ', 'cash', 900);
@@ -204,11 +215,13 @@ begin
   insert into messaging.chat_message_tb(conversation_id, sender_id, message)
     values (room, renter, format(E'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:\n[ITEM_INQUIRY:{"itemId":%s,"previousBookingId":%s}]', equipment_id, expired.id));
   perform set_config('request.jwt.claim.sub', renter::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
   set local role authenticated;
   insert into messaging.chat_message_tb(conversation_id, sender_id, message)
     values (room, renter, format(E'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:\n[ITEM_INQUIRY:{"itemId":%s,"previousBookingId":%s}]', equipment_id, expired.id));
   reset role;
   perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claim.role', '', true);
   assert not exists (select 1 from public.booking_tb where id = expired.id), 'reopening an existing inquiry left its expired request';
   assert (select count(*) = 2 from messaging.chat_message_tb where conversation_id = room and sender_id = renter
     and message like 'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:%'), 'existing inquiry was duplicated';

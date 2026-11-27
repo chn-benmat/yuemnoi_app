@@ -30,7 +30,7 @@ Widget _frame(Widget child, {double scale = 1, bool reduceMotion = false}) =>
 
 void main() {
   testWidgets(
-    'blank drafts cannot send and the character limit appears near 200',
+    'blank drafts cannot send and long drafts are counted without truncation',
     (tester) async {
       final controller = TextEditingController();
       final focus = FocusNode();
@@ -74,14 +74,17 @@ void main() {
         'a' * 160,
       );
       await tester.pump();
-      expect(find.text('160/200'), findsOneWidget);
+      expect(find.text('160'), findsOneWidget);
+      final longDraft = 'a' * 201;
       await tester.enterText(
         find.byKey(const Key('chatbot-message-field')),
-        'a' * 201,
+        longDraft,
       );
       await tester.pump();
-      expect(controller.text.length, 200);
-      expect(find.text('200/200'), findsOneWidget);
+      expect(controller.text, longDraft);
+      expect(find.text('201'), findsOneWidget);
+      await tester.tap(send);
+      expect(sends, 2);
     },
   );
 

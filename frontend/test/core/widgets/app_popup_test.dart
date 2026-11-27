@@ -40,12 +40,12 @@ void main() {
     await tester.tap(find.text('บันทึก'));
     await tester.pumpAndSettle();
     expect(find.byType(SnackBar), findsNothing);
-    expect(find.byType(AlertDialog), findsOneWidget);
-    expect(find.text('บันทึกไม่สำเร็จ'), findsOneWidget);
-    await tester.tap(find.text('ตกลง'));
+    final popup = find.widgetWithText(Dialog, 'บันทึกไม่สำเร็จ');
+    expect(popup, findsOneWidget);
+    await tester.tap(find.descendant(of: popup, matching: find.text('ยืนยัน')));
     await tester.pumpAndSettle();
     expect(find.text('หน้าหลัก'), findsOneWidget);
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(popup, findsNothing);
     expect(tester.takeException(), isNull);
   });
 

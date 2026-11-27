@@ -45,10 +45,10 @@ const _understanding = ChatUnderstanding(
 );
 const _sampleItem = RecommendedItem(
   id: 7,
-  name: 'ชุดเลนส์สำหรับถ่ายภาพ',
+  name: 'สมาร์ตโฟนสำหรับถ่ายภาพ',
   price: 350,
   unit: 'วัน',
-  imageUrl: 'assets/images/chat_lens_set.png',
+  imageUrl: 'assets/images/smartphone.png',
   status: 'พร้อมให้เช่า',
   category: 'กล้องและอุปกรณ์',
   description: 'ข้อมูลตัวอย่างสำหรับตรวจหน้าจอ',
@@ -140,10 +140,7 @@ void main() {
         const AssetImage('assets/images/yuemnoi.png'),
         context,
       );
-      await precacheImage(
-        const AssetImage('assets/images/chat_lens_set.png'),
-        context,
-      );
+      await precacheImage(AssetImage(_sampleItem.imageUrl), context);
     });
     await tester.pump(const Duration(milliseconds: 500));
     return bloc;
@@ -217,8 +214,8 @@ void main() {
         messages: [
           _summary.copyWith(
             content:
-                '**ชุดเลนส์สำหรับถ่ายภาพ**\n\n'
-                '- **รายละเอียด**: ชุดเลนส์สำหรับงานถ่ายภาพในห้อง\n'
+                '**สมาร์ตโฟนสำหรับถ่ายภาพ**\n\n'
+                '- **รายละเอียด**: สมาร์ตโฟนสำหรับงานถ่ายภาพในห้อง\n'
                 '- ราคา: 350 บาทต่อวัน',
             recommendedItems: const [_sampleItem],
             understanding: _understanding,
