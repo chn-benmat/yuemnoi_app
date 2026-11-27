@@ -578,46 +578,39 @@ abstract final class AppRoutes {
         GoRoute(
           path: booking,
           pageBuilder: (context, state) {
-            if (state.extra is BookingRequestData) {
-              final data = state.extra as BookingRequestData;
-              return MaterialPage<void>(
-                key: state.pageKey,
-                child: data.isCustomerRequest
-                    ? BlocProvider(
-                        create: (_) {
-                          final repository = RentalRequestRepositoryImpl(
-                            RentalRequestRemoteDataSource(),
-                          );
-                          return RentalRequestCubit(
-                            submitRentalRequest: SubmitRentalRequestUseCase(
-                              repository,
-                            ),
-                            repository: repository,
-                          );
-                        },
-                        child: BookingRequestPage(initialData: data),
-                      )
-                    : BookingRequestPage(initialData: data),
-              );
-            }
-            if (state.extra is Map<String, dynamic>) {
-              final map = state.extra as Map<String, dynamic>;
-              return MaterialPage<void>(
-                key: state.pageKey,
-                child: BookingRequestPage(
-                  initialData: map['initialData'] as BookingRequestData?,
-                  itemId: map['itemId'] as int?,
-                  isEditMode: map['isEditMode'] as bool? ?? false,
-                  originalQueueOfferMessage:
-                      map['originalQueueOfferMessage'] as String?,
-                  onSendRequest:
-                      map['onSendRequest'] as ValueChanged<BookingRequestData>?,
-                ),
-              );
-            }
+            final page = switch (state.extra) {
+              final BookingRequestData data => BookingRequestPage(
+                initialData: data,
+              ),
+              final Map<String, dynamic> map => BookingRequestPage(
+                initialData: map['initialData'] as BookingRequestData?,
+                itemId: map['itemId'] as int?,
+                isEditMode: map['isEditMode'] as bool? ?? false,
+                originalQueueOfferMessage:
+                    map['originalQueueOfferMessage'] as String?,
+                onSendRequest:
+                    map['onSendRequest'] as ValueChanged<BookingRequestData>?,
+              ),
+              _ => const BookingRequestPage(),
+            };
             return MaterialPage<void>(
               key: state.pageKey,
-              child: const BookingRequestPage(),
+              child: page.initialData?.isCustomerRequest == true
+                  ? BlocProvider(
+                      create: (_) {
+                        final repository = RentalRequestRepositoryImpl(
+                          RentalRequestRemoteDataSource(),
+                        );
+                        return RentalRequestCubit(
+                          submitRentalRequest: SubmitRentalRequestUseCase(
+                            repository,
+                          ),
+                          repository: repository,
+                        );
+                      },
+                      child: page,
+                    )
+                  : page,
             );
           },
         ),
