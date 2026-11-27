@@ -20,7 +20,13 @@ class ConfirmRentalRequestUseCase {
       paymentMethod: paymentMethod,
     );
     if (result.id != rentalId ||
-        !const ['confirmed', 'active', 'completed'].contains(result.status)) {
+        !const [
+          'confirmed',
+          'active',
+          'awaiting_return',
+          'return_ready',
+          'completed',
+        ].contains(result.status)) {
       throw const RentalRequestException(
         'ระบบยังไม่ยืนยันการเช่า กรุณาลองใหม่',
       );

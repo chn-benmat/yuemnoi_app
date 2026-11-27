@@ -83,6 +83,28 @@ void main() {
     BookingConfirmationTracker.clearMemoryCache();
   });
 
+  test(
+    'owner confirms the existing customer booking without submission',
+    () async {
+      final repository = FakeRentalRequestRepository();
+      final cubit = buildCubit(repository);
+      addTearDown(cubit.close);
+
+      expect(
+        await cubit.confirm(
+          rentalId: 25,
+          offerMessageId: '36',
+          paymentMethod: '',
+        ),
+        isTrue,
+      );
+      expect(cubit.state.status, RentalRequestStatus.confirmed);
+      expect(repository.confirmedRentalId, 25);
+      expect(repository.confirmedOfferMessageId, '36');
+      expect(repository.submitCalls, 0);
+    },
+  );
+
   testWidgets('a blocked rental opens the checklist and its contact page', (
     tester,
   ) async {

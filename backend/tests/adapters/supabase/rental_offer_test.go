@@ -23,6 +23,79 @@ func (offerConfirmationVerifier) UserIDFromToken(context.Context, string) (strin
 	return "renter", nil
 }
 
+func TestCustomerChatRequestUsesAuthenticatedRenterAndCreatesPendingBooking(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/v1/rpc/create_chat_rental_request" {
+			t.Errorf("unexpected request: %s", r.URL.Path)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil ||
+			body["p_renter"] != "renter" || body["p_payment_method"] != "promptpay" || body["p_expected_unit_price"] != float64(150) ||
+			body["p_conversation"] != "94932fed-0903-4413-92a4-193b00bca455" || body["p_queue_message_id"] != float64(11) {
+			t.Errorf("unexpected RPC arguments: %v, %v", body, err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"id":25,"status":"pending","rental_request_message_id":36}`)
+	}))
+	defer server.Close()
+
+	repository := supabase.NewSupabaseRentalRepository(supabaseclient.CreateClient(server.URL, "test-key"))
+	app := ports.NewHTTPApp()
+	defer app.Shutdown()
+	app.Post("/api/rentals", ports.NewRentalHandler(repository, offerConfirmationVerifier{}).CreateRentalOrder)
+	request := httptest.NewRequest(http.MethodPost, "/api/rentals", strings.NewReader(
+		`{"item_id":7,"start_at":"2026-11-27T02:00:00Z","end_at":"2026-11-27T03:00:00Z","rental_type":"hourly","pickup_location":"Pickup","conversation_id":"94932fed-0903-4413-92a4-193b00bca455","payment_method":"promptpay","unit_price":150,"queue_message_id":11}`,
+	))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer renter-token")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var rental domain.RentalOrder
+	if err := json.NewDecoder(response.Body).Decode(&rental); err != nil || response.StatusCode != http.StatusCreated || rental.ID != 25 || rental.Status != "pending" {
+		t.Fatalf("status=%d rental=%+v err=%v", response.StatusCode, rental, err)
+	}
+}
+
+func TestCustomerChatRequestConfirmationUsesTheLinkedCardAndPreservesPayment(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/rest/v1/booking_tb":
+			fmt.Fprint(w, `[{"id":25,"user_id":"renter","status":"pending","rental_request_message_id":36}]`)
+		case "/rest/v1/rpc/confirm_chat_rental_request":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil ||
+				body["p_booking_id"] != float64(25) || body["p_message_id"] != float64(36) || len(body) != 3 {
+				t.Errorf("unexpected RPC arguments: %v, %v", body, err)
+			}
+			if body["p_owner"] == "owner" {
+				fmt.Fprint(w, `{"id":25,"status":"confirmed","payment_method":"promptpay"}`)
+				return
+			}
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"code":"P0001","message":"rental_forbidden"}`)
+		default:
+			t.Errorf("unexpected request: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	repository := supabase.NewSupabaseRentalRepository(supabaseclient.CreateClient(server.URL, "test-key"))
+	if _, err := repository.ConfirmRental(context.Background(), "renter", 25, "36", "cash"); !errors.Is(err, domain.ErrRentalForbidden) {
+		t.Fatalf("renter confirmation error = %v", err)
+	}
+	if _, err := repository.ConfirmRental(context.Background(), "owner", 25, "37", "cash"); !errors.Is(err, domain.ErrInvalidRental) {
+		t.Fatalf("mismatched card error = %v", err)
+	}
+	confirmed, err := repository.ConfirmRental(context.Background(), "owner", 25, "36", "cash")
+	if err != nil || confirmed.Status != "confirmed" || confirmed.PaymentMethod != "promptpay" {
+		t.Fatalf("confirmed rental = %+v, err = %v", confirmed, err)
+	}
+}
+
 func TestRentalCreationMapsDatabaseRejections(t *testing.T) {
 	for _, tc := range []struct {
 		failure, code string

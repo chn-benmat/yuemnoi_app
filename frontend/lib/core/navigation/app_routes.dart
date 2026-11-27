@@ -577,11 +577,25 @@ abstract final class AppRoutes {
           path: booking,
           pageBuilder: (context, state) {
             if (state.extra is BookingRequestData) {
+              final data = state.extra as BookingRequestData;
               return MaterialPage<void>(
                 key: state.pageKey,
-                child: BookingRequestPage(
-                  initialData: state.extra as BookingRequestData,
-                ),
+                child: data.isCustomerRequest
+                    ? BlocProvider(
+                        create: (_) {
+                          final repository = RentalRequestRepositoryImpl(
+                            RentalRequestRemoteDataSource(),
+                          );
+                          return RentalRequestCubit(
+                            submitRentalRequest: SubmitRentalRequestUseCase(
+                              repository,
+                            ),
+                            repository: repository,
+                          );
+                        },
+                        child: BookingRequestPage(initialData: data),
+                      )
+                    : BookingRequestPage(initialData: data),
               );
             }
             if (state.extra is Map<String, dynamic>) {

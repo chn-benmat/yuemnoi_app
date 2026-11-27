@@ -9,10 +9,12 @@ class BookingTypeDropdown extends StatelessWidget {
     required this.selectedType,
     required this.onChanged,
     this.showError = false,
+    this.availableTypes = BookingRentalType.values,
   });
   final BookingRentalType? selectedType;
   final ValueChanged<BookingRentalType> onChanged;
   final bool showError;
+  final List<BookingRentalType> availableTypes;
 
   @override
   Widget build(BuildContext context) {
@@ -30,9 +32,8 @@ class BookingTypeDropdown extends StatelessWidget {
         const SizedBox(height: 8),
         Row(
           children: [
-            for (final type in BookingRentalType.values) ...[
-              if (type != BookingRentalType.values.first)
-                const SizedBox(width: 10),
+            for (final type in availableTypes) ...[
+              if (type != availableTypes.first) const SizedBox(width: 10),
               Expanded(
                 child: Semantics(
                   selected: selectedType == type,

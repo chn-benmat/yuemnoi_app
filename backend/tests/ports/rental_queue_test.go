@@ -48,10 +48,12 @@ func TestRentalQueueValidatesActionTargets(t *testing.T) {
 		action, target string
 		want           int
 	}{
-		{"invite", `,"item_id":8`, http.StatusOK},
+		{"request", `,"item_id":8`, http.StatusOK},
+		{"invite", `,"item_id":8`, http.StatusBadRequest},
+		{"request", "", http.StatusBadRequest},
 		{"accept", `,"message_id":35`, http.StatusOK},
 		{"accept", `,"item_id":8`, http.StatusBadRequest},
-		{"invite", `,"item_id":8,"message_id":35`, http.StatusBadRequest},
+		{"request", `,"item_id":8,"message_id":35`, http.StatusBadRequest},
 	} {
 		t.Run(tc.action+tc.target, func(t *testing.T) {
 			repo := &queueTestRepository{}

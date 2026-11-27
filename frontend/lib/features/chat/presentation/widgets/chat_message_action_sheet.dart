@@ -17,6 +17,10 @@ String _extractActualTextMessage(String raw) {
     final idx = text.indexOf(BookingRequestData.metaStartTag);
     text = text.substring(0, idx).trim();
   }
+  if (text.contains(BookingRequestData.customerRequestMetaTag)) {
+    final idx = text.indexOf(BookingRequestData.customerRequestMetaTag);
+    text = text.substring(0, idx).trim();
+  }
   if (text.startsWith('↩ ตอบกลับ:') ||
       text.startsWith('💬 ตอบกลับ') ||
       text.startsWith('↪ ตอบกลับ')) {
@@ -227,12 +231,15 @@ class ChatMessageActionSheet extends StatelessWidget {
                 color: Colors.white,
                 onTap: onEdit!,
               ),
-            _ActionButton(
-              icon: Icons.delete_outline_rounded,
-              label: 'ลบ',
-              color: const Color(0xFFF43F5E),
-              onTap: onDelete,
-            ),
+            if (!message.message.contains(
+              BookingRequestData.customerRequestMetaTag,
+            ))
+              _ActionButton(
+                icon: Icons.delete_outline_rounded,
+                label: 'ลบ',
+                color: const Color(0xFFF43F5E),
+                onTap: onDelete,
+              ),
           ],
         ),
       ),

@@ -316,10 +316,13 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             }
           });
 
-          await BookingConfirmationTracker.markConfirmed(
-            messageId: widget.message.id,
-            bookingId: targetBookingId,
-          );
+          if (!widget.bookingData.isCustomerRequest ||
+              resolvedStatus != 'pending') {
+            await BookingConfirmationTracker.markConfirmed(
+              messageId: widget.message.id,
+              bookingId: targetBookingId,
+            );
+          }
           await BookingConfirmationTracker.setStatus(
             messageId: widget.message.id,
             status: resolvedStatus,
@@ -339,6 +342,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
       }
     } catch (_) {
       if (mounted &&
+          !widget.bookingData.isCustomerRequest &&
           !_isConfirmed &&
           !isLocallyConfirmed &&
           !widget.isHandoverCompleted &&
@@ -354,8 +358,15 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
 
   bool _checkIsOwner() {
     if (widget.isOwner != null) return widget.isOwner!;
-    return widget.message.isMine;
+    return widget.message.isMine != widget.bookingData.isCustomerRequest;
   }
+
+  bool get _canConfirmCustomerRequest =>
+      _checkIsOwner() &&
+      !widget.message.isMine &&
+      _rentalStatus == 'pending' &&
+      (_bookingId ?? 0) > 0 &&
+      !widget.bookingData.hasCustomerRequestStartPassed;
 
   void _openMeetupLocation(BuildContext context) {
     final bookingData = widget.bookingData;
@@ -364,7 +375,10 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     AppRoutes.openRentalTrackingMap(
       context,
       isOwner: isOwner,
-      pickupOnly: bookingId == null || bookingId <= 0,
+      pickupOnly:
+          bookingId == null ||
+          bookingId <= 0 ||
+          (bookingData.isCustomerRequest && !_isConfirmed),
       trackingArgs: {
         'itemTitle': bookingData.item.title,
         'itemImageUrl': bookingData.item.imageUrl,
@@ -414,7 +428,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     }
 
     if (isEditMode) {
-      if (!isOwner) return;
+      if (!isOwner || attachedData.isCustomerRequest) return;
       final isQueueOffer = attachedData.rentalQueueMessageId != null;
       if (isQueueOffer && attachedData.bookingId != null) {
         showAppPopup(
@@ -434,14 +448,16 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
       return;
     }
 
+    if (attachedData.isCustomerRequest && !_canConfirmCustomerRequest) return;
     final confirmed = await AppRoutes.openBookingConfirmation(
       context,
       bookingData: attachedData,
     );
     if (confirmed == true ||
-        await BookingConfirmationTracker.isConfirmed(
-          messageId: widget.message.id,
-        )) {
+        (!attachedData.isCustomerRequest &&
+            await BookingConfirmationTracker.isConfirmed(
+              messageId: widget.message.id,
+            ))) {
       final int? updatedBookingId =
           await BookingConfirmationTracker.getBookingId(
             messageId: widget.message.id,
@@ -449,6 +465,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
       if (mounted) {
         setState(() {
           _isConfirmed = true;
+          if (_rentalStatus == 'pending' && confirmed == true) {
+            _rentalStatus = 'confirmed';
+          }
           if (updatedBookingId != null && updatedBookingId > 0) {
             _bookingId = updatedBookingId;
           }
@@ -874,6 +893,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   ),
                 ),
               )
+            else if (widget.bookingData.isCustomerRequest &&
+                !_canConfirmCustomerRequest)
+              const SizedBox.shrink()
             else if (isMine && isOwnerUser)
               // ผู้ส่งคำขอ/ข้อเสนอ -> สามารถกดแก้ไขรายละเอียดได้
               SizedBox(
@@ -937,7 +959,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     color: Colors.white,
                   ),
                   label: Text(
-                    isOwnerUser
+                    widget.bookingData.isCustomerRequest
+                        ? 'ตรวจสอบและยืนยันคำขอเช่า'
+                        : isOwnerUser
                         ? 'ตรวจสอบและยอมรับคำขอเช่า'
                         : 'ตรวจสอบคำขอเช่า',
                     style: const TextStyle(
@@ -1057,6 +1081,14 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     }
     if (_rentalStatus == 'confirmed') {
       return 'ยืนยันเรียบร้อยแล้ว รอนัดรับและส่งมอบอุปกรณ์';
+    }
+    if (widget.bookingData.isCustomerRequest && _rentalStatus == 'pending') {
+      if (widget.bookingData.hasCustomerRequestStartPassed) {
+        return 'เวลานัดรับผ่านไปแล้ว';
+      }
+      return _checkIsOwner()
+          ? 'ลูกค้าส่งคำขอเช่าให้คุณตรวจสอบ'
+          : 'รอผู้ปล่อยเช่ายืนยันคำขอ';
     }
     return 'ตรวจสอบข้อมูลและรายละเอียดยืนยันการนัดรับ';
   }

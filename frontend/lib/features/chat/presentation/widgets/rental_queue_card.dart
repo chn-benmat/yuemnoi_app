@@ -10,13 +10,15 @@ class RentalQueueCard extends StatefulWidget {
     required this.data,
     required this.isOwner,
     required this.onAction,
-    this.onSendOffer,
+    this.canJoin = true,
+    this.onSendRequest,
   });
 
   final RentalQueueCardData data;
   final bool isOwner;
   final Future<void> Function(String action) onAction;
-  final VoidCallback? onSendOffer;
+  final bool canJoin;
+  final VoidCallback? onSendRequest;
 
   @override
   State<RentalQueueCard> createState() => _RentalQueueCardState();
@@ -49,9 +51,7 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
       RentalQueueStatus.ready =>
         owner ? 'กันอุปกรณ์ให้คิวนี้แล้ว' : 'อุปกรณ์พร้อมให้เช่าต่อ',
       RentalQueueStatus.accepted =>
-        owner
-            ? 'ผู้เช่ายืนยันสิทธิ์แล้ว'
-            : 'ยืนยันสิทธิ์แล้ว · รอข้อเสนอจากเจ้าของ',
+        owner ? 'ผู้เช่ายืนยันสิทธิ์แล้ว' : 'ยืนยันสิทธิ์แล้ว · ส่งคำขอเช่าได้',
       RentalQueueStatus.booked => 'จองเช่าสำเร็จ',
       RentalQueueStatus.left => 'ออกจากคิวแล้ว',
       RentalQueueStatus.expired => 'หมดเวลายืนยันการเช่า',
@@ -66,7 +66,7 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
           _ => false,
         };
     final String? action = switch (data.status) {
-      RentalQueueStatus.invited when !owner => 'join',
+      RentalQueueStatus.invited when !owner && widget.canJoin => 'join',
       RentalQueueStatus.ready when !owner => 'accept',
       _ => null,
     };
@@ -111,13 +111,15 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
             FilledButton(
               onPressed: _busy ? null : () => _perform(action),
               child: Text(
-                action == 'join' ? 'เข้าคิวเช่าต่อ' : 'ยืนยันสิทธิ์และนัดรับ',
+                action == 'join' ? 'ขอคิวเช่าต่อ' : 'ยืนยันสิทธิ์และนัดรับ',
               ),
             ),
-          if (widget.onSendOffer != null)
+          if (!owner &&
+              data.status == RentalQueueStatus.accepted &&
+              widget.onSendRequest != null)
             FilledButton(
-              onPressed: widget.onSendOffer,
-              child: const Text('ส่งข้อเสนอและนัดรับ'),
+              onPressed: widget.onSendRequest,
+              child: const Text('ส่งคำขอเช่า'),
             ),
           if (canLeave)
             TextButton(

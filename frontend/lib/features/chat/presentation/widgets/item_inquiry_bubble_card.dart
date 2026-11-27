@@ -275,8 +275,9 @@ class ItemInquiryBubbleCard extends StatelessWidget {
               ),
             ],
 
-            // ให้สร้างข้อเสนอได้เฉพาะเจ้าของอุปกรณ์ แม้ caller จะส่ง callback มา
-            if (isOwner == true && onSendBookingRequest != null) ...[
+            if (isOwner == false &&
+                message.isMine &&
+                onSendBookingRequest != null) ...[
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -297,7 +298,7 @@ class ItemInquiryBubbleCard extends StatelessWidget {
                   onPressed: () => onSendBookingRequest!(inquiryData),
                   icon: const Icon(Icons.receipt_long_rounded, size: 15),
                   label: Text(
-                    'สร้างข้อเสนอการเช่า / นัดรับ',
+                    'ส่งคำขอเช่าอุปกรณ์นี้',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 12,

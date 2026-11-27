@@ -16,6 +16,7 @@ class RentalQueueCardData {
     required this.itemId,
     required this.name,
     required this.status,
+    this.requestedByRenter = false,
     this.price,
     this.additionalDailyPrice,
     this.rentalType,
@@ -28,6 +29,7 @@ class RentalQueueCardData {
   final int itemId;
   final String name;
   final RentalQueueStatus status;
+  final bool requestedByRenter;
   final int? price;
   final int? additionalDailyPrice;
   final String? rentalType;
@@ -35,6 +37,8 @@ class RentalQueueCardData {
   final DateTime? dueAt;
   final DateTime? expiresAt;
   final DateTime? acceptedAt;
+
+  bool isRenterView({required bool isSender}) => isSender == requestedByRenter;
 
   String? get unitLabel => switch (rentalType) {
     'hourly' || 'hour' || 'รายชั่วโมง' => 'ชั่วโมง',
@@ -53,6 +57,7 @@ class RentalQueueCardData {
         itemId: itemId,
         name: name,
         status: RentalQueueStatus.values.byName(data['status'] as String),
+        requestedByRenter: data['requestedByRenter'] == true,
         price: data['price'] as int?,
         additionalDailyPrice: data['dailyPrice'] as int?,
         rentalType: data['rentalType'] as String?,
