@@ -40,6 +40,10 @@ class _Repository extends FakeUserItemsRepository {
   var fail = false;
   var requests = 0;
   Future<List<UserItem>>? pending;
+  Stream<void> changes = const Stream.empty();
+
+  @override
+  Stream<void> watchMyItemChanges(String userId) => changes;
 
   @override
   Future<List<UserItem>> getMyItems(String userId) async {
@@ -69,6 +73,56 @@ Future<void> _selectStatus(WidgetTester tester, String status) async {
 }
 
 void main() {
+  testWidgets('updates a review badge and filter counts on a live change', (
+    tester,
+  ) async {
+    const pendingReview = UserItem(
+      id: 1,
+      title: 'MacBook Pro',
+      subtitle: '',
+      status: 'pending_review',
+    );
+    final changes = StreamController<void>.broadcast();
+    addTearDown(changes.close);
+    final repository = _Repository()
+      ..items = [pendingReview]
+      ..changes = changes.stream;
+    await tester.pumpWidget(_app(repository));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'MacBook');
+    expect(find.text('รอแอดมินตรวจสอบ'), findsOneWidget);
+
+    final updatedItems = Completer<List<UserItem>>();
+    repository.pending = updatedItems.future;
+    changes.add(null);
+    await tester.pump();
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    updatedItems.complete([_laptop]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('รอแอดมินตรวจสอบ'), findsNothing);
+    expect(find.text('เปิดให้เช่า'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'MacBook',
+    );
+    await tester.tap(find.byKey(const ValueKey('my-items-filter-button')));
+    await tester.pumpAndSettle();
+    for (final entry in {'pendingReview': '0', 'available': '1'}.entries) {
+      expect(
+        find.descendant(
+          of: find.byKey(ValueKey('my-items-filter-${entry.key}')),
+          matching: find.text(entry.value),
+        ),
+        findsOneWidget,
+      );
+    }
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    expect(changes.hasListener, isFalse);
+  });
+
   testWidgets('a moderated listing appears as removed from public view', (
     tester,
   ) async {
