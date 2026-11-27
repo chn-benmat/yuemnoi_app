@@ -14,6 +14,7 @@ declare
   booking_id bigint;
   card_id bigint;
   next_card_id bigint;
+  ready_message_id bigint;
   card jsonb;
   items jsonb;
 begin
@@ -89,6 +90,15 @@ begin
     raise exception 'expected the second customer to wait behind the first, got %', card;
   end if;
   update public.booking_tb set status = 'completed' where id = booking_id;
+  select message::jsonb->'rentalQueue' into card from messaging.chat_message_tb where id = card_id;
+  ready_message_id := (card->>'readyMessageId')::bigint;
+  if (card->>'status') is distinct from 'ready' or not exists (
+    select 1 from messaging.chat_message_tb where id = ready_message_id
+      and conversation_id = customer_room and sender_id = owner_id
+      and message = 'อุปกรณ์พร้อมให้เช่าต่อแล้ว กรุณายืนยันสิทธิ์ในการ์ดคิวภายใน 24 ชั่วโมง'
+  ) then
+    raise exception 'the original card must reference its owner-sent ready notice, got %', card;
+  end if;
   if public.rental_queue_action(current_renter_id, current_renter_room, 'list')->'items' <> '[]'::jsonb then
     raise exception 'a queue hold must not be treated as an active rental';
   end if;
@@ -100,7 +110,8 @@ begin
   end;
   perform public.rental_queue_action(customer_id, customer_room, 'accept', p_message_id => card_id);
   select message::jsonb->'rentalQueue' into card from messaging.chat_message_tb where id = card_id;
-  if (card->>'status') is distinct from 'accepted' or (card->>'requestedByRenter') is distinct from 'true' then
+  if (card->>'status') is distinct from 'accepted' or (card->>'requestedByRenter') is distinct from 'true'
+    or (card->>'readyMessageId')::bigint is distinct from ready_message_id then
     raise exception 'the customer should be able to accept the promoted card they sent, got %', card;
   end if;
   perform public.rental_queue_action(customer_id, customer_room, 'leave', p_message_id => card_id);

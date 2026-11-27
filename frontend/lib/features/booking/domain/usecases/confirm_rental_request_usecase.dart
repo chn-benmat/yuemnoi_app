@@ -10,6 +10,7 @@ class ConfirmRentalRequestUseCase {
     required int rentalId,
     required String offerMessageId,
     required String paymentMethod,
+    int? requestRevision,
   }) async {
     if (rentalId <= 0 || offerMessageId.trim().isEmpty) {
       throw const RentalRequestException('ไม่พบข้อเสนอที่ต้องการยืนยัน');
@@ -18,6 +19,7 @@ class ConfirmRentalRequestUseCase {
       rentalId: rentalId,
       offerMessageId: offerMessageId,
       paymentMethod: paymentMethod,
+      requestRevision: requestRevision,
     );
     if (result.id != rentalId ||
         !const [

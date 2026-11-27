@@ -3,6 +3,8 @@ import 'package:equatable/equatable.dart';
 enum ChatParticipantRole { owner, renter }
 
 class ChatConversation extends Equatable {
+  static const anonymousAvatar = 'anonymous';
+
   const ChatConversation({
     required this.id,
     required this.otherUserId,
@@ -39,6 +41,8 @@ class ChatConversation extends Equatable {
   final ChatParticipantRole? itemRentalRole;
   final bool isOnline;
   final bool hasUnreadMessage;
+
+  bool get isOtherUserUnavailable => avatarAsset == anonymousAvatar;
 
   ChatParticipantRole get currentUserRentalRole =>
       itemRentalRole ??

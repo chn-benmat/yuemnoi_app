@@ -8,6 +8,7 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../chat/data/datasources/chat_remote_data_source.dart';
+import '../../../item_detail/data/datasources/item_detail_remote_data_source.dart';
 import '../../domain/entities/booking_request_model.dart';
 import '../../domain/entities/rental_request.dart';
 import '../bloc/rental_request_cubit.dart';
@@ -47,6 +48,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
   bool _showLocationError = false;
   String? _locationAddress;
   bool _isSubmitting = false;
+  bool _isReviewing = false;
 
   @override
   void initState() {
@@ -71,6 +73,28 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     _selectedRentalType = _bookingData.rentalType;
     _hasSelectedLocation = _bookingData.location.trim().isNotEmpty;
     _locationAddress = _bookingData.locationAddress;
+    if (widget.isEditMode && _bookingData.isCustomerRequest) {
+      _loadCurrentRentalRates();
+    }
+  }
+
+  Future<void> _loadCurrentRentalRates() async {
+    try {
+      final item = await ItemDetailRemoteDataSource().fetchById(
+        _bookingData.item.id,
+      );
+      if (!mounted || _isSubmitting || _isReviewing) return;
+      setState(() {
+        _bookingData = _bookingData.copyWith(
+          item: _bookingData.item.copyWith(
+            hourlyRate: item.hourlyPrice?.toDouble(),
+            dailyRate: item.dailyPrice?.toDouble(),
+          ),
+        );
+      });
+    } catch (_) {
+      // ใช้เรตจากการ์ดระหว่างแก้ไข และให้เซิร์ฟเวอร์ตรวจเรตอีกครั้งตอนบันทึก
+    }
   }
 
   bool get _isRentalPeriodValid {
@@ -234,6 +258,15 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
   }
 
   Future<void> _submitCustomerRequest() async {
+    if (widget.isEditMode &&
+        ((_bookingData.bookingId ?? 0) <= 0 ||
+            (_bookingData.conversationId?.isEmpty ?? true))) {
+      showAppPopup(
+        context,
+        content: const Text('กรุณาเปิดแก้ไขจากการ์ดคำขอเช่าในแชท'),
+      );
+      return;
+    }
     final cubit = context.read<RentalRequestCubit>();
     final sent = await cubit.submit(
       RentalRequestDraft(
@@ -246,6 +279,10 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
         paymentMethod: _bookingData.paymentMethod,
         unitPrice: _bookingData.unitRate.toInt(),
         queueMessageId: _bookingData.rentalQueueMessageId,
+        bookingId: widget.isEditMode ? _bookingData.bookingId : null,
+        requestRevision: widget.isEditMode
+            ? _bookingData.requestRevision
+            : null,
       ),
     );
     if (!mounted) return;
@@ -257,19 +294,24 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     if (verification == null) {
       showAppPopup(
         context,
-        content: Text(cubit.state.errorMessage ?? 'ส่งคำขอเช่าไม่สำเร็จ'),
+        content: Text(
+          cubit.state.errorMessage ??
+              (widget.isEditMode
+                  ? 'บันทึกการแก้ไขไม่สำเร็จ'
+                  : 'ส่งคำขอเช่าไม่สำเร็จ'),
+        ),
       );
       return;
     }
     await AppRoutes.openRentalVerification(
       context,
       verification,
-      action: 'ส่งคำขอเช่า',
+      action: widget.isEditMode ? 'แก้ไขคำขอเช่า' : 'ส่งคำขอเช่า',
     );
   }
 
-  void _handleSendBookingRequest() {
-    if (!_checkQueueOfferStart()) return;
+  Future<void> _handleSendBookingRequest() async {
+    if (_isReviewing || !_checkQueueOfferStart()) return;
     final hasValidationError =
         _selectedRentalType == null ||
         !_isRentalPeriodValid ||
@@ -285,7 +327,8 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     }
 
     // แสดง Bottom Sheet สรุปตรวจสอบรายละเอียดก่อนส่งคำขอไปยังแชท
-    showModalBottomSheet<void>(
+    _isReviewing = true;
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -545,6 +588,7 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
         );
       },
     );
+    _isReviewing = false;
   }
 
   Widget _buildSummaryItem({

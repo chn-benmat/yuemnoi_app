@@ -1063,7 +1063,6 @@ class _DetailContent extends StatelessWidget {
                 _OwnerCard(item: item),
                 const SizedBox(height: 24),
                 _ReviewsSection(
-                  key: ValueKey('reviews-${item.id}'),
                   reviews: item.reviews,
                   averageRating: item.averageRating,
                 ),
@@ -1501,81 +1500,16 @@ class _RelatedItemsSection extends StatelessWidget {
   );
 }
 
-class _ReviewsSection extends StatefulWidget {
-  const _ReviewsSection({
-    super.key,
-    required this.reviews,
-    required this.averageRating,
-  });
+class _ReviewsSection extends StatelessWidget {
+  const _ReviewsSection({required this.reviews, required this.averageRating});
 
   final List<ItemReview> reviews;
   final double averageRating;
 
-  @override
-  State<_ReviewsSection> createState() => _ReviewsSectionState();
-}
-
-class _ReviewsSectionState extends State<_ReviewsSection> {
-  final _controller = PageController();
-  Timer? _timer;
-  int _page = 0;
-  bool _showingMore = false;
-
-  int get _count => widget.reviews.take(4).length;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _restartTimer();
-  }
-
-  @override
-  void didUpdateWidget(covariant _ReviewsSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!listEquals(oldWidget.reviews, widget.reviews)) {
-      _page = 0;
-      if (_controller.hasClients) _controller.jumpToPage(0);
-      _restartTimer();
-    }
-  }
-
-  void _restartTimer() {
-    _timer?.cancel();
-    final media = MediaQuery.of(context);
-    if (_count < 2 || media.disableAnimations || media.accessibleNavigation)
-      return;
-    _timer = Timer.periodic(const Duration(seconds: 6), (_) {
-      if (!_controller.hasClients ||
-          _showingMore ||
-          !TickerMode.valuesOf(context).enabled ||
-          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
-          _controller.position.isScrollingNotifier.value)
-        return;
-      _controller.animateToPage(
-        (_page + 1) % _count,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
-    });
-  }
-
-  Future<void> _showMore() async {
-    _showingMore = true;
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => _AllReviewsPage(reviews: widget.reviews),
-      ),
+  void _showMore(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => _AllReviewsPage(reviews: reviews)),
     );
-    if (!mounted) return;
-    _showingMore = false;
-    _restartTimer();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _controller.dispose();
-    super.dispose();
   }
 
   @override
@@ -1585,25 +1519,26 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
       Row(
         children: [
           const Expanded(child: _SectionTitle('รีวิวจากคนที่เช่า')),
-          if (widget.reviews.isNotEmpty)
-            TextButton(onPressed: _showMore, child: const Text('ดูเพิ่มเติม')),
+          if (reviews.isNotEmpty)
+            TextButton(
+              onPressed: () => _showMore(context),
+              child: const Text('ดูเพิ่มเติม'),
+            ),
         ],
       ),
       const SizedBox(height: 4),
-      Text(
-        widget.reviews.isEmpty
-            ? 'ประสบการณ์เป็นยังไง มาแชร์กันได้เลย'
-            : 'อ่านประสบการณ์ก่อนตัดสินใจ · ปัดดูรีวิวได้',
-        style: const TextStyle(
-          color: _DetailStyle.secondary,
-          fontSize: 13,
-          height: 1.5,
+      if (reviews.isEmpty) ...[
+        const Text(
+          'ประสบการณ์เป็นยังไง มาแชร์กันได้เลย',
+          style: TextStyle(
+            color: _DetailStyle.secondary,
+            fontSize: 13,
+            height: 1.5,
+          ),
         ),
-      ),
-      const SizedBox(height: 14),
-      if (widget.reviews.isEmpty)
-        const _EmptyReviews()
-      else ...[
+        const SizedBox(height: 14),
+        const _EmptyReviews(),
+      ] else ...[
         Wrap(
           spacing: 6,
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -1614,7 +1549,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
               color: _DetailStyle.accent,
             ),
             Text(
-              'คะแนนเฉลี่ย ${widget.averageRating.toStringAsFixed(1)}/5',
+              'คะแนนเฉลี่ย ${averageRating.toStringAsFixed(1)}/5',
               style: const TextStyle(
                 color: _DetailStyle.ink,
                 fontSize: 13,
@@ -1623,40 +1558,10 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 300 * MediaQuery.textScalerOf(context).scale(1),
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              if (notification is ScrollStartNotification &&
-                  notification.dragDetails != null) {
-                _timer?.cancel();
-              } else if (notification is ScrollEndNotification) {
-                _restartTimer();
-              }
-              return false;
-            },
-            child: PageView.builder(
-              key: const ValueKey('review-carousel'),
-              controller: _controller,
-              itemCount: _count,
-              onPageChanged: (page) => setState(() => _page = page),
-              itemBuilder: (_, index) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: SingleChildScrollView(
-                  child: _ReviewCard(review: widget.reviews[index]),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Center(
-          child: Text(
-            '${_page + 1} / $_count',
-            style: const TextStyle(color: _DetailStyle.secondary, fontSize: 12),
-          ),
-        ),
+        for (final review in reviews.take(4)) ...[
+          const SizedBox(height: 12),
+          _ReviewCard(review: review),
+        ],
       ],
     ],
   );

@@ -15,6 +15,7 @@ class ChatReplyPreview extends StatelessWidget {
     required this.isMine,
     this.originalMessage,
     this.otherUserName,
+    this.replyTarget,
     this.onTap,
   });
 
@@ -22,6 +23,7 @@ class ChatReplyPreview extends StatelessWidget {
   final bool isMine;
   final ChatMessage? originalMessage;
   final String? otherUserName;
+  final String? replyTarget;
   final VoidCallback? onTap;
 
   static bool _isProduct(String text) =>
@@ -63,7 +65,7 @@ class ChatReplyPreview extends StatelessWidget {
         ? CrossAxisAlignment.end
         : CrossAxisAlignment.start;
     final label =
-        '${isMine ? 'คุณ' : (otherUserName ?? 'ผู้ใช้')}ตอบกลับ${reply.target}';
+        '${isMine ? 'คุณ' : (otherUserName ?? 'ผู้ใช้')}ตอบกลับ${replyTarget ?? reply.target}';
 
     return Semantics(
       button: onTap != null,

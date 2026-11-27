@@ -31,7 +31,9 @@ class ChatEmptyView extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              conversation.itemName != null
+              conversation.isOtherUserUnavailable
+                  ? 'ยังไม่มีประวัติการสนทนา'
+                  : conversation.itemName != null
                   ? 'เริ่มพูดคุยเกี่ยวกับ "${conversation.itemName}"'
                   : 'ยังไม่มีประวัติการสนทนา เริ่มพิมพ์ข้อความได้เลย',
               textAlign: TextAlign.center,

@@ -195,10 +195,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('reviews swipe, auto advance, cap at four and open more', (
+  testWidgets('reviews scroll down the detail page and open more', (
     tester,
   ) async {
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(375, 600);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
     final reviews = List.generate(
       6,
       (index) => ItemReview(
@@ -213,23 +216,23 @@ void main() {
       ),
     );
     await pumpDetail(tester, isOwner: false, reviews: reviews);
-    final carousel = find.byKey(const ValueKey('review-carousel'));
-    await tester.ensureVisible(carousel);
+    final more = find.text('ดูเพิ่มเติม');
+    await Scrollable.ensureVisible(tester.element(more), alignment: 0.25);
     await tester.pumpAndSettle();
     expect(find.text('คะแนนเฉลี่ย 4.3/5'), findsOneWidget);
-    expect(
-      tester.widget<PageView>(carousel).childrenDelegate.estimatedChildCount,
-      4,
-    );
-    expect(find.text('1 / 4'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 6));
+    final firstReview = find.text('Review number 0');
+    final fourthReview = find.text('Review number 3');
+    expect(firstReview.hitTestable(), findsOneWidget);
+    expect(fourthReview.hitTestable(), findsNothing);
+
+    await tester.drag(firstReview, const Offset(0, -350));
     await tester.pumpAndSettle();
-    expect(find.text('2 / 4'), findsOneWidget);
-    await tester.drag(carousel, const Offset(-600, 0));
+    expect(fourthReview.hitTestable(), findsOneWidget);
+    expect(find.text('Review number 4'), findsNothing);
+
+    await Scrollable.ensureVisible(tester.element(more), alignment: 0.25);
     await tester.pumpAndSettle();
-    expect(find.text('3 / 4'), findsOneWidget);
-    await tester.ensureVisible(find.text('ดูเพิ่มเติม'));
-    await tester.tap(find.text('ดูเพิ่มเติม'));
+    await tester.tap(more);
     await tester.pumpAndSettle();
     expect(find.text('รีวิวทั้งหมด'), findsOneWidget);
     final list = find.byType(ListView);
@@ -239,11 +242,15 @@ void main() {
       scrollable: find.descendant(of: list, matching: find.byType(Scrollable)),
     );
     expect(find.text('Review number 5'), findsOneWidget);
+    await tester.ensureVisible(find.text('1 ดาว'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('1 ดาว'));
     await tester.pumpAndSettle();
     expect(find.text('1 รีวิว'), findsOneWidget);
     expect(find.text('Review number 0'), findsNothing);
     expect(find.text('Review number 5'), findsOneWidget);
+    await tester.ensureVisible(find.text('2 ดาว'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('2 ดาว'));
     await tester.pumpAndSettle();
     expect(find.text('ยังไม่มีรีวิวในระดับดาวนี้'), findsOneWidget);

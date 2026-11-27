@@ -13,6 +13,7 @@ class RentalRequestDraft extends Equatable {
     this.paymentMethod,
     this.unitPrice,
     this.queueMessageId,
+    this.requestRevision,
   });
 
   final int itemId;
@@ -26,6 +27,7 @@ class RentalRequestDraft extends Equatable {
   final String? paymentMethod;
   final int? unitPrice;
   final int? queueMessageId;
+  final int? requestRevision;
 
   @override
   List<Object?> get props => [
@@ -40,6 +42,7 @@ class RentalRequestDraft extends Equatable {
     paymentMethod,
     unitPrice,
     queueMessageId,
+    requestRevision,
   ];
 }
 

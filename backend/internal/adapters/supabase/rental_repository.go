@@ -49,8 +49,17 @@ func (r *supabaseRentalRepository) CreateRental(
 		if request.QueueMessageID > 0 {
 			params["p_queue_message_id"] = request.QueueMessageID
 		}
-		if err := r.client.DB.Rpc("create_chat_rental_request", params).ExecuteWithContext(ctx, &rental); err != nil {
-			return nil, mapRentalRepositoryError("create chat rental request", err)
+		rpc := "create_chat_rental_request"
+		if request.BookingID > 0 {
+			rpc = "edit_chat_rental_request"
+			params["p_booking_id"] = request.BookingID
+			params["p_request_revision"] = request.RequestRevision
+			if request.QueueMessageID == 0 {
+				params["p_queue_message_id"] = nil
+			}
+		}
+		if err := r.client.DB.Rpc(rpc, params).ExecuteWithContext(ctx, &rental); err != nil {
+			return nil, mapRentalRepositoryError(rpc, err)
 		}
 		return &rental, nil
 	}
@@ -119,6 +128,8 @@ func mapRentalRepositoryError(operation string, err error) error {
 		return domain.ErrRentalRequestExpired
 	case message == "rental_price_changed":
 		return domain.ErrRentalPriceChanged
+	case message == "rental_request_changed":
+		return domain.ErrRentalRequestChanged
 	case requestErr.Code == "22023":
 		return domain.ErrInvalidRental
 	default:

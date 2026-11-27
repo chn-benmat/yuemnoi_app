@@ -18,6 +18,48 @@ void main() {
   });
   tearDown(AuthSession.clear);
 
+  test('an edit submits the original booking ID and card revision', () async {
+    final draft = RentalRequestDraft(
+      itemId: 7,
+      startAt: DateTime.utc(2026, 11, 28, 2),
+      endAt: DateTime.utc(2026, 11, 28, 5),
+      rentalType: 'hourly',
+      pickupLocation: 'Pickup',
+      bookingId: 25,
+      conversationId: 'room',
+      paymentMethod: 'cash',
+      unitPrice: 150,
+      requestRevision: 2,
+    );
+    when(
+      () => client.post(
+        '/api/rentals',
+        data: {
+          'item_id': 7,
+          'start_at': draft.startAt.toIso8601String(),
+          'end_at': draft.endAt.toIso8601String(),
+          'rental_type': 'hourly',
+          'pickup_location': 'Pickup',
+          'booking_id': 25,
+          'conversation_id': 'room',
+          'payment_method': 'cash',
+          'unit_price': 150,
+          'request_revision': 2,
+        },
+        headers: {'Authorization': 'Bearer test-token'},
+      ),
+    ).thenAnswer(
+      (_) async => const ApiResponse(
+        statusCode: 200,
+        data: {'id': 25, 'status': 'pending'},
+      ),
+    );
+    expect(
+      await source.submit(draft),
+      const RentalRequestResult(id: 25, status: 'pending'),
+    );
+  });
+
   test(
     'prepare and final confirmation use separate authenticated requests',
     () async {

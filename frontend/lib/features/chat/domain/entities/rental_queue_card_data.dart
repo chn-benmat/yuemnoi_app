@@ -24,6 +24,7 @@ class RentalQueueCardData {
     this.dueAt,
     this.expiresAt,
     this.acceptedAt,
+    this.readyMessageId,
   });
 
   final int itemId;
@@ -37,6 +38,7 @@ class RentalQueueCardData {
   final DateTime? dueAt;
   final DateTime? expiresAt;
   final DateTime? acceptedAt;
+  final String? readyMessageId;
 
   bool isRenterView({required bool isSender}) => isSender == requestedByRenter;
 
@@ -65,6 +67,7 @@ class RentalQueueCardData {
         dueAt: DateTime.tryParse(data['dueAt']?.toString() ?? ''),
         expiresAt: DateTime.tryParse(data['expiresAt']?.toString() ?? ''),
         acceptedAt: DateTime.tryParse(data['acceptedAt']?.toString() ?? ''),
+        readyMessageId: data['readyMessageId']?.toString(),
       );
     } on FormatException {
       return null;

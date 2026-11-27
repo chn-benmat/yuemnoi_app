@@ -123,6 +123,7 @@ class BookingRequestData {
   final int? rentalQueueMessageId;
   final String? status;
   final bool isCustomerRequest;
+  final int requestRevision;
 
   static const String bookingPayloadPrefix = '📋 คำขอเช่าอุปกรณ์';
   static const String metaStartTag = '[BOOKING_DATA:';
@@ -152,6 +153,7 @@ class BookingRequestData {
     this.rentalQueueMessageId,
     this.status,
     this.isCustomerRequest = false,
+    this.requestRevision = 0,
   });
 
   /// ตรวจสอบว่าข้อความเป็นข้อความคำขอเช่าหรือไม่
@@ -203,6 +205,7 @@ class BookingRequestData {
       if (rentalQueueMessageId != null)
         'rentalQueueMessageId': rentalQueueMessageId,
       if (status != null) 'status': status,
+      if (requestRevision > 0) 'requestRevision': requestRevision,
     };
 
     final jsonString = jsonEncode(jsonMap);
@@ -283,6 +286,7 @@ $tag$jsonString$metaEndTag''';
           rentalQueueMessageId: (map['rentalQueueMessageId'] as num?)?.toInt(),
           status: map['status'] as String?,
           isCustomerRequest: isCustomerRequest,
+          requestRevision: (map['requestRevision'] as num?)?.toInt() ?? 0,
           rentalType: rentalType,
           startDate: startDate,
           endDate: endDate,
@@ -475,6 +479,7 @@ $tag$jsonString$metaEndTag''';
       rentalQueueMessageId: rentalQueueMessageId ?? this.rentalQueueMessageId,
       status: status ?? this.status,
       isCustomerRequest: isCustomerRequest,
+      requestRevision: requestRevision,
     );
   }
 }

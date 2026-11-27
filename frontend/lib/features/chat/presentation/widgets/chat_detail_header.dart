@@ -22,7 +22,10 @@ class ChatDetailHeader extends StatelessWidget {
   final bool isPhoneCallLoading;
 
   void _openProfile(BuildContext context) {
-    if (conversation.otherUserId.isEmpty) return;
+    if (conversation.isOtherUserUnavailable ||
+        conversation.otherUserId.isEmpty) {
+      return;
+    }
     AppRoutes.openUserProfile(
       context,
       args: UserProfileViewArgs(
@@ -53,24 +56,27 @@ class ChatDetailHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 2),
-              ValueListenableBuilder<Set<String>>(
-                valueListenable:
-                    UserPresenceService.instance.onlineUsersNotifier,
-                builder: (context, onlineUsers, _) {
-                  final isCurrentlyOnline =
-                      conversation.isOnline ||
-                      onlineUsers.contains(conversation.otherUserId);
-                  return InkWell(
-                    key: const ValueKey('chat-profile-avatar'),
-                    onTap: () => _openProfile(context),
-                    child: ChatAvatar(
-                      asset: conversation.avatarAsset,
-                      size: 46,
-                      isOnline: isCurrentlyOnline,
-                    ),
-                  );
-                },
-              ),
+              if (conversation.isOtherUserUnavailable)
+                ChatAvatar(asset: conversation.avatarAsset, size: 46)
+              else
+                ValueListenableBuilder<Set<String>>(
+                  valueListenable:
+                      UserPresenceService.instance.onlineUsersNotifier,
+                  builder: (context, onlineUsers, _) {
+                    final isCurrentlyOnline =
+                        conversation.isOnline ||
+                        onlineUsers.contains(conversation.otherUserId);
+                    return InkWell(
+                      key: const ValueKey('chat-profile-avatar'),
+                      onTap: () => _openProfile(context),
+                      child: ChatAvatar(
+                        asset: conversation.avatarAsset,
+                        size: 46,
+                        isOnline: isCurrentlyOnline,
+                      ),
+                    );
+                  },
+                ),
               const SizedBox(width: 12),
               Expanded(
                 child: InkWell(
@@ -89,68 +95,70 @@ class ChatDetailHeader extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      BlocBuilder<ChatDetailBloc, ChatDetailState>(
-                        buildWhen: (p, c) =>
-                            p.isOtherUserTyping != c.isOtherUserTyping,
-                        builder: (context, state) {
-                          if (state.isOtherUserTyping) {
-                            return const Text(
-                              'กำลังพิมพ์...',
-                              key: ValueKey('chat-header-typing-status'),
-                              style: TextStyle(
-                                color: Color(0xFF6EE7B7),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            );
-                          }
-                          return ValueListenableBuilder<Set<String>>(
-                            valueListenable: UserPresenceService
-                                .instance
-                                .onlineUsersNotifier,
-                            builder: (context, onlineUsers, _) {
-                              final isCurrentlyOnline =
-                                  conversation.isOnline ||
-                                  onlineUsers.contains(
-                                    conversation.otherUserId,
-                                  );
-                              return Text(
-                                isCurrentlyOnline ? 'ออนไลน์' : 'ออฟไลน์',
-                                key: const ValueKey(
-                                  'chat-header-online-status',
-                                ),
+                      if (!conversation.isOtherUserUnavailable)
+                        BlocBuilder<ChatDetailBloc, ChatDetailState>(
+                          buildWhen: (p, c) =>
+                              p.isOtherUserTyping != c.isOtherUserTyping,
+                          builder: (context, state) {
+                            if (state.isOtherUserTyping) {
+                              return const Text(
+                                'กำลังพิมพ์...',
+                                key: ValueKey('chat-header-typing-status'),
                                 style: TextStyle(
-                                  color: isCurrentlyOnline
-                                      ? const Color(0xFF6EE7B7)
-                                      : Colors.white60,
+                                  color: Color(0xFF6EE7B7),
                                   fontSize: 12,
-                                  fontWeight: isCurrentlyOnline
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               );
-                            },
-                          );
-                        },
-                      ),
+                            }
+                            return ValueListenableBuilder<Set<String>>(
+                              valueListenable: UserPresenceService
+                                  .instance
+                                  .onlineUsersNotifier,
+                              builder: (context, onlineUsers, _) {
+                                final isCurrentlyOnline =
+                                    conversation.isOnline ||
+                                    onlineUsers.contains(
+                                      conversation.otherUserId,
+                                    );
+                                return Text(
+                                  isCurrentlyOnline ? 'ออนไลน์' : 'ออฟไลน์',
+                                  key: const ValueKey(
+                                    'chat-header-online-status',
+                                  ),
+                                  style: TextStyle(
+                                    color: isCurrentlyOnline
+                                        ? const Color(0xFF6EE7B7)
+                                        : Colors.white60,
+                                    fontSize: 12,
+                                    fontWeight: isCurrentlyOnline
+                                        ? FontWeight.w600
+                                        : FontWeight.w400,
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
                     ],
                   ),
                 ),
               ),
-              IconButton(
-                key: const ValueKey('chat-phone-call-button'),
-                tooltip: 'โทรศัพท์',
-                onPressed: isPhoneCallLoading ? null : onPhoneCallPressed,
-                icon: isPhoneCallLoading
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Icon(Icons.call_rounded, color: Colors.white),
-              ),
+              if (!conversation.isOtherUserUnavailable)
+                IconButton(
+                  key: const ValueKey('chat-phone-call-button'),
+                  tooltip: 'โทรศัพท์',
+                  onPressed: isPhoneCallLoading ? null : onPhoneCallPressed,
+                  icon: isPhoneCallLoading
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.call_rounded, color: Colors.white),
+                ),
               const SizedBox(width: 8),
             ],
           ),

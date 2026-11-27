@@ -16,7 +16,7 @@ class RentalQueueCard extends StatefulWidget {
 
   final RentalQueueCardData data;
   final bool isOwner;
-  final Future<void> Function(String action) onAction;
+  final Future<void> Function(String action)? onAction;
   final bool canJoin;
   final VoidCallback? onSendRequest;
 
@@ -30,7 +30,7 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
   Future<void> _perform(String action) async {
     setState(() => _busy = true);
     try {
-      await widget.onAction(action);
+      await widget.onAction?.call(action);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -107,7 +107,7 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
             Text('กำหนดคืนโดยประมาณ ${date.format(due.toLocal())}'),
           if (data.expiresAt case final expires?)
             Text('ยืนยันการเช่าภายใน ${date.format(expires.toLocal())} น.'),
-          if (action != null)
+          if (action != null && widget.onAction != null)
             FilledButton(
               onPressed: _busy ? null : () => _perform(action),
               child: Text(
@@ -121,7 +121,7 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
               onPressed: widget.onSendRequest,
               child: const Text('ส่งคำขอเช่า'),
             ),
-          if (canLeave)
+          if (canLeave && widget.onAction != null)
             TextButton(
               onPressed: _busy ? null : () => _perform('leave'),
               child: const Text('ออกจากคิว'),
