@@ -375,6 +375,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     AppRoutes.openRentalTrackingMap(
       context,
       isOwner: isOwner,
+      startDate: bookingData.startDate,
       pickupOnly:
           bookingId == null ||
           bookingId <= 0 ||

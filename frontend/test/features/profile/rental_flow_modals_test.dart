@@ -137,6 +137,18 @@ void main() {
         await tester.ensureVisible(confirm);
         await tester.tap(confirm);
         await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsOneWidget);
+        expect(active, isFalse);
+        await tester.tap(find.text('ยกเลิก'));
+        await tester.pumpAndSettle();
+        expect(find.byType(RentalPickupPaymentModal), findsOneWidget);
+        expect(active, isFalse);
+        expect(statuses, isEmpty);
+
+        await tester.tap(confirm);
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(ElevatedButton, 'ยืนยัน'));
+        await tester.pumpAndSettle();
         expect(statuses, ['active']);
         expect(find.byType(RentalPickupPaymentModal), findsNothing);
         expect(find.text('Open booking').hitTestable(), findsOneWidget);

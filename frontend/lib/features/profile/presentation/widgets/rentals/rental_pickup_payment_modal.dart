@@ -7,13 +7,12 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/network/api_client.dart';
-import '../../../../../core/network/supabase_client.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../data/datasources/promptpay_app_launcher.dart';
+import '../../../data/datasources/rental_handover_payment_watcher.dart';
 import '../../../data/repositories/rental_management_repository_impl.dart';
 import '../../../domain/entities/rental_handover_payment.dart';
 import '../../../domain/usecases/update_booking_status_usecase.dart';
@@ -202,8 +201,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
       _handoverPayment?.paymentConfirmed != true &&
       PromptPayAppLauncher.isSupported;
 
-  Timer? _statusPollTimer;
-  RealtimeChannel? _realtimeChannel;
+  RentalHandoverPaymentWatcher? _paymentWatcher;
 
   bool get _hasBooking => (widget.bookingId ?? 0) > 0;
   bool get _hasPaymentMethod => !_hasBooking || _handoverPayment != null;
@@ -257,26 +255,11 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
 
     _initialPaymentLoad = _refreshHandoverPayment();
     if (_hasBooking && !_isOwner) {
-      _statusPollTimer = Timer.periodic(
-        const Duration(milliseconds: 1500),
-        (_) => _refreshHandoverPayment(),
+      _paymentWatcher = RentalHandoverPaymentWatcher(
+        bookingId: widget.bookingId!,
+        channelName: 'rental_payment_${widget.bookingId}',
+        onChanged: _refreshHandoverPayment,
       );
-    }
-    if (_hasBooking && !_isOwner && SupabaseConfig.isInitialized) {
-      _realtimeChannel = SupabaseConfig.client
-          .channel('rental_payment_${widget.bookingId}')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.update,
-            schema: 'public',
-            table: 'booking_tb',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'id',
-              value: widget.bookingId,
-            ),
-            callback: (_) => _refreshHandoverPayment(),
-          )
-          .subscribe();
     }
   }
 
@@ -285,7 +268,8 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
     String? promptPayPhone,
     String? promptPayNationalId,
   }) async {
-    if (!_hasBooking ||
+    if (!mounted ||
+        !_hasBooking ||
         _finishedStatus != null ||
         _isReadingPayment ||
         _isConfirmingPayment ||
@@ -338,6 +322,36 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
           _isSavingPromptPayAccount = false;
         });
       }
+    }
+  }
+
+  Future<void> _confirmPaymentReceipt() async {
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('ยืนยันการรับเงิน'),
+        content: Text(
+          'คุณได้รับเงินครบ $_paymentAmountLabel แล้วใช่ไหม? เมื่อยืนยัน ระบบจะเริ่มการเช่า',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('ยกเลิก'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('ยืนยัน'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (_finishedStatus != null) {
+      _closeIfFinished();
+    } else if (confirmed == true) {
+      await _refreshHandoverPayment(confirm: true);
     }
   }
 
@@ -507,8 +521,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
 
   @override
   void dispose() {
-    _statusPollTimer?.cancel();
-    _realtimeChannel?.unsubscribe();
+    _paymentWatcher?.dispose();
     _promptPayIdentifierController.dispose();
     super.dispose();
   }
@@ -516,7 +529,8 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
   void _finishWithStatus(String status) {
     if (_finishedStatus != null) return;
     _finishedStatus = status;
-    _statusPollTimer?.cancel();
+    _paymentWatcher?.dispose();
+    _paymentWatcher = null;
     unawaited(_clearSavedStep());
     _closeIfFinished();
   }
@@ -988,9 +1002,7 @@ class _RentalPickupPaymentModalState extends State<RentalPickupPaymentModal> {
                 _handoverPayment?.paymentConfirmed == true)) ...[
           const SizedBox(height: 18),
           _buildPaymentButton(
-            onPressed: _isConfirmingPayment
-                ? null
-                : () => _refreshHandoverPayment(confirm: true),
+            onPressed: _isConfirmingPayment ? null : _confirmPaymentReceipt,
             icon: Icons.verified_rounded,
             label: _isConfirmingPayment
                 ? 'กำลังยืนยันการรับเงิน...'

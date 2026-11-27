@@ -250,6 +250,7 @@ abstract final class AppRoutes {
           path: chatDetail,
           pageBuilder: (context, state) => CupertinoPage<void>(
             key: state.pageKey,
+            name: chatDetail,
             child: ChatDetailScreen(
               conversation: _requiredConversationExtra(state),
               initialMessageId: switch (state.extra) {
@@ -338,6 +339,7 @@ abstract final class AppRoutes {
                   startDate: extra['startDate'] is DateTime
                       ? extra['startDate'] as DateTime
                       : DateTime.tryParse(extra['startDate']?.toString() ?? ''),
+                  isOwner: extra['isOwner'] as bool?,
                   requireBookingId: true,
                 ),
               );
@@ -830,6 +832,28 @@ abstract final class AppRoutes {
     );
   }
 
+  static void returnToChatAfterPickup(
+    BuildContext context, {
+    required bool returnToPreviousChat,
+    ChatConversation? conversation,
+  }) {
+    final navigator = Navigator.of(context);
+    final router = GoRouter.maybeOf(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      if (returnToPreviousChat) return;
+      if (conversation != null) {
+        router?.push<void>(chatDetail, extra: conversation);
+        return;
+      }
+    }
+    if (conversation == null) {
+      router?.go(home, extra: 1);
+    } else {
+      router?.go(chatDetail, extra: conversation);
+    }
+  }
+
   static Future<void> openBooking(
     BuildContext context, {
     BookingRequestData? initialData,
@@ -1040,6 +1064,7 @@ abstract final class AppRoutes {
       isOwner: isOwner ?? (trackingArgs?['isOwner'] as bool?),
       requireBookingId: true,
       pickupOnly: pickupOnly,
+      returnToPreviousChat: ModalRoute.of(context)?.settings.name == chatDetail,
     );
 
     return Navigator.of(context).push<void>(

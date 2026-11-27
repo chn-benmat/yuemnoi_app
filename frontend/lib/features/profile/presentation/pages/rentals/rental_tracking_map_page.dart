@@ -9,12 +9,17 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/models/pickup_location.dart';
+import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/network/auth_session.dart';
 import '../../../../../core/utils/auth_guard.dart';
 import '../../../../../core/services/location_service.dart';
 import '../../../../../core/services/phone_call_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../booking/domain/entities/booking_request_model.dart';
+import '../../../../chat/domain/entities/chat_conversation.dart';
+import '../../../data/datasources/rental_handover_payment_watcher.dart';
+import '../../../data/repositories/rental_management_repository_impl.dart';
+import '../../../domain/usecases/update_booking_status_usecase.dart';
 import '../../widgets/rentals/rental_pickup_payment_modal.dart';
 import '../../bloc/rental_route_cubit.dart';
 import '../../../data/datasources/rental_contact_remote_data_source.dart';
@@ -44,6 +49,8 @@ class RentalTrackingMapPage extends StatefulWidget {
   final LocationService? locationService;
   final RentalContactRemoteDataSource? contactDataSource;
   final PhoneCallService phoneCallService;
+  final bool returnToPreviousChat;
+  final UpdateBookingStatusUseCase? updateBookingStatusUseCase;
 
   const RentalTrackingMapPage({
     super.key,
@@ -70,6 +77,8 @@ class RentalTrackingMapPage extends StatefulWidget {
     this.locationService,
     this.contactDataSource,
     this.phoneCallService = const UrlPhoneCallService(),
+    this.returnToPreviousChat = false,
+    this.updateBookingStatusUseCase,
   });
 
   @override
@@ -105,6 +114,11 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   late String _currentStatusCode;
   late bool _isOwner;
   int _renterPaymentStep = 0;
+  RentalHandoverPaymentWatcher? _paymentWatcher;
+  bool _readingPaymentStatus = false;
+  late final _updateBookingStatusUseCase =
+      widget.updateBookingStatusUseCase ??
+      UpdateBookingStatusUseCase(RentalManagementRepositoryImpl());
 
   bool get _isReturn =>
       widget.returnPoint != null || widget.returnDetails != null;
@@ -113,6 +127,10 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   // หน้าจากแชทส่ง ID ใน bookingData ส่วนหน้าสถานะส่ง ID แยก
   int? get _resolvedBookingId =>
       widget.bookingId ?? widget.bookingData?.bookingId;
+  String? get _conversationId =>
+      widget.conversationId ?? widget.bookingData?.conversationId;
+  bool get _canViewBooking =>
+      !widget.requireBookingId || AuthSession.isAuthenticated;
 
   DateTime? get _startDate {
     return widget.bookingData?.startDate ?? widget.startDate;
@@ -133,7 +151,8 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     return startDay.difference(today).inDays;
   }
 
-  void _openPayment() async {
+  Future<void> _openPayment() async {
+    if (ModalRoute.of(context)?.isCurrent != true) return;
     if (_currentStatusCode != 'confirmed') {
       showAppPopup(
         context,
@@ -205,17 +224,19 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
       return;
     }
 
+    _paymentWatcher?.dispose();
+    _paymentWatcher = null;
     final status = await RentalPickupPaymentModal.show(
       context,
       bookingId: _resolvedBookingId,
-      conversationId:
-          widget.conversationId ?? widget.bookingData?.conversationId,
+      conversationId: _conversationId,
       itemId: widget.bookingData?.item.id,
       itemTitle: _resolvedTitle,
       totalPrice: _resolvedPrice,
       paymentMethod: widget.bookingData?.paymentMethod ?? 'promptpay',
       initialIsOwner: _isOwner,
       initialStep: _renterPaymentStep,
+      updateBookingStatusUseCase: _updateBookingStatusUseCase,
       onStepChanged: (step) {
         if (mounted) {
           setState(() {
@@ -224,11 +245,91 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
         }
       },
     );
-    if (!mounted || status == null) return;
+    if (!mounted) return;
+    if (status == null) {
+      _watchRenterPayment();
+      return;
+    }
+    await _applyPaymentStatus(status);
+  }
+
+  void _watchRenterPayment() {
+    final bookingId = _resolvedBookingId;
+    if (!_showRentalActions ||
+        _isOwner ||
+        _currentStatusCode != 'confirmed' ||
+        _startDate == null ||
+        bookingId == null ||
+        bookingId <= 0) {
+      return;
+    }
+    _paymentWatcher = RentalHandoverPaymentWatcher(
+      bookingId: bookingId,
+      channelName: 'rental_pickup_map_$bookingId',
+      onChanged: () => _checkRenterPayment(bookingId),
+    );
+  }
+
+  Future<void> _checkRenterPayment(int bookingId) async {
+    final watcher = _paymentWatcher;
+    if (!mounted ||
+        watcher == null ||
+        _readingPaymentStatus ||
+        !_canViewBooking ||
+        _isBeforeMeetupDate ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    _readingPaymentStatus = true;
+    try {
+      final payment = await _updateBookingStatusUseCase.handoverPayment(
+        bookingId: bookingId,
+      );
+      if (mounted &&
+          identical(_paymentWatcher, watcher) &&
+          ModalRoute.of(context)?.isCurrent == true &&
+          payment.status != 'confirmed') {
+        await _applyPaymentStatus(payment.status);
+      }
+    } catch (_) {
+      // ตรวจสอบใหม่รอบถัดไปเมื่อการเชื่อมต่อสะดุดชั่วคราว
+    } finally {
+      _readingPaymentStatus = false;
+    }
+  }
+
+  Future<void> _applyPaymentStatus(String status) async {
+    _paymentWatcher?.dispose();
+    _paymentWatcher = null;
     setState(() {
       _currentStatusCode = status;
       _renterPaymentStep = 0;
     });
+    if (status != 'active') return;
+
+    ChatConversation? conversation;
+    if (!widget.returnToPreviousChat) {
+      try {
+        conversation =
+            await (widget.contactDataSource ?? RentalContactRemoteDataSource())
+                .getConversation(
+                  bookingId: _resolvedBookingId,
+                  conversationId: _conversationId,
+                );
+      } catch (_) {
+        // เปิดรายการแชทได้แม้โหลดข้อมูลห้องสนทนาไม่สำเร็จ
+      }
+    }
+    if (!mounted ||
+        !_canViewBooking ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    AppRoutes.returnToChatAfterPickup(
+      context,
+      returnToPreviousChat: widget.returnToPreviousChat,
+      conversation: conversation,
+    );
   }
 
   @override
@@ -246,6 +347,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     );
 
     _resolveInitialData();
+    _watchRenterPayment();
     if (_hasDestinationCoordinates) _pulseController.repeat(reverse: true);
     WidgetsBinding.instance.addObserver(this);
     _routeCubit = RentalRouteCubit(
@@ -279,6 +381,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
     _routeSubscription?.cancel();
     _routeCubit.close();
     _positionStreamSubscription?.cancel();
+    _paymentWatcher?.dispose();
     _pulseController.dispose();
     _mapController.dispose();
     super.dispose();
@@ -332,8 +435,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
   Future<void> _loadSavedPaymentStep() async {
     final step = await RentalPickupPaymentModal.getSavedStep(
       bookingId: _resolvedBookingId,
-      conversationId:
-          widget.conversationId ?? widget.bookingData?.conversationId,
+      conversationId: _conversationId,
       itemId: widget.bookingData?.item.id,
       itemTitle: _resolvedTitle,
     );
@@ -469,8 +571,7 @@ class _RentalTrackingMapPageState extends State<RentalTrackingMapPage>
           await (widget.contactDataSource ?? RentalContactRemoteDataSource())
               .getPhone(
                 bookingId: _resolvedBookingId,
-                conversationId:
-                    widget.conversationId ?? widget.bookingData?.conversationId,
+                conversationId: _conversationId,
               );
       if (!mounted) return;
       if (phone.trim().isEmpty) {
