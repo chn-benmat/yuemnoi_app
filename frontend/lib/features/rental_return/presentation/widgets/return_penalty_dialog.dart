@@ -74,20 +74,23 @@ class _ReturnPenaltyDialogState extends State<ReturnPenaltyDialog> {
 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
     _run(() async {
       final report = await widget.onSave(
         damaged: _damaged,
         late: _late,
         details: _details.text.trim(),
       );
-      if (mounted) setState(() => _report = report);
+      if (!mounted) return;
+      setState(() => _report = report);
+      if (report.amountSatang > 0) await _loadQr();
     });
   }
 
-  void _loadQr() => _run(() async {
+  Future<void> _loadQr() async {
     final qr = await widget.onLoadQr();
     if (mounted) setState(() => _qr = qr);
-  });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -194,9 +197,9 @@ class _ReturnPenaltyDialogState extends State<ReturnPenaltyDialog> {
               onPressed: _busy || (!_damaged && !_late) ? null : _save,
               child: const Text('บันทึกรายงาน'),
             )
-          else if (report.amountSatang > 0 && _qr == null)
+          else if (report.amountSatang > 0 && _qr == null && !_busy)
             FilledButton(
-              onPressed: _busy ? null : _loadQr,
+              onPressed: () => _run(_loadQr),
               child: const Text('เรียกเก็บค่าปรับ'),
             ),
         ],

@@ -12,8 +12,6 @@ class LenderInspectionView extends StatelessWidget {
     required this.onConfirm,
     required this.onReport,
     required this.reportLabel,
-    required this.pauseItem,
-    required this.onPauseItem,
   });
 
   final bool isChecked;
@@ -22,8 +20,6 @@ class LenderInspectionView extends StatelessWidget {
   final VoidCallback onConfirm;
   final VoidCallback onReport;
   final String reportLabel;
-  final bool pauseItem;
-  final ValueChanged<bool> onPauseItem;
 
   @override
   Widget build(BuildContext context) {
@@ -122,16 +118,6 @@ class LenderInspectionView extends StatelessWidget {
               ),
             ),
           ],
-        ),
-        Material(
-          type: MaterialType.transparency,
-          child: SwitchListTile(
-            value: pauseItem,
-            onChanged: isSubmitting ? null : onPauseItem,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-            title: const Text('พักให้เช่าหลังรับคืน'),
-            subtitle: const Text('เลือกเมื่ออุปกรณ์ต้องซ่อมก่อนส่งให้คิวถัดไป'),
-          ),
         ),
       ],
     );

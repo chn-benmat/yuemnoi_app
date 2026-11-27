@@ -9,6 +9,7 @@ import 'package:frontend/features/rental_return/domain/entities/rental_return_se
 import 'package:frontend/features/rental_return/domain/repositories/rental_return_repository.dart';
 import 'package:frontend/features/rental_return/presentation/pages/rental_return_page.dart';
 import 'package:frontend/features/rental_return/presentation/widgets/lender_inspection_view.dart';
+import 'package:frontend/features/rental_return/presentation/widgets/return_penalty_dialog.dart';
 import 'package:frontend/features/rental_return/presentation/widgets/role_switcher_bar.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:mocktail/mocktail.dart';
@@ -81,7 +82,7 @@ void main() {
     );
 
     testWidgets(
-      'RentalReturnPage renders only Lender UI when isLender is true and DOES NOT render RoleSwitcherBar',
+      'lender sees the PromptPay QR immediately after saving a damage report',
       (tester) async {
         await tester.pumpWidget(
           MaterialApp(
@@ -134,14 +135,60 @@ void main() {
         await tester.tap(find.text('บันทึกรายงาน'));
         await tester.pumpAndSettle();
         expect(find.text('ค่าปรับ 125 บาท'), findsWidgets);
-        await tester.tap(find.text('เรียกเก็บค่าปรับ'));
-        await tester.pumpAndSettle();
+        expect(find.text('ชำระค่าปรับผ่านพร้อมเพย์'), findsOneWidget);
         expect(find.byType(QrImageView), findsOneWidget);
+        expect(find.text('เรียกเก็บค่าปรับ'), findsNothing);
         verify(() => mockRepository.getPenaltyQr(1024)).called(1);
         expect(find.text('ส่งภาพยืนยันให้ร้านค้า'), findsNothing);
         expect(find.text('ยืนยันการตรวจสภาพด้านบนก่อน'), findsNothing);
       },
     );
+
+    testWidgets('lender can retry the QR without saving the report again', (
+      tester,
+    ) async {
+      var saveCount = 0;
+      var qrAttempts = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ReturnPenaltyDialog(
+              session: RentalReturnSession.createMockSession(),
+              onSave:
+                  ({required damaged, required late, required details}) async {
+                    saveCount++;
+                    return RentalReturnPenaltyReport(
+                      damaged: damaged,
+                      late: late,
+                      details: details,
+                      amountSatang: 20000,
+                    );
+                  },
+              onLoadQr: () async {
+                if (++qrAttempts == 1) {
+                  throw const RentalReturnPenaltyException(
+                    'ตั้งค่าบัญชีพร้อมเพย์ของคุณก่อนรับค่าปรับ',
+                    needsPromptPay: true,
+                  );
+                }
+                return 'server-generated-promptpay';
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.enterText(find.byType(TextFormField), 'เลนส์แตก');
+      await tester.tap(find.text('บันทึกรายงาน'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ค่าปรับ 200 บาท'), findsOneWidget);
+      expect(find.text('ตั้งค่าพร้อมเพย์'), findsOneWidget);
+      await tester.tap(find.text('เรียกเก็บค่าปรับ'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(QrImageView), findsOneWidget);
+      expect(saveCount, 1);
+    });
 
     testWidgets('renter sees completion after the lender confirms receipt', (
       tester,
@@ -184,6 +231,7 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(SwitchListTile), findsNothing);
       final inspectionButton = find.widgetWithText(
         ElevatedButton,
         'ยืนยันรับคืนสินค้า',
