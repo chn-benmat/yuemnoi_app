@@ -30,6 +30,8 @@ abstract final class RelatedItemModel {
       'รายวัน' || 'day' || 'daily' => 'รายวัน',
       _ => throw const FormatException('ไม่ระบุหน่วยค่าเช่า'),
     };
+    final pickupLocation = json['pickup_location'];
+    final locationName = pickupLocation is String ? pickupLocation.trim() : '';
     return RelatedItem(
       id: id,
       name: name,
@@ -37,6 +39,9 @@ abstract final class RelatedItemModel {
       price: price,
       rentalType: rentalType,
       imageUrl: imageUrl,
+      locationName: locationName.isEmpty ? 'ไม่ระบุตำแหน่ง' : locationName,
+      paidBookingCount: int.tryParse('${json['paid_booking_count']}') ?? 0,
+      isRentalOccupied: json['is_rental_occupied'] == true,
     );
   }
 }
