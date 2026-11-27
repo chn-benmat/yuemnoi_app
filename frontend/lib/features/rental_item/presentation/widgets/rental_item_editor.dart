@@ -43,6 +43,14 @@ class RentalItemEditor extends StatefulWidget {
 }
 
 class _RentalItemEditorState extends State<RentalItemEditor> {
+  static final _priceInputFormatters = [
+    FilteringTextInputFormatter.digitsOnly,
+    TextInputFormatter.withFunction(
+      (oldValue, newValue) =>
+          newValue.text.startsWith('0') ? oldValue : newValue,
+    ),
+  ];
+
   final _formKey = GlobalKey<FormState>();
   final _imageKey = GlobalKey();
   final _pickupKey = GlobalKey();
@@ -368,7 +376,7 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
         style: AppFormFieldStyles.textStyle,
         keyboardType: TextInputType.number,
         textInputAction: action,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        inputFormatters: _priceInputFormatters,
         onChanged: (_) => setState(() {}),
         decoration: _decoration('0').copyWith(
           prefixIcon: const Center(

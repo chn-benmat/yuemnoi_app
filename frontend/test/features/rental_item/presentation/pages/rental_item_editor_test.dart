@@ -74,6 +74,33 @@ void main() {
     expect(submitted.single.additionalDailyPrice, 410);
   });
 
+  for (final unit in ['hourly', 'daily']) {
+    testWidgets('$unit rental price rejects leading zeros', (tester) async {
+      await phoneSize(tester);
+      await tester.pumpWidget(
+        MaterialApp(home: RentalItemEditor(onSubmit: (_) {})),
+      );
+
+      final price = find.byKey(ValueKey('rental-item-$unit-price'));
+      final editable = find.descendant(
+        of: price,
+        matching: find.byType(EditableText),
+      );
+      await tester.ensureVisible(price);
+      await tester.enterText(price, '0');
+      expect(tester.widget<EditableText>(editable).controller.text, isEmpty);
+
+      await tester.enterText(price, '00500');
+      expect(tester.widget<EditableText>(editable).controller.text, isEmpty);
+
+      await tester.enterText(price, '500');
+      expect(tester.widget<EditableText>(editable).controller.text, '500');
+
+      await tester.enterText(price, '0750');
+      expect(tester.widget<EditableText>(editable).controller.text, '500');
+    });
+  }
+
   testWidgets('adding requires confirmation and cancel keeps the draft', (
     tester,
   ) async {
