@@ -179,7 +179,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   }
 
   String _formatDeadline(DateTime dt) {
-    return DateFormat('dd/MM/yyyy เวลา HH:mm น.').format(dt);
+    return DateFormat('dd/MM/yyyy เวลา HH:mm น.').format(dt.toLocal());
   }
 
   Future<void> _checkConfirmedStatus() async {

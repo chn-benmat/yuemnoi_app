@@ -127,6 +127,8 @@ func SetupRouterWithOperations(
 			rentals.Post("/:id/return-evidence", rentalController.SubmitRentalReturnEvidence)
 			rentals.Post("/:id/return-inspection", rentalController.InspectRentalReturn)
 			rentals.Post("/:id/return-confirmation", rentalController.ConfirmRentalReceipt)
+			rentals.Post("/:id/return-penalty", rentalController.SaveRentalReturnPenalty)
+			rentals.Get("/:id/return-penalty/qr", rentalController.GetRentalReturnPenaltyQR)
 			rentals.Post("/:id/cancel", rentalController.CancelRental)
 		}
 

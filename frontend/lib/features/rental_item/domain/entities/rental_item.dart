@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import '../../../../core/models/pickup_location.dart';
+import '../../../../core/models/rental_penalty_terms.dart';
 
 class RentalItem {
   const RentalItem({required this.id, required this.imageUrls});
@@ -33,6 +34,7 @@ class RentalItemDraft {
     required this.rentalType,
     required this.price,
     this.additionalDailyPrice,
+    this.penaltyTerms = const RentalPenaltyTerms(),
     required this.images,
     this.pickupLocation,
   });
@@ -43,6 +45,7 @@ class RentalItemDraft {
   final String rentalType;
   final int price;
   final int? additionalDailyPrice;
+  final RentalPenaltyTerms penaltyTerms;
   final List<RentalItemImage> images;
   final PickupLocation? pickupLocation;
 }

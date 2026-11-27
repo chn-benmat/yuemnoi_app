@@ -178,6 +178,28 @@ void main() {
           find.descendant(of: renewedCard, matching: sendRequest),
           findsOneWidget,
         );
+
+        // คำขอ 11 และการ์ดเดิมถูกลบเมื่อเปิดแชทสอบถามรอบใหม่
+        stream.add([
+          ...previousMessages,
+          ChatMessage(
+            id: renewedMessage.id,
+            conversationId: conversation.id,
+            senderId: 'customer',
+            message: original.withPreviousBookingId(11).toChatMessagePayload(),
+            createdAt: DateTime(2026, 10, 22),
+            isMine: true,
+          ),
+        ]);
+        await tester.pumpAndSettle();
+        expect(
+          find.descendant(of: originalCard, matching: sendRequest),
+          findsNothing,
+        );
+        expect(
+          find.descendant(of: renewedCard, matching: sendRequest),
+          findsOneWidget,
+        );
       }
       await tester.pumpWidget(const SizedBox.shrink());
     });

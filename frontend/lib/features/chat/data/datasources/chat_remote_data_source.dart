@@ -41,7 +41,7 @@ class ChatRemoteDataSource {
         ({DateTime expiresAt, Future<String> url, String? resolved})
       >{};
   static final _pendingInquiries =
-      <(SupabaseClient, String, String, int), Future<String?>>{};
+      <(SupabaseClient, String, String, int, bool), Future<String?>>{};
 
   ApiClient get _backendClient => _apiClient ??= DioApiClient();
 
@@ -911,13 +911,20 @@ class ChatRemoteDataSource {
     required String conversationId,
     required ItemInquiryData inquiry,
     String? imageUrl,
+    bool onlyIfPickupDeadlineExpired = false,
   }) async {
     final itemId = inquiry.itemId;
     if (itemId == null || itemId <= 0) {
       throw const ChatRemoteException('ไม่พบอุปกรณ์สำหรับเริ่มการสนทนา');
     }
     final userId = _currentUserId;
-    final key = (_supabaseClient, userId, conversationId, itemId);
+    final key = (
+      _supabaseClient,
+      userId,
+      conversationId,
+      itemId,
+      onlyIfPickupDeadlineExpired,
+    );
     final pending = _pendingInquiries[key];
     if (pending != null) return pending;
 
@@ -926,6 +933,7 @@ class ChatRemoteDataSource {
       userId: userId,
       inquiry: inquiry,
       imageUrl: imageUrl,
+      onlyIfPickupDeadlineExpired: onlyIfPickupDeadlineExpired,
     );
     _pendingInquiries[key] = operation;
     try {
@@ -946,11 +954,12 @@ class ChatRemoteDataSource {
     required String conversationId,
     required String userId,
     required ItemInquiryData inquiry,
+    required bool onlyIfPickupDeadlineExpired,
     String? imageUrl,
   }) async {
     final bookings = await _supabaseClient
         .from('booking_tb')
-        .select('id,status')
+        .select('id,status,pickup_deadline_expired')
         .eq('user_id', userId)
         .eq('item_id', inquiry.itemId!)
         .order('created_at', ascending: false)
@@ -963,6 +972,11 @@ class ChatRemoteDataSource {
     if (latestBooking != null && bookingId == null) {
       throw const ChatRemoteException('ข้อมูลรายการเช่าเดิมไม่ถูกต้อง');
     }
+    final pickupDeadlineExpired =
+        latestBooking?['status'] == 'cancelled' &&
+        latestBooking?['pickup_deadline_expired'] == true;
+    if (onlyIfPickupDeadlineExpired && !pickupDeadlineExpired) return null;
+
     final latestInquiry = await _findLatestItemInquiry(
       conversationId: conversationId,
       userId: userId,
@@ -971,11 +985,12 @@ class ChatRemoteDataSource {
     if (_currentUserId != userId) {
       throw const ChatRemoteException('บัญชีผู้ใช้เปลี่ยน กรุณาเปิดแชตใหม่');
     }
-    if (!const ShouldSendItemInquiryUseCase()(
+    final needsNewInquiry = const ShouldSendItemInquiryUseCase()(
       latestInquiry: latestInquiry?.inquiry,
       latestBookingId: bookingId,
       latestBookingStatus: latestBooking?['status']?.toString(),
-    )) {
+    );
+    if (!needsNewInquiry && !pickupDeadlineExpired) {
       return latestInquiry?.messageId;
     }
 
@@ -984,7 +999,7 @@ class ChatRemoteDataSource {
       message: inquiry.withPreviousBookingId(bookingId).toChatMessagePayload(),
       imageUrl: imageUrl,
     );
-    return null;
+    return needsNewInquiry ? null : latestInquiry?.messageId;
   }
 
   Future<({String messageId, ItemInquiryData inquiry})?>
@@ -1028,19 +1043,15 @@ class ChatRemoteDataSource {
     final offer = BookingRequestData.fromChatMessage(message);
 
     try {
-      await client
-          .schema('messaging')
-          .from('chat_message_tb')
-          .insert({
-            'conversation_id': conversationId,
-            'sender_id': currentUserId,
-            'message': message.trim(),
-            'image_url': imageUrl,
-            // ข้อเสนอในคิวต้องเปรียบเทียบอายุกับเวลายืนยันสิทธิ์ฝั่งเซิร์ฟเวอร์
-            if (offer?.rentalQueueMessageId == null) 'created_at': nowIso,
-          }, defaultToNull: false)
-          .select('id')
-          .maybeSingle();
+      // การเปิดข้อความสอบถามเดิมอาจล้างคำขอหมดเวลาโดยไม่เพิ่มข้อความใหม่
+      await client.schema('messaging').from('chat_message_tb').insert({
+        'conversation_id': conversationId,
+        'sender_id': currentUserId,
+        'message': message.trim(),
+        'image_url': imageUrl,
+        // ข้อเสนอในคิวต้องเปรียบเทียบอายุกับเวลายืนยันสิทธิ์ฝั่งเซิร์ฟเวอร์
+        if (offer?.rentalQueueMessageId == null) 'created_at': nowIso,
+      }, defaultToNull: false);
 
       // ฐานข้อมูลอัปเดตข้อความล่าสุดพร้อม auto reply ใน transaction เดียว
 

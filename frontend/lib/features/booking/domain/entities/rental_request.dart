@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../../core/models/rental_penalty_terms.dart';
+
 class RentalRequestDraft extends Equatable {
   const RentalRequestDraft({
     required this.itemId,
@@ -14,6 +16,7 @@ class RentalRequestDraft extends Equatable {
     this.unitPrice,
     this.queueMessageId,
     this.requestRevision,
+    this.expectedPenaltyTerms,
   });
 
   final int itemId;
@@ -28,6 +31,7 @@ class RentalRequestDraft extends Equatable {
   final int? unitPrice;
   final int? queueMessageId;
   final int? requestRevision;
+  final RentalPenaltyTerms? expectedPenaltyTerms;
 
   @override
   List<Object?> get props => [
@@ -43,6 +47,7 @@ class RentalRequestDraft extends Equatable {
     unitPrice,
     queueMessageId,
     requestRevision,
+    expectedPenaltyTerms,
   ];
 }
 

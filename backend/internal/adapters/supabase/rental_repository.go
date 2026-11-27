@@ -57,6 +57,9 @@ func (r *supabaseRentalRepository) CreateRental(
 			if request.QueueMessageID == 0 {
 				params["p_queue_message_id"] = nil
 			}
+		} else if request.ExpectedPenaltyTerms != nil {
+			rpc = "create_chat_rental_request_with_penalties"
+			params["p_expected_penalty_terms"] = request.ExpectedPenaltyTerms
 		}
 		if err := r.client.DB.Rpc(rpc, params).ExecuteWithContext(ctx, &rental); err != nil {
 			return nil, mapRentalRepositoryError(rpc, err)

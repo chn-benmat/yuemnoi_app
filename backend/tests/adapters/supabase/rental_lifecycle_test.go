@@ -102,6 +102,31 @@ func TestUnreadablePromptPayNationalIDCanBeReplaced(t *testing.T) {
 	}
 }
 
+func TestReturnPenaltyQRUsesSavedAmount(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/v1/rpc/rental_return_penalty" {
+			t.Errorf("unexpected RPC %s", r.URL.Path)
+		}
+		var args map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&args); err != nil || args["p_actor"] != "owner" || args["p_action"] != "qr" || args["p_booking"] != float64(25) {
+			t.Errorf("unexpected RPC arguments: %v, %v", args, err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"amount_satang":12500,"phone":"0812345678"}`)
+	}))
+	defer server.Close()
+	repo, ok := supabase.NewSupabaseRentalRepository(sb.CreateClient(server.URL, "test-key")).(interface {
+		RentalReturnPenaltyQR(context.Context, string, int64) (string, error)
+	})
+	if !ok {
+		t.Fatal("rental repository does not expose the saved return penalty QR")
+	}
+	qr, err := repo.RentalReturnPenaltyQR(context.Background(), "owner", 25)
+	if err != nil || !strings.Contains(qr, "5406125.00") || !strings.Contains(qr, "0066812345678") {
+		t.Fatalf("expected a 125-baht QR for the saved account, got %q, %v", qr, err)
+	}
+}
+
 func TestRentalReturnUsesServerChallengeAndNeverLeaksRawSecretsToDatabase(t *testing.T) {
 	var tokenHash, otpHash string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

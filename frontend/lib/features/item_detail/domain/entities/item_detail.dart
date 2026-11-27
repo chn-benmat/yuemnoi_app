@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../../../../core/models/pickup_location.dart';
+import '../../../../core/models/rental_penalty_terms.dart';
 
 import '../../../rental_item/domain/entities/rental_item.dart';
 
@@ -47,6 +48,7 @@ class ItemDetail extends Equatable {
     required this.category,
     required this.price,
     this.additionalDailyPrice,
+    this.penaltyTerms = const RentalPenaltyTerms(),
     required this.status,
     this.isRentalOccupied = false,
     this.isRentalQueueHeld = false,
@@ -65,6 +67,7 @@ class ItemDetail extends Equatable {
   final String category;
   final int price;
   final int? additionalDailyPrice;
+  final RentalPenaltyTerms penaltyTerms;
   final String status;
   final bool isRentalOccupied;
   final bool isRentalQueueHeld;
@@ -88,6 +91,7 @@ class ItemDetail extends Equatable {
     category: category,
     price: price,
     additionalDailyPrice: additionalDailyPrice,
+    penaltyTerms: penaltyTerms,
     status: status,
     isRentalOccupied: isRentalOccupied,
     isRentalQueueHeld: isRentalQueueHeld,
@@ -114,6 +118,7 @@ class ItemDetail extends Equatable {
     category,
     price,
     additionalDailyPrice,
+    penaltyTerms,
     status,
     isRentalOccupied,
     isRentalQueueHeld,
@@ -134,6 +139,7 @@ class ItemEditDraft extends Equatable {
     required this.rentalType,
     required this.price,
     this.additionalDailyPrice,
+    this.penaltyTerms,
     required this.retainedImageUrls,
     required this.newImages,
     this.imageOrder,
@@ -147,6 +153,7 @@ class ItemEditDraft extends Equatable {
   final String rentalType;
   final int price;
   final int? additionalDailyPrice;
+  final RentalPenaltyTerms? penaltyTerms;
   final List<String> retainedImageUrls;
   final List<RentalItemImage> newImages;
   final List<RentalItemPhoto>? imageOrder;
@@ -190,6 +197,7 @@ class ItemEditDraft extends Equatable {
     rentalType,
     price,
     additionalDailyPrice,
+    penaltyTerms,
     retainedImageUrls,
     newImages,
     imageOrder,

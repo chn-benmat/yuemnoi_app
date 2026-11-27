@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/models/pickup_location.dart';
+import '../../../../core/models/rental_penalty_terms.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/services/item_catalog_service.dart';
@@ -56,6 +57,8 @@ class RentalReturnRemoteDataSource {
     final returnState = Map<String, dynamic>.from(
       data['return_state'] as Map? ?? {},
     );
+    final penaltyTerms = booking['return_penalty_terms'];
+    final penaltyReport = returnState['return_penalty_report'];
     final status = booking['status']?.toString();
     if (![
       'active',
@@ -126,6 +129,12 @@ class RentalReturnRemoteDataSource {
         _ => RentalReturnStep.inProgress,
       },
       photos: photos,
+      penaltyTerms: penaltyTerms is Map<String, dynamic>
+          ? RentalPenaltyTerms.fromJson(penaltyTerms)
+          : const RentalPenaltyTerms(),
+      penaltyReport: penaltyReport is Map<String, dynamic>
+          ? RentalReturnPenaltyReport.fromJson(penaltyReport)
+          : null,
     );
   }
 
@@ -141,6 +150,41 @@ class RentalReturnRemoteDataSource {
       throw StateError('เซิร์ฟเวอร์ยังไม่ยืนยันว่าคืนอุปกรณ์สำเร็จ');
     }
     ItemCatalogService.instance.notifyChanged();
+  }
+
+  Future<RentalReturnPenaltyReport> savePenaltyReport({
+    required int rentalId,
+    required bool damaged,
+    required bool late,
+    required String details,
+  }) async {
+    final result = _result(
+      await _api.post(
+        '/api/rentals/$rentalId/return-penalty',
+        data: {'damaged': damaged, 'late': late, 'details': details},
+        headers: _headers,
+      ),
+    );
+    return RentalReturnPenaltyReport.fromJson(result);
+  }
+
+  Future<String> getPenaltyQr(int rentalId) async {
+    final response = await _api.get(
+      '/api/rentals/$rentalId/return-penalty/qr',
+      headers: _headers,
+    );
+    if (response.data is Map &&
+        response.data['code'] == 'promptpay_account_required') {
+      throw const RentalReturnPenaltyException(
+        'ตั้งค่าบัญชีพร้อมเพย์ของคุณก่อนรับค่าปรับ',
+        needsPromptPay: true,
+      );
+    }
+    final qr = _result(response)['promptpay_qr'];
+    if (qr is! String || qr.isEmpty) {
+      throw const RentalReturnPenaltyException('ไม่พบข้อมูล QR พร้อมเพย์');
+    }
+    return qr;
   }
 
   Future<void> cancelRental({

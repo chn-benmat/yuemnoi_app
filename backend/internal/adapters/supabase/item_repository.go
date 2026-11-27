@@ -53,6 +53,15 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 	if item.DailyPrice != nil {
 		payload["daily_price"] = *item.DailyPrice
 	}
+	if item.DamageFee > 0 {
+		payload["damage_fee"] = item.DamageFee
+	}
+	if item.LateReturnFee > 0 {
+		payload["late_return_fee"] = item.LateReturnFee
+	}
+	if item.DamageTerms != "" {
+		payload["damage_terms"] = item.DamageTerms
+	}
 
 	err := r.client.DB.From("item_tb").Insert(payload).ExecuteWithContext(ctx, &items)
 	if err != nil {

@@ -192,10 +192,11 @@ void main() {
     final text = tester.widget<Text>(find.text(message));
     expect(text.style?.fontStyle, isNot(FontStyle.italic));
     expect(text.maxLines, isNull);
+    expect(find.text('ดูเพิ่มเติม'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('reviews scroll down the detail page and open more', (
+  testWidgets('shows two review previews with a button below to open all', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -216,22 +217,19 @@ void main() {
       ),
     );
     await pumpDetail(tester, isOwner: false, reviews: reviews);
-    final more = find.text('ดูเพิ่มเติม');
-    await Scrollable.ensureVisible(tester.element(more), alignment: 0.25);
-    await tester.pumpAndSettle();
     expect(find.text('คะแนนเฉลี่ย 4.3/5'), findsOneWidget);
-    final firstReview = find.text('Review number 0');
-    final fourthReview = find.text('Review number 3');
-    expect(firstReview.hitTestable(), findsOneWidget);
-    expect(fourthReview.hitTestable(), findsNothing);
+    expect(find.text('Review number 0'), findsOneWidget);
+    final secondReview = find.text('Review number 1');
+    expect(secondReview, findsOneWidget);
+    expect(find.text('Review number 2'), findsNothing);
 
-    await tester.drag(firstReview, const Offset(0, -350));
-    await tester.pumpAndSettle();
-    expect(fourthReview.hitTestable(), findsOneWidget);
-    expect(find.text('Review number 4'), findsNothing);
-
+    final more = find.widgetWithText(TextButton, 'ดูเพิ่มเติม');
     await Scrollable.ensureVisible(tester.element(more), alignment: 0.25);
     await tester.pumpAndSettle();
+    expect(
+      tester.getTopLeft(more).dy,
+      greaterThan(tester.getBottomLeft(secondReview).dy),
+    );
     await tester.tap(more);
     await tester.pumpAndSettle();
     expect(find.text('รีวิวทั้งหมด'), findsOneWidget);

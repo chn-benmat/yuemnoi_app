@@ -23,6 +23,11 @@ class ItemInquiryData {
   final int? previousBookingId;
   final String rawMessage;
 
+  bool followsBooking(int bookingId) {
+    final previousId = previousBookingId;
+    return previousId != null && previousId >= bookingId;
+  }
+
   static const String inquiryPrefix =
       'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:';
   static const String legacyPrefix = 'ฉันสนใจจ้างงานของคุณตามรายละเอียดนี้:';

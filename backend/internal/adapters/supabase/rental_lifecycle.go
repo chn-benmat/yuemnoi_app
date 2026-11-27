@@ -34,6 +34,8 @@ func rentalLifecycleError(err error) error {
 			return domain.ErrRentalStatusTransition
 		case strings.Contains(e.Message, "rental_not_started"):
 			return domain.ErrRentalNotStarted
+		case strings.Contains(e.Message, "return_penalty_no_amount"):
+			return domain.ErrReturnPenaltyNoAmount
 		case strings.Contains(e.Message, "invalid_rental"):
 			return domain.ErrInvalidRental
 		}

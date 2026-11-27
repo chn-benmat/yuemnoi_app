@@ -9,6 +9,8 @@ import 'package:flutter/services.dart';
 import '../../../../core/widgets/pickup_location_field.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+
+import '../../../../core/widgets/rental_penalty_summary.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/colors.dart';
@@ -219,18 +221,17 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         imageUrl: firstImageUrl,
       );
 
-      // เปิดแชตโดยไม่ส่งความสนใจเพิ่มเมื่อมีรายการเช่าหรือสิทธิ์จากคิว
       final chatDataSource = ChatRemoteDataSource();
       String? initialMessageId;
-      if (!item.isRentalOccupied && !item.isRentalQueueHeld) {
-        try {
-          initialMessageId = await chatDataSource.sendItemInquiryIfNeeded(
-            conversationId: conversation.id,
-            inquiry: inquiryData,
-            imageUrl: firstImageUrl.isNotEmpty ? firstImageUrl : null,
-          );
-        } catch (_) {}
-      }
+      try {
+        initialMessageId = await chatDataSource.sendItemInquiryIfNeeded(
+          conversationId: conversation.id,
+          inquiry: inquiryData,
+          imageUrl: firstImageUrl.isNotEmpty ? firstImageUrl : null,
+          onlyIfPickupDeadlineExpired:
+              item.isRentalOccupied || item.isRentalQueueHeld,
+        );
+      } catch (_) {}
 
       if (mounted) {
         setState(() => _isChatLoading = false);
@@ -1059,6 +1060,10 @@ class _DetailContent extends StatelessWidget {
                   key: ValueKey('item-description-${item.id}'),
                   description: item.description,
                 ),
+                if (!item.penaltyTerms.isEmpty) ...[
+                  const SizedBox(height: 18),
+                  RentalPenaltySummary(terms: item.penaltyTerms),
+                ],
                 const SizedBox(height: 18),
                 _OwnerCard(item: item),
                 const SizedBox(height: 24),
@@ -1503,6 +1508,8 @@ class _RelatedItemsSection extends StatelessWidget {
 class _ReviewsSection extends StatelessWidget {
   const _ReviewsSection({required this.reviews, required this.averageRating});
 
+  static const _previewLimit = 2;
+
   final List<ItemReview> reviews;
   final double averageRating;
 
@@ -1516,16 +1523,7 @@ class _ReviewsSection extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Row(
-        children: [
-          const Expanded(child: _SectionTitle('รีวิวจากคนที่เช่า')),
-          if (reviews.isNotEmpty)
-            TextButton(
-              onPressed: () => _showMore(context),
-              child: const Text('ดูเพิ่มเติม'),
-            ),
-        ],
-      ),
+      const _SectionTitle('รีวิวจากคนที่เช่า'),
       const SizedBox(height: 4),
       if (reviews.isEmpty) ...[
         const Text(
@@ -1558,9 +1556,18 @@ class _ReviewsSection extends StatelessWidget {
             ),
           ],
         ),
-        for (final review in reviews.take(4)) ...[
+        for (final review in reviews.take(_previewLimit)) ...[
           const SizedBox(height: 12),
           _ReviewCard(review: review),
+        ],
+        if (reviews.length > _previewLimit) ...[
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton(
+              onPressed: () => _showMore(context),
+              child: const Text('ดูเพิ่มเติม'),
+            ),
+          ),
         ],
       ],
     ],

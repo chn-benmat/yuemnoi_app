@@ -21,7 +21,7 @@ class ShouldSendItemInquiryUseCase {
     if (!closedStatuses.contains(latestBookingStatus?.trim().toLowerCase())) {
       return false;
     }
-    // รอบใหม่ส่งได้ครั้งเดียวหลังรายการเดิมปิด แม้ผู้ใช้กลับมาเปิดแชตอีก
-    return latestInquiry?.previousBookingId != latestBookingId;
+    // เมื่อลบคำขอที่หมดเวลา รายการที่อ่านได้ล่าสุดอาจเป็นรายการก่อนหน้าข้อความนี้
+    return latestInquiry?.followsBooking(latestBookingId) != true;
   }
 }

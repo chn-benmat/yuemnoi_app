@@ -20,4 +20,21 @@ class RentalReturnRepositoryImpl implements RentalReturnRepository {
   }) {
     return _remoteDataSource.confirmReceipt(rentalId, pauseItem: pauseItem);
   }
+
+  @override
+  Future<RentalReturnPenaltyReport> savePenaltyReport({
+    required int rentalId,
+    required bool damaged,
+    required bool late,
+    required String details,
+  }) => _remoteDataSource.savePenaltyReport(
+    rentalId: rentalId,
+    damaged: damaged,
+    late: late,
+    details: details,
+  );
+
+  @override
+  Future<String> getPenaltyQr(int rentalId) =>
+      _remoteDataSource.getPenaltyQr(rentalId);
 }

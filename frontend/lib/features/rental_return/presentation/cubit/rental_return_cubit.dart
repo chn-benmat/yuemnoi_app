@@ -86,6 +86,42 @@ class RentalReturnCubit extends Cubit<RentalReturnState> {
     }
   }
 
+  Future<RentalReturnPenaltyReport> savePenaltyReport({
+    required bool damaged,
+    required bool late,
+    required String details,
+  }) async {
+    if (!state.isLender ||
+        state.isSubmitting ||
+        state.session.step == RentalReturnStep.completed) {
+      throw const RentalReturnPenaltyException(
+        'บันทึกรายงานสำหรับรายการนี้ไม่ได้',
+      );
+    }
+    emit(state.copyWith(isSubmitting: true));
+    try {
+      final report = await _repository.savePenaltyReport(
+        rentalId: state.session.rentalId,
+        damaged: damaged,
+        late: late,
+        details: details,
+      );
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            session: state.session.copyWith(penaltyReport: report),
+          ),
+        );
+      }
+      return report;
+    } finally {
+      if (!isClosed) emit(state.copyWith(isSubmitting: false));
+    }
+  }
+
+  Future<String> getPenaltyQr() =>
+      _repository.getPenaltyQr(state.session.rentalId);
+
   /// กระตุ้นการแจ้งเตือนฉุกเฉินกึ่งนาฬิกาปลุก (Urgent Alarm)
   Future<void> triggerUrgentAlarm() async {
     emit(state.copyWith(isAlarmActive: true));

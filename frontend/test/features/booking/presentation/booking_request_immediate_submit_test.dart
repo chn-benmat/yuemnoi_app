@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/models/rental_penalty_terms.dart';
 import 'package:frontend/core/navigation/app_routes.dart';
 import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
@@ -21,7 +22,14 @@ void main() {
     final bangkokNow = DateTime.now().toUtc().add(const Duration(hours: 7));
     final today = DateUtils.dateOnly(bangkokNow);
     final data = BookingRequestData(
-      item: BookingItemInfo.defaultMockItem.copyWith(imageUrl: ''),
+      item: BookingItemInfo.defaultMockItem.copyWith(
+        imageUrl: '',
+        penaltyTerms: const RentalPenaltyTerms(
+          damageFee: 125,
+          lateReturnFee: 50,
+          damageTerms: 'เลนส์แตกร้าว',
+        ),
+      ),
       rentalType: BookingRentalType.daily,
       startDate: today,
       endDate: DateTime(today.year, today.month, today.day + 1),
@@ -44,6 +52,8 @@ void main() {
       find.byKey(const ValueKey('confirm-send-booking-request-button')),
       findsOneWidget,
     );
+    expect(find.text('ชำรุด 125 บาท / ครั้ง'), findsWidgets);
+    expect(find.text('คืนเกินกำหนด 50 บาท / ครั้ง'), findsWidgets);
   });
 
   testWidgets('owner can correct a past queue offer before saving', (

@@ -19,6 +19,11 @@ BookingItemInfo _$BookingItemInfoFromJson(Map<String, dynamic> json) =>
       ownerName: json['ownerName'] as String? ?? 'ผู้ปล่อยเช่า',
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
+      penaltyTerms: json['penaltyTerms'] == null
+          ? null
+          : RentalPenaltyTerms.fromJson(
+              json['penaltyTerms'] as Map<String, dynamic>,
+            ),
     );
 
 Map<String, dynamic> _$BookingItemInfoToJson(BookingItemInfo instance) =>
@@ -34,4 +39,5 @@ Map<String, dynamic> _$BookingItemInfoToJson(BookingItemInfo instance) =>
       'ownerName': instance.ownerName,
       'latitude': instance.latitude,
       'longitude': instance.longitude,
+      'penaltyTerms': ?instance.penaltyTerms?.toJson(),
     };

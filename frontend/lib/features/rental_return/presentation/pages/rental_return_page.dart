@@ -17,6 +17,7 @@ import '../widgets/lender_inspection_view.dart';
 import '../widgets/rental_time_card.dart';
 import '../widgets/return_completed_dialog.dart';
 import '../widgets/return_evidence_gallery.dart';
+import '../widgets/return_penalty_dialog.dart';
 import '../widgets/urgent_return_alarm_dialog.dart';
 
 class RentalReturnPage extends StatelessWidget {
@@ -161,6 +162,8 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                     RentalTimeCard(session: session),
                     if (session.photos.any((photo) => photo.hasPhoto))
                       ReturnEvidenceGallery(photos: session.photos),
+                    if (session.penaltyReport case final report?)
+                      ReturnPenaltyReportSummary(report: report),
                     if (state.isRenter)
                       _RenterReturnStatus(
                         awaitingConfirmation:
@@ -177,6 +180,24 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
                         onPauseItem: (pause) => setState(() {
                           _pausedRentalId = pause ? session.rentalId : null;
                         }),
+                        reportLabel: session.penaltyReport != null
+                            ? 'ดูรายงาน'
+                            : session.isOverdue &&
+                                  session.penaltyTerms.lateReturnFee > 0
+                            ? 'ชำรุด / คืนช้า'
+                            : 'แจ้งชำรุด',
+                        onReport: () {
+                          final cubit = context.read<RentalReturnCubit>();
+                          showDialog<void>(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (context) => ReturnPenaltyDialog(
+                              session: session,
+                              onSave: cubit.savePenaltyReport,
+                              onLoadQr: cubit.getPenaltyQr,
+                            ),
+                          );
+                        },
                         onConfirm: () => context
                             .read<RentalReturnCubit>()
                             .confirmMerchantReceipt(

@@ -1,4 +1,5 @@
 import '../../../../core/models/pickup_location.dart';
+import '../../../../core/models/rental_penalty_terms.dart';
 import '../../domain/entities/item_detail.dart';
 
 abstract final class ItemDetailModel {
@@ -34,6 +35,7 @@ abstract final class ItemDetailModel {
       category: _fallbackString(item['category'], 'อุปกรณ์'),
       price: _optionalInt(item['price']) ?? 0,
       additionalDailyPrice: _optionalInt(item['daily_price']),
+      penaltyTerms: RentalPenaltyTerms.fromJson(item),
       status: _string(item['status']),
       isRentalOccupied: item['is_rental_occupied'] == true,
       isRentalQueueHeld: item['is_rental_queue_held'] == true,
@@ -69,6 +71,7 @@ abstract final class ItemDetailModel {
       category: _fallbackString(item['category'], 'อุปกรณ์'),
       price: _optionalInt(item['price']) ?? 0,
       additionalDailyPrice: _optionalInt(item['daily_price']),
+      penaltyTerms: RentalPenaltyTerms.fromJson(item),
       status: _string(item['status']),
       isRentalOccupied: item['is_rental_occupied'] == true,
       isRentalQueueHeld: item['is_rental_queue_held'] == true,
