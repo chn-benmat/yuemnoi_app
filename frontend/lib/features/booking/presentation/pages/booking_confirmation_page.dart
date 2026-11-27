@@ -79,6 +79,13 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
         _bookingData.ownerId == currentUserId;
   }
 
+  bool get _canConfirmCustomerRequest =>
+      _isCurrentUserOwner &&
+      _bookingData.status == 'pending' &&
+      (_bookingData.bookingId ?? 0) > 0 &&
+      (_bookingData.originalMessageId?.isNotEmpty ?? false) &&
+      !_bookingData.hasCustomerRequestStartPassed;
+
   RentalRequestDraft _buildRentalDraft() {
     return RentalRequestDraft(
       itemId: _bookingData.item.id,
@@ -334,7 +341,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
 
     _isConfirmationSheetOpen = false;
     if (!mounted || openStatus != true) return;
-    // ปิดหน้าสรุปกลับไปยังแชทเดิมหลังผู้เช่ายืนยันคำขอ
+    // ปิดหน้าสรุปกลับไปยังแชทเดิมหลังยืนยันคำขอ
     if (mounted) Navigator.pop(context, true);
   }
 
@@ -385,7 +392,10 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                           }
                           final confirmed = await cubit.confirm(
                             offerMessageId: messageId,
-                            paymentMethod: _bookingData.paymentMethod,
+                            paymentMethod: _bookingData.isCustomerRequest
+                                ? ''
+                                : _bookingData.paymentMethod,
+                            rentalId: bookingId,
                           );
                           if (!confirmed) return;
                           // บันทึกในเครื่องหลัง server ยืนยันสำเร็จเท่านั้น การเปิดหรือปิดสรุปยังคง pending
@@ -442,6 +452,8 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
         title: Text(
           widget.isDetailView
               ? 'รายละเอียดที่นัดรับ'
+              : _bookingData.isCustomerRequest
+              ? 'ตรวจสอบคำขอเช่า'
               : (_isCurrentUserOwner
                     ? 'ตรวจสอบและยอมรับคำขอเช่า'
                     : 'ยืนยันคำขอเช่า'),
@@ -529,8 +541,11 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     const SizedBox(height: 18),
                     BookingPaymentMethodCard(
                       selectedMethod: _bookingData.paymentMethod,
-                      isEditable: !widget.isDetailView,
-                      onMethodChanged: widget.isDetailView
+                      isEditable:
+                          !widget.isDetailView &&
+                          !_bookingData.isCustomerRequest,
+                      onMethodChanged:
+                          widget.isDetailView || _bookingData.isCustomerRequest
                           ? null
                           : (method) {
                               setState(() {
@@ -602,7 +617,13 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                                 borderRadius: BorderRadius.circular(28),
                               ),
                             ),
-                            onPressed: isSubmitting || _isCurrentUserOwner
+                            onPressed: _bookingData.isCustomerRequest
+                                ? (!isSubmitting && _canConfirmCustomerRequest
+                                      ? () => _showConfirmation(
+                                          _bookingData.bookingId,
+                                        )
+                                      : null)
+                                : isSubmitting || _isCurrentUserOwner
                                 ? null
                                 : isConfirmed
                                 ? () => _showConfirmation(state.rentalId)
@@ -646,6 +667,8 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                                       Text(
                                         isConfirmed
                                             ? 'ดูรายละเอียดคำขอ'
+                                            : _bookingData.isCustomerRequest
+                                            ? 'ยืนยันคำขอเช่า'
                                             : hasPendingRental
                                             ? 'ยืนยันการเช่า'
                                             : (_isCurrentUserOwner

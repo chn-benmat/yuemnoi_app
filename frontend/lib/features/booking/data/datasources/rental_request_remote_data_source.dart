@@ -35,6 +35,13 @@ class RentalRequestRemoteDataSource {
           if (draft.offerMessageId != null)
             'offer_message_id': draft.offerMessageId,
           if (draft.bookingId != null) 'booking_id': draft.bookingId,
+          if (draft.conversationId != null)
+            'conversation_id': draft.conversationId,
+          if (draft.paymentMethod != null)
+            'payment_method': draft.paymentMethod,
+          if (draft.unitPrice != null) 'unit_price': draft.unitPrice,
+          if (draft.queueMessageId != null)
+            'queue_message_id': draft.queueMessageId,
         },
         headers: {'Authorization': 'Bearer $token'},
       );

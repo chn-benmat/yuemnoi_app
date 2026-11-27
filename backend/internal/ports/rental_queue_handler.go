@@ -8,7 +8,7 @@ import (
 )
 
 type rentalQueuePayload struct {
-	Action         string `json:"action" validate:"required,oneof=list invite join accept leave"`
+	Action         string `json:"action" validate:"required,oneof=list request join accept leave"`
 	ConversationID string `json:"conversation_id" validate:"required,uuid"`
 	ItemID         int64  `json:"item_id" validate:"omitempty,gt=0"`
 	MessageID      int64  `json:"message_id" validate:"omitempty,gt=0"`
@@ -28,7 +28,7 @@ func (h *RentalHandler) RentalQueue(c fiber.Ctx) error {
 		if body.ItemID != 0 || body.MessageID != 0 {
 			return writeRentalError(c, domain.ErrInvalidRental)
 		}
-	case "invite":
+	case "request":
 		if body.ItemID <= 0 || body.MessageID != 0 {
 			return writeRentalError(c, domain.ErrInvalidRental)
 		}

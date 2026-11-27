@@ -15,6 +15,8 @@ var (
 	ErrRentalStatusTransition = errors.New("invalid rental status transition")
 	ErrRentalReturnToken      = errors.New("invalid or expired return token")
 	ErrRentalNotStarted       = errors.New("rental has not started yet")
+	ErrRentalRequestExpired   = errors.New("requested pickup time has passed")
+	ErrRentalPriceChanged     = errors.New("rental listing price has changed")
 )
 
 // CreateRentalRequest accepts only user-selected values. Pricing is calculated
@@ -27,6 +29,9 @@ type CreateRentalRequest struct {
 	PickupLocation string    `json:"pickup_location"`
 	OfferMessageID string    `json:"offer_message_id,omitempty"`
 	BookingID      int64     `json:"booking_id,omitempty"`
+	ConversationID string    `json:"conversation_id,omitempty"`
+	PaymentMethod  string    `json:"payment_method,omitempty"`
+	UnitPrice      int64     `json:"unit_price,omitempty"`
 	QueueMessageID int64     `json:"-"`
 }
 
@@ -34,16 +39,17 @@ type RentalOrder struct {
 	PickupAddress string `json:"pickup_address"`
 	PickupNote    string `json:"pickup_note"`
 
-	ID             int64     `json:"id"`
-	UserID         string    `json:"user_id"`
-	ItemID         int64     `json:"item_id"`
-	StartAt        time.Time `json:"start_at"`
-	EndAt          time.Time `json:"end_at"`
-	RentalType     string    `json:"type"`
-	PickupLocation string    `json:"pickup_location"`
-	TotalPrice     int64     `json:"total_price"`
-	Status         string    `json:"status"`
-	PaymentMethod  string    `json:"payment_method,omitempty"`
+	ID               int64     `json:"id"`
+	UserID           string    `json:"user_id"`
+	ItemID           int64     `json:"item_id"`
+	StartAt          time.Time `json:"start_at"`
+	EndAt            time.Time `json:"end_at"`
+	RentalType       string    `json:"type"`
+	PickupLocation   string    `json:"pickup_location"`
+	TotalPrice       int64     `json:"total_price"`
+	Status           string    `json:"status"`
+	PaymentMethod    string    `json:"payment_method,omitempty"`
+	RequestMessageID int64     `json:"rental_request_message_id,omitempty"`
 }
 
 type RentalRepository interface {

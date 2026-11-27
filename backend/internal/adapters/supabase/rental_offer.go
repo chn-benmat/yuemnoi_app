@@ -27,6 +27,19 @@ func (r *supabaseRentalRepository) ConfirmRental(ctx context.Context, userID str
 		return nil, domain.ErrRentalNotFound
 	}
 	rental := bookings[0]
+	if rental.RequestMessageID > 0 {
+		messageID, err := strconv.ParseInt(offerMessageID, 10, 64)
+		if err != nil || messageID != rental.RequestMessageID {
+			return nil, domain.ErrInvalidRental
+		}
+		var confirmed domain.RentalOrder
+		if err := r.client.DB.Rpc("confirm_chat_rental_request", map[string]any{
+			"p_owner": userID, "p_booking_id": rentalID, "p_message_id": messageID,
+		}).ExecuteWithContext(ctx, &confirmed); err != nil {
+			return nil, mapRentalRepositoryError("confirm chat rental request", err)
+		}
+		return &confirmed, nil
+	}
 	if rental.UserID != userID {
 		return nil, domain.ErrRentalForbidden
 	}
@@ -141,7 +154,7 @@ func (r *supabaseRentalRepository) processChatOffer(ctx context.Context, userID 
 		if err := r.client.DB.From("booking_tb").Select("*").Eq("id", strconv.FormatInt(offer.BookingID, 10)).ExecuteWithContext(ctx, &bookings); err != nil {
 			return nil, fmt.Errorf("load accepted offer: %w", err)
 		}
-		if len(bookings) != 1 || bookings[0].UserID != userID || bookings[0].ItemID != request.ItemID {
+		if len(bookings) != 1 || bookings[0].UserID != userID || bookings[0].ItemID != request.ItemID || bookings[0].RequestMessageID > 0 {
 			return nil, domain.ErrRentalForbidden
 		}
 		rental = &bookings[0]

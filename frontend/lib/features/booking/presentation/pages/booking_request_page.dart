@@ -1,13 +1,18 @@
 import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../chat/data/datasources/chat_remote_data_source.dart';
 import '../../domain/entities/booking_request_model.dart';
+import '../../domain/entities/rental_request.dart';
+import '../bloc/rental_request_cubit.dart';
 import '../widgets/booking_location_card.dart';
+import '../widgets/booking_payment_method_card.dart';
 import '../widgets/booking_price_summary_card.dart';
 import '../widgets/booking_product_card.dart';
 import '../widgets/booking_time_range_picker.dart';
@@ -129,7 +134,10 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
   }
 
   bool _checkQueueOfferStart() {
-    if (!_bookingData.hasQueueOfferStartPassed) return true;
+    final startPassed = _bookingData.isCustomerRequest
+        ? _bookingData.hasCustomerRequestStartPassed
+        : _bookingData.hasQueueOfferStartPassed;
+    if (!startPassed) return true;
     showAppPopup(
       context,
       content: const Text(
@@ -149,6 +157,10 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     setState(() => _isSubmitting = true);
 
     try {
+      if (_bookingData.isCustomerRequest) {
+        await _submitCustomerRequest();
+        return;
+      }
       if (!widget.isEditMode && widget.onSendRequest != null) {
         widget.onSendRequest!(_bookingData);
         if (mounted) Navigator.maybePop(context, _bookingData);
@@ -189,21 +201,11 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
           newMessage: payload,
         );
       } else if (widget.isEditMode && oldMsgId != null && oldMsgId.isNotEmpty) {
-        try {
-          await chatDataSource.editMessage(
-            messageId: oldMsgId,
-            newMessage: payload,
-            conversationId: convId,
-          );
-        } catch (_) {
-          await chatDataSource.sendMessage(
-            conversationId: convId,
-            message: payload,
-            imageUrl: _bookingData.item.imageUrl.isNotEmpty
-                ? _bookingData.item.imageUrl
-                : null,
-          );
-        }
+        await chatDataSource.editMessage(
+          messageId: oldMsgId,
+          newMessage: payload,
+          conversationId: convId,
+        );
       } else {
         await chatDataSource.sendMessage(
           conversationId: convId,
@@ -229,6 +231,41 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
         setState(() => _isSubmitting = false);
       }
     }
+  }
+
+  Future<void> _submitCustomerRequest() async {
+    final cubit = context.read<RentalRequestCubit>();
+    final sent = await cubit.submit(
+      RentalRequestDraft(
+        itemId: _bookingData.item.id,
+        startAt: _bookingData.requestStartAt,
+        endAt: _bookingData.requestEndAt,
+        rentalType: _bookingData.rentalType.name,
+        pickupLocation: _bookingData.location,
+        conversationId: _bookingData.conversationId,
+        paymentMethod: _bookingData.paymentMethod,
+        unitPrice: _bookingData.unitRate.toInt(),
+        queueMessageId: _bookingData.rentalQueueMessageId,
+      ),
+    );
+    if (!mounted) return;
+    if (sent) {
+      Navigator.pop(context);
+      return;
+    }
+    final verification = cubit.state.verification;
+    if (verification == null) {
+      showAppPopup(
+        context,
+        content: Text(cubit.state.errorMessage ?? 'ส่งคำขอเช่าไม่สำเร็จ'),
+      );
+      return;
+    }
+    await AppRoutes.openRentalVerification(
+      context,
+      verification,
+      action: 'ส่งคำขอเช่า',
+    );
   }
 
   void _handleSendBookingRequest() {
@@ -604,6 +641,14 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
                 selectedType: _selectedRentalType,
                 onChanged: _onRentalTypeChanged,
                 showError: _showRentalTypeError,
+                availableTypes: _bookingData.isCustomerRequest
+                    ? [
+                        if (_bookingData.item.hourlyRate > 0)
+                          BookingRentalType.hourly,
+                        if (_bookingData.item.dailyRate > 0)
+                          BookingRentalType.daily,
+                      ]
+                    : BookingRentalType.values,
               ),
               const SizedBox(height: 16),
               BookingTimeRangePicker(
@@ -630,6 +675,15 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
               ),
               const SizedBox(height: 24),
               BookingPriceSummaryCard(bookingData: _bookingData),
+              if (_bookingData.isCustomerRequest) ...[
+                const SizedBox(height: 18),
+                BookingPaymentMethodCard(
+                  selectedMethod: _bookingData.paymentMethod,
+                  onMethodChanged: (method) => setState(() {
+                    _bookingData = _bookingData.copyWith(paymentMethod: method);
+                  }),
+                ),
+              ],
             ],
           ),
         ),

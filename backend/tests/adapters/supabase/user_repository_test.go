@@ -56,6 +56,43 @@ func TestRegisterUsesSupabaseEmailConfirmation(t *testing.T) {
 	}
 }
 
+func TestGetProfileReturnsUsernameChangeTime(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/v1/profile_tb":
+			columns := strings.Split(r.URL.Query().Get("select"), ",")
+			profile := map[string]string{
+				"user_id": "u1", "username": "elle.com_", "display_name": "ELLE",
+				"email": "elle@example.com", "phone": "+66812345678",
+				"user_image_url": "https://example.com/profile.png",
+			}
+			for _, column := range columns {
+				if column == "username_changed_at" {
+					profile[column] = "2026-11-27T05:00:00Z"
+				}
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]string{profile})
+		default:
+			t.Errorf("unexpected request: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	repository := supabase.NewSupabaseUserRepository(supabaseclient.CreateClient(server.URL, "test-key"), "test-key")
+
+	profile, err := repository.GetProfile(context.Background(), "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := json.Marshal(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(response), `"username_changed_at":"2026-11-27T05:00:00Z"`) {
+		t.Fatalf("GetProfile() returned %s, want persisted username change time", response)
+	}
+}
+
 func TestRegisterStopsWhenSupabaseAutoConfirmsEmail(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/auth/v1/settings" {

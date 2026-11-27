@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -99,6 +102,88 @@ void main() {
     final database = CacheDatabase(NativeDatabase.memory());
     AppCache.useDatabase(database);
     addTearDown(database.close);
+  });
+
+  test('receives feed changes after reconnecting and signing out', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final joins = StreamController<(WebSocket, List<dynamic>)>();
+    final sockets = <WebSocket>[];
+    final left = Completer<void>();
+    var leaveCount = 0;
+    server.listen((request) async {
+      final socket = await WebSocketTransformer.upgrade(request);
+      sockets.add(socket);
+      socket.listen((message) {
+        if (socket.readyState != WebSocket.open) return;
+        final frame = jsonDecode(message as String) as List<dynamic>;
+        socket.add(
+          jsonEncode([
+            frame[0],
+            frame[1],
+            frame[2],
+            'phx_reply',
+            {'status': 'ok', 'response': <String, dynamic>{}},
+          ]),
+        );
+        if (frame[3] == 'phx_join') joins.add((socket, frame));
+        if (frame[3] == 'phx_leave' && ++leaveCount == 2) left.complete();
+      });
+    });
+
+    final client = SupabaseClient(
+      'http://127.0.0.1:${server.port}',
+      'sb_publishable_test',
+    );
+    final source = HomeSupabaseDataSource(supabaseClient: client);
+    final connection = StreamIterator(joins.stream);
+    final changes = StreamIterator(source.watchFeedChanges());
+    addTearDown(() async {
+      await changes.cancel();
+      await connection.cancel();
+      await client.dispose();
+      await Future.wait(sockets.map((socket) => socket.close()));
+      await server.close(force: true);
+      await joins.close();
+    });
+
+    final initialSync = changes.moveNext();
+    expect(await connection.moveNext(), isTrue);
+    final (socket, join) = connection.current;
+    expect(join[2], 'realtime:home_feed');
+    expect(join[4]['config']['private'], isTrue);
+    expect(await initialSync, isTrue);
+
+    final changed = changes.moveNext();
+    socket.add(
+      jsonEncode([
+        join[0],
+        null,
+        join[2],
+        'broadcast',
+        {
+          'type': 'broadcast',
+          'event': 'feed_changed',
+          'payload': <String, dynamic>{},
+        },
+      ]),
+    );
+    expect(await changed, isTrue);
+
+    final reconnectSync = changes.moveNext();
+    await socket.close();
+    expect(await connection.moveNext(), isTrue);
+    expect(await reconnectSync, isTrue);
+
+    final signedOutSync = changes.moveNext();
+    await client.auth.signOut();
+    expect(
+      await connection.moveNext().timeout(const Duration(seconds: 5)),
+      isTrue,
+    );
+    expect(await signedOutSync, isTrue);
+
+    await changes.cancel();
+    await left.future;
   });
 
   test(
@@ -384,6 +469,51 @@ void main() {
     final searched = await dataSource.fetchNearbyItems(searchQuery: 'fresh');
     expect(searched.map((item) => item.id), ['8']);
   });
+
+  test(
+    'background updates keep featured items, remove hidden items, and use fresh details',
+    () async {
+      final api = _FakeApiClient(
+        ApiResponse(
+          statusCode: 200,
+          data: [
+            for (var id = 1; id <= 6; id++) {'id': id, 'item_name': 'Item $id'},
+          ],
+        ),
+      );
+      final source = HomeSupabaseDataSource(apiClient: api);
+      expect((await source.fetchCuratedItems()).map((item) => item.id), [
+        '1',
+        '2',
+        '3',
+        '4',
+      ]);
+
+      api.response = const ApiResponse(
+        statusCode: 200,
+        data: [
+          {'id': 6, 'item_name': 'Item 6'},
+          {'id': 3, 'item_name': 'Item 3 edited', 'is_rental_occupied': true},
+          {'id': 5, 'item_name': 'Item 5'},
+          {'id': 4, 'item_name': 'Item 4'},
+          {'id': 2, 'item_name': 'Item 2'},
+        ],
+      );
+      source.clearMemoryCache(rotateRecommendations: false);
+
+      final featured = await source.fetchCuratedItems();
+      expect(featured.map((item) => item.id), ['2', '3', '4', '6']);
+      expect(featured[1].title, 'Item 3 edited');
+      expect(featured[1].isRentalOccupied, isTrue);
+      expect((await source.fetchNearbyItems()).map((item) => item.id), [
+        '2',
+        '3',
+        '4',
+        '6',
+        '5',
+      ]);
+    },
+  );
 
   test(
     'refresh rotates previously featured items out of the first four',

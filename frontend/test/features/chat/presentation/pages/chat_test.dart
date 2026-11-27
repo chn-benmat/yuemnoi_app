@@ -373,164 +373,6 @@ void main() {
       ChatMessagesCache.clear();
     });
 
-    testWidgets('puts the queue invitation above the owner’s message field', (
-      tester,
-    ) async {
-      final bloc = ChatDetailBloc(
-        streamMessages: mockStreamMessages,
-        sendMessage: mockSendMessage,
-      );
-      addTearDown(bloc.close);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ChatDetailScreen(
-            conversation: sampleConversation2.copyWith(id: 'conv-1'),
-            chatDetailBloc: bloc,
-          ),
-        ),
-      );
-      await tester.pump();
-
-      final invite = find.ancestor(
-        of: find.text('ชวนเข้าคิวเช่าต่อ'),
-        matching: find.byWidgetPredicate(
-          (widget) => widget is ButtonStyleButton,
-        ),
-      );
-      final field = find.byKey(const ValueKey('chat-message-field'));
-      expect(invite.hitTestable(), findsOneWidget);
-      expect(
-        tester.getRect(invite).bottom,
-        lessThanOrEqualTo(tester.getRect(field).top),
-      );
-      expect(find.byTooltip('ส่งคำขอเช่าต่อ'), findsNothing);
-    });
-
-    testWidgets(
-      'shows the queue shortcut when the chat contains an owned item',
-      (tester) async {
-        final ownership = _MockGetOwnedChatItemIdsUseCase();
-        when(() => ownership({76})).thenAnswer((_) async => {76});
-        final bloc = ChatDetailBloc(
-          streamMessages: mockStreamMessages,
-          sendMessage: mockSendMessage,
-          getOwnedItemIds: ownership,
-        );
-        addTearDown(bloc.close);
-
-        await tester.pumpWidget(
-          MaterialApp(
-            home: ChatDetailScreen(
-              conversation: sampleConversation1,
-              chatDetailBloc: bloc,
-            ),
-          ),
-        );
-        await tester.pump();
-
-        final invite = find.text('ชวนเข้าคิวเช่าต่อ');
-        expect(invite, findsNothing);
-        expect(find.byIcon(Icons.playlist_add_rounded), findsNothing);
-        streamController.add([
-          ChatMessage(
-            id: 'owned-inquiry',
-            conversationId: 'conv-1',
-            senderId: 'user-owner-1',
-            message: const ItemInquiryData(
-              itemId: 76,
-              itemName: 'Canon EOS R50',
-            ).toChatMessagePayload(),
-            createdAt: DateTime(2026, 11, 26),
-            isMine: false,
-            isRead: true,
-          ),
-        ]);
-        await tester.pumpAndSettle();
-
-        expect(invite.hitTestable(), findsOneWidget);
-      },
-    );
-
-    for (final conversation in [
-      sampleConversation2.copyWith(id: 'conv-1'),
-      sampleConversation1,
-    ]) {
-      testWidgets('limits the queue shortcut to owners without an open rental '
-          '(${conversation.role.name})', (tester) async {
-        final bloc = ChatDetailBloc(
-          streamMessages: mockStreamMessages,
-          sendMessage: mockSendMessage,
-        );
-        addTearDown(bloc.close);
-
-        final booking = BookingRequestData(
-          item: BookingItemInfo.defaultMockItem.copyWith(imageUrl: ''),
-          startDate: DateTime(2026, 11, 27),
-          endDate: DateTime(2026, 11, 28),
-          startTime: const TimeOfDay(hour: 9, minute: 0),
-          endTime: const TimeOfDay(hour: 17, minute: 0),
-          location: 'Pickup',
-        );
-        ChatMessage offer(String status, {bool isMine = true}) => ChatMessage(
-          id: isMine ? 'outgoing-offer' : 'incoming-offer',
-          conversationId: conversation.id,
-          senderId: isMine ? 'me' : conversation.otherUserId,
-          message: booking
-              .copyWith(
-                item: isMine ? booking.item : booking.item.copyWith(id: 76),
-                bookingId: isMine ? 2087 : 2086,
-                status: status,
-              )
-              .toChatMessagePayload(),
-          createdAt: DateTime(2026, 11, 26, 10, isMine ? 1 : 0),
-          isMine: isMine,
-          isRead: true,
-        );
-
-        await tester.pumpWidget(
-          MaterialApp(
-            home: ChatDetailScreen(
-              conversation: conversation,
-              chatDetailBloc: bloc,
-            ),
-          ),
-        );
-        await tester.pump();
-
-        final shortcut = find.byIcon(Icons.playlist_add_rounded);
-        final availableWithoutOpenRental =
-            conversation.role == ChatParticipantRole.renter
-            ? findsOneWidget
-            : findsNothing;
-        final incomingOffer = offer('active', isMine: false);
-        streamController.add([incomingOffer, offer('pending')]);
-        await tester.pumpAndSettle();
-        expect(shortcut, availableWithoutOpenRental);
-
-        for (final status in [
-          'confirmed',
-          'active',
-          'awaiting_return',
-          'return_ready',
-        ]) {
-          streamController.add([incomingOffer, offer(status)]);
-          await tester.pumpAndSettle();
-          expect(find.text('ชวนเข้าคิวเช่าต่อ'), findsNothing, reason: status);
-          expect(
-            find.byTooltip('ส่งคำขอเช่าต่อ'),
-            findsNothing,
-            reason: status,
-          );
-        }
-
-        streamController.add([incomingOffer, offer('completed')]);
-        await tester.pumpAndSettle();
-        expect(shortcut, availableWithoutOpenRental);
-        await tester.pumpWidget(const SizedBox.shrink());
-      });
-    }
-
     testWidgets('opens the existing inquiry for the selected item', (
       tester,
     ) async {
@@ -1920,7 +1762,7 @@ void main() {
     });
 
     testWidgets(
-      'ChatDetailScreen displays rental request button on item inquiry card for owner',
+      'ChatDetailScreen hides the rental request action from the item owner',
       (tester) async {
         final getOwnedItemIds = _MockGetOwnedChatItemIdsUseCase();
         when(() => getOwnedItemIds({2})).thenAnswer((_) async => {2});
@@ -1958,12 +1800,12 @@ void main() {
         bloc.add(ChatMessagesUpdated([inquiryMsg]));
         await tester.pumpAndSettle();
 
-        // Owner should see the rental offer button on the inquiry card
+        // The owner receives requests from the renter
         expect(
           find.byKey(const ValueKey('inquiry-send-request-2')),
-          findsOneWidget,
+          findsNothing,
         );
-        expect(find.text('สร้างข้อเสนอการเช่า / นัดรับ'), findsOneWidget);
+        expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsNothing);
       },
     );
 
@@ -2042,19 +1884,19 @@ void main() {
       'Rental request button re-appears when renter sends a new item inquiry after previous booking request',
       (tester) async {
         final getOwnedItemIds = _MockGetOwnedChatItemIdsUseCase();
-        when(() => getOwnedItemIds({10})).thenAnswer((_) async => {10});
-        when(() => getOwnedItemIds({25})).thenAnswer((_) async => {25});
+        when(() => getOwnedItemIds({10})).thenAnswer((_) async => {});
+        when(() => getOwnedItemIds({25})).thenAnswer((_) async => {});
         final bloc = ChatDetailBloc(
           streamMessages: mockStreamMessages,
           sendMessage: mockSendMessage,
-          conversationId: sampleConversation2.id,
+          conversationId: sampleConversation1.id,
           getOwnedItemIds: getOwnedItemIds,
         );
 
         await tester.pumpWidget(
           MaterialApp(
             home: ChatDetailScreen(
-              conversation: sampleConversation2,
+              conversation: sampleConversation1,
               chatDetailBloc: bloc,
             ),
           ),
@@ -2069,11 +1911,11 @@ void main() {
         );
         final inquiryMsg1 = ChatMessage(
           id: 'msg-inq-1',
-          conversationId: sampleConversation2.id,
-          senderId: 'user-renter-1',
+          conversationId: sampleConversation1.id,
+          senderId: 'my-renter-id',
           message: inquiry1.toChatMessagePayload(),
           createdAt: DateTime(2026, 9, 1, 10, 0),
-          isMine: false,
+          isMine: true,
         );
 
         // Step 2: Owner sent booking request for inquiry 1
@@ -2094,15 +1936,15 @@ void main() {
           startTime: const TimeOfDay(hour: 9, minute: 0),
           endTime: const TimeOfDay(hour: 17, minute: 0),
           location: 'กรุงเทพ',
-          conversationId: sampleConversation2.id,
+          conversationId: sampleConversation1.id,
         );
         final bookingMsg1 = ChatMessage(
           id: 'msg-book-1',
-          conversationId: sampleConversation2.id,
-          senderId: 'my-owner-id',
+          conversationId: sampleConversation1.id,
+          senderId: 'user-owner-1',
           message: bookingData1.toChatMessagePayload(),
           createdAt: DateTime(2026, 9, 1, 10, 5),
-          isMine: true,
+          isMine: false,
         );
 
         // Deliver inquiry 1 + booking 1 -> button should be hidden
@@ -2123,11 +1965,11 @@ void main() {
         );
         final inquiryMsg2 = ChatMessage(
           id: 'msg-inq-2',
-          conversationId: sampleConversation2.id,
-          senderId: 'user-renter-1',
+          conversationId: sampleConversation1.id,
+          senderId: 'my-renter-id',
           message: inquiry2.toChatMessagePayload(),
           createdAt: DateTime(2026, 9, 4, 12, 0),
-          isMine: false,
+          isMine: true,
         );
 
         // Deliver new inquiry after booking request
@@ -2139,53 +1981,52 @@ void main() {
           find.byKey(const ValueKey('inquiry-send-request-25')),
           findsOneWidget,
         );
-        expect(find.text('สร้างข้อเสนอการเช่า / นัดรับ'), findsWidgets);
+        expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsWidgets);
       },
     );
 
-    testWidgets(
-      'Renter cannot create rental offers from the item inquiry card',
-      (tester) async {
-        final bloc = ChatDetailBloc(
-          streamMessages: mockStreamMessages,
-          sendMessage: mockSendMessage,
-          conversationId: sampleConversation1.id,
-        );
+    testWidgets('Renter can send a rental request from their inquiry card', (
+      tester,
+    ) async {
+      final bloc = ChatDetailBloc(
+        streamMessages: mockStreamMessages,
+        sendMessage: mockSendMessage,
+        conversationId: sampleConversation1.id,
+      );
 
-        const inquiry = ItemInquiryData(
-          itemId: 1,
-          itemName: 'Sony Alpha A7 IV',
-          price: 1200,
-          unitLabel: 'วัน',
-        );
-        final inquiryMsg = ChatMessage(
-          id: 'msg-inq-renter-1',
-          conversationId: sampleConversation1.id,
-          senderId: 'my-renter-id',
-          message: inquiry.toChatMessagePayload(),
-          createdAt: DateTime.now(),
-          isMine: true,
-        );
+      const inquiry = ItemInquiryData(
+        itemId: 1,
+        itemName: 'Sony Alpha A7 IV',
+        price: 1200,
+        unitLabel: 'วัน',
+      );
+      final inquiryMsg = ChatMessage(
+        id: 'msg-inq-renter-1',
+        conversationId: sampleConversation1.id,
+        senderId: 'my-renter-id',
+        message: inquiry.toChatMessagePayload(),
+        createdAt: DateTime.now(),
+        isMine: true,
+      );
 
-        await tester.pumpWidget(
-          MaterialApp(
-            home: ChatDetailScreen(
-              conversation: sampleConversation1,
-              chatDetailBloc: bloc,
-            ),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatDetailScreen(
+            conversation: sampleConversation1,
+            chatDetailBloc: bloc,
           ),
-        );
+        ),
+      );
 
-        bloc.add(ChatMessagesUpdated([inquiryMsg]));
-        await tester.pumpAndSettle();
+      bloc.add(ChatMessagesUpdated([inquiryMsg]));
+      await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(const ValueKey('inquiry-send-request-1')),
-          findsNothing,
-        );
-        expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsNothing);
-      },
-    );
+      expect(
+        find.byKey(const ValueKey('inquiry-send-request-1')),
+        findsOneWidget,
+      );
+      expect(find.text('ส่งคำขอเช่าอุปกรณ์นี้'), findsOneWidget);
+    });
 
     testWidgets('Chat avatar opens the counterpart profile with its user ID', (
       tester,

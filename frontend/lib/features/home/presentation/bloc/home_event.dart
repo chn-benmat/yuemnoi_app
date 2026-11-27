@@ -8,13 +8,17 @@ abstract class HomeEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+sealed class HomeFeedQueryEvent extends HomeEvent {
+  const HomeFeedQueryEvent();
+}
+
 /// อีเวนต์เริ่มโหลดข้อมูลหน้า Home Feed
-class LoadHomeFeedStarted extends HomeEvent {
+class LoadHomeFeedStarted extends HomeFeedQueryEvent {
   const LoadHomeFeedStarted();
 }
 
 /// อีเวนต์เปลี่ยนหมวดหมู่ตัวกรอง
-class CategoryFilterChanged extends HomeEvent {
+class CategoryFilterChanged extends HomeFeedQueryEvent {
   const CategoryFilterChanged(this.categoryId);
 
   final String categoryId;
@@ -24,7 +28,7 @@ class CategoryFilterChanged extends HomeEvent {
 }
 
 /// อีเวนต์ปรับเปลี่ยนเงื่อนไขตัวกรอง (หมวดหมู่, ราคา, คะแนนรีวิว)
-class ApplyFilterRequested extends HomeEvent {
+class ApplyFilterRequested extends HomeFeedQueryEvent {
   const ApplyFilterRequested({
     this.categoryId = 'all',
     this.minPrice,
@@ -42,12 +46,12 @@ class ApplyFilterRequested extends HomeEvent {
 }
 
 /// อีเวนต์ล้างตัวกรองทั้งหมดกลับสู่ค่าเริ่มต้น
-class ClearFilterRequested extends HomeEvent {
+class ClearFilterRequested extends HomeFeedQueryEvent {
   const ClearFilterRequested();
 }
 
 /// อีเวนต์เปลี่ยนคำค้นหา
-class SearchQueryChanged extends HomeEvent {
+class SearchQueryChanged extends HomeFeedQueryEvent {
   const SearchQueryChanged(this.query);
 
   final String query;
@@ -71,7 +75,12 @@ class FavoriteSetChanged extends HomeEvent {
   const FavoriteSetChanged();
 }
 
-/// อีเวนต์ดึงข้อมูลใหม่ (Pull-to-Refresh)
-class RefreshHomeFeedRequested extends HomeEvent {
-  const RefreshHomeFeedRequested();
+/// อีเวนต์ดึงข้อมูลใหม่เมื่อผู้ใช้รีเฟรชหรือรายการเปลี่ยน
+class RefreshHomeFeedRequested extends HomeFeedQueryEvent {
+  const RefreshHomeFeedRequested({this.inBackground = false});
+
+  final bool inBackground;
+
+  @override
+  List<Object?> get props => [inBackground];
 }

@@ -145,6 +145,7 @@ class ChatReplyContent {
     }
     for (final tag in [
       BookingRequestData.metaStartTag,
+      BookingRequestData.customerRequestMetaTag,
       ItemInquiryData.metaStartTag,
     ]) {
       final index = text.indexOf(tag);

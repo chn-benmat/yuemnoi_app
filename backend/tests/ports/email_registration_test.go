@@ -11,8 +11,10 @@ import (
 	"testing"
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/emaildns"
+	supabaseadapter "github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/domain"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/ports"
+	supabaseclient "github.com/nedpals/supabase-go"
 )
 
 type registrationGateway struct {
@@ -141,6 +143,96 @@ func TestRegistrationChecksEmailDomainBeforeSignup(t *testing.T) {
 				}
 			} else if resp.StatusCode != http.StatusBadRequest || result.Error != "โดเมนนี้รับอีเมลไม่ได้ กรุณาตรวจสอบส่วนหลัง @" {
 				t.Fatalf("status = %d, error = %q, want 400 with an email domain message", resp.StatusCode, result.Error)
+			}
+		})
+	}
+}
+
+func TestRegistrationHandlesExistingSupabaseAccounts(t *testing.T) {
+	tests := []struct {
+		name             string
+		identities       json.RawMessage
+		echoSignupData   bool
+		wantStatus       int
+		wantError        string
+		wantConfirmation bool
+	}{
+		{
+			name:           "confirmed account such as Google sign-in",
+			identities:     json.RawMessage(`[]`),
+			echoSignupData: true,
+			wantStatus:     http.StatusConflict,
+			wantError:      "อีเมลนี้ถูกใช้งานในระบบแล้ว โปรดใช้อีเมลอื่น",
+		},
+		{
+			name:             "email awaiting confirmation",
+			identities:       json.RawMessage(`[{"provider":"email"}]`),
+			wantStatus:       http.StatusCreated,
+			wantConfirmation: true,
+		},
+		{
+			name:             "invited account awaiting confirmation",
+			identities:       json.RawMessage(`[]`),
+			wantStatus:       http.StatusCreated,
+			wantConfirmation: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/auth/v1/settings":
+					_, _ = w.Write([]byte(`{"mailer_autoconfirm":false}`))
+				case r.Method == http.MethodPost && r.URL.Path == "/auth/v1/signup":
+					var body struct {
+						Data map[string]string `json:"data"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Errorf("decode signup request: %v", err)
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					metadata := map[string]string{}
+					if tt.echoSignupData {
+						metadata = body.Data
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"id":            userTestID,
+						"identities":    tt.identities,
+						"user_metadata": metadata,
+					})
+				default:
+					t.Errorf("unexpected Auth request: %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			t.Cleanup(authServer.Close)
+			repository := supabaseadapter.NewSupabaseUserRepository(supabaseclient.CreateClient(authServer.URL, "test-key"), "test-key")
+			dns := &registrationDNS{mx: []*net.MX{{Host: "mx.example.test."}}}
+			gateway := domain.WithRegistrationEmailCheck(repository, emaildns.NewChecker(dns))
+			app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, gateway, nil, nil, nil, "test-secret")
+			t.Cleanup(func() { _ = app.Shutdown() })
+
+			resp, err := app.Test(registrationRequest(t, "existing@example.test"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			var result struct {
+				Error                string `json:"error"`
+				ConfirmationRequired bool   `json:"confirmation_required"`
+				UserID               string `json:"user_id"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				t.Fatal(err)
+			}
+			if resp.StatusCode != tt.wantStatus || result.Error != tt.wantError || result.ConfirmationRequired != tt.wantConfirmation {
+				t.Fatalf("status = %d, error = %q, confirmation required = %t; want %d, %q, %t",
+					resp.StatusCode, result.Error, result.ConfirmationRequired, tt.wantStatus, tt.wantError, tt.wantConfirmation)
+			}
+			if result.UserID != "" {
+				t.Fatal("registration exposed a user ID for an existing account")
 			}
 		})
 	}

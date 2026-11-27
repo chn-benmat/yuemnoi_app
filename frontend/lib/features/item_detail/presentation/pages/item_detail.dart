@@ -1065,6 +1065,7 @@ class _DetailContent extends StatelessWidget {
                 _ReviewsSection(
                   key: ValueKey('reviews-${item.id}'),
                   reviews: item.reviews,
+                  averageRating: item.averageRating,
                 ),
                 if (relatedStatus != RelatedItemsStatus.initial) ...[
                   const SizedBox(height: 24),
@@ -1501,8 +1502,14 @@ class _RelatedItemsSection extends StatelessWidget {
 }
 
 class _ReviewsSection extends StatefulWidget {
-  const _ReviewsSection({super.key, required this.reviews});
+  const _ReviewsSection({
+    super.key,
+    required this.reviews,
+    required this.averageRating,
+  });
+
   final List<ItemReview> reviews;
+  final double averageRating;
 
   @override
   State<_ReviewsSection> createState() => _ReviewsSectionState();
@@ -1597,6 +1604,26 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
       if (widget.reviews.isEmpty)
         const _EmptyReviews()
       else ...[
+        Wrap(
+          spacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Icon(
+              Icons.star_rounded,
+              size: 18,
+              color: _DetailStyle.accent,
+            ),
+            Text(
+              'คะแนนเฉลี่ย ${widget.averageRating.toStringAsFixed(1)}/5',
+              style: const TextStyle(
+                color: _DetailStyle.ink,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         SizedBox(
           height: 300 * MediaQuery.textScalerOf(context).scale(1),
           child: NotificationListener<ScrollNotification>(

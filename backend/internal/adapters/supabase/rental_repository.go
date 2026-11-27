@@ -38,6 +38,22 @@ func (r *supabaseRentalRepository) CreateRental(
 	userID string,
 	request domain.CreateRentalRequest,
 ) (*domain.RentalOrder, error) {
+	if request.ConversationID != "" {
+		var rental domain.RentalOrder
+		params := map[string]any{
+			"p_renter": userID, "p_conversation": request.ConversationID,
+			"p_item_id": request.ItemID, "p_start_at": request.StartAt.UTC(), "p_end_at": request.EndAt.UTC(),
+			"p_rental_type": request.RentalType, "p_pickup_location": request.PickupLocation,
+			"p_payment_method": request.PaymentMethod, "p_expected_unit_price": request.UnitPrice,
+		}
+		if request.QueueMessageID > 0 {
+			params["p_queue_message_id"] = request.QueueMessageID
+		}
+		if err := r.client.DB.Rpc("create_chat_rental_request", params).ExecuteWithContext(ctx, &rental); err != nil {
+			return nil, mapRentalRepositoryError("create chat rental request", err)
+		}
+		return &rental, nil
+	}
 	if request.OfferMessageID != "" {
 		return r.processChatOffer(ctx, userID, request, false, "")
 	}
@@ -95,6 +111,14 @@ func mapRentalRepositoryError(operation string, err error) error {
 		return domain.ErrRentalUnavailable
 	case strings.Contains(message, "booking not found"):
 		return domain.ErrRentalNotFound
+	case message == "rental_forbidden":
+		return domain.ErrRentalForbidden
+	case message == "rental_transition":
+		return domain.ErrRentalStatusTransition
+	case message == "rental_request_expired", message == "rental_not_started":
+		return domain.ErrRentalRequestExpired
+	case message == "rental_price_changed":
+		return domain.ErrRentalPriceChanged
 	case requestErr.Code == "22023":
 		return domain.ErrInvalidRental
 	default:

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:frontend/core/navigation/app_routes.dart';
 import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/core/services/booking_confirmation_tracker.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
 import 'package:frontend/features/chat/presentation/widgets/booking_request_bubble_card.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,6 +30,8 @@ void main() {
     bool isOwner = false,
     bool isHandoverCompleted = false,
     String? bookingStatus,
+    bool customerRequest = false,
+    bool canCloseConfirmation = false,
   }) async {
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     final bookingData = BookingRequestData(
@@ -49,6 +53,8 @@ void main() {
       latitude: 13.7466,
       longitude: 100.5393,
       status: bookingStatus,
+      isCustomerRequest: customerRequest,
+      bookingId: customerRequest ? 36 : null,
     );
     final message = ChatMessage(
       id: 'merge-regression-message',
@@ -56,7 +62,7 @@ void main() {
       senderId: 'renter',
       message: bookingData.toChatMessagePayload(),
       createdAt: DateTime.now(),
-      isMine: true,
+      isMine: !customerRequest || !isOwner,
       isRead: true,
     );
 
@@ -74,10 +80,71 @@ void main() {
         ),
       ),
     );
-    await tester.pumpWidget(MaterialApp(home: home));
+    if (canCloseConfirmation) {
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, _) => home),
+          GoRoute(
+            path: AppRoutes.bookingConfirmation,
+            builder: (context, _) => Scaffold(
+              body: TextButton(
+                onPressed: () => context.pop(false),
+                child: const Text('ปิดคำขอ'),
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    } else {
+      await tester.pumpWidget(MaterialApp(home: home));
+    }
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
   }
+
+  testWidgets('only the owner can confirm a pending customer request', (
+    tester,
+  ) async {
+    const label = 'ตรวจสอบและยืนยันคำขอเช่า';
+    await pumpCard(tester, bookingStatus: 'pending', customerRequest: true);
+    expect(find.text('รอผู้ปล่อยเช่ายืนยันคำขอ'), findsOneWidget);
+    expect(find.text(label), findsNothing);
+
+    await pumpCard(
+      tester,
+      bookingStatus: 'pending',
+      customerRequest: true,
+      isOwner: true,
+    );
+    expect(find.text(label), findsOneWidget);
+  });
+
+  testWidgets('closing the owner review leaves the customer request pending', (
+    tester,
+  ) async {
+    await BookingConfirmationTracker.markConfirmed(
+      messageId: 'merge-regression-message',
+      bookingId: 36,
+    );
+    await pumpCard(
+      tester,
+      bookingStatus: 'pending',
+      customerRequest: true,
+      isOwner: true,
+      canCloseConfirmation: true,
+    );
+    final review = find.text('ตรวจสอบและยืนยันคำขอเช่า');
+    await tester.ensureVisible(review);
+    await tester.tap(review);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ปิดคำขอ'));
+    await tester.pumpAndSettle();
+
+    expect(review, findsOneWidget);
+    expect(find.text('รายละเอียดนัดรับ'), findsNothing);
+  });
 
   for (final owner in [true, false]) {
     testWidgets(

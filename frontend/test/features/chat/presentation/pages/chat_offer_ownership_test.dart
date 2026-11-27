@@ -26,7 +26,7 @@ class _MockRepository extends Mock implements ChatRepository {}
 
 void main() {
   for (final status in ['pending', null, 'completed', 'finished']) {
-    testWidgets('offer availability after previous status=$status', (
+    testWidgets('request availability after previous status=$status', (
       tester,
     ) async {
       await initializeDateFormatting('th');
@@ -38,13 +38,13 @@ void main() {
       final conversation = ChatConversationModel.fromRecords(
         conversation: const {
           'id': 'renewal-room',
-          'renter_id': 'owner',
-          'owner_id': 'customer',
+          'renter_id': 'customer',
+          'owner_id': 'owner',
           'item_id': 1,
         },
-        otherProfile: const {'display_name': 'ลูกค้า'},
+        otherProfile: const {'display_name': 'ผู้ปล่อยเช่า'},
         item: const {'id': 1, 'user_id': 'owner', 'item_name': 'Canon EOS R50'},
-        currentUserId: 'owner',
+        currentUserId: 'customer',
       );
       final previous = BookingRequestData(
         item: const BookingItemInfo(
@@ -73,7 +73,7 @@ void main() {
         senderId: 'customer',
         message: original.toChatMessagePayload(),
         createdAt: DateTime(2026, 10, 17),
-        isMine: false,
+        isMine: true,
       );
       final renewedMessage = ChatMessage(
         id: 'renewed-inquiry',
@@ -81,7 +81,7 @@ void main() {
         senderId: 'customer',
         message: renewed.toChatMessagePayload(),
         createdAt: DateTime(2026, 10, 20),
-        isMine: false,
+        isMine: true,
       );
       final stream = StreamController<List<ChatMessage>>();
       final streamMessages = _MockStreamMessages();
@@ -89,7 +89,7 @@ void main() {
         () => streamMessages(conversation.id),
       ).thenAnswer((_) => stream.stream);
       final repository = _MockRepository();
-      when(() => repository.getOwnedItemIds({1})).thenAnswer((_) async => {1});
+      when(() => repository.getOwnedItemIds({1})).thenAnswer((_) async => {});
       final bloc = ChatDetailBloc(
         streamMessages: streamMessages,
         sendMessage: _MockSendMessage(),
@@ -118,7 +118,7 @@ void main() {
           senderId: 'owner',
           message: previous.toChatMessagePayload(),
           createdAt: DateTime(2026, 10, 18),
-          isMine: true,
+          isMine: false,
         ),
       ];
       stream.add(previousMessages);
@@ -133,20 +133,20 @@ void main() {
             widget is ItemInquiryBubbleCard &&
             widget.message.id == renewedMessage.id,
       );
-      final createOffer = find.text('สร้างข้อเสนอการเช่า / นัดรับ');
+      final sendRequest = find.text('ส่งคำขอเช่าอุปกรณ์นี้');
       expect(originalCard, findsOneWidget);
-      expect(createOffer, findsNothing);
+      expect(sendRequest, findsNothing);
 
       stream.add([...previousMessages, renewedMessage]);
       await tester.pumpAndSettle();
       expect(originalCard, findsOneWidget);
       expect(renewedCard, findsOneWidget);
       expect(
-        find.descendant(of: originalCard, matching: createOffer),
+        find.descendant(of: originalCard, matching: sendRequest),
         findsNothing,
       );
       expect(
-        find.descendant(of: renewedCard, matching: createOffer),
+        find.descendant(of: renewedCard, matching: sendRequest),
         status == 'completed' || status == 'finished'
             ? findsOneWidget
             : findsNothing,
@@ -164,18 +164,18 @@ void main() {
                 .copyWith(bookingId: 11, status: 'cancelled')
                 .toChatMessagePayload(),
             createdAt: DateTime(2026, 10, 21),
-            isMine: true,
+            isMine: false,
           ),
         ]);
         await tester.pumpAndSettle();
         expect(originalCard, findsOneWidget);
         expect(renewedCard, findsOneWidget);
         expect(
-          find.descendant(of: originalCard, matching: createOffer),
+          find.descendant(of: originalCard, matching: sendRequest),
           findsNothing,
         );
         expect(
-          find.descendant(of: renewedCard, matching: createOffer),
+          find.descendant(of: renewedCard, matching: sendRequest),
           findsOneWidget,
         );
       }
@@ -183,8 +183,8 @@ void main() {
     });
   }
 
-  for (final isOwner in [false, null]) {
-    testWidgets('inquiry card rejects creation callback when owner=$isOwner', (
+  for (final isOwner in [true, null]) {
+    testWidgets('inquiry card hides sending callback when owner=$isOwner', (
       tester,
     ) async {
       const inquiry = ItemInquiryData(itemId: 1, itemName: 'Canon EOS R50');
@@ -221,7 +221,7 @@ void main() {
     for (final viewerIsOwner in [true, false]) {
       for (final senderIsOwner in [true, false]) {
         testWidgets(
-          'Only item owner can create offer: reversed=$reversedParticipants, '
+          'Only the renter who sent the inquiry can request a rental: reversed=$reversedParticipants, '
           'viewerOwner=$viewerIsOwner, senderOwner=$senderIsOwner',
           (tester) async {
             const ownerId = 'item-owner';
@@ -293,11 +293,11 @@ void main() {
             await tester.pumpAndSettle();
 
             expect(
-              find.text('สร้างข้อเสนอการเช่า / นัดรับ'),
-              viewerIsOwner ? findsOneWidget : findsNothing,
+              find.text('ส่งคำขอเช่าอุปกรณ์นี้'),
+              !viewerIsOwner && !senderIsOwner ? findsOneWidget : findsNothing,
               reason:
-                  'Offer creation follows item ownership, regardless of '
-                  'conversation participant slots or inquiry sender.',
+                  'Sending follows the inquiry sender and item ownership, regardless of '
+                  'conversation participant slots.',
             );
           },
         );

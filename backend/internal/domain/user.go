@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 var ErrInvalidAccessToken = errors.New("invalid access token")
@@ -42,13 +43,14 @@ type AuthTokens struct {
 }
 
 type UserProfile struct {
-	UserID       string `json:"user_id"`
-	Email        string `json:"email"`
-	DisplayName  string `json:"display_name"`
-	Username     string `json:"username"`
-	Bio          string `json:"bio"`
-	Phone        string `json:"phone"`
-	UserImageURL string `json:"user_image_url"`
+	UserID            string     `json:"user_id"`
+	Email             string     `json:"email"`
+	DisplayName       string     `json:"display_name"`
+	Username          string     `json:"username"`
+	UsernameChangedAt *time.Time `json:"username_changed_at"`
+	Bio               string     `json:"bio"`
+	Phone             string     `json:"phone"`
+	UserImageURL      string     `json:"user_image_url"`
 }
 
 type UpdateProfileRequest struct {

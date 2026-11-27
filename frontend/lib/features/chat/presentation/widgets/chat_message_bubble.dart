@@ -39,7 +39,8 @@ class ChatMessageBubble extends StatelessWidget {
     this.onSendBookingRequest,
     this.defaultItemId,
     this.onQueueAction,
-    this.onSendQueueOffer,
+    this.canJoinInvitedQueue = true,
+    this.onSendQueuedRequest,
     this.isHandoverCompleted = false,
     this.isReturnCompleted = false,
   });
@@ -63,7 +64,8 @@ class ChatMessageBubble extends StatelessWidget {
   final void Function(ItemInquiryData)? onSendBookingRequest;
   final int? defaultItemId;
   final Future<void> Function(String action)? onQueueAction;
-  final VoidCallback? onSendQueueOffer;
+  final bool canJoinInvitedQueue;
+  final VoidCallback? onSendQueuedRequest;
   final ValueChanged<ChatMessage>? onEdit;
   final ValueChanged<ChatMessage>? onDelete;
   final ValueChanged<String>? onQuotedTap;
@@ -95,9 +97,10 @@ class ChatMessageBubble extends StatelessWidget {
         alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
         child: RentalQueueCard(
           data: queue,
-          isOwner: isMine,
+          isOwner: !queue.isRenterView(isSender: isMine),
           onAction: queueAction,
-          onSendOffer: onSendQueueOffer,
+          canJoin: canJoinInvitedQueue,
+          onSendRequest: onSendQueuedRequest,
         ),
       );
     }

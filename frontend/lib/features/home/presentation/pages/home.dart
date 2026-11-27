@@ -29,7 +29,6 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final homeRepository = HomeRepositoryImpl();
     final chatRepository = ChatRepositoryImpl(
       remoteDataSource: ChatRemoteDataSource(),
     );
@@ -37,10 +36,14 @@ class HomeScreen extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider<HomeBloc>(
-          create: (context) => HomeBloc(
-            homeRepository: homeRepository,
-            getHomeFeed: GetHomeFeedUseCase(homeRepository),
-          )..add(const LoadHomeFeedStarted()),
+          create: (context) {
+            final homeRepository = HomeRepositoryImpl();
+            return HomeBloc(
+              homeRepository: homeRepository,
+              getHomeFeed: GetHomeFeedUseCase(homeRepository),
+              feedChanges: homeRepository.watchFeedChanges(),
+            )..add(const LoadHomeFeedStarted());
+          },
         ),
         BlocProvider<ChatListBloc>(
           create: (context) {

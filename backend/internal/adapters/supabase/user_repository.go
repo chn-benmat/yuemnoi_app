@@ -225,9 +225,13 @@ func (r *supabaseUserRepository) Register(ctx context.Context, user domain.Regis
 	if signup.ID == "" {
 		return nil, fmt.Errorf("Auth signup response is missing a user ID")
 	}
-	// Supabase คืนบัญชีเดิมเมื่อส่งลิงก์ซ้ำ และคืนข้อมูลจำลองสำหรับบัญชีที่ยืนยันแล้ว
-	if len(signup.Identities) == 0 || signup.UserMetadata.RegistrationID != registrationID {
+	// บัญชีที่รอยืนยันอาจได้ข้อมูลจากคำขอเดิมหรือไม่มีข้อมูลยืนยันตัวตน
+	if signup.UserMetadata.RegistrationID != registrationID || signup.Identities == nil {
 		return &domain.RegisterResult{}, nil
+	}
+	// อีเมลที่ใช้แล้วอาจได้ข้อมูลจำลองที่สะท้อนข้อมูลจากคำขอนี้ แต่มีรายการ identities ว่าง
+	if len(signup.Identities) == 0 {
+		return nil, domain.ErrRegistrationEmailTaken
 	}
 
 	result, err := r.completeRegistration(ctx, user, signup.ID)
@@ -534,18 +538,10 @@ func (r *supabaseUserRepository) IsEmailExists(ctx context.Context, email string
 }
 
 func (r *supabaseUserRepository) GetProfile(ctx context.Context, userID string) (*domain.UserProfile, error) {
-	var profiles []struct {
-		UserID       string `json:"user_id"`
-		Email        string `json:"email"`
-		UserImageURL string `json:"user_image_url"`
-		DisplayName  string `json:"display_name"`
-		Bio          string `json:"bio"`
-		Username     string `json:"username"`
-		Phone        string `json:"phone"`
-	}
+	var profiles []domain.UserProfile
 
 	err := schemaDatabase(r.client, profilesSchema).From("profile_tb").
-		Select("user_id,email,user_image_url,display_name,bio,username,phone").
+		Select("user_id,email,user_image_url,display_name,bio,username,username_changed_at,phone").
 		Eq("user_id", userID).
 		ExecuteWithContext(ctx, &profiles)
 	if err != nil {
@@ -554,15 +550,13 @@ func (r *supabaseUserRepository) GetProfile(ctx context.Context, userID string) 
 
 	profile := &domain.UserProfile{UserID: userID}
 	if len(profiles) > 0 {
-		p := profiles[0]
-		profile.Email = p.Email
-		profile.UserImageURL = p.UserImageURL
-		profile.DisplayName = p.DisplayName
-		profile.Bio = p.Bio
-		profile.Username = p.Username
-		profile.Phone = p.Phone
+		profile = &profiles[0]
+		profile.UserID = userID
 	}
 
+	if profile.Email != "" && profile.Phone != "" && profile.DisplayName != "" && profile.UserImageURL != "" {
+		return profile, nil
+	}
 	user, err := r.client.Admin.GetUser(ctx, userID)
 	if err == nil && user != nil {
 		if profile.Email == "" {

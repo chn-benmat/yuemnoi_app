@@ -13,6 +13,8 @@ class UserProfileModel {
   final String displayName;
   @JsonKey(fromJson: _string)
   final String username;
+  @JsonKey(includeIfNull: false)
+  final DateTime? usernameChangedAt;
   @JsonKey(fromJson: _string)
   final String email;
   @JsonKey(fromJson: _string)
@@ -33,6 +35,7 @@ class UserProfileModel {
     required this.userId,
     this.displayName = '',
     this.username = '',
+    this.usernameChangedAt,
     this.email = '',
     this.phone = '',
     this.bio = '',
@@ -60,6 +63,7 @@ class UserProfileModel {
       userId: userId,
       displayName: displayName,
       username: username,
+      usernameChangedAt: usernameChangedAt,
       email: email,
       phone: phone,
       bio: bio,
@@ -74,6 +78,7 @@ class UserProfileModel {
       userId: entity.userId,
       displayName: entity.displayName,
       username: entity.username,
+      usernameChangedAt: entity.usernameChangedAt,
       email: entity.email,
       phone: entity.phone,
       bio: entity.bio,

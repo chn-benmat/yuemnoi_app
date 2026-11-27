@@ -122,10 +122,15 @@ class BookingRequestData {
   final int? bookingId;
   final int? rentalQueueMessageId;
   final String? status;
+  final bool isCustomerRequest;
 
   static const String bookingPayloadPrefix = '📋 คำขอเช่าอุปกรณ์';
   static const String metaStartTag = '[BOOKING_DATA:';
+  static const String customerRequestMetaTag = '[RENTAL_REQUEST_DATA:';
   static const String metaEndTag = ']';
+  static final _customerRequestMetadata = RegExp(
+    r'\n\[RENTAL_REQUEST_DATA:([^\r\n]*)\]$',
+  );
 
   const BookingRequestData({
     required this.item,
@@ -146,6 +151,7 @@ class BookingRequestData {
     this.bookingId,
     this.rentalQueueMessageId,
     this.status,
+    this.isCustomerRequest = false,
   });
 
   /// ตรวจสอบว่าข้อความเป็นข้อความคำขอเช่าหรือไม่
@@ -200,6 +206,7 @@ class BookingRequestData {
     };
 
     final jsonString = jsonEncode(jsonMap);
+    final tag = isCustomerRequest ? customerRequestMetaTag : metaStartTag;
 
     return '''$bookingPayloadPrefix
 อุปกรณ์: ${item.title}
@@ -207,7 +214,7 @@ class BookingRequestData {
 สถานที่นัดพบ: $location
 วิธีชำระเงิน: $paymentMethodLabel
 ยอดรวม: ${totalPrice.toStringAsFixed(0)} ฿
-$metaStartTag$jsonString$metaEndTag''';
+$tag$jsonString$metaEndTag''';
   }
 
   /// แปลงข้อความแชทกลับมาเป็น BookingRequestData
@@ -216,75 +223,86 @@ $metaStartTag$jsonString$metaEndTag''';
     String? imageUrl,
     String? messageId,
   }) {
+    final customerMetadata = text.startsWith(bookingPayloadPrefix)
+        ? _customerRequestMetadata.firstMatch(text)?.group(1)
+        : null;
     try {
-      if (text.contains(metaStartTag) && text.contains(metaEndTag)) {
-        final startIdx = text.indexOf(metaStartTag) + metaStartTag.length;
-        final endIdx = text.lastIndexOf(metaEndTag);
-        if (startIdx < endIdx) {
-          final jsonStr = text.substring(startIdx, endIdx);
-          final map = jsonDecode(jsonStr) as Map<String, dynamic>;
-
-          final item = BookingItemInfo.fromJson({
-            ...map,
-            'id': map['itemId'],
-            'imageUrl': (imageUrl != null && imageUrl.isNotEmpty)
-                ? imageUrl
-                : map['imageUrl'],
-          });
-
-          final rentalType = map['rentalType'] == 'hourly'
-              ? BookingRentalType.hourly
-              : BookingRentalType.daily;
-
-          final startDate = map['startDate'] != null
-              ? DateTime.tryParse(map['startDate'] as String) ?? DateTime.now()
-              : DateTime.now();
-
-          final endDate = map['endDate'] != null
-              ? DateTime.tryParse(map['endDate'] as String) ??
-                    startDate.add(const Duration(days: 1))
-              : startDate.add(const Duration(days: 1));
-
-          final startTime = TimeOfDay(
-            hour: (map['startHour'] as num?)?.toInt() ?? 9,
-            minute: (map['startMinute'] as num?)?.toInt() ?? 0,
-          );
-
-          final endTime = TimeOfDay(
-            hour: (map['endHour'] as num?)?.toInt() ?? 17,
-            minute: (map['endMinute'] as num?)?.toInt() ?? 0,
-          );
-
-          final resolvedOriginalMessageId =
-              messageId ?? (map['originalMessageId'] as String?);
-
-          return BookingRequestData(
-            item: item,
-            bookingId: (map['bookingId'] as num?)?.toInt(),
-            rentalQueueMessageId: (map['rentalQueueMessageId'] as num?)
-                ?.toInt(),
-            status: map['status'] as String?,
-            rentalType: rentalType,
-            startDate: startDate,
-            endDate: endDate,
-            startTime: startTime,
-            endTime: endTime,
-            location: map['location'] as String? ?? 'นัดรับตามตกลง',
-            locationNote:
-                map['locationNote'] as String? ?? 'เลือกโดยผู้ปล่อยเช่า',
-            locationAddress: map['locationAddress'] as String?,
-            latitude: (map['latitude'] as num?)?.toDouble(),
-            longitude: (map['longitude'] as num?)?.toDouble(),
-            conversationId: map['conversationId'] as String?,
-            ownerId: map['ownerId'] as String?,
-            originalMessageId: resolvedOriginalMessageId,
-            paymentMethod: map['paymentMethod'] as String? ?? 'cash',
-          );
+      final isCustomerRequest = customerMetadata != null;
+      final legacyStart = text.indexOf(metaStartTag);
+      final endIdx = text.lastIndexOf(metaEndTag);
+      final startIdx = legacyStart + metaStartTag.length;
+      final jsonStr =
+          customerMetadata ??
+          (legacyStart >= 0 && startIdx < endIdx
+              ? text.substring(startIdx, endIdx)
+              : null);
+      if (jsonStr != null) {
+        final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+        if (isCustomerRequest &&
+            ((map['bookingId'] as num?)?.toInt() ?? 0) <= 0) {
+          return null;
         }
+
+        final item = BookingItemInfo.fromJson({
+          ...map,
+          'id': map['itemId'],
+          'imageUrl': (imageUrl != null && imageUrl.isNotEmpty)
+              ? imageUrl
+              : map['imageUrl'],
+        });
+
+        final rentalType = map['rentalType'] == 'hourly'
+            ? BookingRentalType.hourly
+            : BookingRentalType.daily;
+
+        final startDate = map['startDate'] != null
+            ? DateTime.tryParse(map['startDate'] as String) ?? DateTime.now()
+            : DateTime.now();
+
+        final endDate = map['endDate'] != null
+            ? DateTime.tryParse(map['endDate'] as String) ??
+                  startDate.add(const Duration(days: 1))
+            : startDate.add(const Duration(days: 1));
+
+        final startTime = TimeOfDay(
+          hour: (map['startHour'] as num?)?.toInt() ?? 9,
+          minute: (map['startMinute'] as num?)?.toInt() ?? 0,
+        );
+
+        final endTime = TimeOfDay(
+          hour: (map['endHour'] as num?)?.toInt() ?? 17,
+          minute: (map['endMinute'] as num?)?.toInt() ?? 0,
+        );
+
+        final resolvedOriginalMessageId =
+            messageId ?? (map['originalMessageId'] as String?);
+
+        return BookingRequestData(
+          item: item,
+          bookingId: (map['bookingId'] as num?)?.toInt(),
+          rentalQueueMessageId: (map['rentalQueueMessageId'] as num?)?.toInt(),
+          status: map['status'] as String?,
+          isCustomerRequest: isCustomerRequest,
+          rentalType: rentalType,
+          startDate: startDate,
+          endDate: endDate,
+          startTime: startTime,
+          endTime: endTime,
+          location: map['location'] as String? ?? 'นัดรับตามตกลง',
+          locationNote:
+              map['locationNote'] as String? ?? 'เลือกโดยผู้ปล่อยเช่า',
+          locationAddress: map['locationAddress'] as String?,
+          latitude: (map['latitude'] as num?)?.toDouble(),
+          longitude: (map['longitude'] as num?)?.toDouble(),
+          conversationId: map['conversationId'] as String?,
+          ownerId: map['ownerId'] as String?,
+          originalMessageId: resolvedOriginalMessageId,
+          paymentMethod: map['paymentMethod'] as String? ?? 'cash',
+        );
       }
     } catch (_) {}
 
-    if (isBookingRequest(text)) {
+    if (customerMetadata == null && isBookingRequest(text)) {
       // Fallback สำหรับกรณีข้อความพื้นฐาน
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
@@ -324,6 +342,24 @@ $metaStartTag$jsonString$metaEndTag''';
 
   bool get hasQueueOfferStartPassed =>
       rentalQueueMessageId != null && !startDateTime.isAfter(DateTime.now());
+
+  DateTime get requestStartAt => _bangkokToUtc(startDate, startTime);
+
+  DateTime get requestEndAt => _bangkokToUtc(
+    _rentalEndDate,
+    rentalType == BookingRentalType.hourly ? endTime : startTime,
+  );
+
+  bool get hasCustomerRequestStartPassed =>
+      isCustomerRequest && !requestStartAt.isAfter(DateTime.now());
+
+  DateTime _bangkokToUtc(DateTime day, TimeOfDay time) => DateTime.utc(
+    day.year,
+    day.month,
+    day.day,
+    time.hour,
+    time.minute,
+  ).subtract(const Duration(hours: 7));
 
   DateTime get endDateTime {
     final date = _rentalEndDate;
@@ -438,6 +474,7 @@ $metaStartTag$jsonString$metaEndTag''';
       bookingId: bookingId ?? this.bookingId,
       rentalQueueMessageId: rentalQueueMessageId ?? this.rentalQueueMessageId,
       status: status ?? this.status,
+      isCustomerRequest: isCustomerRequest,
     );
   }
 }

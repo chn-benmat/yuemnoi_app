@@ -216,6 +216,7 @@ void main() {
     final carousel = find.byKey(const ValueKey('review-carousel'));
     await tester.ensureVisible(carousel);
     await tester.pumpAndSettle();
+    expect(find.text('คะแนนเฉลี่ย 4.3/5'), findsOneWidget);
     expect(
       tester.widget<PageView>(carousel).childrenDelegate.estimatedChildCount,
       4,

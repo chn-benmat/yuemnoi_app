@@ -3,6 +3,7 @@ import '../../../item_detail/data/datasources/item_detail_remote_data_source.dar
 import '../../../item_detail/domain/entities/item_detail.dart';
 import '../../../../core/widgets/package_chat_list.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -11,8 +12,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
-import '../../../../core/services/item_review_service.dart';
 import '../../../../core/services/phone_call_service.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/active_conversation_tracker.dart';
@@ -55,6 +56,7 @@ class ChatDetailScreen extends StatelessWidget {
     required this.conversation,
     this.initialMessageId,
     this.chatDetailBloc,
+    this.rentalQueueSource,
     this.getContactPhone,
     this.phoneCallService = const UrlPhoneCallService(),
   });
@@ -62,6 +64,7 @@ class ChatDetailScreen extends StatelessWidget {
   final ChatConversation conversation;
   final String? initialMessageId;
   final ChatDetailBloc? chatDetailBloc;
+  final RentalQueueRemoteDataSource? rentalQueueSource;
   final GetConversationContactPhoneUseCase? getContactPhone;
   final PhoneCallService phoneCallService;
 
@@ -77,6 +80,7 @@ class ChatDetailScreen extends StatelessWidget {
       getContactPhone: contactPhoneUseCase,
       phoneCallService: phoneCallService,
       initialMessageId: initialMessageId,
+      rentalQueueSource: rentalQueueSource,
     );
 
     if (chatDetailBloc != null) {
@@ -104,12 +108,14 @@ class _ChatDetailView extends StatefulWidget {
     required this.getContactPhone,
     required this.phoneCallService,
     this.initialMessageId,
+    this.rentalQueueSource,
   });
 
   final ChatConversation conversation;
   final GetConversationContactPhoneUseCase getContactPhone;
   final PhoneCallService phoneCallService;
   final String? initialMessageId;
+  final RentalQueueRemoteDataSource? rentalQueueSource;
 
   @override
   State<_ChatDetailView> createState() => _ChatDetailViewState();
@@ -129,10 +135,16 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   bool _showScrollToBottom = false;
   bool _isStartingPhoneCall = false;
   bool _selectingRentalQueueItem = false;
+  bool _loadingRentalQueueItems = false;
+  bool _isCurrentRoute = false;
+  bool _refreshRentalQueueItemsAgain = false;
+  Timer? _rentalQueueRefreshTimer;
+  List<({int id, String name})> _rentalQueueItems = const [];
   RentalQueueRemoteDataSource? _queueSource;
 
   RentalQueueRemoteDataSource get _rentalQueue =>
-      _queueSource ??= RentalQueueRemoteDataSource();
+      widget.rentalQueueSource ??
+      (_queueSource ??= RentalQueueRemoteDataSource());
   final _messageKeys = <String, GlobalKey>{};
 
   GlobalKey _getKeyForMessage(String id) =>
@@ -176,6 +188,23 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     }
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isCurrent = ModalRoute.isCurrentOf(context) ?? true;
+    if (_isCurrentRoute == isCurrent) return;
+    _isCurrentRoute = isCurrent;
+    _rentalQueueRefreshTimer?.cancel();
+    if (!isCurrent || !AuthSession.isAuthenticated) return;
+
+    unawaited(_refreshRentalQueueItems());
+    // รายการเช่าของคนอื่นไม่ส่งเหตุการณ์เข้ามาในห้องแชทนี้
+    _rentalQueueRefreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(_refreshRentalQueueItems()),
+    );
+  }
+
   Future<void> _showRentalSafetyReminder() async {
     final accountId = SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentUser?.id
@@ -193,6 +222,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   void dispose() {
     _typingDebounceTimer?.cancel();
     _highlightTimer?.cancel();
+    _rentalQueueRefreshTimer?.cancel();
     _messageController.removeListener(_onTextChanged);
     ActiveConversationTracker.instance.clearActive(widget.conversation.id);
     _scrollController.removeListener(_onScroll);
@@ -551,19 +581,42 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     }
   }
 
-  Future<void> _inviteToRentalQueue() async {
-    if (_selectingRentalQueueItem) return;
-    _selectingRentalQueueItem = true;
+  Future<void> _refreshRentalQueueItems({bool afterAction = false}) async {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (!AuthSession.isAuthenticated ||
+        (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+      return;
+    }
+    if (_loadingRentalQueueItems) {
+      _refreshRentalQueueItemsAgain |= afterAction;
+      return;
+    }
+    _loadingRentalQueueItems = true;
     try {
       final items = await _rentalQueue.listItems(_conversation.id);
-      if (!mounted) return;
-      if (items.isEmpty) {
-        showAppPopup(
-          context,
-          content: const Text('ไม่มีอุปกรณ์ที่เปิดให้เข้าคิวในแชตนี้'),
-        );
-        return;
+      if (mounted &&
+          !_refreshRentalQueueItemsAgain &&
+          !listEquals(_rentalQueueItems, items)) {
+        setState(() => _rentalQueueItems = items);
       }
+    } on RentalQueueRemoteException {
+      if (mounted && _rentalQueueItems.isNotEmpty) {
+        setState(() => _rentalQueueItems = const []);
+      }
+    } finally {
+      _loadingRentalQueueItems = false;
+      if (_refreshRentalQueueItemsAgain && mounted) {
+        _refreshRentalQueueItemsAgain = false;
+        unawaited(_refreshRentalQueueItems());
+      }
+    }
+  }
+
+  Future<void> _requestRentalQueue() async {
+    if (_selectingRentalQueueItem || _rentalQueueItems.isEmpty) return;
+    _selectingRentalQueueItem = true;
+    try {
+      final items = _rentalQueueItems;
       final itemId = await showModalBottomSheet<int>(
         context: context,
         showDragHandle: true,
@@ -571,7 +624,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
           child: ListView(
             shrinkWrap: true,
             children: [
-              const ListTile(title: Text('เลือกอุปกรณ์ที่จะส่งคำขอเช่าต่อ')),
+              const ListTile(title: Text('เลือกอุปกรณ์ที่ต้องการขอคิว')),
               for (final item in items)
                 ListTile(
                   title: Text(item.name),
@@ -582,12 +635,19 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
         ),
       );
       if (!mounted || itemId == null) return;
-      await _rentalQueue.runAction(_conversation.id, 'invite', itemId: itemId);
-      if (mounted) _scrollToBottom();
+      await _rentalQueue.runAction(_conversation.id, 'request', itemId: itemId);
+      if (!mounted) return;
+      setState(() {
+        _rentalQueueItems = _rentalQueueItems
+            .where((item) => item.id != itemId)
+            .toList();
+      });
+      _scrollToBottom();
     } on RentalQueueRemoteException catch (error) {
       if (mounted) showAppPopup(context, content: Text(error.message));
     } finally {
       _selectingRentalQueueItem = false;
+      if (mounted) unawaited(_refreshRentalQueueItems(afterAction: true));
     }
   }
 
@@ -598,39 +658,53 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       await _rentalQueue.runAction(_conversation.id, action, messageId: id);
     } on RentalQueueRemoteException catch (error) {
       if (mounted) showAppPopup(context, content: Text(error.message));
+    } finally {
+      if (mounted) unawaited(_refreshRentalQueueItems(afterAction: true));
     }
   }
 
-  bool _canCreateQueueOffer(String messageId, ChatDetailState state) {
+  bool _canSendQueuedRentalRequest(String messageId, ChatDetailState state) {
     final id = int.tryParse(messageId);
     if (id == null) return false;
     final card = state.messages
         .where((message) => message.id == messageId)
         .firstOrNull;
-    if (card == null || !card.isMine) return false;
-    final acceptedAt = RentalQueueCardData.fromMessage(
-      card.message,
-    )?.acceptedAt;
-    if (acceptedAt == null) return false;
+    if (card == null) return false;
+    final queue = RentalQueueCardData.fromMessage(card.message);
+    if (queue == null ||
+        queue.status != RentalQueueStatus.accepted ||
+        !queue.isRenterView(isSender: card.isMine)) {
+      return false;
+    }
+    final acceptedAt = queue.acceptedAt;
+    if (acceptedAt == null ||
+        queue.expiresAt?.isAfter(DateTime.now()) == false) {
+      return false;
+    }
     for (final message in state.messages.reversed) {
-      if (!message.isMine || state.failedMessageIds.contains(message.id)) {
-        continue;
-      }
-      final offer = BookingRequestData.fromChatMessage(message.message);
-      if (offer?.rentalQueueMessageId != id ||
+      if (state.failedMessageIds.contains(message.id)) continue;
+      final request = BookingRequestData.fromChatMessage(message.message);
+      if (request == null ||
+          request.rentalQueueMessageId != id ||
           message.createdAt.isBefore(acceptedAt)) {
         continue;
       }
-      return const {'cancelled', 'rejected', 'expired'}.contains(offer?.status);
+      return _canRetryRentalRequest(request);
     }
     return true;
   }
 
-  bool _canCreateOffer(ItemInquiryData inquiry) {
-    final state = context.read<ChatDetailBloc>().state;
-    if (!state.ownedItemIds.contains(inquiry.itemId)) return false;
+  bool _canRetryRentalRequest(BookingRequestData request) =>
+      const {'cancelled', 'rejected', 'expired'}.contains(request.status) ||
+      (request.status == 'pending' && request.hasCustomerRequestStartPassed);
 
-    var isLatestOffer = true;
+  bool _canSendRentalRequest(ItemInquiryData inquiry) {
+    final state = context.read<ChatDetailBloc>().state;
+    if (inquiry.itemId == null || state.ownedItemIds.contains(inquiry.itemId)) {
+      return false;
+    }
+
+    var isLatestRequest = true;
     var matchesPreviousBooking = false;
     for (final message in state.messages.reversed) {
       if (state.failedMessageIds.contains(message.id)) continue;
@@ -639,13 +713,9 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
 
       final status = booking.status;
       final isCompleted = status == 'completed' || status == 'finished';
-      final canRetry = const {
-        'cancelled',
-        'rejected',
-        'expired',
-      }.contains(status);
-      if (isLatestOffer && !isCompleted && !canRetry) return false;
-      isLatestOffer = false;
+      final canRetry = _canRetryRentalRequest(booking);
+      if (isLatestRequest && !isCompleted && !canRetry) return false;
+      isLatestRequest = false;
       if (!isCompleted && !canRetry) continue;
 
       final bookingId =
@@ -665,44 +735,14 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     String? queueMessageId,
   }) async {
     bool canSend() => queueMessageId == null
-        ? _canCreateOffer(inquiry)
-        : _canCreateQueueOffer(
+        ? _canSendRentalRequest(inquiry)
+        : _canSendQueuedRentalRequest(
             queueMessageId,
             context.read<ChatDetailBloc>().state,
           );
 
     final itemId = inquiry.itemId;
     if (itemId == null || !canSend()) return;
-
-    final title = inquiry.itemName.isNotEmpty
-        ? inquiry.itemName
-        : (_conversation.itemName?.isNotEmpty == true
-              ? _conversation.itemName!
-              : (_conversation.name.isNotEmpty
-                    ? 'อุปกรณ์จาก ${_conversation.name}'
-                    : 'อุปกรณ์เช่า'));
-    final imageUrl = (inquiry.imageUrl?.isNotEmpty == true)
-        ? inquiry.imageUrl!
-        : (_conversation.itemImageUrl?.isNotEmpty == true
-              ? _conversation.itemImageUrl!
-              : 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop');
-    final price = (inquiry.price != null && inquiry.price! > 0)
-        ? inquiry.price!
-        : (_conversation.itemPrice ?? 100).toDouble();
-    final BookingRentalType rentalType;
-    final unit = (inquiry.unitLabel ?? '').toLowerCase();
-    if (unit.contains('ชั่วโมง') || unit.contains('hour')) {
-      rentalType = BookingRentalType.hourly;
-    } else if (unit.contains('วัน') || unit.contains('day')) {
-      rentalType = BookingRentalType.daily;
-    } else {
-      rentalType =
-          (_conversation.itemRentalType == 'hourly' ||
-              _conversation.itemRentalType == 'hour' ||
-              _conversation.itemRentalType == 'รายชั่วโมง')
-          ? BookingRentalType.hourly
-          : BookingRentalType.daily;
-    }
 
     final itemSource = ItemDetailRemoteDataSource();
     final ItemDetail itemDetail;
@@ -717,10 +757,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       return;
     }
     if (!mounted) return;
-    if (!itemDetail.isOwner) {
+    if (itemDetail.isOwner ||
+        itemDetail.owner.userId != _conversation.otherUserId) {
       showAppPopup(
         context,
-        content: Text('เฉพาะเจ้าของอุปกรณ์เท่านั้นที่สร้างข้อเสนอได้'),
+        content: const Text('ส่งคำขอเช่าได้ในห้องแชทกับเจ้าของอุปกรณ์'),
       );
       return;
     }
@@ -730,8 +771,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
         context,
         content: Text(
           itemDetail.isRentalOccupied
-              ? 'อุปกรณ์นี้กำลังถูกเช่า ส่งข้อเสนอได้หลังยกเลิกการจองหรือรับคืนอุปกรณ์แล้ว'
-              : 'อุปกรณ์นี้มีผู้ได้สิทธิ์จากคิวเช่าต่อ กรุณาส่งข้อเสนอจากการ์ดคิว',
+              ? 'อุปกรณ์นี้กำลังถูกเช่า กรุณารอให้อุปกรณ์พร้อมให้เช่า'
+              : 'อุปกรณ์นี้มีผู้ได้สิทธิ์จากคิวเช่าต่อ ผู้ได้สิทธิ์ส่งคำขอได้จากการ์ดคิว',
         ),
       );
       return;
@@ -741,42 +782,34 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       showAppPopup(
         context,
         content: Text(
-          'กรุณาระบุจุดนัดรับสินค้าในหน้าแก้ไขอุปกรณ์ก่อนส่งข้อเสนอ',
+          'กรุณาให้ผู้ปล่อยเช่าระบุจุดนัดรับในประกาศก่อนส่งคำขอเช่า',
         ),
       );
       return;
     }
-    final reviewStats = await ItemReviewService.fetchStats(itemId);
-    if (!mounted || !canSend()) return;
+    if (!canSend()) return;
 
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
     final today = DateTime(now.year, now.month, now.day);
-    final pickupDate = queueMessageId != null && now.hour >= 9
+    final pickupDate = now.hour >= 9
         ? today.add(const Duration(days: 1))
         : today;
+    final rentalType = itemDetail.hourlyPrice == null
+        ? BookingRentalType.daily
+        : BookingRentalType.hourly;
 
     final itemInfo = BookingItemInfo(
       id: itemId,
-      title: title,
-      imageUrl: queueMessageId == null
-          ? imageUrl
-          : (itemDetail.imageUrls.firstOrNull ?? ''),
-      rating: reviewStats.rating,
-      reviewCount: reviewStats.reviewCount,
-      hourlyRate: itemDetail.additionalDailyPrice != null
-          ? itemDetail.price.toDouble()
-          : (rentalType == BookingRentalType.hourly
-                ? price
-                : (price / 8).roundToDouble()),
-      dailyRate:
-          itemDetail.additionalDailyPrice?.toDouble() ??
-          (rentalType == BookingRentalType.daily
-              ? price
-              : (price * 8).roundToDouble()),
+      title: itemDetail.name,
+      imageUrl: itemDetail.imageUrls.firstOrNull ?? '',
+      rating: itemDetail.averageRating,
+      reviewCount: itemDetail.reviews.length,
+      hourlyRate: itemDetail.hourlyPrice?.toDouble() ?? 0,
+      dailyRate: itemDetail.dailyPrice?.toDouble() ?? 0,
       defaultLocation: pickup.name,
       latitude: pickup.latitude,
       longitude: pickup.longitude,
-      ownerName: 'ฉัน',
+      ownerName: itemDetail.owner.displayName,
     );
 
     final bookingData = BookingRequestData(
@@ -796,55 +829,15 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
       conversationId: _conversation.id,
       ownerId: itemDetail.owner.userId,
       rentalQueueMessageId: int.tryParse(queueMessageId ?? ''),
+      isCustomerRequest: true,
     );
 
-    final bloc = context.read<ChatDetailBloc>();
-    AppRoutes.openBooking(
-      context,
-      initialData: bookingData,
-      onSendRequest: (data) {
-        if (!mounted) return;
-        if (!canSend()) {
-          showAppPopup(
-            context,
-            content: const Text('ไม่สามารถส่งข้อเสนอจากคำถามเช่านี้ได้'),
-          );
-          return;
-        }
-        bloc.add(
-          ChatMessageSent(
-            conversationId: _conversation.id,
-            message: data.toChatMessagePayload(),
-            imageUrl: data.item.imageUrl.isEmpty ? null : data.item.imageUrl,
-          ),
-        );
-        _scrollToBottom();
-      },
-    );
+    await AppRoutes.openBooking(context, initialData: bookingData);
+    if (mounted) _scrollToBottom();
   }
 
   @override
   Widget build(BuildContext context) {
-    final ownsItemInChat = context.select(
-      (ChatDetailBloc bloc) => bloc.state.ownedItemIds.isNotEmpty,
-    );
-    final hasOpenRentalWithCustomer = context.select(
-      (ChatDetailBloc bloc) => bloc.state.messages.any((message) {
-        if (!message.isMine) return false;
-        final booking = BookingRequestData.fromChatMessage(message.message);
-        // ใช้สถานะเดียวกับระบบคิว ซึ่งกันรายการตั้งแต่ยืนยันนัดรับ
-        return const {
-          'confirmed',
-          'active',
-          'awaiting_return',
-          'return_ready',
-        }.contains(booking?.status);
-      }),
-    );
-    final canInviteToRentalQueue =
-        !hasOpenRentalWithCustomer &&
-        (_conversation.role == ChatParticipantRole.renter || ownsItemInChat);
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6F7),
       body: Column(
@@ -969,20 +962,19 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                         final ownsInquiryItem = state.ownedItemIds.contains(
                           inquiry?.itemId,
                         );
-                        // ข้อเสนอที่บันทึกแล้วมีผู้ส่งเป็นเจ้าของตามกฎฝั่งเซิร์ฟเวอร์
-                        final isOwner =
-                            BookingRequestData.isBookingRequest(
-                              item.message.message,
-                            )
-                            ? item.message.isMine
-                            : ownsInquiryItem;
+                        final booking = BookingRequestData.fromChatMessage(
+                          item.message.message,
+                        );
+                        final isOwner = booking == null
+                            ? ownsInquiryItem
+                            : item.message.isMine != booking.isCustomerRequest;
 
                         final rentalQueue = RentalQueueCardData.fromMessage(
                           item.message.message,
                         );
-                        final canSendQueueOffer =
+                        final canSendQueuedRequest =
                             rentalQueue?.status == RentalQueueStatus.accepted &&
-                            _canCreateQueueOffer(item.message.id, state);
+                            _canSendQueuedRentalRequest(item.message.id, state);
 
                         return Container(
                           key: itemKey,
@@ -1047,14 +1039,22 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                                       m.message.contains('คืนของสำเร็จ'),
                                 ),
                                 onSendBookingRequest:
-                                    inquiry != null && _canCreateOffer(inquiry)
+                                    inquiry != null &&
+                                        item.message.isMine &&
+                                        _canSendRentalRequest(inquiry)
                                     ? _openBookingRequest
                                     : null,
                                 defaultItemId: _conversation.itemId,
                                 onQueueAction: (action) =>
                                     _updateRentalQueue(item.message.id, action),
-                                onSendQueueOffer:
-                                    canSendQueueOffer && rentalQueue != null
+                                canJoinInvitedQueue:
+                                    rentalQueue?.status ==
+                                        RentalQueueStatus.invited &&
+                                    _rentalQueueItems.any(
+                                      (item) => item.id == rentalQueue?.itemId,
+                                    ),
+                                onSendQueuedRequest:
+                                    canSendQueuedRequest && rentalQueue != null
                                     ? () => _openBookingRequest(
                                         ItemInquiryData(
                                           itemId: rentalQueue.itemId,
@@ -1195,8 +1195,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
             onSend: _sendMessage,
             onCamera: _handleCameraPick,
             onGallery: _handleGalleryPick,
-            onInviteToRentalQueue: canInviteToRentalQueue
-                ? _inviteToRentalQueue
+            onRequestRentalQueue: _rentalQueueItems.isNotEmpty
+                ? _requestRentalQueue
                 : null,
             replyingMessage: _replyingMessage,
             editingMessage: _editingMessage,

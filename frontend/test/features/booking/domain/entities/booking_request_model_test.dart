@@ -36,6 +36,26 @@ void main() {
     expect(booking.originalMessageId, 'message');
   });
 
+  test('customer request retains its role while realtime replaces status', () {
+    final payload =
+        '${BookingRequestData.bookingPayloadPrefix}\n'
+        '${BookingRequestData.customerRequestMetaTag}'
+        '{"itemId":7,"bookingId":36,"status":"pending","paymentMethod":"promptpay",'
+        '"startDate":"2030-01-03","startHour":9,"startMinute":15}]';
+    final booking = BookingRequestData.fromChatMessage(payload)!;
+    final live = BookingRequestData.fromChatMessage(
+      booking.copyWith(status: 'confirmed').toChatMessagePayload(),
+    )!;
+    expect(live.isCustomerRequest, isTrue);
+    expect(live.paymentMethod, 'promptpay');
+    expect(live.status, 'confirmed');
+    expect(live.requestStartAt, DateTime.utc(2030, 1, 3, 2, 15));
+    expect(
+      BookingRequestData.fromChatMessage('regular chat\n$payload'),
+      isNull,
+    );
+  });
+
   for (final type in BookingRentalType.values) {
     test('chat offer uses the correct end date for ${type.name}', () {
       final pickupDay = DateTime(2026, 11, 24);

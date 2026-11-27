@@ -26,7 +26,7 @@ class _HomeRepository implements HomeRepository {
   _HomeRepository(this.item);
   final FeedItem item;
   @override
-  void clearCache() {}
+  void clearCache({bool rotateRecommendations = true}) {}
   @override
   Future<List<FeedCategory>> getCategories() async => const [];
   @override

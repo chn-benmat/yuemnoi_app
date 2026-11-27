@@ -23,7 +23,7 @@ class _DelayedHomeRepository implements HomeRepository {
   final categories = Completer<List<FeedCategory>>();
 
   @override
-  void clearCache() {}
+  void clearCache({bool rotateRecommendations = true}) {}
 
   @override
   Future<List<FeedCategory>> getCategories() => categories.future;

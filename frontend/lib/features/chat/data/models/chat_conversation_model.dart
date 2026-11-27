@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 
+import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/item_inquiry_data.dart';
 import '../../domain/entities/rental_queue_card_data.dart';
@@ -45,8 +46,8 @@ abstract final class ChatConversationModel {
       cleanPreview = 'เริ่มการสนทนา';
     } else if (queue != null) {
       cleanPreview = 'คิวเช่าต่อ · ${queue.name}';
-    } else if (rawLastMessage.contains('[BOOKING_DATA:')) {
-      cleanPreview = '📋 คำขอเช่าอุปกรณ์';
+    } else if (BookingRequestData.isBookingRequest(rawLastMessage)) {
+      cleanPreview = BookingRequestData.bookingPayloadPrefix;
     } else if (ItemInquiryData.isInquiry(rawLastMessage)) {
       final inquiry = ItemInquiryData.fromChatMessage(rawLastMessage);
       cleanPreview = inquiry != null && inquiry.itemName.isNotEmpty

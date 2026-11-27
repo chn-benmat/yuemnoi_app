@@ -40,19 +40,20 @@ class ProfileRemoteDataSource {
       } catch (_) {}
     }
 
-    // 2. ดึงข้อมูลจาก Supabase profile_tb
+    // API รุ่นก่อนยังไม่ส่งเวลาเปลี่ยนชื่อผู้ใช้ จึงอ่านจากตารางเป็นทางสำรอง
     if (SupabaseConfig.isInitialized) {
-      try {
-        final profileResp = await SupabaseConfig.client
-            .schema('profiles')
-            .from('profile_tb')
-            .select()
-            .eq('user_id', userId)
-            .maybeSingle();
-        if (profileResp != null) {
-          mergedData.addAll(Map<String, dynamic>.from(profileResp));
-        }
-      } catch (_) {}
+      if (!mergedData.containsKey('username_changed_at') ||
+          (mergedData['username']?.toString().isEmpty ?? true)) {
+        try {
+          final profileResp = await SupabaseConfig.client
+              .schema('profiles')
+              .from('profile_tb')
+              .select()
+              .eq('user_id', userId)
+              .maybeSingle();
+          if (profileResp != null) mergedData.addAll(profileResp);
+        } catch (_) {}
+      }
 
       // 3. ถ้าเป็นผู้ใช้ปัจจุบัน นำ metadata จาก Auth มาเสริม
       try {
@@ -165,7 +166,10 @@ class ProfileRemoteDataSource {
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
         : <String, dynamic>{};
-    return UserProfileModel.fromJson(data);
+    final profile = data['profile'];
+    return UserProfileModel.fromJson(
+      profile is Map ? Map<String, dynamic>.from(profile) : data,
+    );
   }
 
   Future<void> updateContactPhone({

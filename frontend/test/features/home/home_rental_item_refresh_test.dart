@@ -47,7 +47,7 @@ class _CatalogRepository implements HomeRepository, RentalItemRepository {
   Future<bool> toggleFavorite(String itemId) async => false;
 
   @override
-  void clearCache() {
+  void clearCache({bool rotateRecommendations = true}) {
     cacheClearCount++;
     _cachedItems = null;
   }

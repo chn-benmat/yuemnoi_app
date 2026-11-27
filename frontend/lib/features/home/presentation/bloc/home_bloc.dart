@@ -12,34 +12,55 @@ import 'home_state.dart';
 
 /// BLoC ควบคุมการทำงานของหน้า Home Feed
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
-  HomeBloc({required this.getHomeFeed, required this.homeRepository})
-    : super(const HomeInitial()) {
-    on<LoadHomeFeedStarted>(_onLoadHomeFeedStarted);
-    on<CategoryFilterChanged>(_onCategoryFilterChanged);
-    on<ApplyFilterRequested>(_onApplyFilterRequested);
-    on<ClearFilterRequested>(_onClearFilterRequested);
-    on<SearchQueryChanged>(_onSearchQueryChanged);
+  HomeBloc({
+    required this.getHomeFeed,
+    required this.homeRepository,
+    Stream<void> feedChanges = const Stream.empty(),
+  }) : super(const HomeInitial()) {
+    // จัดคิวร่วมกันเพื่อไม่ให้ผลรีเฟรชเขียนทับคำค้นหาหรือตัวกรองใหม่
+    on<HomeFeedQueryEvent>(
+      (event, emit) => switch (event) {
+        LoadHomeFeedStarted() => _onLoadHomeFeedStarted(event, emit),
+        CategoryFilterChanged() => _onCategoryFilterChanged(event, emit),
+        ApplyFilterRequested() => _onApplyFilterRequested(event, emit),
+        ClearFilterRequested() => _onClearFilterRequested(event, emit),
+        SearchQueryChanged() => _onSearchQueryChanged(event, emit),
+        RefreshHomeFeedRequested() => _onRefreshHomeFeedRequested(event, emit),
+      },
+      transformer: (events, mapper) => events.asyncExpand(mapper),
+    );
     on<ToggleFavoriteRequested>(_onToggleFavoriteRequested);
     on<FavoriteSetChanged>(_onFavoriteSetChanged);
-    on<RefreshHomeFeedRequested>(_onRefreshHomeFeedRequested);
     _favoriteListener = () => add(const FavoriteSetChanged());
     FavoriteService.instance.favoritesNotifier.addListener(_favoriteListener);
-    _catalogSubscription = ItemCatalogService.instance.changes.listen((_) {
-      add(const RefreshHomeFeedRequested());
-    });
+    _catalogSubscription = ItemCatalogService.instance.changes.listen(
+      _queueBackgroundRefresh,
+    );
+    _realtimeSubscription = feedChanges.listen(_queueBackgroundRefresh);
   }
 
   final GetHomeFeedUseCase getHomeFeed;
   final HomeRepository homeRepository;
   late final void Function() _favoriteListener;
   late final StreamSubscription<void> _catalogSubscription;
+  late final StreamSubscription<void> _realtimeSubscription;
+  bool _backgroundRefreshQueued = false;
+
+  void _queueBackgroundRefresh(void _) {
+    if (isClosed || _backgroundRefreshQueued) return;
+    _backgroundRefreshQueued = true;
+    add(const RefreshHomeFeedRequested(inBackground: true));
+  }
 
   @override
   Future<void> close() async {
-    await _catalogSubscription.cancel();
     FavoriteService.instance.favoritesNotifier.removeListener(
       _favoriteListener,
     );
+    await Future.wait([
+      _catalogSubscription.cancel(),
+      _realtimeSubscription.cancel(),
+    ]);
     return super.close();
   }
 
@@ -194,16 +215,20 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     ToggleFavoriteRequested event,
     Emitter<HomeState> emit,
   ) async {
-    final currentState = state;
-    if (currentState is! HomeLoaded) return;
+    if (state is! HomeLoaded) return;
 
     late final bool isFav;
     try {
       isFav = await homeRepository.toggleFavorite(event.itemId);
     } catch (error) {
-      emit(currentState.copyWith(favoriteErrorMessage: error.toString()));
+      if (state case final HomeLoaded currentState) {
+        emit(currentState.copyWith(favoriteErrorMessage: error.toString()));
+      }
       return;
     }
+
+    final currentState = state;
+    if (currentState is! HomeLoaded) return;
 
     final updatedCurated = currentState.curatedItems.map((item) {
       if (item.id == event.itemId) {
@@ -255,22 +280,25 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     RefreshHomeFeedRequested event,
     Emitter<HomeState> emit,
   ) async {
+    if (event.inBackground) _backgroundRefreshQueued = false;
     final currentState = state;
-    final categoryId = currentState is HomeLoaded
-        ? currentState.selectedCategoryId
-        : 'all';
-    final query = currentState is HomeLoaded ? currentState.searchQuery : '';
+    final previousFeed = currentState is HomeLoaded ? currentState : null;
+    final categoryId = previousFeed?.selectedCategoryId ?? 'all';
+    final query = previousFeed?.searchQuery ?? '';
 
-    if (currentState is HomeLoaded) {
+    if (!event.inBackground || previousFeed == null) {
       emit(const HomeLoading());
     }
 
-    homeRepository.clearCache();
+    homeRepository.clearCache(rotateRecommendations: !event.inBackground);
 
     try {
       final data = await getHomeFeed(
         categoryId: categoryId,
         searchQuery: query,
+        minPrice: previousFeed?.minPrice,
+        maxPrice: previousFeed?.maxPrice,
+        minRating: previousFeed?.minRating,
       );
 
       emit(
@@ -280,13 +308,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           searchQuery: query,
           curatedItems: data.curatedItems,
           nearbyItems: data.nearbyItems,
-          minPrice: currentState is HomeLoaded ? currentState.minPrice : null,
-          maxPrice: currentState is HomeLoaded ? currentState.maxPrice : null,
-          minRating: currentState is HomeLoaded ? currentState.minRating : null,
-          isRefreshing: false,
+          minPrice: previousFeed?.minPrice,
+          maxPrice: previousFeed?.maxPrice,
+          minRating: previousFeed?.minRating,
         ),
       );
-    } catch (e) {
+    } catch (_) {
+      if (event.inBackground && previousFeed != null) return;
       const message = 'ไม่มีการเชื่อมต่ออินเทอร์เน็ต กรุณาลองใหม่';
       emit(const HomeError(message));
     }

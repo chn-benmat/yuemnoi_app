@@ -21,12 +21,21 @@ class GetHomeFeedUseCase {
 
   final HomeRepository repository;
 
-  Future<HomeFeedData> call({String? categoryId, String? searchQuery}) async {
+  Future<HomeFeedData> call({
+    String? categoryId,
+    String? searchQuery,
+    int? minPrice,
+    int? maxPrice,
+    double? minRating,
+  }) async {
     final categories = await repository.getCategories();
     final curatedItems = await repository.getCuratedItems();
     final nearbyItems = await repository.getNearbyItems(
       categoryId: categoryId,
       searchQuery: searchQuery,
+      minPrice: minPrice,
+      maxPrice: maxPrice,
+      minRating: minRating,
     );
 
     return HomeFeedData(

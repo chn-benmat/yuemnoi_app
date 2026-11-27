@@ -210,11 +210,13 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                   onRefresh: () async {
                     final bloc = context.read<HomeBloc>();
                     bloc.add(const RefreshHomeFeedRequested());
-                    await bloc.stream.firstWhere(
-                      (state) =>
-                          (state is HomeLoaded && !state.isRefreshing) ||
-                          state is HomeError,
-                    );
+                    await bloc.stream
+                        .skipWhile((state) => state is! HomeLoading)
+                        .firstWhere(
+                          (state) =>
+                              (state is HomeLoaded && !state.isRefreshing) ||
+                              state is HomeError,
+                        );
                   },
                   child: CustomScrollView(
                     controller: _scrollController,

@@ -35,6 +35,10 @@ type createRentalRequest struct {
 	PickupLocation string    `json:"pickup_location" validate:"required,min=1,max=500"`
 	OfferMessageID string    `json:"offer_message_id" validate:"omitempty,max=100"`
 	BookingID      int64     `json:"booking_id" validate:"omitempty,gt=0"`
+	ConversationID string    `json:"conversation_id" validate:"omitempty,uuid"`
+	PaymentMethod  string    `json:"payment_method" validate:"omitempty,oneof=cash promptpay"`
+	UnitPrice      int64     `json:"unit_price" validate:"omitempty,gt=0,lte=2147483647"`
+	QueueMessageID int64     `json:"queue_message_id" validate:"omitempty,gt=0"`
 }
 
 // CreateRentalOrder สร้างคำขอจองอุปกรณ์ใหม่ โดยระบบจะตรวจสอบความพร้อมและคำนวณราคา
@@ -49,6 +53,11 @@ func (h *RentalHandler) CreateRentalOrder(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลคำขอเช่าไม่ถูกต้อง"})
 	}
 	req.PickupLocation = strings.TrimSpace(req.PickupLocation)
+	req.OfferMessageID = strings.TrimSpace(req.OfferMessageID)
+	if (req.ConversationID != "" && (req.OfferMessageID != "" || req.BookingID > 0 || req.PaymentMethod == "" || req.UnitPrice == 0)) ||
+		(req.ConversationID == "" && (req.PaymentMethod != "" || req.UnitPrice != 0 || req.QueueMessageID > 0)) {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลคำขอเช่าไม่ถูกต้อง"})
+	}
 	if req.BookingID > 0 && strings.TrimSpace(req.OfferMessageID) == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุข้อความข้อเสนอที่ต้องการยืนยัน"})
 	}
@@ -65,8 +74,12 @@ func (h *RentalHandler) CreateRentalOrder(c fiber.Ctx) error {
 		EndAt:          req.EndAt,
 		RentalType:     req.RentalType,
 		PickupLocation: req.PickupLocation,
-		OfferMessageID: strings.TrimSpace(req.OfferMessageID),
+		OfferMessageID: req.OfferMessageID,
 		BookingID:      req.BookingID,
+		ConversationID: req.ConversationID,
+		PaymentMethod:  req.PaymentMethod,
+		UnitPrice:      req.UnitPrice,
+		QueueMessageID: req.QueueMessageID,
 	})
 	if err != nil {
 		return writeRentalError(c, err)
@@ -88,7 +101,7 @@ type confirmRentalRequest struct {
 	PaymentMethod  string `json:"payment_method"`
 }
 
-// ConfirmRentalOrder เปลี่ยนจาก pending หลังผู้เช่ากดปุ่มยืนยันขั้นสุดท้ายเท่านั้น
+// ConfirmRentalOrder ยืนยันคำขอเช่าจากแชทตามสิทธิ์ของคู่เช่า
 func (h *RentalHandler) ConfirmRentalOrder(c fiber.Ctx) error {
 	userID, ok := authenticatedUserID(c, h.tokenVerifier)
 	if !ok {
@@ -221,7 +234,7 @@ func writeRentalError(c fiber.Ctx, err error) error {
 	case errors.As(err, &verification):
 		return writeRentalVerificationRequired(c, verification.Verification)
 	case errors.Is(err, domain.ErrRentalForbidden):
-		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "ยืนยันได้เฉพาะข้อเสนอที่เจ้าของอุปกรณ์ส่งให้คุณเท่านั้น"})
+		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "คุณไม่มีสิทธิ์จัดการคำขอเช่านี้"})
 	case errors.Is(err, domain.ErrRentalNotFound), errors.Is(err, domain.ErrItemNotFound):
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบรายการเช่าหรืออุปกรณ์"})
 	case errors.Is(err, domain.ErrItemRentalOccupied):
@@ -230,6 +243,10 @@ func writeRentalError(c fiber.Ctx, err error) error {
 		})
 	case errors.Is(err, domain.ErrRentalUnavailable):
 		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "อุปกรณ์หรือช่วงเวลานี้ไม่พร้อมให้เช่า"})
+	case errors.Is(err, domain.ErrRentalRequestExpired):
+		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "เวลานัดรับผ่านไปแล้ว กรุณาส่งคำขอพร้อมวันและเวลาใหม่"})
+	case errors.Is(err, domain.ErrRentalPriceChanged):
+		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "ราคาเช่ามีการเปลี่ยนแปลง กรุณากลับไปเปิดคำขอใหม่เพื่อตรวจสอบราคา"})
 	case errors.Is(err, domain.ErrRentalStatusTransition):
 		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "ไม่สามารถยืนยันรายการในสถานะปัจจุบันได้"})
 	case errors.Is(err, domain.ErrInvalidRental):
