@@ -147,8 +147,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
   Timer? _rentalQueueRefreshTimer;
   List<({int id, String name})> _rentalQueueItems = const [];
   final _requestingRentalQueueItemIds = <int>{};
-  Set<int> _rentalRequestItemIds = const {};
-  Set<int> _unavailableRentalRequestItemIds = const {};
+  Set<int> _rentalAvailabilityItemIds = const {};
+  Set<int> _unavailableRentalItemIds = const {};
   int _rentalAvailabilityRevision = 0;
   RentalQueueRemoteDataSource? _queueSource;
 
@@ -208,11 +208,11 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     if (!isCurrent || !AuthSession.isAuthenticated) return;
 
     unawaited(_refreshRentalQueueItems());
-    unawaited(_refreshRentalRequestAvailability());
+    unawaited(_refreshRentalAvailability());
     // รายการเช่าของคนอื่นไม่ส่งเหตุการณ์เข้ามาในห้องแชทนี้
     _rentalQueueRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       unawaited(_refreshRentalQueueItems());
-      unawaited(_refreshRentalRequestAvailability());
+      unawaited(_refreshRentalAvailability());
     });
   }
 
@@ -626,7 +626,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
     }
   }
 
-  Future<void> _refreshRentalRequestAvailability({
+  Future<void> _refreshRentalAvailability({
     bool onlyWhenItemsChange = false,
   }) async {
     final lifecycle = WidgetsBinding.instance.lifecycleState;
@@ -646,11 +646,16 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
               item: BookingItemInfo(:final id),
             ) when !state.failedMessageIds.contains(message.id))
           id,
+      for (final message in state.messages)
+        if (message.isMine && !state.failedMessageIds.contains(message.id))
+          if (_itemInquiry(message)?.itemId case final int id
+              when !state.ownedItemIds.contains(id))
+            id,
     };
-    if (onlyWhenItemsChange && setEquals(itemIds, _rentalRequestItemIds)) {
+    if (onlyWhenItemsChange && setEquals(itemIds, _rentalAvailabilityItemIds)) {
       return;
     }
-    _rentalRequestItemIds = itemIds;
+    _rentalAvailabilityItemIds = itemIds;
     final revision = ++_rentalAvailabilityRevision;
     try {
       final unavailable = itemIds.isEmpty
@@ -658,8 +663,8 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
           : await widget.getUnavailableRentalItemIds(itemIds);
       if (mounted &&
           revision == _rentalAvailabilityRevision &&
-          !setEquals(unavailable, _unavailableRentalRequestItemIds)) {
-        setState(() => _unavailableRentalRequestItemIds = unavailable);
+          !setEquals(unavailable, _unavailableRentalItemIds)) {
+        setState(() => _unavailableRentalItemIds = unavailable);
       }
     } catch (_) {
       // เก็บสถานะล่าสุดไว้ระหว่างที่โหลดสถานะใหม่ไม่ได้
@@ -668,6 +673,29 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
 
   bool _canRequestRentalQueueForItem(int itemId) =>
       _rentalQueueItems.any((item) => item.id == itemId);
+
+  ItemInquiryData? _itemInquiry(ChatMessage message) {
+    if (ChatReplyContent.tryParse(message.message) != null) return null;
+    return ItemInquiryData.fromChatMessage(
+      message.message,
+      defaultItemId: _conversation.itemId,
+    );
+  }
+
+  bool _hasOwnOpenRental(ChatDetailState state, int itemId) {
+    return state.messages.any((message) {
+      final booking = BookingRequestData.fromChatMessage(message.message);
+      return booking != null &&
+          booking.item.id == itemId &&
+          message.isMine == booking.isCustomerRequest &&
+          const {
+            'confirmed',
+            'active',
+            'awaiting_return',
+            'return_ready',
+          }.contains(booking.status);
+    });
+  }
 
   Future<void> _requestRentalQueue() async {
     if (_selectingRentalQueueItem || _rentalQueueItems.isEmpty) return;
@@ -948,6 +976,9 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
 
   @override
   Widget build(BuildContext context) {
+    final currentQueueItem = _rentalQueueItems
+        .where((item) => item.id == _conversation.itemId)
+        .firstOrNull;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6F7),
       body: Column(
@@ -963,9 +994,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                 BlocConsumer<ChatDetailBloc, ChatDetailState>(
                   listener: (context, state) {
                     unawaited(
-                      _refreshRentalRequestAvailability(
-                        onlyWhenItemsChange: true,
-                      ),
+                      _refreshRentalAvailability(onlyWhenItemsChange: true),
                     );
                     if (state.status == ChatDetailStatus.failure &&
                         state.errorMessage != null) {
@@ -1087,13 +1116,34 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                           _messageKeys[id] = itemKey;
                         }
 
-                        final inquiry = ItemInquiryData.fromChatMessage(
-                          item.message.message,
-                          defaultItemId: _conversation.itemId,
-                        );
+                        final inquiry = _itemInquiry(item.message);
                         final ownsInquiryItem = state.ownedItemIds.contains(
                           inquiry?.itemId,
                         );
+                        if (inquiry
+                            case ItemInquiryData(
+                              itemId: final int itemId,
+                              :final itemName,
+                            )
+                            when item.message.isMine &&
+                                !ownsInquiryItem &&
+                                !_conversation.isOtherUserUnavailable &&
+                                !state.failedMessageIds.contains(
+                                  item.message.id,
+                                )) {
+                          final canQueue = _canRequestRentalQueueForItem(
+                            itemId,
+                          );
+                          if (canQueue ||
+                              (_unavailableRentalItemIds.contains(itemId) &&
+                                  !_hasOwnOpenRental(state, itemId))) {
+                            return _RentalUnavailableNotice(
+                              key: itemKey,
+                              itemName: itemName,
+                              canQueue: canQueue,
+                            );
+                          }
+                        }
                         final booking = BookingRequestData.fromChatMessage(
                           item.message.message,
                         );
@@ -1110,7 +1160,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
                             _canRequestRentalQueueForItem(booking.item.id);
                         final customerRequestBlockedByRental =
                             isUnqueuedCustomerRequest &&
-                            (_unavailableRentalRequestItemIds.contains(
+                            (_unavailableRentalItemIds.contains(
                                   booking.item.id,
                                 ) ||
                                 canRequestQueueForItem);
@@ -1391,6 +1441,26 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
               );
             },
           ),
+          if (!_conversation.isOtherUserUnavailable && currentQueueItem != null)
+            BlocBuilder<ChatDetailBloc, ChatDetailState>(
+              builder: (context, state) {
+                final linkedRequests = _linkedInquiryRequests(state);
+                final hasInquiry = state.messages.any(
+                  (message) =>
+                      message.isMine &&
+                      !state.ownedItemIds.contains(currentQueueItem.id) &&
+                      !state.failedMessageIds.contains(message.id) &&
+                      !linkedRequests.containsKey(message.id) &&
+                      _itemInquiry(message)?.itemId == currentQueueItem.id,
+                );
+                return hasInquiry
+                    ? const SizedBox.shrink()
+                    : _RentalUnavailableNotice(
+                        itemName: currentQueueItem.name,
+                        canQueue: true,
+                      );
+              },
+            ),
           if (!_conversation.isOtherUserUnavailable)
             ChatMessageComposer(
               controller: _messageController,
@@ -1422,10 +1492,7 @@ class _ChatDetailViewState extends State<_ChatDetailView> {
         nextRequest[(message.senderId, booking.item.id)] = message.id;
         continue;
       }
-      final inquiry = ItemInquiryData.fromChatMessage(
-        message.message,
-        defaultItemId: _conversation.itemId,
-      );
+      final inquiry = _itemInquiry(message);
       final itemId = inquiry?.itemId;
       if (itemId == null) continue;
       final requestId = nextRequest[(message.senderId, itemId)];
@@ -1619,6 +1686,60 @@ typedef _AttachedRentalQueue = ({
   ChatMessage message,
   RentalQueueCardData data,
 });
+
+class _RentalUnavailableNotice extends StatelessWidget {
+  const _RentalUnavailableNotice({
+    super.key,
+    required this.itemName,
+    required this.canQueue,
+  });
+
+  final String itemName;
+  final bool canQueue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0E5FC),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.schedule_rounded,
+                color: AppColors.primaryColor,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (itemName.isNotEmpty)
+                      Text(
+                        itemName,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    Text(
+                      canQueue
+                          ? 'อุปกรณ์นี้กำลังถูกเช่า กรุณาต่อคิวเพื่อเช่าต่อ'
+                          : 'อุปกรณ์นี้ยังไม่พร้อมให้เช่า',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _ChatRenderItem {
   const _ChatRenderItem({
