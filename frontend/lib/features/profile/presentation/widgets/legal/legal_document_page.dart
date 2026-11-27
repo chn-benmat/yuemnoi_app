@@ -12,12 +12,12 @@ class LegalDocumentPage extends StatelessWidget {
   const LegalDocumentPage({
     super.key,
     required this.title,
-    required this.description,
+    this.description,
     this.sections = const [],
   });
 
   final String title;
-  final String description;
+  final String? description;
   final List<LegalDocumentSection> sections;
 
   @override
@@ -40,7 +40,8 @@ class LegalDocumentPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              AccountPageIntro(title: title, description: description),
+              if (description case final introDescription?)
+                AccountPageIntro(title: title, description: introDescription),
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(

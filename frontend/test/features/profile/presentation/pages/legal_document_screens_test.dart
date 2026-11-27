@@ -23,7 +23,9 @@ void main() {
         ),
       );
 
-      expect(find.text('นโยบายความเป็นส่วนตัว').hitTestable(), findsWidgets);
+      expect(find.text('นโยบายความเป็นส่วนตัว'), findsOneWidget);
+      expect(find.text('ฉบับร่าง · ยังไม่ประกาศใช้'), findsNothing);
+      expect(find.text('ขอบเขตของนโยบาย').hitTestable(), findsOneWidget);
       expect(find.textContaining('ข้อมูลที่เราเก็บ'), findsOneWidget);
       expect(find.text('เนื้อหาอยู่ระหว่างจัดทำ'), findsNothing);
 

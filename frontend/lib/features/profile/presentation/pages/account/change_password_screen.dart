@@ -1,5 +1,4 @@
 import 'package:frontend/core/widgets/app_popup.dart';
-import '../../widgets/account/account_page_intro.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
