@@ -9,6 +9,7 @@ import 'rental_status_state.dart';
 class RentalStatusCubit extends Cubit<RentalStatusState> {
   Future<void>? _activeLoad;
   bool _reloadRequested = false;
+  ({String userId, RentalStatusLoaded data})? _lastLoaded;
 
   final GetRentalBookingsUseCase getRentalBookings;
   final UpdateBookingStatusUseCase updateBookingStatus;
@@ -47,7 +48,9 @@ class RentalStatusCubit extends Cubit<RentalStatusState> {
 
   Future<void> _loadBookings(String userId) async {
     if (isClosed) return;
-    emit(const RentalStatusLoading());
+    final lastLoaded = _lastLoaded;
+    final previous = lastLoaded?.userId == userId ? lastLoaded?.data : null;
+    emit(RentalStatusLoading(previous: previous));
     try {
       final renting = await getRentalBookings.executeRenting(userId);
       if (isClosed) return;
@@ -65,15 +68,15 @@ class RentalStatusCubit extends Cubit<RentalStatusState> {
         }.contains(s);
       }
 
-      emit(
-        RentalStatusLoaded(
-          rentingList: renting.where(isAllowedStatus).toList(),
-          lendingList: lending.where(isAllowedStatus).toList(),
-        ),
+      final loaded = RentalStatusLoaded(
+        rentingList: renting.where(isAllowedStatus).toList(),
+        lendingList: lending.where(isAllowedStatus).toList(),
       );
+      _lastLoaded = (userId: userId, data: loaded);
+      emit(loaded);
     } catch (e) {
       if (isClosed) return;
-      emit(RentalStatusError(_userFacingError(e)));
+      emit(RentalStatusError(_userFacingError(e), previous: previous));
     }
   }
 

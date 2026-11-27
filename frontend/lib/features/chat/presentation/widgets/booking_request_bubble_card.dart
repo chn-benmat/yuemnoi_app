@@ -48,12 +48,25 @@ class BookingRequestBubbleCard extends StatefulWidget {
 
 class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   bool _isConfirmed = false;
+  bool _isCheckingBookingStatus = false;
+  bool _bookingStatusUnavailable = false;
+  int _statusCheckRevision = 0;
+  ({int bookingId, String status, VoidCallback open})? _pendingBookingAction;
   int? _bookingId;
   String _paymentMethod = 'cash';
   String _rentalStatus =
       'pending'; // 'pending', 'confirmed', 'active', 'completed'
   DateTime? _endDateTime;
   Timer? _countdownTimer;
+
+  String? get _sharedStatus =>
+      widget.bookingData.status ?? widget.initialStatus;
+
+  bool get _shouldCheckInitialStatus =>
+      _rentalStatus != 'completed' &&
+      ((_bookingId ?? 0) > 0 || _isConfirmed) &&
+      SupabaseConfig.isInitialized &&
+      SupabaseConfig.client.auth.currentUser != null;
 
   bool get _isRentalActive => const {
     'active',
@@ -99,15 +112,16 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   @override
   void initState() {
     super.initState();
-    _paymentMethod = widget.bookingData.paymentMethod;
     _applySharedStatus();
+    _isCheckingBookingStatus = _shouldCheckInitialStatus;
     _checkConfirmedStatus();
   }
 
   void _applySharedStatus() {
     _paymentMethod = widget.bookingData.paymentMethod;
-    final status = widget.bookingData.status ?? widget.initialStatus;
-    if (status != null) {
+    final status = _sharedStatus;
+    // ข้อความเดิมอาจยังเป็น confirmed แม้รายการนี้จะคืนเสร็จแล้ว
+    if (status != null && _rentalStatus != 'completed') {
       _rentalStatus = status;
       _isConfirmed = const {
         'confirmed',
@@ -124,15 +138,29 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
   @override
   void didUpdateWidget(covariant BookingRequestBubbleCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isHandoverCompleted != oldWidget.isHandoverCompleted ||
+    final bookingChanged =
+        widget.message.id != oldWidget.message.id ||
+        (widget.bookingData.bookingId != oldWidget.bookingData.bookingId &&
+            widget.bookingData.bookingId != _bookingId);
+    if (bookingChanged) {
+      _bookingId = null;
+      _isConfirmed = false;
+      _bookingStatusUnavailable = false;
+      _pendingBookingAction = null;
+      _rentalStatus = 'pending';
+      _endDateTime = null;
+      _countdownTimer?.cancel();
+    }
+    if (bookingChanged ||
+        widget.isHandoverCompleted != oldWidget.isHandoverCompleted ||
         widget.isReturnCompleted != oldWidget.isReturnCompleted ||
-        widget.message != oldWidget.message ||
         widget.initialStatus != oldWidget.initialStatus ||
         widget.bookingData.status != oldWidget.bookingData.status ||
         widget.bookingData.bookingId != oldWidget.bookingData.bookingId ||
         widget.bookingData.paymentMethod !=
             oldWidget.bookingData.paymentMethod) {
       _applySharedStatus();
+      if (bookingChanged) _isCheckingBookingStatus = _shouldCheckInitialStatus;
       _checkConfirmedStatus();
     }
   }
@@ -182,8 +210,59 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     return DateFormat('dd/MM/yyyy เวลา HH:mm น.').format(dt.toLocal());
   }
 
+  void _retryBookingStatus() {
+    setState(() {
+      _isCheckingBookingStatus = true;
+      _bookingStatusUnavailable = false;
+    });
+    _checkConfirmedStatus();
+  }
+
+  VoidCallback? _bookingAction(VoidCallback open) {
+    final bookingId = _bookingId;
+    final status = _rentalStatus;
+    if (_bookingStatusUnavailable ||
+        (_isCheckingBookingStatus && (bookingId ?? 0) <= 0)) {
+      return null;
+    }
+    return () {
+      if (_bookingStatusUnavailable ||
+          _pendingBookingAction != null ||
+          _bookingId != bookingId ||
+          _rentalStatus != status) {
+        return;
+      }
+      if (!_isCheckingBookingStatus) {
+        open();
+        return;
+      }
+      if (bookingId == null || bookingId <= 0) return;
+      setState(() {
+        _pendingBookingAction = (
+          bookingId: bookingId,
+          status: _isRentalActive ? 'active' : status,
+          open: open,
+        );
+      });
+    };
+  }
+
+  Widget _bookingActionIcon(Widget icon, {Color color = Colors.white}) =>
+      _pendingBookingAction == null
+      ? icon
+      : SizedBox.square(
+          dimension: 15,
+          child: CircularProgressIndicator(
+            color: color,
+            strokeWidth: 2,
+            semanticsLabel: 'กำลังตรวจสอบสถานะการเช่า',
+          ),
+        );
+
   Future<void> _checkConfirmedStatus() async {
     final message = widget.message;
+    final revision = ++_statusCheckRevision;
+    bool isCurrentCheck() => mounted && revision == _statusCheckRevision;
     // 1. ตรวจสอบสถานะการยืนยันจาก Local Tracker ทันที (เฉพาะ messageId)
     final isLocallyConfirmed = await BookingConfirmationTracker.isConfirmed(
       messageId: message.id,
@@ -194,14 +273,12 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     final cachedStatus = await BookingConfirmationTracker.getStatus(
       messageId: message.id,
     );
-    if (!mounted || widget.message != message) return;
+    if (!isCurrentCheck()) return;
     final targetBookingId =
         widget.bookingData.bookingId ?? cachedBookingId ?? _bookingId;
-    final hasSharedStatus =
-        widget.bookingData.status != null || widget.initialStatus != null;
     // ข้อความส่งมอบหรือคืนของเก่าในห้องแชตใช้กับคำขอที่ยังไม่มีเลขรายการไม่ได้
     final useLegacyStatus =
-        !hasSharedStatus && targetBookingId != null && targetBookingId > 0;
+        _sharedStatus == null && targetBookingId != null && targetBookingId > 0;
 
     if (mounted) {
       setState(() {
@@ -213,8 +290,10 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
         }
         if (widget.bookingData.bookingId == null &&
             cachedBookingId != null &&
-            cachedBookingId > 0) {
+            cachedBookingId > 0 &&
+            _bookingId != cachedBookingId) {
           _bookingId = cachedBookingId;
+          _isCheckingBookingStatus = _shouldCheckInitialStatus;
         }
         if (_rentalStatus == 'completed' ||
             (useLegacyStatus &&
@@ -247,7 +326,11 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     // 2. ตรวจสอบสถานะจาก Supabase booking_tb
     // โดยจะตรวจสอบเฉพาะ bookingId ที่ถูกผูกไว้กับข้อความคำขอนี้เท่านั้น (ป้องกันการปะปนกับออเดอร์อื่น)
     try {
-      if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized) return;
+      if (!isCurrentCheck() ||
+          !SupabaseConfig.isConfigured ||
+          !SupabaseConfig.isInitialized) {
+        return;
+      }
       final client = SupabaseConfig.client;
       final currentUserId = client.auth.currentUser?.id;
       if (currentUserId == null) return;
@@ -261,10 +344,14 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             .eq('id', targetBookingId)
             .maybeSingle();
 
-        if (exactBooking != null && mounted && widget.message == message) {
-          final rawDbStatus =
-              exactBooking['status']?.toString().toLowerCase().trim() ??
-              'confirmed';
+        final rawDbStatus = exactBooking?['status']
+            ?.toString()
+            .toLowerCase()
+            .trim();
+        if (exactBooking != null &&
+            rawDbStatus != null &&
+            rawDbStatus.isNotEmpty &&
+            isCurrentCheck()) {
           final DateTime? parsedEndAt;
           if (exactBooking['end_at'] != null) {
             parsedEndAt = DateTime.tryParse(exactBooking['end_at'].toString());
@@ -299,6 +386,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             resolvedStatus = 'pending';
           }
 
+          final pendingAction = _pendingBookingAction;
           setState(() {
             _isConfirmed = const {
               'confirmed',
@@ -309,6 +397,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
               'completed',
             }.contains(resolvedStatus);
             _rentalStatus = resolvedStatus;
+            _isCheckingBookingStatus = false;
+            _bookingStatusUnavailable = false;
+            _pendingBookingAction = null;
             _bookingId = targetBookingId;
             if (databasePaymentMethod == 'cash' ||
                 databasePaymentMethod == 'promptpay') {
@@ -323,6 +414,15 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
               _countdownTimer?.cancel();
             }
           });
+
+          // เปิดเฉพาะรายการที่ผู้ใช้กด และยังอยู่ในสถานะเดียวกันหลังตรวจสอบ
+          if (pendingAction != null &&
+              pendingAction.bookingId == targetBookingId &&
+              pendingAction.status == resolvedStatus &&
+              mounted &&
+              ModalRoute.isCurrentOf(context) == true) {
+            pendingAction.open();
+          }
 
           if (!widget.bookingData.isCustomerRequest ||
               resolvedStatus != 'pending') {
@@ -349,7 +449,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
         });
       }
     } catch (_) {
-      if (mounted &&
+      if (isCurrentCheck() &&
           !widget.bookingData.isCustomerRequest &&
           !_isConfirmed &&
           !isLocallyConfirmed &&
@@ -359,6 +459,14 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
           _isConfirmed = false;
           _rentalStatus = 'pending';
           _bookingId = null;
+        });
+      }
+    } finally {
+      if (isCurrentCheck() && _isCheckingBookingStatus) {
+        setState(() {
+          _isCheckingBookingStatus = false;
+          _bookingStatusUnavailable = (targetBookingId ?? 0) > 0;
+          _pendingBookingAction = null;
         });
       }
     }
@@ -514,6 +622,17 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
         ? widget.message.imageUrl!
         : item.imageUrl;
     final isOwnerUser = _checkIsOwner();
+    final String? bookingStatusMessage = _rentalStatus == 'completed'
+        ? null
+        : _isCheckingBookingStatus
+        ? 'กำลังตรวจสอบสถานะการเช่า…'
+        : _bookingStatusUnavailable
+        ? 'ตรวจสอบสถานะการเช่าไม่สำเร็จ'
+        : null;
+    final canUseBookingActions = bookingStatusMessage == null;
+    // แสดงสถานะจากข้อความเดิมได้ระหว่างรอตรวจสอบสถานะล่าสุด
+    final canShowStatus = canUseBookingActions || _sharedStatus != null;
+    final showActiveStatus = canShowStatus && _isRentalActive;
 
     final senderText =
         (widget.senderName != null && widget.senderName!.isNotEmpty)
@@ -671,7 +790,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _getCardTitle(isMine, senderText),
+                    canShowStatus
+                        ? _getCardTitle(isMine, senderText)
+                        : 'รายละเอียดคำขอเช่า',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13.5,
@@ -683,12 +804,12 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _getCardSubtitle(),
+                    canShowStatus ? _getCardSubtitle() : bookingStatusMessage,
                     style: TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: _isRentalActive
+                      color: showActiveStatus
                           ? AppColors.primaryColor
                           : const Color(0xFF64748B),
                       height: 1.3,
@@ -728,7 +849,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             ),
 
             // 3. กล่องข้อมูลการเช่าแบบ Swiss Table (แสดงเฉพาะก่อนเริ่มการเช่า)
-            if (!_isRentalActive) ...[
+            if (!showActiveStatus) ...[
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -782,12 +903,14 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             ],
 
             // 4. แถบนับเวลาถอยหลังและสถานะเมื่อกำลังเช่าอยู่
-            if (_isRentalActive) _buildActiveCountdownCard(),
+            if (showActiveStatus) _buildActiveCountdownCard(),
 
             const SizedBox(height: 12),
 
             // 5. ปุ่ม Action
-            if (_isRentalActive)
+            if (!canShowStatus)
+              const SizedBox.shrink()
+            else if (showActiveStatus)
               // ปุ่มส่งคืนอุปกรณ์ (หรือตรวจรับคืน)
               SizedBox(
                 width: double.infinity,
@@ -808,19 +931,20 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
-                  onPressed: () {
-                    AppRoutes.openRentalReturn(
+                  onPressed: _bookingAction(
+                    () => AppRoutes.openRentalReturn(
                       context,
                       rentalId: _bookingId,
-                      isLender: isOwnerUser,
-                    );
-                  },
-                  icon: FaIcon(
-                    isOwnerUser
-                        ? FontAwesomeIcons.qrcode
-                        : FontAwesomeIcons.arrowRotateLeft,
-                    size: 14,
-                    color: Colors.white,
+                      isLender: _checkIsOwner(),
+                    ),
+                  ),
+                  icon: _bookingActionIcon(
+                    FaIcon(
+                      isOwnerUser
+                          ? FontAwesomeIcons.qrcode
+                          : FontAwesomeIcons.arrowRotateLeft,
+                      size: 14,
+                    ),
                   ),
                   label: Text(
                     isOwnerUser
@@ -834,7 +958,6 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -897,11 +1020,11 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
-                  onPressed: () => _handleAction(context, isEditMode: false),
-                  icon: const FaIcon(
-                    FontAwesomeIcons.calendarCheck,
-                    size: 14,
-                    color: Colors.white,
+                  onPressed: _bookingAction(
+                    () => _handleAction(context, isEditMode: false),
+                  ),
+                  icon: _bookingActionIcon(
+                    const FaIcon(FontAwesomeIcons.calendarCheck, size: 14),
                   ),
                   label: const Text(
                     'รายละเอียดนัดรับ',
@@ -909,7 +1032,6 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -933,23 +1055,23 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
-                  onPressed: () => _handleAction(context, isEditMode: true),
-                  child: const Row(
+                  onPressed: _bookingAction(
+                    () => _handleAction(context, isEditMode: true),
+                  ),
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        Icons.edit_outlined,
-                        size: 15,
+                      _bookingActionIcon(
+                        const Icon(Icons.edit_outlined, size: 15),
                         color: AppColors.primaryColor,
                       ),
-                      SizedBox(width: 6),
-                      Text(
+                      const SizedBox(width: 6),
+                      const Text(
                         'แก้ไขรายละเอียด',
                         style: TextStyle(
                           fontFamily: AppTextStyles.fontFamily,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.primaryColor,
                         ),
                       ),
                     ],
@@ -974,11 +1096,11 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
-                  onPressed: () => _handleAction(context, isEditMode: false),
-                  icon: const Icon(
-                    Icons.assignment_turned_in_outlined,
-                    size: 16,
-                    color: Colors.white,
+                  onPressed: _bookingAction(
+                    () => _handleAction(context, isEditMode: false),
+                  ),
+                  icon: _bookingActionIcon(
+                    const Icon(Icons.assignment_turned_in_outlined, size: 16),
                   ),
                   label: Text(
                     widget.bookingData.isCustomerRequest
@@ -994,7 +1116,8 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   ),
                 ),
               ),
-            if (widget.onRequestRentalQueue != null &&
+            if (canUseBookingActions &&
+                widget.onRequestRentalQueue != null &&
                 (_rentalStatus == 'pending' ||
                     const {
                       'cancelled',
@@ -1005,7 +1128,8 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                 onPressed: widget.onRequestRentalQueue,
                 child: const Text('ชวนเข้าคิวเช่าต่อ'),
               )
-            else if (!widget.customerRequestBlockedByRental &&
+            else if (canUseBookingActions &&
+                !widget.customerRequestBlockedByRental &&
                 widget.onRetryCustomerRequest != null &&
                 (const {
                       'cancelled',
@@ -1018,6 +1142,20 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                 onPressed: widget.onRetryCustomerRequest,
                 child: const Text('ส่งคำขอเช่าใหม่'),
               ),
+            if (bookingStatusMessage != null && _bookingStatusUnavailable) ...[
+              if (canShowStatus)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    bookingStatusMessage,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              OutlinedButton(
+                onPressed: _retryBookingStatus,
+                child: const Text('ลองตรวจสอบอีกครั้ง'),
+              ),
+            ],
           ],
         ),
       ),

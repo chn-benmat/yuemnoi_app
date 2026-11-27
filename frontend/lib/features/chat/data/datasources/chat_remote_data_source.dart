@@ -42,6 +42,7 @@ class ChatRemoteDataSource {
       >{};
   static final _pendingInquiries =
       <(SupabaseClient, String, String, int, bool), Future<String?>>{};
+  static final _rentalAvailabilityChanges = Expando<Map<int, Stream<void>>>();
 
   ApiClient get _backendClient => _apiClient ??= DioApiClient();
 
@@ -255,6 +256,52 @@ class ChatRemoteDataSource {
             row['is_rental_queue_held'] == true)
           if (row['id'] case final int id) id,
     };
+  }
+
+  Stream<void> watchRentalAvailabilityChanges(int itemId) {
+    if (!SupabaseConfig.isInitialized && _client == null) {
+      return const Stream.empty();
+    }
+    final client = _supabaseClient;
+    final streams = _rentalAvailabilityChanges[client] ??= {};
+    return streams.putIfAbsent(itemId, () {
+      RealtimeChannel? channel;
+      late final StreamController<void> changes;
+      changes = StreamController<void>.broadcast(
+        onListen: () {
+          final subscription = client.channel(
+            'chat_rental_item:$itemId',
+            opts: const RealtimeChannelConfig(private: true),
+          );
+          channel = subscription;
+
+          void notifyChanged() {
+            if (channel == subscription) changes.add(null);
+          }
+
+          subscription
+              .onBroadcast(
+                event: 'rental_availability_changed',
+                callback: (_) => notifyChanged(),
+              )
+              .subscribe((status, _) {
+                // โหลดสถานะหลังเชื่อมต่อเผื่อมีการเปลี่ยนแปลงระหว่างที่หลุด
+                if (status == RealtimeSubscribeStatus.subscribed) {
+                  notifyChanged();
+                }
+              });
+        },
+        onCancel: () {
+          final subscription = channel;
+          channel = null;
+          streams.remove(itemId);
+          if (subscription != null) {
+            unawaited(client.removeChannel(subscription));
+          }
+        },
+      );
+      return changes.stream;
+    });
   }
 
   Future<List<ChatConversation>> getConversations() async {

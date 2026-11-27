@@ -134,12 +134,13 @@ void main() {
             widget.message.id == renewedMessage.id,
       );
       final sendRequest = find.text('ส่งคำขอเช่าอุปกรณ์นี้');
-      expect(originalCard, findsOneWidget);
+      final isCompleted = status == 'completed' || status == 'finished';
+      expect(originalCard, isCompleted ? findsNothing : findsOneWidget);
       expect(sendRequest, findsNothing);
 
       stream.add([...previousMessages, renewedMessage]);
       await tester.pumpAndSettle();
-      expect(originalCard, findsOneWidget);
+      expect(originalCard, isCompleted ? findsNothing : findsOneWidget);
       expect(renewedCard, findsOneWidget);
       expect(
         find.descendant(of: originalCard, matching: sendRequest),
@@ -147,9 +148,7 @@ void main() {
       );
       expect(
         find.descendant(of: renewedCard, matching: sendRequest),
-        status == 'completed' || status == 'finished'
-            ? findsOneWidget
-            : findsNothing,
+        isCompleted ? findsOneWidget : findsNothing,
       );
 
       if (status == 'completed') {
@@ -168,7 +167,7 @@ void main() {
           ),
         ]);
         await tester.pumpAndSettle();
-        expect(originalCard, findsOneWidget);
+        expect(originalCard, findsNothing);
         expect(renewedCard, findsOneWidget);
         expect(
           find.descendant(of: originalCard, matching: sendRequest),
