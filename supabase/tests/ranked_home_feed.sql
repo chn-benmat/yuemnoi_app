@@ -79,8 +79,20 @@ begin
     where (item->>'id')::bigint = near_id and (item->>'rating')::numeric = 4.5
       and (item->>'review_count')::integer = 2
   ), 'ฟีด v2 คำนวณคะแนนรีวิวไม่ตรงกับที่บันทึก';
-  assert exists (select 1 from public.home_feed_ranked_v where id = near_id and rating = 4.5 and review_count = 2),
-    'view ฟีดคำนวณคะแนนรีวิวไม่ตรงกับที่บันทึก';
+  assert exists (
+    select 1 from jsonb_array_elements(public.get_home_catalog(null, location_lat, location_lng)) item
+    where (item->>'id')::bigint = near_id and (item->>'rating')::numeric = 4.5
+      and (item->>'review_count')::integer = 2
+  ), 'แคตตาล็อกคำนวณคะแนนรีวิวไม่ตรงกับที่บันทึก';
+  -- Go เรียกด้วย service_role ต้องรันฟีดและแคตตาล็อกได้ (ไม่ใช่แค่ postgres)
+  set local role service_role;
+  perform public.get_home_feed_v2(null, location_lat, location_lng, '{}', null, 48);
+  perform public.get_home_catalog(null, location_lat, location_lng);
+  reset role;
+  -- แคตตาล็อกและฟีดหน้าแรกเรียงด้วยสูตรเดียวกัน
+  assert (select array_agg((x->>'id')::bigint) from jsonb_array_elements(public.get_home_catalog(null, location_lat, location_lng)) x)
+    = (select array_agg((x->>'id')::bigint) from jsonb_array_elements(public.get_home_feed_v2(null, location_lat, location_lng, '{}', null, 48)->'items') x),
+    'แคตตาล็อกเรียงต่างจากฟีดหน้าแรก';
 end;
 $test$;
 

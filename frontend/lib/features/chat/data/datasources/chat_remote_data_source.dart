@@ -1218,54 +1218,7 @@ class ChatRemoteDataSource {
           .delete()
           .eq('id', parsedId);
 
-      // อัปเดตข้อความล่าสุด (last_message) ใน conversation_tb ให้เป็นข้อความล่าสุดที่เหลืออยู่
-      try {
-        final latestMsg = await client
-            .schema('messaging')
-            .from('chat_message_tb')
-            .select('message, image_url, created_at')
-            .eq('conversation_id', conversationId)
-            .order('created_at', ascending: false)
-            .limit(1)
-            .maybeSingle();
-
-        if (latestMsg != null) {
-          final lastText = latestMsg['message']?.toString().trim() ?? '';
-          final lastImg = latestMsg['image_url']?.toString();
-          final displayLastMsg =
-              lastImg != null &&
-                  lastImg.isNotEmpty &&
-                  (lastText.isEmpty || lastText == '📷 ส่งรูปภาพ')
-              ? '[รูปภาพ]'
-              : lastText;
-          final lastAt =
-              latestMsg['created_at']?.toString() ??
-              DateTime.now().toUtc().toIso8601String();
-
-          await client
-              .schema('messaging')
-              .from('conversation_tb')
-              .update({
-                'last_message': displayLastMsg,
-                'last_message_at': lastAt,
-                'updated_at': DateTime.now().toUtc().toIso8601String(),
-              })
-              .eq('id', conversationId);
-        } else {
-          await client
-              .schema('messaging')
-              .from('conversation_tb')
-              .update({
-                'last_message': '',
-                'updated_at': DateTime.now().toUtc().toIso8601String(),
-              })
-              .eq('id', conversationId);
-        }
-      } catch (e) {
-        debugPrint(
-          'Failed to update conversation last_message after delete: $e',
-        );
-      }
+      // ฐานอัปเดต preview ของห้อง (last_message) เองเมื่อข้อความถูกลบ
     } on PostgrestException catch (e) {
       throw ChatRemoteException('ลบข้อความไม่สำเร็จ: ${e.message}');
     } catch (_) {
@@ -1321,21 +1274,7 @@ class ChatRemoteDataSource {
           .from('chat_message_tb')
           .update({'message': newMessage})
           .eq('id', parsedId);
-
-      if (conversationId != null && conversationId.isNotEmpty) {
-        final nowIso = DateTime.now().toUtc().toIso8601String();
-        try {
-          await client
-              .schema('messaging')
-              .from('conversation_tb')
-              .update({
-                'last_message': newMessage.trim(),
-                'last_message_at': nowIso,
-                'updated_at': nowIso,
-              })
-              .eq('id', conversationId);
-        } catch (_) {}
-      }
+      // ฐานอัปเดต preview ของห้องเองเมื่อแก้ข้อความล่าสุด
     } on PostgrestException catch (e) {
       throw ChatRemoteException('แก้ไขข้อความไม่สำเร็จ: ${e.message}');
     } catch (_) {

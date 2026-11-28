@@ -124,57 +124,13 @@ func (r *supabaseItemRepository) rollbackCreatedItem(ctx context.Context, item *
 	}
 }
 
-// FindAll ดึงฟีดอุปกรณ์ที่จัดอันดับแล้ว พร้อมข้อมูลเจ้าของ
+// FindAll ดึงแคตตาล็อกที่จัดอันดับด้วยสูตรเดียวกับฟีดหน้าแรก พร้อมข้อมูลเจ้าของ
 func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedItem, error) {
 	var items []domain.RankedItem
-
-	// อ่านจาก view ที่คำนวณคะแนนฟีดและลำดับไว้แล้ว โดยไม่ส่งคะแนนภายในออก API
-	err := r.client.DB.From("home_feed_ranked_v").
-		Select(
-			"id",
-			"user_id",
-			"item_name",
-			"item_image_url",
-			"description",
-			"category",
-			"status",
-			"is_rental_occupied",
-			"hourly_rate",
-			"daily_rate",
-			"created_at",
-			"updated_at",
-			"rating",
-			"review_count",
-			"paid_booking_count",
-			"pickup_location",
-		).
-		OrderBy("rank_position", "asc").
-		ExecuteWithContext(ctx, &items)
+	err := r.client.DB.Rpc("get_home_catalog", map[string]any{}).ExecuteWithContext(ctx, &items)
 	if err != nil {
 		return nil, fmt.Errorf("supabase find all failed: %w", err)
 	}
-
-	if len(items) > 0 {
-		var profiles []struct {
-			UserID       string `json:"user_id"`
-			DisplayName  string `json:"display_name"`
-			UserImageURL string `json:"user_image_url"`
-			IsVerified   bool   `json:"is_verified"`
-		}
-		_ = schemaDatabase(r.client, profilesSchema).From("public_profile_v").Select("user_id,display_name,user_image_url,is_verified").ExecuteWithContext(ctx, &profiles)
-		for i := range items {
-			items[i].OwnerName = "ผู้ใช้งาน"
-			for _, p := range profiles {
-				if p.UserID == items[i].UserID {
-					items[i].OwnerName = p.DisplayName
-					items[i].OwnerAvatarURL = p.UserImageURL
-					items[i].IsVerified = p.IsVerified
-					break
-				}
-			}
-		}
-	}
-
 	return items, nil
 }
 

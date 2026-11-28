@@ -317,29 +317,29 @@ void main() {
       messenger.setMockMethodCallHandler(channel, null);
     });
 
-    final client = SupabaseClient(
-      'https://example.test',
-      'public-test-key',
-      httpClient: MockClient((request) async {
-        final body = switch (request.url.path) {
-          '/rest/v1/home_feed_ranked_v' =>
-            '[{"id":1,"item_name":"Far"},{"id":2,"item_name":"Near","paid_booking_count":3},{"id":3,"item_name":"Unknown"}]',
-          '/rest/v1/item_tb' =>
-            '[{"id":1,"pickup_latitude":14,"pickup_longitude":100},'
-                '{"id":2,"pickup_latitude":13.01,"pickup_longitude":100}]',
-          _ => throw StateError('Unexpected request: ${request.url.path}'),
-        };
-        return http.Response(
-          body,
-          200,
-          request: request,
-          headers: {'content-type': 'application/json'},
-        );
-      }),
+    final api = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 200,
+        data: [
+          {
+            'id': 1,
+            'item_name': 'Far',
+            'pickup_latitude': 14,
+            'pickup_longitude': 100,
+          },
+          {
+            'id': 2,
+            'item_name': 'Near',
+            'paid_booking_count': 3,
+            'pickup_latitude': 13.01,
+            'pickup_longitude': 100,
+          },
+          {'id': 3, 'item_name': 'Unknown'},
+        ],
+      ),
     );
-    addTearDown(client.dispose);
     final repository = HomeRepositoryImpl(
-      dataSource: HomeSupabaseDataSource(supabaseClient: client),
+      dataSource: HomeSupabaseDataSource(apiClient: api),
     );
     final items = await repository.getNearbyItems();
 
@@ -357,97 +357,71 @@ void main() {
     expect(ordinaryFeed.map((item) => item.distanceKm), everyElement(isNull));
   });
 
-  test('search reads projected ranked listings beyond the first page', () async {
-    final rankedQueries = <Map<String, String>>[];
-    final profileFilters = <String>[];
-    final rows = [
-      for (var id = 1; id <= 101; id++)
-        {
-          'id': id,
-          'user_id': 'owner-$id',
-          'item_name': id == 101 ? 'แคมป์กันฝน' : 'Camera $id',
-          'category': id == 101 ? 'แคมป์ปิง' : 'กล้อง',
-          'pickup_location': 'กรุงเทพ',
-          'rating': 4.8,
-          'review_count': 2,
-          'paid_booking_count': 3,
-          'is_rental_occupied': true,
-        },
-    ];
-    final client = SupabaseClient(
-      'https://example.test',
-      'public-test-key',
-      httpClient: MockClient((request) async {
-        final query = request.url.queryParameters;
-        final List<Object> result;
-        switch (request.url.path) {
-          case '/rest/v1/home_feed_ranked_v':
-            rankedQueries.add(query);
-            final offset = int.tryParse(query['offset'] ?? '') ?? 0;
-            final limit = int.tryParse(query['limit'] ?? '') ?? 100;
-            result = rows.skip(offset).take(limit).toList();
-          case '/rest/v1/item_tb':
-            result = [];
-          case '/rest/v1/public_profile_v':
-            final owners = query['user_id']!;
-            profileFilters.add(owners);
-            result = owners.contains('"owner-101"')
-                ? [
-                    {
-                      'user_id': 'owner-101',
-                      'display_name': 'เจ้าของเต็นท์',
-                      'is_verified': true,
-                    },
-                  ]
-                : [];
-          default:
-            throw StateError('Unexpected request: ${request.url.path}');
-        }
-        return http.Response(
-          jsonEncode(result),
-          200,
-          request: request,
-          headers: {'content-type': 'application/json'},
-        );
-      }),
-    );
-    addTearDown(client.dispose);
-    final source = HomeSupabaseDataSource(supabaseClient: client);
+  test(
+    'search reads the ranked catalog with owner details from the API',
+    () async {
+      final rows = [
+        for (var id = 1; id <= 101; id++)
+          {
+            'id': id,
+            'user_id': 'owner-$id',
+            'item_name': id == 101 ? 'แคมป์กันฝน' : 'Camera $id',
+            'category': id == 101 ? 'แคมป์ปิง' : 'กล้อง',
+            'pickup_location': 'กรุงเทพ',
+            'rating': 4.8,
+            'review_count': 2,
+            'paid_booking_count': 3,
+            'is_rental_occupied': true,
+            'owner_name': id == 101 ? 'เจ้าของเต็นท์' : 'เจ้าของ $id',
+            'is_verified': id == 101,
+          },
+      ];
+      final paths = <String>[];
+      final api = _FakeApiClient(ApiResponse(statusCode: 200, data: rows))
+        ..onGet = null;
+      final client = SupabaseClient(
+        'https://example.test',
+        'public-test-key',
+        httpClient: MockClient((request) async {
+          paths.add(request.url.path);
+          return http.Response(
+            '[]',
+            200,
+            request: request,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      addTearDown(client.dispose);
+      final source = HomeSupabaseDataSource(
+        supabaseClient: client,
+        apiClient: api,
+      );
 
-    final items = await source.fetchNearbyItems(
-      searchQuery: 'กันฝน เจ้าของเต็นท์',
-    );
+      final items = await source.fetchNearbyItems(
+        searchQuery: 'กันฝน เจ้าของเต็นท์',
+      );
 
-    expect(items.single.id, '101');
-    expect(items.single.locationName, 'กรุงเทพ');
-    expect(items.single.rating, 4.8);
-    expect(items.single.reviewCount, 2);
-    expect(items.single.paidBookingCount, 3);
-    expect(items.single.isRentalOccupied, isTrue);
-    expect(items.single.isVerified, isTrue);
-    expect(profileFilters.first.split(','), hasLength(100));
-    expect(profileFilters.last, 'in.("owner-101")');
-    expect(rankedQueries.map((query) => query['offset']), ['0', '100']);
-    expect(rankedQueries.map((query) => query['limit']), everyElement('100'));
-    expect(
-      rankedQueries.map((query) => query['order']),
-      everyElement('rank_position.asc.nullslast'),
-    );
-    expect(
-      rankedQueries.first['select'],
-      'id,user_id,item_name,item_image_url,description,category,'
-      'hourly_rate,daily_rate,pickup_location,is_rental_occupied,rating,review_count,paid_booking_count',
-    );
-  });
+      expect(items.single.id, '101');
+      expect(items.single.locationName, 'กรุงเทพ');
+      expect(items.single.rating, 4.8);
+      expect(items.single.reviewCount, 2);
+      expect(items.single.paidBookingCount, 3);
+      expect(items.single.isRentalOccupied, isTrue);
+      expect(items.single.isVerified, isTrue);
+      expect(paths, isNot(contains('/rest/v1/home_feed_ranked_v')));
+    },
+  );
 
-  test('an empty ranked view uses a projected visible-item page', () async {
+  test('an unavailable catalog API falls back to visible items', () async {
     final itemQueries = <Map<String, String>>[];
+    final api = _FakeApiClient(const ApiResponse(statusCode: 200, data: []))
+      ..failure = const ApiClientException(ApiClientErrorType.connection);
     final client = SupabaseClient(
       'https://example.test',
       'public-test-key',
       httpClient: MockClient((request) async {
         final body = switch (request.url.path) {
-          '/rest/v1/home_feed_ranked_v' => '[]',
           '/rest/v1/item_tb' => () {
             itemQueries.add(request.url.queryParameters);
             return '[{"id":7,"item_name":"Camera",'
@@ -465,7 +439,10 @@ void main() {
       }),
     );
     addTearDown(client.dispose);
-    final source = HomeSupabaseDataSource(supabaseClient: client);
+    final source = HomeSupabaseDataSource(
+      supabaseClient: client,
+      apiClient: api,
+    );
 
     final item = (await source.fetchNearbyItems()).single;
 
@@ -480,7 +457,7 @@ void main() {
     );
     expect(query['owner_hidden'], 'eq.false');
     expect(query['moderation_hidden'], 'eq.false');
-    expect(query['status'], 'in.("available","พร้อมใช้งาน")');
+    expect(query['status'], 'eq.available');
     expect(query['order'], 'created_at.desc.nullslast,id.desc.nullslast');
     expect(query['offset'], '0');
     expect(query['limit'], '100');

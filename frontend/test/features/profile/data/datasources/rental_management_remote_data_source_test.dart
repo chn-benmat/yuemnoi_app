@@ -11,6 +11,7 @@ void main() {
     () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       final bookingQueries = <Uri>[];
+      final itemQueries = <Uri>[];
       server.listen((request) async {
         expect(
           request.headers.value('accept-profile'),
@@ -35,13 +36,12 @@ void main() {
             },
           ];
         } else if (request.uri.path.endsWith('item_tb')) {
+          itemQueries.add(request.uri);
           data = [
             {
               'id': 7,
               'user_id': 'owner',
               'item_name': 'Test camera',
-              'type': 'รายวัน',
-              'price': 500,
               'item_image_url': <String>[],
             },
           ];
@@ -72,6 +72,14 @@ void main() {
       expect(lending.single.isOwner, isTrue);
       expect(bookingQueries.first.queryParameters['user_id'], 'eq.renter');
       expect(bookingQueries.last.queryParameters['item_id'], 'in.(7)');
+      // item_tb ไม่มี price/type แล้ว ราคาในประวัติมาจากใบจอง
+      for (final query in itemQueries) {
+        final columns = query.queryParameters['select']!
+            .split(',')
+            .map((column) => column.trim());
+        expect(columns, isNot(anyOf(contains('price'), contains('type'))));
+      }
+      expect(renting.single.title, 'Test camera');
     },
   );
 }

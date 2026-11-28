@@ -36,7 +36,8 @@ begin
   ), 'Public profile read grants changed';
 
   assert to_regclass('public.home_feed_ranked_with_user_location_v') is null;
-  assert to_regclass('public.home_feed_ranked_v') is not null;
+  assert to_regclass('public.home_feed_ranked_v') is null;
+  assert to_regprocedure('public.get_home_catalog(uuid,double precision,double precision)') is not null;
   assert to_regprocedure('public.get_home_feed_v2(uuid,double precision,double precision,text[],text,integer)') is not null;
 
   assert has_function_privilege('service_role', 'public.identity_submit(uuid,uuid,jsonb,jsonb)', 'EXECUTE');

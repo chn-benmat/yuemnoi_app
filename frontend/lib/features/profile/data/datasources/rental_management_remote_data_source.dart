@@ -278,7 +278,7 @@ class RentalManagementRemoteDataSource {
       final itemsResp = await _supabaseClient
           .from('item_tb')
           .select(
-            'id, user_id, item_name, category, item_image_url, price, type, pickup_location, pickup_latitude, pickup_longitude',
+            'id, user_id, item_name, category, item_image_url, pickup_location, pickup_latitude, pickup_longitude',
           )
           .inFilter('id', itemIds);
 

@@ -365,8 +365,6 @@ class HomeSupabaseDataSource {
   static const _listingColumns =
       'id,user_id,item_name,item_image_url,description,category,'
       'hourly_rate,daily_rate,pickup_location,is_rental_occupied';
-  static const _rankedListingColumns =
-      '$_listingColumns,rating,review_count,paid_booking_count';
   static const _itemListingColumns =
       '$_listingColumns,pickup_latitude,pickup_longitude';
 
@@ -776,7 +774,7 @@ class HomeSupabaseDataSource {
     }
   }
 
-  /// ดึงข้อมูลรายการอุปกรณ์จริงจาก Supabase โดยตรง (Tier 1)
+  /// ทางสำรองเมื่อ Go ใช้ไม่ได้: อ่านประกาศที่แสดงได้จาก Supabase โดยตรง (เรียงตามเวลาสร้าง)
   Future<List<FeedItemModel>> _fetchFromSupabaseDirectly() async {
     final client = _activeSupabaseClient;
     if (client == null) {
@@ -787,31 +785,16 @@ class HomeSupabaseDataSource {
     try {
       rawItems = await _readCatalogPages(
         client
-            .from('home_feed_ranked_v')
-            .select(_rankedListingColumns)
-            .order('rank_position', ascending: true),
+            .from('item_tb')
+            .select(_itemListingColumns)
+            .eq('owner_hidden', false)
+            .eq('moderation_hidden', false)
+            .eq('status', 'available')
+            .order('created_at', ascending: false)
+            .order('id', ascending: false),
       );
     } catch (e) {
-      debugPrint(
-        'Direct Supabase home_feed_ranked_v error: $e, fallback to item_tb',
-      );
-    }
-
-    if (rawItems == null || rawItems.isEmpty) {
-      try {
-        rawItems = await _readCatalogPages(
-          client
-              .from('item_tb')
-              .select(_itemListingColumns)
-              .eq('owner_hidden', false)
-              .eq('moderation_hidden', false)
-              .inFilter('status', ['available', 'พร้อมใช้งาน'])
-              .order('created_at', ascending: false)
-              .order('id', ascending: false),
-        );
-      } catch (e) {
-        debugPrint('Direct Supabase item_tb fallback error: $e');
-      }
+      debugPrint('Direct Supabase item_tb fallback error: $e');
     }
 
     if (rawItems == null) {
@@ -900,7 +883,7 @@ class HomeSupabaseDataSource {
             )
             .eq('owner_hidden', false)
             .eq('moderation_hidden', false)
-            .inFilter('status', ['available', 'พร้อมใช้งาน']);
+            .eq('status', 'available');
         for (final row in rows) {
           result['${row['id']}'] = row;
         }
@@ -934,13 +917,19 @@ class HomeSupabaseDataSource {
       return _withCurrentFavoriteState(_cachedFeedItems!);
     }
 
+    // แคตตาล็อกจาก Go จัดอันดับด้วยสูตรเดียวกับฟีดหน้าแรก (get_home_catalog)
     List<FeedItemModel>? freshItems;
-    if (_activeSupabaseClient != null) {
-      try {
-        freshItems = await _fetchFromSupabaseDirectly();
-      } catch (_) {
-        // ลอง Go API ต่อเมื่อการอ่าน Supabase ล้มเหลวเท่านั้น
+    try {
+      final response = await _apiClient.get('/api/items');
+      if (response.statusCode == 200 && response.data is List) {
+        final rawItems = response.data as List;
+        freshItems = _mapRawListToFeedItems(
+          rawItems,
+          pickupDetails: await _fetchPickupDetails(rawItems),
+        );
       }
+    } catch (_) {
+      // อ่านจาก Supabase โดยตรงต่อเมื่อ Go ใช้ไม่ได้
     }
     if (ownerId != _cacheOwner) {
       return _fetchAllSupabaseItems(
@@ -948,18 +937,11 @@ class HomeSupabaseDataSource {
         allowOfflineCache: allowOfflineCache,
       );
     }
-    if (freshItems == null) {
+    if (freshItems == null && _activeSupabaseClient != null) {
       try {
-        final response = await _apiClient.get('/api/items');
-        if (response.statusCode == 200 && response.data is List) {
-          final rawItems = response.data as List;
-          freshItems = _mapRawListToFeedItems(
-            rawItems,
-            pickupDetails: await _fetchPickupDetails(rawItems),
-          );
-        }
+        freshItems = await _fetchFromSupabaseDirectly();
       } catch (_) {
-        // ลองแหล่งข้อมูลถัดไปและแจ้ง error หากเชื่อมต่อไม่ได้ทั้งหมด
+        // แจ้ง error หากเชื่อมต่อไม่ได้ทั้งหมด
       }
     }
     if (ownerId != _cacheOwner) {

@@ -5,9 +5,10 @@ declare
   viewer uuid := gen_random_uuid();
   other_viewer uuid := gen_random_uuid();
   equipment_id bigint;
+  other_item bigint;
   last_view_count bigint;
-  score_without_view double precision;
-  score_with_view double precision;
+  viewed_score integer;
+  other_score integer;
 begin
   assert to_regclass('public.user_item_events') is null,
     'ตารางเหตุการณ์เดิมยังอยู่หลังย้าย';
@@ -27,10 +28,12 @@ begin
     values (other_viewer, 'กล้องทดสอบ', 'อุปกรณ์ทดสอบ', 'available', 'กล้อง',
       'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.5, 150, null)
     returning id into equipment_id;
+  insert into public.item_tb(user_id, item_name, description, status, category, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+    values (other_viewer, 'เต็นท์ทดสอบ', 'อุปกรณ์ทดสอบ', 'available', 'แคมป์ปิง',
+      'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.5, 150, null)
+    returning id into other_item;
 
   set local role anon;
-  assert exists (select 1 from public.home_feed_ranked_v where id = equipment_id),
-    'ผู้เยี่ยมชมต้องอ่านฟีดได้';
   assert not exists (select 1 from public.user_item_views),
     'ผู้เยี่ยมชมอ่านประวัติได้';
   reset role;
@@ -39,14 +42,15 @@ begin
   perform set_config('request.jwt.claim.sub', viewer::text, true);
   perform set_config('request.jwt.claims', jsonb_build_object(
     'sub', viewer, 'role', 'authenticated', 'is_anonymous', false)::text, true);
-  select rank_score into score_without_view from public.home_feed_ranked_v
-    where id = equipment_id;
-
   assert public.record_item_view_event(equipment_id), 'บันทึกการดูครั้งแรกไม่สำเร็จ';
   assert not public.record_item_view_event(-1), 'RPC ยอมรับรหัสสินค้าที่ไม่ถูกต้อง';
-  select rank_score into score_with_view from public.home_feed_ranked_v
-    where id = equipment_id;
-  assert score_with_view > score_without_view, 'ฟีดไม่ได้ใช้ประวัติใหม่จัดอันดับ';
+
+  -- สูตรจัดอันดับเดียวของฟีดและแคตตาล็อกต้องดันสินค้าที่เพิ่งดูขึ้นเหนือสินค้าอื่น
+  reset role;
+  select score_key into viewed_score from app_private.home_feed_ranking(viewer, null, null, '{}', now()) where id = equipment_id;
+  select score_key into other_score from app_private.home_feed_ranking(viewer, null, null, '{}', now()) where id = other_item;
+  assert viewed_score > other_score, format('ฟีดไม่ได้ใช้ประวัติใหม่จัดอันดับ %s <= %s', viewed_score, other_score);
+  set local role authenticated;
 
   reset role;
   update public.user_item_views set last_viewed_at = now() - interval '2 minutes'
