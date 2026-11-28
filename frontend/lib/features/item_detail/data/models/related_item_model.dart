@@ -1,7 +1,9 @@
+import '../../../../core/models/rental_rates.dart';
 import '../../domain/entities/related_item.dart';
 
 abstract final class RelatedItemModel {
-  static RelatedItem fromJson(Map<String, dynamic> json) {
+  static RelatedItem fromJson(Map<String, dynamic> row) {
+    final json = RentalRates.withPrimaryRate(row);
     final id = int.tryParse('${json['id']}');
     final price = int.tryParse('${json['price']}');
     final name = '${json['item_name'] ?? ''}'.trim();

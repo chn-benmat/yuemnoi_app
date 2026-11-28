@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../../../core/models/rental_rates.dart';
+
 enum RentalQueueStatus {
   invited,
   waiting,
@@ -20,6 +22,7 @@ class RentalQueueCardData {
     this.price,
     this.additionalDailyPrice,
     this.rentalType,
+    this.rates,
     this.position,
     this.dueAt,
     this.expiresAt,
@@ -34,6 +37,9 @@ class RentalQueueCardData {
   final int? price;
   final int? additionalDailyPrice;
   final String? rentalType;
+
+  /// เรตจากการ์ดรุ่นใหม่ (hourlyRate/dailyRate) การ์ดเก่าตีความจาก price/dailyPrice
+  final RentalRates? rates;
   final int? position;
   final DateTime? dueAt;
   final DateTime? expiresAt;
@@ -47,6 +53,14 @@ class RentalQueueCardData {
     'daily' || 'day' || 'รายวัน' => 'วัน',
     _ => null,
   };
+
+  RentalRates get displayRates =>
+      rates ??
+      RentalRates.legacy(
+        price: price,
+        type: rentalType,
+        dailyPrice: additionalDailyPrice,
+      );
 
   static RentalQueueCardData? fromMessage(String text) {
     if (!text.startsWith('{"rentalQueue"')) return null;
@@ -63,6 +77,11 @@ class RentalQueueCardData {
         price: data['price'] as int?,
         additionalDailyPrice: data['dailyPrice'] as int?,
         rentalType: data['rentalType'] as String?,
+        rates: RentalRates.fromKeys(
+          data,
+          hourlyKey: 'hourlyRate',
+          dailyKey: 'dailyRate',
+        ),
         position: data['position'] as int?,
         dueAt: DateTime.tryParse(data['dueAt']?.toString() ?? ''),
         expiresAt: DateTime.tryParse(data['expiresAt']?.toString() ?? ''),

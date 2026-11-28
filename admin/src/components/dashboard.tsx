@@ -124,7 +124,8 @@ const columns: Record<string, Column[]> = {
       label: "รูปภาพ",
       render: (r) => <ImagePreview value={r.item_image_url} label="รูปสินค้า" />,
     },
-    { key: "price", label: "ราคา" },
+    { key: "hourly_rate", label: "ราคา/ชั่วโมง" },
+    { key: "daily_rate", label: "ราคา/วัน" },
     {
       key: "status",
       label: "สถานะ",

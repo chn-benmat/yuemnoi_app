@@ -34,7 +34,7 @@ class ChatRemoteDataSource {
   ApiClient? _apiClient;
   static const _chatBucket = 'chat_bk';
   static const _conversationItemColumns =
-      'id,item_name,item_image_url,price,type,user_id';
+      'id,item_name,item_image_url,price,type,hourly_rate,daily_rate,user_id';
   static final _signedImages =
       <
         (SupabaseClient, String, String),

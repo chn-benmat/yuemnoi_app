@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/cache/app_cache.dart';
 import '../../../../core/cache/cache_database.dart';
+import '../../../../core/models/rental_rates.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
@@ -363,7 +364,7 @@ class HomeSupabaseDataSource {
   static const int _enrichmentBatchSize = 100;
   static const _listingColumns =
       'id,user_id,item_name,item_image_url,description,category,price,type,'
-      'pickup_location,is_rental_occupied';
+      'hourly_rate,daily_rate,pickup_location,is_rental_occupied';
   static const _rankedListingColumns =
       '$_listingColumns,rating,review_count,paid_booking_count';
   static const _itemListingColumns =
@@ -636,14 +637,20 @@ class HomeSupabaseDataSource {
       final description = item['description']?.toString() ?? '';
       final rawCategory = item['category']?.toString();
       final categoryId = mapDbCategoryToId(rawCategory);
-      final price = (item['price'] is num)
-          ? (item['price'] as num).toInt()
-          : int.tryParse(item['price']?.toString() ?? '0') ?? 0;
-      final type = item['type']?.toString().toLowerCase().trim();
-      final priceUnit =
-          (type == 'รายชั่วโมง' || type == 'hourly' || type == 'hour')
-          ? '/ ชม.'
-          : '/ วัน';
+      // การ์ดแสดงเรตหลัก: รายชั่วโมงถ้ามี ไม่งั้นรายวัน
+      final rates =
+          RentalRates.fromKeys(
+            item,
+            hourlyKey: 'hourly_rate',
+            dailyKey: 'daily_rate',
+          ) ??
+          RentalRates.legacy(
+            price: item['price'],
+            type: item['type'],
+            dailyPrice: item['daily_price'],
+          );
+      final price = rates.hourly ?? rates.daily ?? 0;
+      final priceUnit = rates.hourly != null ? '/ ชม.' : '/ วัน';
 
       String imageUrl = '';
       if (item['item_image_url'] is List &&

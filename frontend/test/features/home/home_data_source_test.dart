@@ -436,7 +436,7 @@ void main() {
     expect(
       rankedQueries.first['select'],
       'id,user_id,item_name,item_image_url,description,category,price,type,'
-      'pickup_location,is_rental_occupied,rating,review_count,paid_booking_count',
+      'hourly_rate,daily_rate,pickup_location,is_rental_occupied,rating,review_count,paid_booking_count',
     );
   });
 
@@ -476,7 +476,7 @@ void main() {
     expect(
       query['select'],
       'id,user_id,item_name,item_image_url,description,category,price,type,'
-      'pickup_location,is_rental_occupied,pickup_latitude,pickup_longitude',
+      'hourly_rate,daily_rate,pickup_location,is_rental_occupied,pickup_latitude,pickup_longitude',
     );
     expect(query['owner_hidden'], 'eq.false');
     expect(query['moderation_hidden'], 'eq.false');
@@ -552,6 +552,42 @@ void main() {
       );
     },
   );
+
+  test('shows the primary rate computed by the database', () async {
+    final api = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 200,
+        data: [
+          {
+            'id': 31,
+            'item_name': 'tripod',
+            'category': 'กล้อง',
+            'price': 75,
+            'type': 'hourly',
+            'hourly_rate': 80,
+            'daily_rate': 300,
+          },
+          {
+            'id': 32,
+            'item_name': 'tent',
+            'category': 'แคมป์ปิง',
+            'price': 400,
+            'type': 'daily',
+            'hourly_rate': null,
+            'daily_rate': 410,
+          },
+        ],
+      ),
+    );
+    final items = await HomeSupabaseDataSource(
+      apiClient: api,
+    ).fetchNearbyItems();
+
+    expect(items.map((item) => (item.price, item.priceUnit)), [
+      (80, '/ ชม.'),
+      (410, '/ วัน'),
+    ]);
+  });
 
   test('preserves backend rank and maps real review metrics', () async {
     final api = _FakeApiClient(

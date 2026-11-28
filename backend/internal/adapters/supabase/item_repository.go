@@ -140,6 +140,8 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 			"status",
 			"is_rental_occupied",
 			"type",
+			"hourly_rate",
+			"daily_rate",
 			"created_at",
 			"updated_at",
 			"rating",

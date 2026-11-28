@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/models/rental_rates.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/favorite_service.dart';
@@ -81,14 +82,14 @@ class UserItemsRemoteDataSource {
       final response = await client
           .from('item_tb')
           .select(
-            'id, user_id, item_name, item_image_url, description, category, price, status, type, owner_hidden, moderation_hidden, is_rental_occupied',
+            'id, user_id, item_name, item_image_url, description, category, price, status, type, hourly_rate, daily_rate, owner_hidden, moderation_hidden, is_rental_occupied',
           )
           .eq('user_id', userId)
           .order('id', ascending: false)
           .range(offset, offset + _pageSize - 1);
 
       for (final raw in response) {
-        items.add(UserItemModel.fromJson(raw));
+        items.add(UserItemModel.fromJson(RentalRates.withPrimaryRate(raw)));
       }
       if (response.length < _pageSize) return items;
     }
