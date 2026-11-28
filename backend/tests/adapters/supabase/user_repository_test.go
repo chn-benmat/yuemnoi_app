@@ -367,3 +367,48 @@ func TestVerifyOTPUsesEmailType(t *testing.T) {
 		t.Errorf("type = %q, want %q", requestBody.Type, supabaseclient.EmailOtpTypeEmail)
 	}
 }
+
+func TestUpdateContactWritesOnlyProfilePhone(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/v1/profile_tb" && r.Method == http.MethodPatch:
+			_, _ = w.Write([]byte(`[{"user_id":"u1","phone":"0812345678"}]`))
+		case strings.HasPrefix(r.URL.Path, "/auth/v1/admin/users"):
+			t.Errorf("contact phone must not change Auth: %s %s", r.Method, r.URL.Path)
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	repository := supabase.NewSupabaseUserRepository(supabaseclient.CreateClient(server.URL, "test-key"), "test-key")
+	if err := repository.UpdateContact(context.Background(), "u1", " 0812345678 "); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGetProfileUsesOnlyProfilePhone(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/rest/v1/profile_tb":
+			_, _ = w.Write([]byte(`[{"user_id":"u1","display_name":"Elle","email":"elle@example.com","user_image_url":"https://example.com/p.png","phone":null}]`))
+		case "/auth/v1/admin/users/u1":
+			_, _ = w.Write([]byte(`{"id":"u1","phone":"66899999999","user_metadata":{"phone":"0899999999"},"app_metadata":{}}`))
+		default:
+			t.Errorf("unexpected request: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	repository := supabase.NewSupabaseUserRepository(supabaseclient.CreateClient(server.URL, "test-key"), "test-key")
+	profile, err := repository.GetProfile(context.Background(), "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.Phone != "" {
+		t.Fatalf("phone = %q, want the empty profile phone rather than Auth's copy", profile.Phone)
+	}
+}

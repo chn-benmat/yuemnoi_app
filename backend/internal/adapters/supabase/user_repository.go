@@ -554,20 +554,13 @@ func (r *supabaseUserRepository) GetProfile(ctx context.Context, userID string) 
 		profile.UserID = userID
 	}
 
-	if profile.Email != "" && profile.Phone != "" && profile.DisplayName != "" && profile.UserImageURL != "" {
+	if profile.Email != "" && profile.DisplayName != "" && profile.UserImageURL != "" {
 		return profile, nil
 	}
 	user, err := r.client.Admin.GetUser(ctx, userID)
 	if err == nil && user != nil {
 		if profile.Email == "" {
 			profile.Email = user.Email
-		}
-		if profile.Phone == "" {
-			if phone, ok := user.UserMetaData["phone"].(string); ok && phone != "" {
-				profile.Phone = phone
-			} else {
-				profile.Phone = user.Phone
-			}
 		}
 		if profile.DisplayName == "" {
 			if dn, ok := user.UserMetaData["display_name"].(string); ok && dn != "" {
@@ -675,12 +668,6 @@ func (r *supabaseUserRepository) UpdateContact(ctx context.Context, userID strin
 		return fmt.Errorf("profile was not found for contact update")
 	}
 
-	_, _ = r.client.Admin.UpdateUser(ctx, userID, supabase.AdminUserParams{
-		Phone: normalizedPhone,
-		UserMetadata: map[string]interface{}{
-			"phone": normalizedPhone,
-		},
-	})
-
+	// เบอร์ติดต่อเก็บที่ profile_tb.phone ที่เดียว ไม่แก้เบอร์ใน Auth ที่ใช้เป็นข้อมูลเข้าสู่ระบบ
 	return nil
 }

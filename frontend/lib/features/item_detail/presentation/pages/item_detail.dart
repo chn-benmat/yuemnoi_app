@@ -13,7 +13,9 @@ import '../../../../core/widgets/rental_penalty_summary.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../profile/data/datasources/profile_remote_data_source.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/utils/auth_guard.dart';
 import '../../../../core/navigation/item_deep_link.dart';
@@ -66,6 +68,7 @@ class ItemDetailScreen extends StatefulWidget {
     this.previewItem,
     this.previewPhotos,
     this.complaintDataSource = const ItemComplaintRemoteDataSource(),
+    this.loadContactPhone,
   });
 
   final int itemId;
@@ -74,6 +77,9 @@ class ItemDetailScreen extends StatefulWidget {
   final ItemDetail? previewItem;
   final List<RentalItemPhoto>? previewPhotos;
   final ItemComplaintRemoteDataSource complaintDataSource;
+
+  /// อ่านเบอร์ติดต่อของผู้ใช้ปัจจุบัน ค่าเริ่มต้นอ่านจากโปรไฟล์ (profile_tb.phone)
+  final Future<String> Function()? loadContactPhone;
 
   @override
   State<ItemDetailScreen> createState() => _ItemDetailScreenState();
@@ -144,13 +150,25 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     await completed;
   }
 
-  bool _hasCurrentUserPhone() {
-    if (!SupabaseConfig.isInitialized) return false;
+  Future<bool> _hasContactPhone() async {
+    try {
+      final phone = await (widget.loadContactPhone ?? _profileContactPhone)();
+      return PhoneFormatter.isValidPhone(phone);
+    } catch (_) {
+      return false;
+    }
+  }
 
+  // เบอร์ติดต่อของแอปอยู่ที่โปรไฟล์ ไม่ใช่ metadata ของ Auth
+  static Future<String> _profileContactPhone() async {
+    if (!SupabaseConfig.isInitialized) return '';
     final user = SupabaseConfig.client.auth.currentUser;
-    final rawPhone =
-        user?.userMetadata?['phone']?.toString() ?? user?.phone ?? '';
-    return PhoneFormatter.isValidPhone(rawPhone);
+    if (user == null) return '';
+    final profile = await ProfileRemoteDataSource().getProfile(
+      userId: user.id,
+      accessToken: AuthSession.accessToken,
+    );
+    return profile.phone;
   }
 
   Future<void> _showMissingPhoneDialog() async {
@@ -196,7 +214,8 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
     if (item.isOwner) return;
 
-    if (!_hasCurrentUserPhone()) {
+    if (!await _hasContactPhone()) {
+      if (!mounted) return;
       await _showMissingPhoneDialog();
       return;
     }

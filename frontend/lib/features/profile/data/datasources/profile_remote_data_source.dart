@@ -191,14 +191,6 @@ class ProfileRemoteDataSource {
           errorMsg ?? 'ไม่สามารถบันทึกเบอร์โทรศัพท์ได้',
         );
       }
-
-      if (SupabaseConfig.isInitialized) {
-        try {
-          await SupabaseConfig.client.auth.updateUser(
-            UserAttributes(data: {'phone': phone}),
-          );
-        } catch (_) {}
-      }
     } on ApiClientException catch (e) {
       throw ProfileApiException('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้: ${e.type}');
     } catch (e) {
