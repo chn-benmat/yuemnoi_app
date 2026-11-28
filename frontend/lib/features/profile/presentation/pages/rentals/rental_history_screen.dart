@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../../core/services/skeleton_layout_cache.dart';
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/network/supabase_client.dart';
@@ -287,6 +288,12 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
     final matchesAccount = _historyUserId == _currentUserId;
     final history = matchesAccount ? _history : null;
     final loadError = matchesAccount ? _loadError : null;
+    if (history != null) {
+      SkeletonLayoutCache.instance.writeCount(
+        'rental_history.$_currentUserId',
+        history.length,
+      );
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F9),
       appBar: AppBar(
@@ -305,7 +312,12 @@ class _RentalHistoryScreenState extends State<RentalHistoryScreen> {
         elevation: 0,
       ),
       body: history == null && loadError == null
-          ? const RentalHistoryLoadingSkeleton()
+          ? RentalHistoryLoadingSkeleton(
+              count: SkeletonLayoutCache.instance.count(
+                'rental_history.$_currentUserId',
+                fallback: 6,
+              ),
+            )
           : loadError != null
           ? Center(
               child: Padding(

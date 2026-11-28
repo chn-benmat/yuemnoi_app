@@ -117,7 +117,7 @@ void main() {
       );
 
       expect(find.byKey(const ValueKey('home-feed-skeleton')), findsOneWidget);
-      expect(find.byType(SkeletonShimmer), findsOneWidget);
+      expect(find.byType(SkeletonShimmer), findsWidgets);
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.byType(HomeSearchBar), findsOneWidget);
       expect(

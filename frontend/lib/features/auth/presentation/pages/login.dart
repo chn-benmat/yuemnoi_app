@@ -1,5 +1,6 @@
 import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/colors.dart';
@@ -173,153 +174,162 @@ class _LoginScreenState extends State<LoginScreen> {
           });
         }
       },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: Navigator.of(context).canPop()
-            ? AppBar(
-                backgroundColor: Colors.white,
-                elevation: 0,
-                leading: IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    color: Colors.black87,
-                    size: 20,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          appBar: Navigator.of(context).canPop()
+              ? AppBar(
+                  backgroundColor: Colors.white,
+                  elevation: 0,
+                  systemOverlayStyle: SystemUiOverlayStyle.dark,
+                  leading: IconButton(
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.black87,
+                      size: 20,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    tooltip: 'ย้อนกลับ',
                   ),
-                  onPressed: () => Navigator.of(context).pop(false),
-                  tooltip: 'ย้อนกลับ',
-                ),
-              )
-            : null,
-        body: ResponsivePageBody(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 48),
-                Text(
-                  'ยินดีต้อนรับ',
-                  style:
-                      theme.textTheme.headlineLarge?.copyWith(
-                        color: Colors.black,
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                      ) ??
-                      const TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                )
+              : null,
+          body: ResponsivePageBody(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 48),
+                  Text(
+                    'ยินดีต้อนรับ',
+                    style:
+                        theme.textTheme.headlineLarge?.copyWith(
+                          color: Colors.black,
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                        ) ??
+                        const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'มาสนุกกับการยืมกัน !',
+                    style:
+                        theme.textTheme.bodyLarge?.copyWith(
+                          color: Colors.black54,
+                          fontSize: 16,
+                        ) ??
+                        const TextStyle(fontSize: 16, color: Colors.black54),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 48),
+                  AppTextFormField(
+                    label: 'อีเมล',
+                    hintText: 'name@exemple.com',
+                    prefixIcon: Icons.email_outlined,
+                    controller: _emailController,
+                    onChanged: (_) => _clearFormError(),
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    validator: AppFormValidators.email(),
+                  ),
+                  const SizedBox(height: 24),
+                  AppTextFormField(
+                    label: 'รหัสผ่าน',
+                    hintText: 'กรุณากรอกรหัสผ่าน',
+                    prefixIcon: Icons.lock_outline_rounded,
+                    obscureText: _obscurePassword,
+                    controller: _passwordController,
+                    onChanged: (_) => _clearFormError(),
+                    textInputAction: TextInputAction.done,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: AppColors.fieldIconColor,
                       ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'มาสนุกกับการยืมกัน !',
-                  style:
-                      theme.textTheme.bodyLarge?.copyWith(
-                        color: Colors.black54,
-                        fontSize: 16,
-                      ) ??
-                      const TextStyle(fontSize: 16, color: Colors.black54),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
-                AppTextFormField(
-                  label: 'อีเมล',
-                  hintText: 'name@exemple.com',
-                  prefixIcon: Icons.email_outlined,
-                  controller: _emailController,
-                  onChanged: (_) => _clearFormError(),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: AppFormValidators.email(),
-                ),
-                const SizedBox(height: 24),
-                AppTextFormField(
-                  label: 'รหัสผ่าน',
-                  hintText: 'กรุณากรอกรหัสผ่าน',
-                  prefixIcon: Icons.lock_outline_rounded,
-                  obscureText: _obscurePassword,
-                  controller: _passwordController,
-                  onChanged: (_) => _clearFormError(),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      color: AppColors.fieldIconColor,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  ),
-                  validator: AppFormValidators.password(),
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      AppRoutes.openForgotPassword(context);
-                    },
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text(
-                      'ลืมรหัสผ่าน ?',
-                      style: TextStyle(
-                        color: AppColors.primaryColor,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 36),
-                AppPrimaryButton(
-                  text: 'เข้าสู่ระบบ',
-                  isLoading: _isLoading,
-                  onPressed: _login,
-                ),
-                const SizedBox(height: 12),
-                AuthInlineError(message: _errorMessage),
-                const SizedBox(height: 32),
-                const AuthDivider(),
-                const SizedBox(height: 32),
-                SocialButton(
-                  text: _isGoogleLoading ? 'กำลังเปิด Google...' : 'Google',
-                  iconPath: 'assets/icons/google.png',
-                  onPressed: _loginWithGoogle,
-                ),
-                const SizedBox(height: 48),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    const Text(
-                      'สร้างบัญชีใหม่ ',
-                      style: TextStyle(color: Colors.black54, fontSize: 14),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        AppRoutes.openRegister(context);
+                      tooltip: _obscurePassword
+                          ? 'แสดงรหัสผ่าน'
+                          : 'ซ่อนรหัสผ่าน',
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
                       },
+                    ),
+                    validator: AppFormValidators.password(),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        AppRoutes.openForgotPassword(context);
+                      },
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
                       child: const Text(
-                        'สมัครสมาชิก',
+                        'ลืมรหัสผ่าน ?',
                         style: TextStyle(
                           color: AppColors.primaryColor,
                           fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-              ],
+                  ),
+                  const SizedBox(height: 36),
+                  AppPrimaryButton(
+                    text: 'เข้าสู่ระบบ',
+                    isLoading: _isLoading,
+                    onPressed: _login,
+                  ),
+                  const SizedBox(height: 12),
+                  AuthInlineError(message: _errorMessage),
+                  const SizedBox(height: 32),
+                  const AuthDivider(),
+                  const SizedBox(height: 32),
+                  SocialButton(
+                    text: _isGoogleLoading ? 'กำลังเปิด Google...' : 'Google',
+                    iconPath: 'assets/icons/google.png',
+                    onPressed: _loginWithGoogle,
+                  ),
+                  const SizedBox(height: 48),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Text(
+                        'สร้างบัญชีใหม่ ',
+                        style: TextStyle(color: Colors.black54, fontSize: 14),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          AppRoutes.openRegister(context);
+                        },
+                        child: const Text(
+                          'สมัครสมาชิก',
+                          style: TextStyle(
+                            color: AppColors.primaryColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
         ),

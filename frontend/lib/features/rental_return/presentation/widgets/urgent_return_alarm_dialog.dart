@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/rental_return_session.dart';
 
@@ -171,7 +172,7 @@ class _UrgentReturnAlarmDialogState extends State<UrgentReturnAlarmDialog>
                 child: ElevatedButton(
                   onPressed: widget.onDismiss,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD97706),
+                    backgroundColor: AppColors.primaryColor,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(26),

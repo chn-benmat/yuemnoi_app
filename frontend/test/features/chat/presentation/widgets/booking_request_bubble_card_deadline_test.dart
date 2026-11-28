@@ -196,7 +196,7 @@ void main() {
 
   for (final (status, label, color) in [
     ('pending', 'ตรวจสอบและยืนยันคำขอเช่า', AppColors.primaryColor),
-    ('active', 'ตรวจรับคืนอุปกรณ์ & ตรวจสภาพ', const Color(0xFF10B981)),
+    ('active', 'ตรวจรับคืนอุปกรณ์ & ตรวจสภาพ', AppColors.primaryColor),
   ]) {
     testWidgets('the $status action keeps its color while refreshing', (
       tester,

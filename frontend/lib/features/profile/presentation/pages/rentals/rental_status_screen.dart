@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../../core/services/skeleton_layout_cache.dart';
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/network/supabase_client.dart';
@@ -278,6 +279,13 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
               final lendingItems =
                   bookings?.lendingList.map(_toItemData).toList() ?? [];
 
+              if (bookings != null) {
+                SkeletonLayoutCache.instance.writeCount(
+                  'rental_status.$_userId',
+                  rentingItems.length,
+                );
+              }
+
               final isLoading =
                   bookings == null &&
                   (state is RentalStatusLoading ||
@@ -296,7 +304,12 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                     child: _userId == null
                         ? _buildGuestView()
                         : isLoading
-                        ? const RentalStatusLoadingSkeleton()
+                        ? RentalStatusLoadingSkeleton(
+                            count: SkeletonLayoutCache.instance.count(
+                              'rental_status.$_userId',
+                              fallback: 3,
+                            ),
+                          )
                         : state is RentalStatusError && bookings == null
                         ? _buildErrorView(state.message)
                         : TabBarView(

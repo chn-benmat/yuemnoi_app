@@ -626,9 +626,7 @@ class _StatusCard extends StatelessWidget {
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: item.isLender
-                        ? const Color(0xFF10B981)
-                        : AppColors.primaryColor,
+                    backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(

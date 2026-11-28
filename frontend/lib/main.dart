@@ -15,6 +15,7 @@ import 'core/services/chat_notification_service.dart';
 
 import 'core/services/chat_pin_service.dart';
 import 'core/services/favorite_service.dart';
+import 'core/services/skeleton_layout_cache.dart';
 import 'core/services/user_presence_service.dart';
 
 Future<void> main() async {
@@ -40,6 +41,8 @@ Future<void> main() async {
     }
   } catch (_) {}
 
+  // โหลดรูปร่างหน้าที่เคยแสดง เพื่อให้ skeleton แรกตรงกับข้อมูลจริง
+  await SkeletonLayoutCache.instance.init();
   await SupabaseConfig.initialize();
   unawaited(ChatPinService.instance.init());
 

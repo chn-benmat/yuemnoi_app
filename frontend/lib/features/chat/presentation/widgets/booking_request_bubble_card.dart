@@ -928,9 +928,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _isExpired
                         ? const Color(0xFFDC2626)
-                        : (isOwnerUser
-                              ? const Color(0xFF10B981)
-                              : AppColors.primaryColor),
+                        : AppColors.primaryColor,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shadowColor: Colors.transparent,
@@ -1133,6 +1131,10 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                       'rejected',
                     }.contains(_rentalStatus)))
               FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryColor,
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: widget.onRequestRentalQueue,
                 child: const Text('ชวนเข้าคิวเช่าต่อ'),
               )
@@ -1148,6 +1150,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     (_rentalStatus == 'pending' &&
                         widget.bookingData.hasCustomerRequestStartPassed)))
               TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primaryColor,
+                ),
                 onPressed: widget.customerRequestAvailabilityPending
                     ? null
                     : widget.onRetryCustomerRequest,
@@ -1163,6 +1168,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   ),
                 ),
               OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryColor,
+                ),
                 onPressed: _retryBookingStatus,
                 child: const Text('ลองตรวจสอบอีกครั้ง'),
               ),

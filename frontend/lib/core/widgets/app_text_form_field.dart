@@ -24,8 +24,11 @@ class AppTextFormField extends StatelessWidget {
   final bool enableInteractiveSelection;
   final VoidCallback? onTap;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onFieldSubmitted;
   final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
   final AppFormFieldVariant variant;
+  final bool dense;
 
   const AppTextFormField({
     super.key,
@@ -47,8 +50,11 @@ class AppTextFormField extends StatelessWidget {
     this.enableInteractiveSelection = true,
     this.onTap,
     this.onChanged,
+    this.onFieldSubmitted,
     this.textInputAction,
+    this.autofillHints,
     this.variant = AppFormFieldVariant.filled,
+    this.dense = false,
   }) : assert(prefixIcon == null || prefix == null);
 
   @override
@@ -72,8 +78,15 @@ class AppTextFormField extends StatelessWidget {
       children: [
         AppFieldLabel(
           text: label,
-          style: outlined ? AppFormFieldStyles.labelTextStyle : null,
-          padding: EdgeInsets.only(left: outlined ? 0 : 4, bottom: 8),
+          style: dense
+              ? AppFormFieldStyles.labelTextStyle.copyWith(height: 1.25)
+              : outlined
+              ? AppFormFieldStyles.labelTextStyle
+              : null,
+          padding: EdgeInsets.only(
+            left: outlined ? 0 : 4,
+            bottom: dense ? 2 : 8,
+          ),
         ),
         Stack(
           children: [
@@ -84,7 +97,9 @@ class AppTextFormField extends StatelessWidget {
               enableInteractiveSelection: enableInteractiveSelection,
               onTap: onTap,
               onChanged: onChanged,
+              onFieldSubmitted: onFieldSubmitted,
               textInputAction: textInputAction,
+              autofillHints: autofillHints,
               controller: controller,
               obscureText: obscureText,
               validator: validator,
@@ -115,6 +130,11 @@ class AppTextFormField extends StatelessWidget {
                         : null,
                     contentPadding: multilineIcon
                         ? const EdgeInsetsDirectional.fromSTEB(50, 16, 16, 16)
+                        : dense
+                        ? EdgeInsets.symmetric(
+                            horizontal: outlined ? 16 : 24,
+                            vertical: 10,
+                          )
                         : null,
                     prefixIcon: prefix != null
                         ? Padding(

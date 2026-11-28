@@ -217,7 +217,6 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFCFF),
         elevation: 0,
         centerTitle: false,
         titleSpacing: 0,
@@ -230,7 +229,6 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
           'รีวิว',
           style: TextStyle(
             fontFamily: AppTextStyles.fontFamily,
-            color: Color(0xFF24212A),
             fontSize: 20,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.3,

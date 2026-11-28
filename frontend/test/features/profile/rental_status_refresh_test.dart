@@ -148,6 +148,31 @@ void main() {
         .onRefresh();
   }
 
+  testWidgets('tapping a rental card does not open details on either tab', (
+    tester,
+  ) async {
+    await openRentalStatus(tester);
+    bookingsResponse.complete(200);
+    await tester.pumpAndSettle();
+
+    final details = find.text('รายละเอียดสถานะการเช่า');
+    await tester.tap(find.text('Rented camera'));
+    await tester.pumpAndSettle();
+    expect(details, findsNothing);
+
+    await tester.tap(find.text('ปล่อยเช่า'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lent tripod'));
+    await tester.pumpAndSettle();
+    expect(details, findsNothing);
+
+    await tester.tap(find.text('ตรวจสอบคำขอเช่า'));
+    await tester.pumpAndSettle();
+    expect(details, findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('keeps both rental lists and counts until refresh completes', (
     tester,
   ) async {

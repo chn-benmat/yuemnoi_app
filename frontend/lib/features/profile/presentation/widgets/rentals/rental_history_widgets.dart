@@ -7,16 +7,19 @@ import '../../../../../core/widgets/skeleton_shimmer.dart';
 import '../../../domain/entities/rental_booking.dart';
 
 class RentalHistoryLoadingSkeleton extends StatelessWidget {
-  const RentalHistoryLoadingSkeleton({super.key});
+  const RentalHistoryLoadingSkeleton({super.key, this.count = 6});
+
+  /// จำนวนรายการที่หน้านี้แสดงครั้งล่าสุด ให้ skeleton มีจำนวนเท่าข้อมูลจริง
+  final int count;
 
   @override
   Widget build(BuildContext context) {
-    return SkeletonShimmer(
+    return ExcludeSemantics(
       key: const ValueKey('rental-history-loading-skeleton'),
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: 6,
+        itemCount: count,
         separatorBuilder: (context, index) => const SizedBox(height: 12),
         itemBuilder: (context, index) => const _RentalHistorySkeletonCard(),
       ),
@@ -29,38 +32,68 @@ class _RentalHistorySkeletonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // กรอบ เงา และแถวรีวิวท้ายการ์ดเหมือน RentalHistoryCard ที่คืนของแล้ว
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SkeletonBox(width: 56, height: 56, borderRadius: 14),
-          const SizedBox(width: 16),
-          const Expanded(
-            child: Column(
+      child: const SkeletonShimmer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SkeletonBox(height: 16, borderRadius: 8),
-                SizedBox(height: 7),
-                FractionallySizedBox(
-                  widthFactor: 0.72,
-                  child: SkeletonBox(height: 12, borderRadius: 6),
+                SkeletonBox(width: 56, height: 56, borderRadius: 14),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FractionallySizedBox(
+                        widthFactor: 0.85,
+                        child: SkeletonBox(height: 16, borderRadius: 8),
+                      ),
+                      SizedBox(height: 8),
+                      FractionallySizedBox(
+                        widthFactor: 0.6,
+                        child: SkeletonBox(height: 12, borderRadius: 6),
+                      ),
+                      SizedBox(height: 9),
+                      FractionallySizedBox(
+                        widthFactor: 0.5,
+                        child: SkeletonBox(height: 11, borderRadius: 5),
+                      ),
+                    ],
+                  ),
                 ),
-                SizedBox(height: 8),
-                FractionallySizedBox(
-                  widthFactor: 0.5,
-                  child: SkeletonBox(height: 10, borderRadius: 5),
-                ),
+                SizedBox(width: 12),
+                SkeletonBox(width: 60, height: 24, borderRadius: 8),
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-          const SkeletonBox(width: 52, height: 22, borderRadius: 8),
-        ],
+            SizedBox(height: 14),
+            SkeletonBox(height: 1, borderRadius: 0),
+            SizedBox(height: 10),
+            Row(
+              children: [
+                SkeletonBox(width: 18, height: 18, shape: BoxShape.circle),
+                SizedBox(width: 6),
+                SkeletonBox(width: 120, height: 12, borderRadius: 5),
+                Spacer(),
+                SkeletonBox(width: 96, height: 36, borderRadius: 12),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../../core/network/auth_session.dart';
+import '../../../../../core/services/skeleton_layout_cache.dart';
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/services/favorite_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
@@ -67,10 +69,21 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
         body: BlocBuilder<FavoriteCubit, FavoriteState>(
           builder: (context, state) {
             if (state is FavoriteLoading || state is FavoriteInitial) {
-              return const FavoriteLoadingSkeleton();
+              return FavoriteLoadingSkeleton(
+                count: SkeletonLayoutCache.instance.count(
+                  'favorites.${AuthSession.userId}',
+                  fallback: 6,
+                ),
+              );
             }
 
             final items = state is FavoriteLoaded ? state.items : [];
+            if (state is FavoriteLoaded) {
+              SkeletonLayoutCache.instance.writeCount(
+                'favorites.${AuthSession.userId}',
+                items.length,
+              );
+            }
 
             if (items.isEmpty) {
               return _buildEmptyState();

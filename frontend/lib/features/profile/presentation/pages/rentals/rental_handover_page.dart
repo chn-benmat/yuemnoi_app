@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/models/pickup_location.dart';
 import '../../../../../core/services/map_device_position.dart';
+import '../../../../../core/widgets/app_page_header.dart';
 import '../../../../../core/widgets/longdo_map_view.dart';
 import '../../../../../core/widgets/map_control_button.dart';
 import '../../../../../core/navigation/app_routes.dart';
@@ -566,72 +567,70 @@ class _RentalHandoverPageState extends State<RentalHandoverPage> {
   }
 
   Widget _buildHeader(BuildContext context, {required bool flushMap}) =>
-      SafeArea(
-        bottom: !flushMap,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(16, 8, 16, flushMap ? 0 : 8),
-          child: Row(
-            crossAxisAlignment: flushMap
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.center,
-            children: [
-              // ปุ่มย้อนกลับ
-              _buildGlassIconButton(
-                icon: Icons.arrow_back_ios_new_rounded,
-                onTap: () => Navigator.of(context).pop(),
-              ),
-              const SizedBox(width: 12),
-              // แถบหัวข้อสถานะ
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
+      AppPageHeader(
+        bottomSafeArea: !flushMap,
+        padding: EdgeInsets.fromLTRB(16, 8, 16, flushMap ? 0 : 8),
+        child: Row(
+          crossAxisAlignment: flushMap
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.center,
+          children: [
+            // ปุ่มย้อนกลับ
+            _buildGlassIconButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              onTap: () => Navigator.of(context).pop(),
+            ),
+            const SizedBox(width: 12),
+            // แถบหัวข้อสถานะ
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF10B981),
-                          shape: BoxShape.circle,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        LongdoMapView.isAvailable && _destination != null
+                            ? (_isReturn
+                                  ? 'เส้นทางคืนสินค้า'
+                                  : 'เส้นทางนัดรับอุปกรณ์')
+                            : (_isReturn ? 'คืนสินค้า' : 'นัดรับอุปกรณ์'),
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E2022),
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          LongdoMapView.isAvailable && _destination != null
-                              ? (_isReturn
-                                    ? 'เส้นทางคืนสินค้า'
-                                    : 'เส้นทางนัดรับอุปกรณ์')
-                              : (_isReturn ? 'คืนสินค้า' : 'นัดรับอุปกรณ์'),
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E2022),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
 
@@ -978,11 +977,9 @@ class _RentalHandoverPageState extends State<RentalHandoverPage> {
                 Expanded(
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _currentStatusCode == 'active'
-                          ? const Color(0xFF0F172A)
-                          : (_currentStatusCode == 'cancelled'
-                                ? const Color(0xFF94A3B8)
-                                : AppColors.primaryColor),
+                      backgroundColor: _currentStatusCode == 'cancelled'
+                          ? const Color(0xFF94A3B8)
+                          : AppColors.primaryColor,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shadowColor: Colors.transparent,

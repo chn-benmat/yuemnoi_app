@@ -1,6 +1,7 @@
 import 'package:frontend/core/widgets/app_popup.dart';
 import '../../../item_detail/data/datasources/item_detail_remote_data_source.dart';
 import '../../../item_detail/domain/entities/item_detail.dart';
+import '../../../../core/services/skeleton_layout_cache.dart';
 import '../../../../core/widgets/package_chat_list.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart' show listEquals, setEquals;
@@ -181,6 +182,55 @@ class _ChatDetailViewState extends State<_ChatDetailView>
 
   GlobalKey _getKeyForMessage(String id) =>
       _messageKeys.putIfAbsent(id, () => GlobalKey());
+
+  /// รายการที่ render ล่าสุด ใช้วัดขนาดจริงไปเก็บให้ skeleton รอบหน้า
+  List<_ChatRenderItem> _lastRenderItems = const [];
+  bool _skeletonMeasureScheduled = false;
+
+  String get _skeletonKey => 'chat.${_conversation.id}';
+
+  /// วัดความสูงจริงของข้อความล่าสุดที่เห็นบนจอ (ใหม่สุดก่อน) แล้วเก็บไว้
+  /// skeleton ครั้งหน้าจะวาดกล่องสูงเท่าเดิม ฝั่งเดิม และชนิดเดิม จึงไม่กระโดดตอนโหลดเสร็จ
+  void _scheduleSkeletonMeasure() {
+    if (_skeletonMeasureScheduled) return;
+    _skeletonMeasureScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _skeletonMeasureScheduled = false;
+      if (!mounted) return;
+      final items = _lastRenderItems;
+      final screenHeight = MediaQuery.sizeOf(context).height;
+      final tokens = <String>[];
+      var total = 0.0;
+      for (var i = items.length - 1; i >= 0 && total < screenHeight; i--) {
+        final item = items[i];
+        final size = _messageKeys[item.message.id]?.currentContext?.size;
+        if (size == null || size.height <= 0) break;
+        total += size.height;
+        final text = item.message.message;
+        final kind =
+            RentalQueueCardData.fromMessage(text) != null ||
+                BookingRequestData.isBookingRequest(text) ||
+                ItemInquiryData.isInquiry(text)
+            ? 'c'
+            : item.imageUrls.isNotEmpty || item.isStacked
+            ? 'i'
+            : 't';
+        tokens.add(
+          [
+            item.message.isMine ? 'o' : 'i',
+            kind,
+            size.height.round(),
+            _shouldShowTimeDivider(items, i) ? 1 : 0,
+            _shouldShowAvatar(items, i) ? 1 : 0,
+            text.length,
+          ].join('|'),
+        );
+      }
+      if (tokens.isNotEmpty) {
+        SkeletonLayoutCache.instance.write(_skeletonKey, tokens, max: 12);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -1133,7 +1183,11 @@ class _ChatDetailViewState extends State<_ChatDetailView>
                           conversation: _conversation,
                         ),
                         ChatDetailStatus.failure => const SizedBox.shrink(),
-                        _ => const ChatSkeletonLoadingView(),
+                        _ => ChatSkeletonLoadingView(
+                          layout: SkeletonLayoutCache.instance.read(
+                            _skeletonKey,
+                          ),
+                        ),
                       };
                     }
 
@@ -1143,6 +1197,10 @@ class _ChatDetailViewState extends State<_ChatDetailView>
                       state.messages,
                       inquiryReplacements,
                     );
+                    _lastRenderItems = renderItems;
+                    if (state.status == ChatDetailStatus.success) {
+                      _scheduleSkeletonMeasure();
+                    }
                     final messagesById = {
                       for (final message in state.messages) message.id: message,
                     };

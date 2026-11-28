@@ -440,49 +440,92 @@ class MyItemsMessage extends StatelessWidget {
 }
 
 class MyItemsLoadingSkeleton extends StatelessWidget {
-  const MyItemsLoadingSkeleton({super.key});
+  const MyItemsLoadingSkeleton({super.key, this.count = 5});
+
+  /// จำนวนรายการที่หน้านี้แสดงครั้งล่าสุด ให้ skeleton มีจำนวนเท่าข้อมูลจริง
+  final int count;
   @override
-  Widget build(BuildContext context) => SkeletonShimmer(
+  Widget build(BuildContext context) {
+    // ครั้งก่อนไม่มีอุปกรณ์ หน้าจริงจะขึ้นหน้าว่าง จึงไม่วาด skeleton ให้กระพริบ
+    if (count == 0) {
+      return const SizedBox.shrink(key: ValueKey('my-items-skeleton'));
+    }
+    return _buildSkeleton();
+  }
+
+  Widget _buildSkeleton() => ExcludeSemantics(
     key: const ValueKey('my-items-skeleton'),
     child: ListView.separated(
-      padding: const EdgeInsets.all(20),
+      // หัวข้อจำนวนรายการเว้น 18/12 แล้วตามด้วยรายการเว้นข้าง 20 แบบหน้าจริง
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: 5,
+      itemCount: count + 1,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
-      itemBuilder: (context, index) => Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          children: [
-            const SkeletonBox(width: 82, height: 96, borderRadius: 12),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const FractionallySizedBox(
-                    widthFactor: 0.9,
-                    child: SkeletonBox(height: 14, borderRadius: 5),
+      itemBuilder: (context, index) => index == 0
+          ? const _MyItemsHeaderSkeleton()
+          : const _MyItemSkeletonCard(),
+    ),
+  );
+}
+
+class _MyItemsHeaderSkeleton extends StatelessWidget {
+  const _MyItemsHeaderSkeleton();
+  @override
+  Widget build(BuildContext context) => const SkeletonShimmer(
+    child: SizedBox(
+      height: 18,
+      child: Row(
+        children: [
+          SkeletonBox(width: 110, height: 13, borderRadius: 5),
+          Spacer(),
+          SkeletonBox(width: 52, height: 11, borderRadius: 5),
+        ],
+      ),
+    ),
+  );
+}
+
+class _MyItemSkeletonCard extends StatelessWidget {
+  const _MyItemSkeletonCard();
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFEAE8EF)),
+    ),
+    child: const SkeletonShimmer(
+      child: Row(
+        children: [
+          SkeletonBox(width: 82, height: 96, borderRadius: 12),
+          SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ชื่อ 14px สูงบรรทัด 1.45
+                SizedBox(
+                  height: 20,
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: FractionallySizedBox(
+                      widthFactor: 0.85,
+                      child: SkeletonBox(height: 13, borderRadius: 5),
+                    ),
                   ),
-                  const SizedBox(height: 7),
-                  const FractionallySizedBox(
-                    widthFactor: 0.6,
-                    child: SkeletonBox(height: 12, borderRadius: 5),
-                  ),
-                  const SizedBox(height: 10),
-                  const SkeletonBox(width: 90, height: 22, borderRadius: 6),
-                  const SizedBox(height: 9),
-                  const SkeletonBox(width: 75, height: 14, borderRadius: 5),
-                ],
-              ),
+                ),
+                SizedBox(height: 8),
+                // ป้ายสถานะ: ไอคอน 14 ข้อความ 12 padding 4
+                SkeletonBox(width: 84, height: 24, borderRadius: 6),
+                SizedBox(height: 9),
+                SkeletonBox(width: 96, height: 15, borderRadius: 5),
+              ],
             ),
-            const SizedBox(width: 8),
-            const SkeletonBox(width: 10, height: 14, borderRadius: 5),
-          ],
-        ),
+          ),
+          SizedBox(width: 4),
+          SkeletonBox(width: 20, height: 20, borderRadius: 6),
+        ],
       ),
     ),
   );

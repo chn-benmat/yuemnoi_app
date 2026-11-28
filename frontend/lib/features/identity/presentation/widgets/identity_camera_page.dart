@@ -281,11 +281,7 @@ class _IdentityCameraPageState extends State<IdentityCameraPage>
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: IdentityColors.ink,
-    appBar: AppBar(
-      title: Text(_preview == null ? _title : 'ตรวจรูปก่อนใช้'),
-      backgroundColor: IdentityColors.ink,
-      foregroundColor: Colors.white,
-    ),
+    appBar: AppBar(title: Text(_preview == null ? _title : 'ตรวจรูปก่อนใช้')),
     body: SafeArea(
       child: Column(
         children: [

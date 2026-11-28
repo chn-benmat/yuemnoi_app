@@ -211,7 +211,7 @@ void main() {
       final search = find.byType(TextField);
       final filter = find.byKey(const ValueKey('my-items-filter-button'));
       final searchPosition = tester.getTopLeft(search);
-      expect(find.byType(SkeletonShimmer), findsOneWidget);
+      expect(find.byType(SkeletonShimmer), findsWidgets);
       expect(
         find.ancestor(of: search, matching: find.byType(SkeletonShimmer)),
         findsNothing,

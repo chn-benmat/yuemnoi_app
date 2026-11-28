@@ -39,44 +39,22 @@ class PromptPayIdentifierFields extends StatelessWidget {
           showSelectedIcon: false,
           onSelectionChanged: enabled
               ? (selection) {
-                  if (selection.single != nationalId)
+                  if (selection.single != nationalId) {
                     onTypeChanged(selection.single);
+                  }
                 }
               : null,
         ),
         const SizedBox(height: 8),
-        TextFormField(
-          key: ValueKey(nationalId),
+        PromptPayIdentifierField(
           controller: controller,
+          nationalId: nationalId,
           enabled: enabled,
-          keyboardType: TextInputType.number,
-          textInputAction: TextInputAction.done,
-          autocorrect: false,
-          enableSuggestions: false,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(nationalId ? 13 : 10),
-          ],
+          onSubmitted: onSubmitted,
           decoration: InputDecoration(
-            labelText: nationalId
-                ? 'เลขบัตรประชาชนที่ผูกพร้อมเพย์'
-                : 'เบอร์มือถือที่ผูกพร้อมเพย์',
-            hintText: nationalId ? null : '08XXXXXXXX',
             helperText: helperText,
-            errorMaxLines: 2,
             border: const OutlineInputBorder(),
           ),
-          validator: (value) {
-            if (nationalId) {
-              return value?.length == 13
-                  ? null
-                  : 'กรุณากรอกเลขบัตรประชาชน 13 หลัก';
-            }
-            return RegExp(r'^0[689][0-9]{8}$').hasMatch(value ?? '')
-                ? null
-                : 'กรุณากรอกเบอร์มือถือพร้อมเพย์ 10 หลัก';
-          },
-          onFieldSubmitted: (_) => onSubmitted(),
         ),
         if (nationalId)
           const Padding(
@@ -84,6 +62,59 @@ class PromptPayIdentifierFields extends StatelessWidget {
             child: Text('QR จะมีเลขบัตรประชาชนสำหรับการสแกนโอน'),
           ),
       ],
+    );
+  }
+}
+
+class PromptPayIdentifierField extends StatelessWidget {
+  const PromptPayIdentifierField({
+    super.key,
+    required this.controller,
+    required this.nationalId,
+    required this.enabled,
+    required this.onSubmitted,
+    required this.decoration,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final bool nationalId;
+  final bool enabled;
+  final VoidCallback onSubmitted;
+  final InputDecoration decoration;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      key: ValueKey(nationalId),
+      controller: controller,
+      enabled: enabled,
+      keyboardType: TextInputType.number,
+      textInputAction: TextInputAction.done,
+      autocorrect: false,
+      enableSuggestions: false,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(nationalId ? 13 : 10),
+      ],
+      decoration: decoration.copyWith(
+        labelText: nationalId
+            ? 'เลขบัตรประชาชนที่ผูกพร้อมเพย์'
+            : 'เบอร์มือถือที่ผูกพร้อมเพย์',
+        hintText: decoration.hintText ?? (nationalId ? null : '08XXXXXXXX'),
+        errorMaxLines: decoration.errorMaxLines ?? 2,
+      ),
+      validator: (value) {
+        if (nationalId) {
+          return value?.length == 13 ? null : 'กรุณากรอกเลขบัตรประชาชน 13 หลัก';
+        }
+        return RegExp(r'^0[689][0-9]{8}$').hasMatch(value ?? '')
+            ? null
+            : 'กรุณากรอกเบอร์มือถือพร้อมเพย์ 10 หลัก';
+      },
+      onChanged: onChanged,
+      onFieldSubmitted: (_) => onSubmitted(),
     );
   }
 }
