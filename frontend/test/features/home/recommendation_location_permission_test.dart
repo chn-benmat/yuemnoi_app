@@ -25,10 +25,7 @@ void main() {
     'dexterous.com/flutter/local_notifications',
   );
   const locationChannel = MethodChannel('flutter.baseflow.com/geolocator');
-  final savedLocations = <Map<String, dynamic>>[];
-  final locationQueries = <String>[];
-  final deletedOwners = <String>[];
-  var hasSavedLocation = false;
+  final legacyLocationRequests = <String>[];
 
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
@@ -52,23 +49,8 @@ void main() {
         if (request.url.path != '/rest/v1/user_recommendation_locations') {
           throw StateError('Unexpected request: ${request.url.path}');
         }
-        if (request.method == 'POST') {
-          savedLocations.add(jsonDecode(request.body) as Map<String, dynamic>);
-          return http.Response('', 201, request: request);
-        }
-        final owner = request.url.queryParameters['user_id'] ?? '';
-        if (request.method == 'DELETE') {
-          deletedOwners.add(owner);
-          hasSavedLocation = false;
-          return http.Response('', 204, request: request);
-        }
-        locationQueries.add(owner);
-        return http.Response(
-          hasSavedLocation ? '[{"user_id":"test-user"}]' : '[]',
-          200,
-          request: request,
-          headers: {'content-type': 'application/json'},
-        );
+        legacyLocationRequests.add(request.method);
+        return http.Response('[]', 404, request: request);
       });
     });
     await SupabaseConfig.client.auth.recoverSession(
@@ -96,10 +78,7 @@ void main() {
       expect(call.method, 'requestNotificationsPermission');
       return true;
     });
-    savedLocations.clear();
-    locationQueries.clear();
-    deletedOwners.clear();
-    hasSavedLocation = false;
+    legacyLocationRequests.clear();
   });
   tearDown(() {
     AuthSession.clear();
@@ -144,23 +123,19 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(SupabaseConfig.client.auth.currentUser?.id, 'test-user');
-        expect(locationQueries, isEmpty);
+        expect(legacyLocationRequests, isEmpty);
         expect(AppRoutes.navigatorKey.currentState?.canPop(), isFalse);
         expect(calls, ['checkPermission', 'requestPermission']);
-        expect(savedLocations, isEmpty);
 
         decision.complete();
         await tester.pumpAndSettle();
 
         if (allowed) {
           expect(calls, contains('getCurrentPosition'));
-          expect(locationQueries, isEmpty);
-          expect(savedLocations, isEmpty);
         } else {
-          expect(locationQueries, isEmpty);
           expect(calls, isNot(contains('getCurrentPosition')));
-          expect(savedLocations, isEmpty);
         }
+        expect(legacyLocationRequests, isEmpty);
         expect(AppRoutes.navigatorKey.currentState?.canPop(), isFalse);
       },
     );
@@ -197,8 +172,7 @@ void main() {
     expect(AppRoutes.navigatorKey.currentState?.canPop(), isFalse);
     expect(calls, contains('getCurrentPosition'));
     expect(calls, isNot(contains('requestPermission')));
-    expect(locationQueries, isEmpty);
-    expect(savedLocations, isEmpty);
+    expect(legacyLocationRequests, isEmpty);
     expect(
       RecommendationLocationService.instance.position.value?.latitude,
       13.7467785,
@@ -239,27 +213,17 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool('startup_location_permission_requested_v1'), isTrue);
     expect(AppRoutes.navigatorKey.currentState?.canPop(), isFalse);
-    expect(savedLocations, isEmpty);
+    expect(legacyLocationRequests, isEmpty);
     waitingForFix.complete(null);
   });
 
   testWidgets(
-    'the owner can still remove a previously saved account location',
+    'account security does not query the retired saved location table',
     (tester) async {
-      hasSavedLocation = true;
       await tester.pumpWidget(const MaterialApp(home: ChangeAccountScreen()));
       await tester.pumpAndSettle();
-      expect(deletedOwners, isEmpty);
-
-      final deleteSavedLocation = find.text('ลบตำแหน่งเดิมออกจากบัญชี');
-      await tester.ensureVisible(deleteSavedLocation);
-      await tester.tap(deleteSavedLocation);
-      await tester.pumpAndSettle();
-      expect(deletedOwners, isEmpty);
-      await tester.tap(find.text('ลบตำแหน่ง'));
-      await tester.pumpAndSettle();
-
-      expect(deletedOwners, ['eq.test-user']);
+      expect(legacyLocationRequests, isEmpty);
+      expect(find.text('ลบบัญชีผู้ใช้'), findsOneWidget);
       expect(find.text('ลบตำแหน่งเดิมออกจากบัญชี'), findsNothing);
     },
   );

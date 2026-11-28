@@ -1,3 +1,4 @@
+import '../../../../core/models/rental_rates.dart';
 import '../../domain/entities/profile_storefront.dart';
 import '../../domain/repositories/profile_storefront_repository.dart';
 import '../datasources/profile_storefront_remote_data_source.dart';
@@ -25,6 +26,7 @@ class ProfileStorefrontRepositoryImpl implements ProfileStorefrontRepository {
   Future<List<StorefrontItem>> getItems(String userId) async {
     final rows = await _dataSource.getItems(userId);
     return rows
+        .map(RentalRates.withPrimaryRate)
         .map(
           (row) => StorefrontItem(
             item: UserItemModel.fromJson(row).toEntity(),

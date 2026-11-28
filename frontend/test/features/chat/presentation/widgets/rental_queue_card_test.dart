@@ -51,6 +51,16 @@ void main() {
       '"price":1200,"rentalType":"รายวัน"',
       ['1,200 บาท / วัน'],
     ),
+    (
+      'the rates computed by the database',
+      '"price":150,"rentalType":"hourly","dailyPrice":1200,"hourlyRate":160,"dailyRate":1300',
+      ['160 บาท / ชั่วโมง', '1,300 บาท / วัน'],
+    ),
+    (
+      'a daily-only listing from the database rates',
+      '"price":1200,"rentalType":"daily","hourlyRate":null,"dailyRate":1200',
+      ['1,200 บาท / วัน'],
+    ),
   ]) {
     testWidgets('the rental queue card shows $description', (tester) async {
       final data = RentalQueueCardData.fromMessage(

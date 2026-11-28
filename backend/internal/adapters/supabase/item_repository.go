@@ -37,10 +37,8 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 		"item_name":         item.ItemName,
 		"description":       item.Description,
 		"category":          item.Category,
-		"price":             item.Price,
 		"status":            item.Status,
 		"moderation_hidden": true,
-		"type":              item.Type,
 		"pickup_location":   item.PickupLocation,
 		"pickup_address":    item.PickupAddress,
 		"pickup_latitude":   item.PickupLatitude,
@@ -49,8 +47,11 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 	if item.ItemImageURL != nil {
 		payload["item_image_url"] = item.ItemImageURL
 	}
-	if item.DailyPrice != nil {
-		payload["daily_price"] = *item.DailyPrice
+	if item.HourlyRate != nil {
+		payload["hourly_rate"] = *item.HourlyRate
+	}
+	if item.DailyRate != nil {
+		payload["daily_rate"] = *item.DailyRate
 	}
 	if item.DamageFee > 0 {
 		payload["damage_fee"] = item.DamageFee
@@ -123,57 +124,13 @@ func (r *supabaseItemRepository) rollbackCreatedItem(ctx context.Context, item *
 	}
 }
 
-// FindAll ดึงฟีดอุปกรณ์ที่จัดอันดับแล้ว พร้อมข้อมูลเจ้าของ
+// FindAll ดึงแคตตาล็อกที่จัดอันดับด้วยสูตรเดียวกับฟีดหน้าแรก พร้อมข้อมูลเจ้าของ
 func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedItem, error) {
 	var items []domain.RankedItem
-
-	// อ่านจาก view ที่คำนวณคะแนนฟีดและลำดับไว้แล้ว โดยไม่ส่งคะแนนภายในออก API
-	err := r.client.DB.From("home_feed_ranked_v").
-		Select(
-			"id",
-			"user_id",
-			"item_name",
-			"item_image_url",
-			"description",
-			"category",
-			"price",
-			"status",
-			"is_rental_occupied",
-			"type",
-			"created_at",
-			"updated_at",
-			"rating",
-			"review_count",
-			"paid_booking_count",
-			"pickup_location",
-		).
-		OrderBy("rank_position", "asc").
-		ExecuteWithContext(ctx, &items)
+	err := r.client.DB.Rpc("get_home_catalog", map[string]any{}).ExecuteWithContext(ctx, &items)
 	if err != nil {
 		return nil, fmt.Errorf("supabase find all failed: %w", err)
 	}
-
-	if len(items) > 0 {
-		var profiles []struct {
-			UserID       string `json:"user_id"`
-			DisplayName  string `json:"display_name"`
-			UserImageURL string `json:"user_image_url"`
-			IsVerified   bool   `json:"is_verified"`
-		}
-		_ = schemaDatabase(r.client, profilesSchema).From("public_profile_v").Select("user_id,display_name,user_image_url,is_verified").ExecuteWithContext(ctx, &profiles)
-		for i := range items {
-			items[i].OwnerName = "ผู้ใช้งาน"
-			for _, p := range profiles {
-				if p.UserID == items[i].UserID {
-					items[i].OwnerName = p.DisplayName
-					items[i].OwnerAvatarURL = p.UserImageURL
-					items[i].IsVerified = p.IsVerified
-					break
-				}
-			}
-		}
-	}
-
 	return items, nil
 }
 
@@ -181,8 +138,9 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domain.Item, error) {
 	var items []domain.Item
 
-	err := r.client.DB.From("account_deletion_item_v").
-		Select("*", "is_rental_occupied", "is_rental_queue_held").
+	// account_deletion_hidden เป็น computed field ของ item_tb จึงอ่านตารางตรงได้โดยไม่ต้องผ่าน view
+	err := r.client.DB.From("item_tb").
+		Select("*", "is_rental_occupied", "is_rental_queue_held", "account_deletion_hidden").
 		Eq("id", strconv.FormatInt(id, 10)).
 		ExecuteWithContext(ctx, &items)
 	if err != nil {

@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 
+import '../../../../core/models/rental_rates.dart';
 import '../../../booking/domain/entities/booking_request_model.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/item_inquiry_data.dart';
@@ -96,6 +97,7 @@ abstract final class ChatConversationModel {
     String? itemRentalType;
 
     if (item != null) {
+      item = RentalRates.withPrimaryRate(item);
       itemName = item['item_name']?.toString().trim();
       final rawImages = item['item_image_url'];
       if (rawImages is List && rawImages.isNotEmpty) {

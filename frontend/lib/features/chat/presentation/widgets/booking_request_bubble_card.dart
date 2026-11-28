@@ -354,7 +354,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
         final exactBooking = await client
             .from('booking_tb')
             .select(
-              'id, status, created_at, start_at, end_at, start_date, end_date, user_id, payment_method',
+              'id, status, created_at, start_at, end_at, user_id, payment_method',
             )
             .eq('id', targetBookingId)
             .maybeSingle();
@@ -367,16 +367,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             rawDbStatus != null &&
             rawDbStatus.isNotEmpty &&
             isCurrentCheck()) {
-          final DateTime? parsedEndAt;
-          if (exactBooking['end_at'] != null) {
-            parsedEndAt = DateTime.tryParse(exactBooking['end_at'].toString());
-          } else if (exactBooking['end_date'] != null) {
-            parsedEndAt = DateTime.tryParse(
-              exactBooking['end_date'].toString(),
-            );
-          } else {
-            parsedEndAt = null;
-          }
+          final parsedEndAt = DateTime.tryParse(
+            exactBooking['end_at']?.toString() ?? '',
+          );
           final databasePaymentMethod = exactBooking['payment_method']
               ?.toString();
 

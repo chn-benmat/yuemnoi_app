@@ -63,16 +63,20 @@ func (r *supabaseConversationContactRepository) PhoneForConversation(
 		return "", domain.ErrContactForbidden
 	}
 
-	phone := ""
-	if metadataPhone, ok := user.UserMetaData["phone"].(string); ok {
-		phone = strings.TrimSpace(metadataPhone)
+	// เบอร์ติดต่อของแอปเก็บที่ profile_tb.phone เพียงที่เดียว
+	var profiles []struct {
+		Phone *string `json:"phone"`
 	}
-	if phone == "" {
-		phone = strings.TrimSpace(user.Phone)
+	err = schemaDatabase(r.client, profilesSchema).From("profile_tb").
+		Select("phone").
+		Eq("user_id", contactUserID).
+		ExecuteWithContext(ctx, &profiles)
+	if err != nil {
+		return "", fmt.Errorf("load conversation contact phone: %w", err)
 	}
-	if phone == "" {
+	if len(profiles) == 0 || profiles[0].Phone == nil || strings.TrimSpace(*profiles[0].Phone) == "" {
 		return "", domain.ErrContactPhoneNotFound
 	}
 
-	return phone, nil
+	return strings.TrimSpace(*profiles[0].Phone), nil
 }

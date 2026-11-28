@@ -323,19 +323,61 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     widget.onSubmit(draft);
   }
 
-  Widget _label(String label, Widget child) => Column(
+  // แยกเครื่องหมายบังคับเป็น widget ต่างหาก เพื่อให้ข้อความ label ยังค้นหาได้ตรงตัว
+  Widget _label(
+    String label,
+    Widget child, {
+    bool required = false,
+    bool optional = false,
+  }) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: AppFormFieldStyles.labelTextStyle),
+      Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 4,
+        children: [
+          Text(label, style: AppFormFieldStyles.labelTextStyle),
+          if (required)
+            Text(
+              '*',
+              semanticsLabel: 'จำเป็น',
+              style: AppFormFieldStyles.labelTextStyle.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          if (optional)
+            const Text(
+              '(ไม่บังคับ)',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppFormFieldStyles.outlinedHintColor,
+              ),
+            ),
+        ],
+      ),
       const SizedBox(height: 8),
       child,
     ],
   );
 
-  InputDecoration _decoration(String hint) => AppFormFieldStyles.decoration(
-    context,
-    variant: AppFormFieldVariant.outlined,
-  ).copyWith(hintText: hint);
+  InputDecoration _decoration(String hint, {String? helper}) =>
+      AppFormFieldStyles.decoration(
+        context,
+        variant: AppFormFieldVariant.outlined,
+      ).copyWith(
+        hintText: hint,
+        helperText: helper,
+        helperMaxLines: 3,
+        helperStyle: const TextStyle(
+          fontSize: 12,
+          color: AppFormFieldStyles.outlinedHintColor,
+        ),
+      );
+
+  // ตรวจช่องที่ผูกกันซ้ำ เมื่อผู้ใช้แก้อีกช่องหลังกดส่งแล้ว ข้อความผิดพลาดจะได้หายทันที
+  void _revalidate(int index) {
+    if (_showErrors) _fieldKeys[index].currentState?.validate();
+  }
 
   Widget _textField({
     required int index,
@@ -344,32 +386,47 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     required String hint,
     required TextEditingController controller,
     required FocusNode focus,
+    String? helper,
     int? maxLength,
     int lines = 1,
   }) => KeyedSubtree(
     key: ValueKey('$_prefix-$id'),
     child: _label(
       label,
-      TextFormField(
-        key: _fieldKeys[index],
-        controller: controller,
-        focusNode: focus,
-        style: AppFormFieldStyles.textStyle,
-        maxLength: maxLength,
-        maxLines: lines,
-        minLines: lines,
-        textInputAction: lines == 1
-            ? TextInputAction.next
-            : TextInputAction.newline,
-        textCapitalization: TextCapitalization.sentences,
-        onChanged: (_) => setState(() {}),
-        decoration: _decoration(hint),
-        validator: (value) {
-          if (value == null || value.trim().isEmpty) return 'กรุณาระบุ$label';
-          if (maxLength != null && value.runes.length > maxLength)
-            return '$labelยาวเกิน $maxLength ตัวอักษร';
-          return null;
-        },
+      required: true,
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            key: _fieldKeys[index],
+            controller: controller,
+            focusNode: focus,
+            style: AppFormFieldStyles.textStyle,
+            maxLength: maxLength,
+            // ช่องหลายบรรทัดขยายตามเนื้อหา ผู้ใช้จะได้เห็นสิ่งที่พิมพ์ทั้งหมด
+            maxLines: lines == 1 ? 1 : lines * 2,
+            minLines: lines,
+            textInputAction: lines == 1
+                ? TextInputAction.next
+                : TextInputAction.newline,
+            keyboardType: lines == 1
+                ? TextInputType.text
+                : TextInputType.multiline,
+            textCapitalization: TextCapitalization.sentences,
+            onChanged: (_) => setState(() {}),
+            decoration: _decoration(
+              hint,
+              helper: helper,
+            ).copyWith(hintMaxLines: lines),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty)
+                return 'กรุณาระบุ$label';
+              if (maxLength != null && value.runes.length > maxLength)
+                return '$labelยาวเกิน $maxLength ตัวอักษร';
+              return null;
+            },
+          ),
+        ],
       ),
     ),
   );
@@ -381,6 +438,9 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
     required TextEditingController controller,
     TextEditingController? fallbackPrice,
     required TextInputAction action,
+    required String hint,
+    String? helper,
+    VoidCallback? onChanged,
   }) => KeyedSubtree(
     key: ValueKey('$_prefix-$id'),
     child: _label(
@@ -392,8 +452,11 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
         keyboardType: TextInputType.number,
         textInputAction: action,
         inputFormatters: _priceInputFormatters,
-        onChanged: (_) => setState(() {}),
-        decoration: _decoration('0').copyWith(
+        onChanged: (_) {
+          setState(() {});
+          onChanged?.call();
+        },
+        decoration: _decoration(hint, helper: helper).copyWith(
           prefixIconConstraints: const BoxConstraints.tightFor(width: 26),
           prefixIcon: const Center(child: Text('฿')),
           suffixIcon: Padding(
@@ -414,7 +477,7 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
           final text = value?.trim() ?? '';
           if (text.isEmpty) {
             return fallbackPrice?.text.trim().isEmpty == true
-                ? 'กรุณาระบุราคาเช่า'
+                ? 'ระบุราคาอย่างน้อย 1 แบบ'
                 : null;
           }
           final price = int.tryParse(text);
@@ -491,7 +554,8 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
               index: 0,
               id: 'name',
               label: 'ชื่ออุปกรณ์',
-              hint: 'กรุณาระบุชื่ออปุกรณ์ที่จะปล่อยเช่า',
+              hint: 'เช่น กล้อง Canon EOS R50 พร้อมเลนส์ 18-45mm',
+              helper: 'ใส่ยี่ห้อและรุ่น ผู้เช่าจะค้นหาเจอง่ายขึ้น',
               controller: _name,
               focus: _nameFocus,
               maxLength: 150,
@@ -499,6 +563,7 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
             const SizedBox(height: 10),
             _label(
               'หมวดหมู่',
+              required: true,
               FormField<String>(
                 key: _fieldKeys[1],
                 initialValue: _category,
@@ -530,13 +595,22 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
               index: 2,
               id: 'description',
               label: 'คำอธิบาย',
-              hint: 'สภาพอุปกรณ์ อุปกรณ์ที่ให้มาด้วย และสิ่งที่ผู้เช่าควรรู้',
+              hint:
+                  'สภาพอุปกรณ์: ใช้งานได้ปกติ มีรอยขีดข่วนเล็กน้อย\n'
+                  'ของที่ให้ไปด้วย: แบตเตอรี่ 2 ก้อน ที่ชาร์จ กระเป๋า\n'
+                  'ข้อควรระวัง: ห้ามใช้งานขณะฝนตก',
+              helper: 'ยิ่งละเอียด ผู้เช่ายิ่งตัดสินใจได้ง่าย',
               controller: _description,
               focus: _descriptionFocus,
               maxLength: 2000,
               lines: 4,
             ),
             _separator,
+            _section(
+              'ราคาเช่า',
+              subtitle:
+                  'ระบุอย่างน้อย 1 แบบ ผู้เช่าจะเลือกเช่าได้ตามแบบที่คุณเปิดไว้',
+            ),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               spacing: 12,
@@ -549,6 +623,7 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
                     controller: _hourlyPrice,
                     fallbackPrice: _dailyPrice,
                     action: TextInputAction.next,
+                    hint: 'เช่น 50',
                   ),
                 ),
                 Expanded(
@@ -558,6 +633,9 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
                     label: 'ราคาต่อวัน',
                     controller: _dailyPrice,
                     action: TextInputAction.next,
+                    hint: 'เช่น 300',
+                    // ราคาต่อชั่วโมงบังคับเฉพาะเมื่อไม่มีราคาต่อวัน จึงต้องตรวจใหม่
+                    onChanged: () => _revalidate(3),
                   ),
                 ),
               ],
@@ -575,6 +653,10 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
                     label: 'ค่าปรับกรณีชำรุด',
                     controller: _damageFee,
                     action: TextInputAction.next,
+                    hint: 'เช่น 500',
+                    helper: 'ต่อครั้งที่ชำรุด',
+                    // เงื่อนไขกรณีชำรุดบังคับเมื่อมีค่าปรับนี้ จึงต้องตรวจใหม่
+                    onChanged: () => _revalidate(7),
                   ),
                 ),
                 Expanded(
@@ -584,6 +666,8 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
                     label: 'ค่าปรับคืนเกินกำหนด',
                     controller: _lateReturnFee,
                     action: TextInputAction.next,
+                    hint: 'เช่น 100',
+                    helper: 'ต่อครั้งที่คืนช้า',
                   ),
                 ),
               ],
@@ -591,15 +675,23 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
             const SizedBox(height: 12),
             _label(
               'เงื่อนไขกรณีชำรุด',
+              required: _damageFee.text.trim().isNotEmpty,
+              optional: _damageFee.text.trim().isEmpty,
               TextFormField(
                 key: _fieldKeys[7],
                 controller: _damageTerms,
                 maxLength: 500,
                 minLines: 2,
-                maxLines: 4,
+                maxLines: 6,
+                keyboardType: TextInputType.multiline,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}),
                 style: AppFormFieldStyles.textStyle,
                 decoration: _decoration(
                   'เช่น อุปกรณ์ตกแตกหรือมีชิ้นส่วนเสียหาย',
+                  helper: _damageFee.text.trim().isEmpty
+                      ? 'ต้องกรอกเมื่อกำหนดค่าปรับกรณีชำรุด'
+                      : 'บอกว่าความเสียหายแบบไหนที่จะคิดค่าปรับ',
                 ),
                 validator: (value) =>
                     _damageFee.text.isNotEmpty && (value ?? '').trim().isEmpty
@@ -634,9 +726,6 @@ class _RentalItemEditorState extends State<RentalItemEditor> {
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
-          foregroundColor: AppFormFieldStyles.outlinedTextColor,
           elevation: 0,
           scrolledUnderElevation: 0,
           centerTitle: true,

@@ -89,7 +89,16 @@ void main() {
         expect(query['user_id'], 'eq.owner');
         expect(
           query['select']!.split(',').map((column) => column.trim()),
-          containsAll(['status', 'type', 'owner_hidden', 'is_rental_occupied']),
+          allOf(
+            containsAll([
+              'status',
+              'hourly_rate',
+              'daily_rate',
+              'owner_hidden',
+              'is_rental_occupied',
+            ]),
+            isNot(anyOf(contains('price'), contains('type'))),
+          ),
         );
         expect(query['order'], startsWith('id.desc'));
         request.response.headers.contentType = ContentType.json;
@@ -111,7 +120,8 @@ void main() {
                   'status': 'available',
                   'owner_hidden': true,
                   'is_rental_occupied': offset == 0,
-                  'type': 'รายชั่วโมง',
+                  'hourly_rate': 75,
+                  'daily_rate': null,
                 },
               ),
             ),
@@ -135,7 +145,8 @@ void main() {
       expect(items.first.ownerHidden, isTrue);
       expect(items.first.isRentalOccupied, isTrue);
       expect(items.last.isRentalOccupied, isFalse);
-      expect(items.last.rentalType, 'รายชั่วโมง');
+      expect(items.last.rentalType, 'hourly');
+      expect(items.last.price, 75);
       fail = true;
       await expectLater(
         source.getMyItems('owner'),

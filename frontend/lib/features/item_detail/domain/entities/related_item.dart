@@ -23,7 +23,8 @@ class RelatedItem extends Equatable {
   final int paidBookingCount;
   final bool isRentalOccupied;
 
-  String get unitLabel => rentalType == 'รายชั่วโมง' ? 'ชั่วโมง' : 'วัน';
+  String get unitLabel =>
+      rentalType == 'hourly' || rentalType == 'รายชั่วโมง' ? 'ชั่วโมง' : 'วัน';
 
   @override
   List<Object?> get props => [

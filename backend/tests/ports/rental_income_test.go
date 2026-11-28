@@ -23,36 +23,40 @@ func (incomeAuthGateway) AppUserIDFromToken(ctx context.Context, token string) (
 
 func TestRentalIncomeReadsOnlyReceiptsForAuthenticatedAccount(t *testing.T) {
 	database := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/rest/v1/rental_handover_payment_tb" {
-			t.Errorf("expected a read from the receipt table, got %s %s", r.Method, r.URL.Path)
+		// อ่านใบรับเงินผ่าน RPC ที่ query ตารางตรงด้วย index ของผู้ยืนยัน แทน view rental_handover_payment_tb
+		if r.Method != http.MethodPost || r.URL.Path != "/rest/v1/rpc/rental_income_receipts" {
+			t.Errorf("expected the receipt RPC, got %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		query := r.URL.Query()
-		if query.Get("select") != "booking_id,confirmed_at,booking:booking_tb!inner(total_price,payment_method,item:item_tb(item_name))" ||
-			query.Get("order") != "booking_id.asc" || r.Header.Get("Range") != "0-199" {
-			t.Errorf("receipt query must load booking details in bounded booking ID order: %v", query)
+		var params struct {
+			Owner string `json:"p_owner"`
+			After int64  `json:"p_after"`
+			Limit int    `json:"p_limit"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil || params.Limit != 200 {
+			t.Errorf("receipt RPC must page in bounded booking ID order: %+v %v", params, err)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		switch query.Get("confirmed_by") {
-		case "eq.owner":
-			switch query.Get("booking_id") {
-			case "gt.0":
-				fmt.Fprint(w, `[{"booking_id":12,"confirmed_at":"2026-11-25T10:00:00Z","booking":{"total_price":150,"payment_method":"cash","item":{"item_name":"กล้อง"}}}]`)
-			case "gt.12":
-				fmt.Fprint(w, `[{"booking_id":14,"confirmed_at":"2026-11-26T12:30:00Z","booking":{"total_price":200,"payment_method":"promptpay","item":{"item_name":"ขาตั้ง"}}}]`)
-			case "gt.14":
+		switch params.Owner {
+		case "owner":
+			switch params.After {
+			case 0:
+				fmt.Fprint(w, `[{"booking_id":12,"confirmed_at":"2026-11-25T10:00:00Z","total_price":150,"payment_method":"cash","item_name":"กล้อง"}]`)
+			case 12:
+				fmt.Fprint(w, `[{"booking_id":14,"confirmed_at":"2026-11-26T12:30:00Z","total_price":200,"payment_method":"promptpay","item_name":"ขาตั้ง"}]`)
+			case 14:
 				fmt.Fprint(w, `[]`)
 			default:
-				t.Errorf("invalid booking cursor: %v", query)
+				t.Errorf("invalid booking cursor: %+v", params)
 				w.WriteHeader(http.StatusBadRequest)
 			}
-		case "eq.renter":
+		case "renter":
 			fmt.Fprint(w, `[]`)
 		default:
-			t.Errorf("read must be scoped to the authenticated account: %v", query)
+			t.Errorf("read must be scoped to the authenticated account: %+v", params)
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	}))

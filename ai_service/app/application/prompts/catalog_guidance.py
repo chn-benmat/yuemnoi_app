@@ -38,6 +38,8 @@ Do not silently substitute another equipment kind when the requested kind is abs
 Recommend only available items. Inspection can include unavailable items if the
 user is asking about those items; do not portray them as rentable recommendations.
 Price ceilings are strict, including zero. Compare prices only in compatible units.
+Each item's rates maps every billing period it is offered in to its price; price and
+type are only the display default, so compare a budget with the rate for that period.
 If budget_max is supplied, price_requirement.maximum must equal it and catalog_units
 must identify the actual catalog price units compatible with the user's budget.
 Copy budget_unit into price_requirement.user_unit. A null budget_unit means the

@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
-import '../../../../../core/services/recommendation_location_service.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../../core/widgets/app_popup.dart';
 import '../../../../auth/presentation/bloc/auth_bloc.dart';
@@ -11,21 +10,10 @@ import '../../../../auth/presentation/bloc/auth_event.dart';
 import '../../../../auth/presentation/bloc/auth_state.dart';
 import '../../widgets/account/change_account_widgets.dart';
 
-class ChangeAccountScreen extends StatefulWidget {
+class ChangeAccountScreen extends StatelessWidget {
   const ChangeAccountScreen({super.key});
 
-  @override
-  State<ChangeAccountScreen> createState() => _ChangeAccountScreenState();
-}
-
-class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
-  bool _deletingSavedLocation = false;
-
-  final _locationService = RecommendationLocationService.instance;
-  late Future<String?> _savedLocationOwner = _locationService
-      .findSavedAccountLocationOwner();
-
-  Future<void> _showDeleteAccountDialog() async {
+  Future<void> _showDeleteAccountDialog(BuildContext context) async {
     final bloc = context.read<AuthBloc>();
     final deleted = await showDialog<bool>(
       context: context,
@@ -121,45 +109,11 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
         },
       ),
     );
-    if (deleted != true || !mounted) return;
+    if (deleted != true || !context.mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('ตั้งเวลาลบบัญชีแล้ว')));
     AppRoutes.goToLogin(context);
-  }
-
-  Future<void> _deleteSavedLocation(String userId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('ลบตำแหน่งที่เคยบันทึกไว้?'),
-        content: const Text('ระบบจะลบพิกัดที่เคยบันทึกไว้ในบัญชีคุณ'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('ยกเลิก'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('ลบตำแหน่ง'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || confirmed != true) return;
-    setState(() => _deletingSavedLocation = true);
-    try {
-      await _locationService.deleteSavedAccountLocation(userId);
-      if (!mounted) return;
-      setState(() => _savedLocationOwner = Future.value(null));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ลบตำแหน่งไม่สำเร็จ กรุณาลองใหม่')),
-      );
-    } finally {
-      if (mounted) setState(() => _deletingSavedLocation = false);
-    }
   }
 
   // ─── Build ───────────────────────────────────────────────────────────────────
@@ -203,29 +157,6 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
             const SizedBox(height: 20),
             _buildSectionHeader('การจัดการบัญชี'),
             _buildCardGroup([
-              FutureBuilder<String?>(
-                future: _savedLocationOwner,
-                builder: (context, snapshot) {
-                  final userId = snapshot.data;
-                  if (userId == null) return const SizedBox.shrink();
-                  return Column(
-                    children: [
-                      AccountSecurityItem(
-                        icon: Icons.location_off_outlined,
-                        iconBgColor: const Color(0xFFFEE2E2),
-                        iconColor: Colors.red.shade700,
-                        title: 'ลบตำแหน่งเดิมออกจากบัญชี',
-                        subtitle: 'ลบพิกัดที่เคยบันทึกไว้ในบัญชี',
-                        isDanger: true,
-                        onTap: _deletingSavedLocation
-                            ? null
-                            : () => _deleteSavedLocation(userId),
-                      ),
-                      _buildDivider(),
-                    ],
-                  );
-                },
-              ),
               AccountSecurityItem(
                 icon: Icons.delete_outline_rounded,
                 iconBgColor: const Color(0xFFFEE2E2),
@@ -233,7 +164,7 @@ class _ChangeAccountScreenState extends State<ChangeAccountScreen> {
                 title: 'ลบบัญชีผู้ใช้',
                 subtitle: 'ซ่อนโปรไฟล์และตั้งเวลาลบบัญชีถาวร',
                 isDanger: true,
-                onTap: _showDeleteAccountDialog,
+                onTap: () => _showDeleteAccountDialog(context),
               ),
             ]),
           ],

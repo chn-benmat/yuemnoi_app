@@ -20,7 +20,7 @@ def catalog_snapshot(items: List[Item]) -> dict:
     if any(not item.name.strip() or not item.category.strip() or not item.type.strip() for item in items):
         raise GuidanceGenerationError("incomplete_catalog_fields")
     return {
-        "items": [item.model_dump(include={"id", "name", "category", "price", "type", "status", "description"})
+        "items": [item.model_dump(include={"id", "name", "category", "price", "type", "rates", "status", "description"})
                   for item in items],
         "categories": list(dict.fromkeys(item.category for item in items if item.category.strip())),
     }
@@ -32,7 +32,12 @@ def presented_record(item, presentation=None):
         amount = format(Decimal(str(item.price)).normalize(), presentation['amount_format'])
         period = presentation['unit_labels'].get(item.type, item.type)
         record.update(unit_display=period, status_display=presentation['status_labels'].get(item.status, item.status),
-            price_display=presentation['price_template'].format(amount=amount, currency=presentation['currency'], period=period))
+            price_display=presentation['price_template'].format(amount=amount, currency=presentation['currency'], period=period),
+            # แสดงทุกเรต เพื่อให้คำตอบอ้างราคาตามหน่วยงบของผู้ใช้ได้ ไม่ใช่แค่เรตหลัก
+            rates_display=[presentation['price_template'].format(
+                amount=format(Decimal(str(rate)).normalize(), presentation['amount_format']),
+                currency=presentation['currency'], period=presentation['unit_labels'].get(unit, unit))
+                for unit, rate in item.rates.items()])
     return record
 
 
@@ -43,8 +48,8 @@ def presented_catalog(snapshot, items, presentation):
 
 def compact_catalog(snapshot: dict) -> dict:
     """Lossless column/row transport, preserving every authoritative field."""
-    columns = ["id", "name", "category", "price", "type", "status", "description"]
-    columns += [key for key in ('price_display', 'unit_display', 'status_display') if any(key in item for item in snapshot['items'])]
+    columns = ["id", "name", "category", "price", "type", "rates", "status", "description"]
+    columns += [key for key in ('price_display', 'rates_display', 'unit_display', 'status_display') if any(key in item for item in snapshot['items'])]
     return {"columns": columns, "rows": [[item[key] for key in columns] for item in snapshot["items"]],
             "categories": snapshot["categories"]}
 

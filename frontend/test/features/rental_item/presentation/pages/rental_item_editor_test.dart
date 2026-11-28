@@ -136,9 +136,8 @@ void main() {
     await tester.enterText(lateFee, '50');
     await confirmAdd(tester);
 
-    expect(submitted.single.rentalType, 'รายชั่วโมง');
-    expect(submitted.single.price, 75);
-    expect(submitted.single.additionalDailyPrice, 410);
+    expect(submitted.single.hourlyRate, 75);
+    expect(submitted.single.dailyRate, 410);
     expect(submitted.single.penaltyTerms.damageFee, 125);
     expect(submitted.single.penaltyTerms.lateReturnFee, 50);
     expect(submitted.single.penaltyTerms.damageTerms, 'เลนส์แตกร้าว');

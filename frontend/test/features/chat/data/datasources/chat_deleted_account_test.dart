@@ -91,6 +91,9 @@ void main() {
               if (request.url.queryParameters['user_id'] != 'eq.pending-user')
                 {'user_id': 'active-user', 'display_name': 'สมชาย'},
             ],
+            '/rest/v1/rpc/chat_unread_conversation_ids' => [
+              {'conversation_id': 'deleted-1'},
+            ],
             '/rest/v1/chat_message_tb' => [
               {
                 'id': 12,
@@ -140,6 +143,12 @@ void main() {
         'ไม่พบผู้ใช้',
         'ไม่พบผู้ใช้',
         'สมชาย',
+      ]);
+      expect(conversations.map((room) => room.hasUnreadMessage), [
+        true,
+        false,
+        false,
+        false,
       ]);
       final detail = await source.getConversationById('deleted-1');
       expect(detail?.name, 'ไม่พบผู้ใช้');

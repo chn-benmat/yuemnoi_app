@@ -34,13 +34,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
         ? SupabaseConfig.client.auth.currentUser
         : null;
 
-    final rawPhone = (user?.userMetadata?['phone'] ?? user?.phone ?? '')
-        .toString();
-
     _emailCtrl = TextEditingController(text: user?.email ?? '');
-    _phoneCtrl = TextEditingController(
-      text: PhoneFormatter.formatForDisplay(rawPhone),
-    );
+    // เบอร์ตั้งต้นมาจากโปรไฟล์เมื่อโหลดเสร็จ (profile_tb.phone)
+    _phoneCtrl = TextEditingController();
 
     final session = SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentSession

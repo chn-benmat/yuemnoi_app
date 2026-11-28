@@ -39,16 +39,43 @@ type createItemRequest struct {
 	PickupLatitude  *float64 `json:"pickup_latitude" form:"pickup_latitude"`
 	PickupLongitude *float64 `json:"pickup_longitude" form:"pickup_longitude"`
 
-	ItemName      string   `json:"item_name" form:"item_name" validate:"required,min=1,max=150"`
-	ItemImageURL  []string `json:"item_image_url" form:"item_image_url" validate:"omitempty,dive,max=2048"`
-	Description   string   `json:"description" form:"description" validate:"required,min=1,max=2000"`
-	Category      string   `json:"category" form:"category" validate:"required,min=1,max=100"`
-	Price         int      `json:"price" form:"price" validate:"required,gt=0,lte=2147483647"`
-	DailyPrice    *int     `json:"daily_price" form:"daily_price" validate:"omitempty,gt=0,lte=2147483647"`
-	DamageFee     int      `json:"damage_fee" form:"damage_fee" validate:"gte=0,lte=2147483647"`
-	LateReturnFee int      `json:"late_return_fee" form:"late_return_fee" validate:"gte=0,lte=2147483647"`
-	DamageTerms   string   `json:"damage_terms" form:"damage_terms" validate:"max=500"`
-	Type          string   `json:"type" form:"type" validate:"required,oneof=รายวัน รายชั่วโมง day hour daily hourly"`
+	ItemName     string   `json:"item_name" form:"item_name" validate:"required,min=1,max=150"`
+	ItemImageURL []string `json:"item_image_url" form:"item_image_url" validate:"omitempty,dive,max=2048"`
+	Description  string   `json:"description" form:"description" validate:"required,min=1,max=2000"`
+	Category     string   `json:"category" form:"category" validate:"required,min=1,max=100"`
+	HourlyRate   *int     `json:"hourly_rate" form:"hourly_rate" validate:"omitempty,gt=0,lte=2147483647"`
+	DailyRate    *int     `json:"daily_rate" form:"daily_rate" validate:"omitempty,gt=0,lte=2147483647"`
+	legacyPricing
+	DamageFee     int    `json:"damage_fee" form:"damage_fee" validate:"gte=0,lte=2147483647"`
+	LateReturnFee int    `json:"late_return_fee" form:"late_return_fee" validate:"gte=0,lte=2147483647"`
+	DamageTerms   string `json:"damage_terms" form:"damage_terms" validate:"max=500"`
+}
+
+// legacyPricing คือราคาแบบเดิมที่แอปรุ่นก่อนยังส่งมา: price ตาม type และ daily_price เสริมของรายชั่วโมง
+type legacyPricing struct {
+	Price      *int    `json:"price" form:"price" validate:"omitempty,gt=0,lte=2147483647"`
+	DailyPrice *int    `json:"daily_price" form:"daily_price" validate:"omitempty,gte=0,lte=2147483647"`
+	Type       *string `json:"type" form:"type" validate:"omitempty,oneof=รายวัน รายชั่วโมง day hour daily hourly"`
+}
+
+func (p legacyPricing) present() bool {
+	return p.Price != nil || p.DailyPrice != nil || p.Type != nil
+}
+
+// rates แปลงราคาแบบเดิมเป็นเรตต่อหน่วย ค่า 0 หมายถึงลบเรตนั้น และ ok=false เมื่อข้อมูลไม่พอ
+func (p legacyPricing) rates() (hourly, daily *int, ok bool) {
+	if p.Price == nil || p.Type == nil {
+		return nil, nil, false
+	}
+	zero := 0
+	if isHourlyItemType(*p.Type) {
+		daily = p.DailyPrice
+		if daily == nil {
+			daily = &zero
+		}
+		return p.Price, daily, true
+	}
+	return &zero, p.Price, true
 }
 
 type updateItemRequest struct {
@@ -61,13 +88,13 @@ type updateItemRequest struct {
 	ItemImageURL  *[]string `json:"item_image_url" validate:"omitempty,dive,max=2048"`
 	Description   *string   `json:"description" validate:"omitempty,min=1,max=2000"`
 	Category      *string   `json:"category" validate:"omitempty,max=100"`
-	Price         *int      `json:"price" validate:"omitempty,gt=0,lte=2147483647"`
-	DailyPrice    *int      `json:"daily_price" validate:"omitempty,gte=0,lte=2147483647"`
+	HourlyRate    *int      `json:"hourly_rate" validate:"omitempty,gte=0,lte=2147483647"`
+	DailyRate     *int      `json:"daily_rate" validate:"omitempty,gte=0,lte=2147483647"`
 	DamageFee     *int      `json:"damage_fee" validate:"omitempty,gte=0,lte=2147483647"`
 	LateReturnFee *int      `json:"late_return_fee" validate:"omitempty,gte=0,lte=2147483647"`
 	DamageTerms   *string   `json:"damage_terms" validate:"omitempty,max=500"`
-	Type          *string   `json:"type" validate:"omitempty,max=100"`
 	OwnerHidden   *bool     `json:"owner_hidden"`
+	legacyPricing
 }
 
 func parseItemID(c fiber.Ctx) (int64, bool) {
@@ -78,6 +105,20 @@ func parseItemID(c fiber.Ctx) (int64, bool) {
 	}
 
 	return id, true
+}
+
+func positiveRate(rate *int) *int {
+	if rate == nil || *rate <= 0 {
+		return nil
+	}
+	return rate
+}
+
+func rateField(rate int) interface{} {
+	if rate == 0 {
+		return nil
+	}
+	return rate
 }
 
 func isHourlyItemType(rentalType string) bool {
@@ -190,8 +231,16 @@ func (h *ItemHandler) CreateItem(c fiber.Ctx) error {
 	if strings.TrimSpace(req.ItemName) == "" || strings.TrimSpace(req.Description) == "" || strings.TrimSpace(req.Category) == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุชื่อ รายละเอียด และหมวดหมู่อุปกรณ์"})
 	}
-	if req.DailyPrice != nil && !isHourlyItemType(req.Type) {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุราคาต่อชั่วโมงเมื่อเพิ่มราคาต่อวัน"})
+	hourlyRate, dailyRate := req.HourlyRate, req.DailyRate
+	if hourlyRate == nil && dailyRate == nil && req.legacyPricing.present() {
+		var ok bool
+		if hourlyRate, dailyRate, ok = req.legacyPricing.rates(); !ok {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุราคาและประเภทการให้เช่า"})
+		}
+		hourlyRate, dailyRate = positiveRate(hourlyRate), positiveRate(dailyRate)
+	}
+	if hourlyRate == nil && dailyRate == nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุราคาต่อชั่วโมงหรือราคาต่อวันอย่างน้อยหนึ่งแบบ"})
 	}
 	if req.DamageFee > 0 && strings.TrimSpace(req.DamageTerms) == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุเงื่อนไขค่าปรับกรณีชำรุด"})
@@ -215,13 +264,12 @@ func (h *ItemHandler) CreateItem(c fiber.Ctx) error {
 		ItemImageURL:    req.ItemImageURL,
 		Description:     strings.TrimSpace(req.Description),
 		Category:        strings.TrimSpace(req.Category),
-		Price:           req.Price,
-		DailyPrice:      req.DailyPrice,
+		HourlyRate:      hourlyRate,
+		DailyRate:       dailyRate,
 		DamageFee:       req.DamageFee,
 		LateReturnFee:   req.LateReturnFee,
 		DamageTerms:     strings.TrimSpace(req.DamageTerms),
 		Status:          "pending_review",
-		Type:            req.Type,
 	}, images)
 	if err != nil {
 		return writeItemError(c, err)
@@ -311,9 +359,15 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "ชื่อและรายละเอียดอุปกรณ์ต้องไม่เป็นข้อความว่าง"})
 	}
 
-	setsDailyPrice := req.DailyPrice != nil && *req.DailyPrice > 0
-	if setsDailyPrice && (req.Price == nil || req.Type == nil || !isHourlyItemType(*req.Type)) {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุราคาต่อชั่วโมงเมื่อเพิ่มราคาต่อวัน"})
+	hourlyRate, dailyRate := req.HourlyRate, req.DailyRate
+	if hourlyRate == nil && dailyRate == nil && req.legacyPricing.present() {
+		var ok bool
+		if hourlyRate, dailyRate, ok = req.legacyPricing.rates(); !ok {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุราคาต่อชั่วโมงเมื่อเพิ่มราคาต่อวัน"})
+		}
+	}
+	if hourlyRate != nil && dailyRate != nil && *hourlyRate == 0 && *dailyRate == 0 {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุราคาต่อชั่วโมงหรือราคาต่อวันอย่างน้อยหนึ่งแบบ"})
 	}
 	if req.DamageFee != nil && *req.DamageFee > 0 && req.DamageTerms != nil && strings.TrimSpace(*req.DamageTerms) == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุเงื่อนไขค่าปรับกรณีชำรุด"})
@@ -321,7 +375,7 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 
 	fields := make(map[string]interface{})
 	listingContentChanged := req.ItemName != nil || req.ItemImageURL != nil || req.Description != nil ||
-		req.Category != nil || req.Price != nil || req.DailyPrice != nil || req.Type != nil ||
+		req.Category != nil || hourlyRate != nil || dailyRate != nil ||
 		req.DamageFee != nil || req.LateReturnFee != nil || req.DamageTerms != nil ||
 		req.PickupLocation != "" || req.PickupLatitude != nil || req.PickupLongitude != nil
 	if listingContentChanged {
@@ -345,16 +399,12 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 	if req.Category != nil {
 		fields["category"] = *req.Category
 	}
-	if req.Price != nil {
-		fields["price"] = *req.Price
+	// ค่า 0 คือเลิกให้เช่าหน่วยนั้น ฐานบังคับให้เหลืออย่างน้อยหนึ่งเรต
+	if hourlyRate != nil {
+		fields["hourly_rate"] = rateField(*hourlyRate)
 	}
-	if req.Type != nil {
-		fields["type"] = *req.Type
-	}
-	if setsDailyPrice {
-		fields["daily_price"] = *req.DailyPrice
-	} else if req.DailyPrice != nil || (req.Type != nil && !isHourlyItemType(*req.Type)) {
-		fields["daily_price"] = nil
+	if dailyRate != nil {
+		fields["daily_rate"] = rateField(*dailyRate)
 	}
 	if req.DamageFee != nil {
 		fields["damage_fee"] = *req.DamageFee

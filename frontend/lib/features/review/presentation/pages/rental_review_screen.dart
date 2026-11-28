@@ -189,7 +189,7 @@ class _RentalReviewScreenState extends State<RentalReviewScreen> {
         'user_id': userId,
         'item_id': itemId,
         'booking_id': widget.bookingId,
-        'rating': _selectedRating.toString(),
+        'rating': _selectedRating,
         'description': description.isEmpty ? null : description,
       });
 

@@ -69,9 +69,7 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                 try {
                   itemData = await client
                       .from('item_tb')
-                      .select(
-                        'item_name, category, price, item_image_url, user_id',
-                      )
+                      .select('item_name, category, item_image_url, user_id')
                       .eq('id', itemId)
                       .maybeSingle();
                 } catch (_) {}
