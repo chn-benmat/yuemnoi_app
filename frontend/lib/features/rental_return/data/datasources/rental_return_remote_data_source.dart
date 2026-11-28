@@ -90,17 +90,18 @@ class RentalReturnRemoteDataSource {
     final bookingLocation = booking['pickup_location']?.toString().trim() ?? '';
     final itemLocation = item['pickup_location']?.toString().trim() ?? '';
     final location = bookingLocation.isEmpty ? itemLocation : bookingLocation;
-    final bookingPoint = PickupLocation.fromJson({
+    final itemPoint = location == itemLocation
+        ? PickupLocation.fromJson(item)
+        : null;
+    final point =
+        mapPoint(booking['latitude'], booking['longitude']) ??
+        mapPoint(itemPoint?.latitude, itemPoint?.longitude);
+    final returnPoint = PickupLocation.fromJson({
       'pickup_location': location,
-      'pickup_address': booking['pickup_address'],
-      'pickup_note': booking['pickup_note'],
-      'pickup_latitude': booking['latitude'],
-      'pickup_longitude': booking['longitude'],
+      'pickup_address': booking['pickup_address'] ?? itemPoint?.address,
+      'pickup_latitude': point?.latitude,
+      'pickup_longitude': point?.longitude,
     });
-    // ใช้หมุดจากประกาศกับรายการเก่าเมื่อเป็นสถานที่เดียวกับที่นัดไว้
-    final returnPoint =
-        bookingPoint ??
-        (location == itemLocation ? PickupLocation.fromJson(item) : null);
     return RentalReturnSession(
       rentalId: rentalId,
       itemId:

@@ -510,7 +510,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     final bookingData = widget.bookingData;
     final isOwner = _checkIsOwner();
     final bookingId = _bookingId ?? bookingData.bookingId;
-    AppRoutes.openRentalTrackingMap(
+    AppRoutes.openRentalHandover(
       context,
       isOwner: isOwner,
       startDate: bookingData.startDate,
@@ -521,13 +521,12 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
       trackingArgs: {
         'itemTitle': bookingData.item.title,
         'itemImageUrl': bookingData.item.imageUrl,
-        // พิกัดในข้อมูลอุปกรณ์เป็นจุดที่เจ้าของเลือกไว้ตอนลงประกาศ
-        'pickupLocation': bookingData.item.defaultLocation.isNotEmpty
-            ? bookingData.item.defaultLocation
-            : bookingData.location,
-        'destinationLat': bookingData.item.latitude ?? bookingData.latitude,
-        'destinationLng': bookingData.item.longitude ?? bookingData.longitude,
-        'pickupNote': bookingData.locationNote,
+        'pickupLocation': bookingData.location.trim().isNotEmpty
+            ? bookingData.location
+            : bookingData.item.defaultLocation,
+        'pickupAddress': bookingData.locationAddress,
+        'pickupLatitude': bookingData.pickupCoordinates?.latitude,
+        'pickupLongitude': bookingData.pickupCoordinates?.longitude,
         'ownerName': bookingData.item.ownerName,
         'periodText': bookingData.formattedPeriodSummary,
         'totalPrice': bookingData.totalPrice,
@@ -554,7 +553,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
     );
 
     if (_isConfirmed) {
-      AppRoutes.openRentalTrackingMap(
+      AppRoutes.openRentalHandover(
         context,
         bookingData: attachedData,
         isOwner: isOwner,

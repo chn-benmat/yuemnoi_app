@@ -24,10 +24,11 @@ begin
       (renter_room, viewer, 'Viewer message'), (renter_room, departing_renter, 'Former renter message');
   insert into identity_private.identity_profiles(user_id, status, legal_name, masked_id, citizen_hmac, is_minor)
     values (departing_owner, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(departing_owner::text) || md5(departing_owner::text), false);
+  update profiles.profile_tb set phone = '0890000001' where user_id = departing_owner;
   insert into public.item_tb(user_id, item_name, description, price, type, status,
-    pickup_location, pickup_address, pickup_note, pickup_latitude, pickup_longitude)
+    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
     values (departing_owner, 'กล้องทดสอบ', 'อุปกรณ์ทดสอบ', 150, 'รายชั่วโมง', 'available',
-      'จุดรับส่วนตัว', 'ที่อยู่ทดสอบ', 'นัดรับ', 13.75, 100.5)
+      'จุดรับส่วนตัว', 'ที่อยู่ทดสอบ', 13.75, 100.5)
     returning id into equipment_id;
   update messaging.conversation_tb set item_id = equipment_id where id = owner_room;
   insert into messaging.chat_message_tb(conversation_id, sender_id, message)

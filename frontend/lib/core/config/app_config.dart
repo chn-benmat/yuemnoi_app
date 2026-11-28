@@ -17,6 +17,16 @@ abstract final class AppConfig {
     'GOOGLE_WEB_CLIENT_ID',
   );
 
+  static const _envLongdoMapApiKey = String.fromEnvironment(
+    'LONGDO_MAP_API_KEY',
+  );
+
+  static String get longdoMapApiKey => _envLongdoMapApiKey.trim().isNotEmpty
+      ? _envLongdoMapApiKey.trim()
+      : (dotenv.isInitialized
+            ? dotenv.env['LONGDO_MAP_API_KEY']?.trim() ?? ''
+            : '');
+
   static String get apiUrl {
     if (_envApiUrl.isNotEmpty) return _envApiUrl;
     if (dotenv.isInitialized) return dotenv.env['API_URL']?.trim() ?? '';

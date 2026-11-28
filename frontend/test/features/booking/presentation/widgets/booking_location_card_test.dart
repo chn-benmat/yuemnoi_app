@@ -1,122 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:frontend/core/services/location_service.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/booking/presentation/widgets/booking_location_card.dart';
 
 void main() {
   group('BookingLocationCard Tests', () {
-    testWidgets('opens the read-only pickup coordinates in Google Maps', (
-      tester,
-    ) async {
-      final launches = <MethodCall>[];
-      const channel = MethodChannel('plugins.flutter.io/url_launcher');
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
-        call,
-      ) async {
-        launches.add(call);
-        return true;
-      });
-      addTearDown(
-        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          channel,
-          null,
-        ),
-      );
+    testWidgets('displays the meeting point and its details', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
             body: BookingLocationCard(
-              location: 'สยามพารากอน (Siam Paragon)',
-              locationNote: 'ระบุโดยคุณ',
-              latitude: 13.7460,
-              longitude: 100.5349,
-              isEditable: false,
-              showMiniMap: false,
+              location: 'Library',
+              locationAddress: 'Bangkok',
             ),
           ),
         ),
       );
 
-      await tester.tap(find.text('สยามพารากอน (Siam Paragon)'));
-      await tester.pumpAndSettle();
-
-      expect(launches, hasLength(1));
-      expect(launches.single.method, 'launch');
-      final arguments = launches.single.arguments as Map;
-      final uri = Uri.parse(arguments['url'] as String);
-      expect(uri.host, 'www.google.com');
-      expect(uri.path, '/maps/search/');
-      expect(uri.queryParameters['query'], '13.746,100.5349');
-      expect(arguments['useWebView'], isFalse);
-      expect(arguments['useSafariVC'], isFalse);
-      expect(find.byType(BookingLocationCard), findsOneWidget);
-    });
-
-    testWidgets(
-      'renders location title, note, and coordinates badge in editable mode',
-      (tester) async {
-        await tester.pumpWidget(
-          const MaterialApp(
-            home: Scaffold(
-              body: SingleChildScrollView(
-                child: BookingLocationCard(
-                  location: 'ซีคอน บางแค',
-                  locationNote: 'เลือกโดยผู้ปล่อยเช่า',
-                  latitude: 13.7126,
-                  longitude: 100.4332,
-                  isEditable: true,
-                ),
-              ),
-            ),
-          ),
-        );
-
-        // Verify location title and note
-        expect(find.text('สถานที่นัดพบ'), findsOneWidget);
-        expect(find.text('ซีคอน บางแค'), findsOneWidget);
-        expect(find.text('เลือกโดยผู้ปล่อยเช่า'), findsOneWidget);
-
-        // Verify map action label is shown
-        expect(find.text('แตะเพื่อเปลี่ยนจุดปักหมุด'), findsOneWidget);
-      },
-    );
-
-    testWidgets('renders non-editable mode with Google Maps action label', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: BookingLocationCard(
-                location: 'สยามพารากอน (Siam Paragon)',
-                locationNote: 'ระบุโดยคุณ',
-                latitude: 13.7460,
-                longitude: 100.5349,
-                isEditable: false,
-              ),
-            ),
-          ),
-        ),
-      );
-
-      // Verify location title
-      expect(find.text('สยามพารากอน (Siam Paragon)'), findsOneWidget);
-      expect(find.text('ระบุโดยคุณ'), findsOneWidget);
-
-      // In non-editable mode, Google Maps action is present
-      expect(find.text('เปิดดูแผนที่'), findsOneWidget);
-    });
-
-    test('LocationService popular landmarks are well populated', () {
-      expect(LocationService.popularLandmarks, isNotEmpty);
-      final seacon = LocationService.popularLandmarks.firstWhere(
-        (l) => l.name == 'ซีคอน บางแค',
-      );
-      expect(seacon.latitude, 13.7115884);
-      expect(seacon.longitude, 100.4341077);
+      expect(find.text('Library'), findsOneWidget);
+      expect(find.text('Bangkok'), findsOneWidget);
     });
 
     test('the booking message preserves its pickup snapshot', () {
@@ -129,7 +31,6 @@ void main() {
         endTime: const TimeOfDay(hour: 18, minute: 0),
         location: 'ไอคอนสยาม (ICONSIAM)',
         locationAddress: '299 ถนนเจริญนคร กรุงเทพฯ',
-        locationNote: 'หน้าร้านกาแฟ ชั้น G',
         latitude: 13.7267,
         longitude: 100.5108,
       );
@@ -138,12 +39,12 @@ void main() {
       expect(payload, contains('ไอคอนสยาม (ICONSIAM)'));
       expect(payload, contains('"latitude":13.7267'));
       expect(payload, contains('"longitude":100.5108'));
+      expect(payload, isNot(contains('locationNote')));
 
       final parsed = BookingRequestData.fromChatMessage(payload);
       expect(parsed, isNotNull);
       expect(parsed!.location, 'ไอคอนสยาม (ICONSIAM)');
       expect(parsed.locationAddress, '299 ถนนเจริญนคร กรุงเทพฯ');
-      expect(parsed.locationNote, 'หน้าร้านกาแฟ ชั้น G');
       expect(parsed.latitude, 13.7267);
       expect(parsed.longitude, 100.5108);
     });

@@ -1,13 +1,17 @@
-import 'package:frontend/core/widgets/app_popup.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../constants/colors.dart';
 import '../models/pickup_location.dart';
 import '../navigation/app_routes.dart';
-import '../services/location_service.dart';
+import '../services/map_device_position.dart';
 import '../theme/app_form_field_styles.dart';
+import 'longdo_map_view.dart';
 
-class PickupLocationField extends StatelessWidget {
+class PickupLocationField extends StatefulWidget {
   const PickupLocationField({
     super.key,
     this.value,
@@ -21,11 +25,116 @@ class PickupLocationField extends StatelessWidget {
   final AppFormFieldVariant variant;
 
   @override
+  State<PickupLocationField> createState() => _PickupLocationFieldState();
+}
+
+class _PickupLocationFieldState extends State<PickupLocationField> {
+  Future<Position?>? _preparedPosition;
+  DateTime? _positionRequestedAt;
+  ScrollPosition? _scrollPosition;
+  bool _nearViewport = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scrollPosition?.removeListener(_prepareWhenNearViewport);
+    _scrollPosition = Scrollable.maybeOf(context)?.position;
+    _scrollPosition?.addListener(_prepareWhenNearViewport);
+    _nearViewport = false;
+    _schedulePreparation();
+  }
+
+  @override
+  void didUpdateWidget(covariant PickupLocationField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.enabled &&
+        (!oldWidget.enabled || widget.value != oldWidget.value)) {
+      _nearViewport = false;
+      _schedulePreparation();
+    }
+  }
+
+  void _schedulePreparation() {
+    if (_scrollPosition == null) {
+      _preparePicker();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _prepareWhenNearViewport(),
+      );
+    }
+  }
+
+  void _prepareWhenNearViewport() {
+    if (!mounted || !widget.enabled || !LongdoMapView.isAvailable) return;
+    final scroll = _scrollPosition;
+    final render = context.findRenderObject();
+    if (scroll == null ||
+        !scroll.hasViewportDimension ||
+        render is! RenderBox ||
+        !render.attached ||
+        !render.hasSize) {
+      return;
+    }
+    final viewport = RenderAbstractViewport.maybeOf(render);
+    if (viewport == null) return;
+    final distance =
+        viewport.getOffsetToReveal(render, 1).offset - scroll.pixels;
+    final nearby = distance.abs() <= scroll.viewportDimension;
+    if (nearby && !_nearViewport) _preparePicker();
+    _nearViewport = nearby;
+  }
+
+  @override
+  void dispose() {
+    _scrollPosition?.removeListener(_prepareWhenNearViewport);
+    super.dispose();
+  }
+
+  Future<Position?>? _preparePicker() {
+    if (!widget.enabled || !LongdoMapView.isAvailable) return null;
+
+    final saved = widget.value;
+    if (saved != null) {
+      unawaited(
+        LongdoMapView.preloadPicker(
+          Future.value(mapPoint(saved.latitude, saved.longitude)),
+        ),
+      );
+      return null;
+    }
+
+    final now = DateTime.now();
+    final requestedAt = _positionRequestedAt;
+    if (requestedAt == null ||
+        now.difference(requestedAt) >= const Duration(seconds: 25)) {
+      _positionRequestedAt = now;
+      _preparedPosition = _readDevicePosition();
+    }
+    final position = _preparedPosition!;
+    unawaited(
+      LongdoMapView.preloadPicker(
+        position.then((value) => mapPoint(value?.latitude, value?.longitude)),
+      ),
+    );
+    return position;
+  }
+
+  Future<Position?> _readDevicePosition() async {
+    try {
+      return await getMapDevicePosition(requestPermission: false);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) => FormField<PickupLocation>(
-    initialValue: value,
+    initialValue: widget.value,
     autovalidateMode: AutovalidateMode.onUserInteraction,
     validator: (selected) =>
-        selected?.isValid == true ? null : 'กรุณาเลือกจุดนัดรับสินค้า',
+        selected?.isValid == true && selected?.hasCoordinates == true
+        ? null
+        : 'กรุณาระบุจุดนัดรับสินค้า',
     builder: (field) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -38,14 +147,14 @@ class PickupLocationField extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Material(
-          color: variant == AppFormFieldVariant.outlined
+          color: widget.variant == AppFormFieldVariant.outlined
               ? Colors.white
               : const Color(0xFFF0F1F2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(
-              variant == AppFormFieldVariant.outlined ? 16 : 24,
+              widget.variant == AppFormFieldVariant.outlined ? 16 : 24,
             ),
-            side: variant == AppFormFieldVariant.outlined
+            side: widget.variant == AppFormFieldVariant.outlined
                 ? BorderSide(
                     color: field.hasError
                         ? Theme.of(context).colorScheme.error
@@ -62,8 +171,10 @@ class PickupLocationField extends StatelessWidget {
               Icons.location_on_outlined,
               color: AppColors.primaryColor,
             ),
-            title: Text(value?.name ?? 'เลือกจุดนัดรับบนแผนที่'),
-            trailing: variant == AppFormFieldVariant.outlined && value != null
+            title: Text(widget.value?.name ?? 'ระบุจุดนัดรับสินค้า'),
+            trailing:
+                widget.variant == AppFormFieldVariant.outlined &&
+                    widget.value != null
                 ? const Text(
                     'เปลี่ยน',
                     style: TextStyle(
@@ -72,26 +183,17 @@ class PickupLocationField extends StatelessWidget {
                     ),
                   )
                 : const Icon(Icons.chevron_right),
-            onTap: !enabled
+            onTap: !widget.enabled
                 ? null
                 : () async {
-                    final result = await AppRoutes.openLocationPicker(
+                    final selected = await AppRoutes.openPickupDetails(
                       context,
-                      initialLocationName: value?.name ?? '',
-                      initialNote: value?.note,
-                      initialLatitude: value?.latitude,
-                      initialLongitude: value?.longitude,
+                      initialLocation: widget.value,
+                      initialDevicePosition: _preparePicker(),
                     );
-                    if (result == null || !context.mounted) return;
-                    final selected = PickupLocation(
-                      name: result.locationName,
-                      address: result.fullAddress,
-                      note: result.locationNote,
-                      latitude: result.latitude,
-                      longitude: result.longitude,
-                    );
+                    if (selected == null || !context.mounted) return;
                     field.didChange(selected);
-                    onChanged(selected);
+                    widget.onChanged(selected);
                   },
           ),
         ),
@@ -113,31 +215,20 @@ class PickupLocationCard extends StatelessWidget {
   final PickupLocation location;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    leading: const Icon(
-      Icons.location_on_outlined,
-      color: AppColors.primaryColor,
-    ),
-    title: const Text('จุดนัดรับสินค้า'),
-    subtitle: Text(location.name),
-    trailing: const Icon(Icons.map_outlined),
-    onTap: () => openPickupLocationInGoogleMaps(context, location),
-  );
-}
-
-Future<void> openPickupLocationInGoogleMaps(
-  BuildContext context,
-  PickupLocation location,
-) async {
-  final opened = await LocationService.openInExternalMaps(
-    location.latitude,
-    location.longitude,
-  );
-  if (!opened && context.mounted) {
-    showAppPopup(
-      context,
-      content: Text('ไม่สามารถเปิด Google Maps ได้ในขณะนี้'),
+  Widget build(BuildContext context) {
+    final address = location.address.trim();
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(
+        Icons.location_on_outlined,
+        color: AppColors.primaryColor,
+      ),
+      title: const Text('จุดนัดรับสินค้า'),
+      subtitle: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [Text(location.name), if (address.isNotEmpty) Text(address)],
+      ),
     );
   }
 }

@@ -32,8 +32,8 @@ begin
   assert exists (select 1 from notifications.notification_tb n where n.user_id = renter_id and n.type = 'identity_approved');
 
   insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_note, pickup_latitude, pickup_longitude)
-    values (owner_id, 'กล้อง', 'ทดสอบ', 100, 'pending_review', 'daily', 'จุดรับ', 'ที่อยู่', 'นัดรับ', 13.75, 100.50)
+    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
+    values (owner_id, 'กล้อง', 'ทดสอบ', 100, 'pending_review', 'daily', 'จุดรับ', 'ที่อยู่', 13.75, 100.50)
     returning id into item_id;
   perform public.admin_review_item(staff_id, item_id, 'approved', 'อนุมัติทดสอบ');
   update public.item_tb set status = 'pending_review' where id = item_id;

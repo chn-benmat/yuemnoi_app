@@ -34,7 +34,6 @@ dependencies:
   share_plus: ^13.3.0
   url_launcher: ^6.3.2
   qr_flutter: ^4.1.0
-  flutter_map: ^8.3.2
   flutter_markdown: ^0.7.6
   latlong2: ^0.10.1
   geolocator: ^14.0.3
@@ -54,6 +53,8 @@ dependencies:
   google_sign_in: 7.2.0
   firebase_core: 3.13.0
   firebase_messaging: 15.2.5
+  webview_flutter: ^4.14.1
+  package_info_plus: 10.2.2
 
 dev_dependencies:
   camera_platform_interface: ^2.14.0
@@ -86,6 +87,7 @@ flutter:
     - assets/icons/
     - assets/sounds/
     - assets/data/
+    - assets/maps/longdo.html
   fonts:
     - family: Prompt
       fonts:

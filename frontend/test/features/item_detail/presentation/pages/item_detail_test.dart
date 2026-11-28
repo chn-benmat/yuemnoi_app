@@ -314,7 +314,7 @@ void main() {
 
   for (final isOwner in [false, true]) {
     testWidgets(
-      '${isOwner ? 'owner' : 'renter'} opens the pickup pin in external Google Maps',
+      '${isOwner ? 'owner' : 'renter'} sees the pickup location without opening another app',
       (tester) async {
         final launches = <MethodCall>[];
         const channel = MethodChannel('plugins.flutter.io/url_launcher');
@@ -341,16 +341,8 @@ void main() {
         await tester.tap(location);
         await tester.pumpAndSettle();
 
-        expect(launches, hasLength(1));
-        expect(launches.single.method, 'launch');
-        final arguments = launches.single.arguments as Map;
-        final uri = Uri.parse(arguments['url'] as String);
-        expect(uri.host, 'www.google.com');
-        expect(uri.path, '/maps/search/');
-        expect(uri.queryParameters['api'], '1');
-        expect(uri.queryParameters['query'], '13.75,100.5');
-        expect(arguments['useWebView'], isFalse);
-        expect(arguments['useSafariVC'], isFalse);
+        expect(location, findsOneWidget);
+        expect(launches, isEmpty);
         expect(
           Navigator.of(tester.element(find.byType(ItemDetailScreen))).canPop(),
           isFalse,

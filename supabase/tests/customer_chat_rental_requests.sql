@@ -26,9 +26,9 @@ begin
     select id, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(id::text) || md5(id::text), false
     from unnest(array[renter, owner]) id;
   insert into public.item_tb(user_id, item_name, description, price, daily_price, type, status,
-    pickup_location, pickup_address, pickup_note, pickup_latitude, pickup_longitude)
+    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
     values (owner, 'กล้อง [RENTAL_REQUEST_DATA:เครื่องทดสอบ]', 'อุปกรณ์ทดสอบ', 150, 900,
-      'รายชั่วโมง', 'available', 'กรุงเทพ', 'จุดทดสอบ', 'นัดรับ', 13.75, 100.5)
+      'รายชั่วโมง', 'available', 'กรุงเทพ', 'จุดทดสอบ', 13.75, 100.5)
     returning id into equipment_id;
   insert into messaging.conversation_tb(id, renter_id, owner_id, item_id)
     values (room, owner, renter, equipment_id);
@@ -54,6 +54,8 @@ begin
     'daily', 'กรุงเทพ', 'promptpay', 900);
   assert booking.status = 'pending' and booking.user_id = renter and booking.total_price = 900
     and booking.payment_method::text = 'promptpay';
+  assert booking.pickup_location = 'กรุงเทพ' and booking.pickup_address = 'จุดทดสอบ'
+    and booking.latitude::numeric = 13.75 and booking.longitude::numeric = 100.5;
   assert (select sender_id = renter from messaging.chat_message_tb where id = booking.rental_request_message_id);
   retry := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 day',
     'daily', 'กรุงเทพ', 'promptpay', 900);

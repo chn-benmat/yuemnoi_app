@@ -30,9 +30,9 @@ class RentalStatusItemData {
   final String? duration;
   final int? totalPrice;
   final String? pickupLocation;
+  final String? pickupAddress;
   final double? latitude;
   final double? longitude;
-  final String? pickupNote;
   final String category;
   final bool isOwner;
 
@@ -53,9 +53,9 @@ class RentalStatusItemData {
     this.duration,
     this.totalPrice,
     this.pickupLocation,
+    this.pickupAddress,
     this.latitude,
     this.longitude,
-    this.pickupNote,
     this.category = 'ทั่วไป',
     this.isOwner = false,
   });
@@ -122,9 +122,9 @@ class RentalStatusItemData {
       duration: entity.duration,
       totalPrice: entity.totalPrice.toInt(),
       pickupLocation: entity.pickupLocation,
+      pickupAddress: entity.pickupAddress,
       latitude: entity.latitude,
       longitude: entity.longitude,
-      pickupNote: entity.pickupNote,
       category: entity.category ?? 'ทั่วไป',
       isOwner: entity.isOwner,
     );
@@ -673,18 +673,18 @@ class RentalStatusCard extends StatelessWidget {
   final RentalStatusItemData item;
   const RentalStatusCard({super.key, required this.item});
 
-  void _openTrackingMap(BuildContext context) {
+  void _openHandover(BuildContext context) {
     final isOwner = item.isOwner;
-    AppRoutes.openRentalTrackingMap(
+    AppRoutes.openRentalHandover(
       context,
       isOwner: isOwner,
       trackingArgs: {
         'itemTitle': item.title,
         'itemImageUrl': item.imageUrl,
         'pickupLocation': item.pickupLocation,
-        'destinationLat': item.latitude,
-        'destinationLng': item.longitude,
-        'pickupNote': item.pickupNote,
+        'pickupAddress': item.pickupAddress,
+        'pickupLatitude': item.latitude,
+        'pickupLongitude': item.longitude,
         'ownerName': item.ownerName,
         'ownerPhone': item.ownerPhone,
         'periodText': item.duration,
@@ -1219,14 +1219,14 @@ class RentalStatusCard extends StatelessWidget {
                             )
                           : item.isConfirmed
                           ? ElevatedButton.icon(
-                              onPressed: () => _openTrackingMap(context),
+                              onPressed: () => _openHandover(context),
                               icon: const Icon(
                                 Icons.near_me_outlined,
                                 size: 15,
                                 color: Colors.white,
                               ),
                               label: const Text(
-                                'ดูจุดนัดรับ & เส้นทาง',
+                                'ดูจุดนัดรับ',
                                 style: TextStyle(
                                   fontFamily: AppTextStyles.fontFamily,
                                   fontSize: 13,
@@ -1653,16 +1653,16 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                     ),
                     onPressed: () {
                       Navigator.pop(context);
-                      AppRoutes.openRentalTrackingMap(
+                      AppRoutes.openRentalHandover(
                         context,
                         isOwner: item.isOwner,
                         trackingArgs: {
                           'itemTitle': item.title,
                           'itemImageUrl': item.imageUrl,
                           'pickupLocation': item.pickupLocation,
-                          'destinationLat': item.latitude,
-                          'destinationLng': item.longitude,
-                          'pickupNote': item.pickupNote,
+                          'pickupAddress': item.pickupAddress,
+                          'pickupLatitude': item.latitude,
+                          'pickupLongitude': item.longitude,
                           'ownerName': item.ownerName,
                           'ownerPhone': item.ownerPhone,
                           'periodText': item.duration,
@@ -1674,8 +1674,8 @@ class _RentalStatusDetailSheet extends StatelessWidget {
                         },
                       );
                     },
-                    icon: const Icon(Icons.near_me_rounded, size: 18),
-                    label: const Text('ดูเส้นทางนัดรับ & แผนที่'),
+                    icon: const Icon(Icons.place_outlined, size: 18),
+                    label: const Text('ดูจุดนัดรับ'),
                   ),
                 ),
                 const SizedBox(height: 10),

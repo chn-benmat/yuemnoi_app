@@ -2232,7 +2232,6 @@ void main() {
           startTime: const TimeOfDay(hour: 9, minute: 0),
           endTime: const TimeOfDay(hour: 17, minute: 0),
           location: 'นัดรับตามตกลง',
-          locationNote: '',
           paymentMethod: 'cash',
           bookingId: 2065,
         );

@@ -43,7 +43,6 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 		"type":              item.Type,
 		"pickup_location":   item.PickupLocation,
 		"pickup_address":    item.PickupAddress,
-		"pickup_note":       item.PickupNote,
 		"pickup_latitude":   item.PickupLatitude,
 		"pickup_longitude":  item.PickupLongitude,
 	}

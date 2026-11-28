@@ -15,7 +15,6 @@ var (
 type Item struct {
 	PickupLocation  string   `json:"pickup_location" form:"pickup_location"`
 	PickupAddress   string   `json:"pickup_address" form:"pickup_address"`
-	PickupNote      string   `json:"pickup_note" form:"pickup_note"`
 	PickupLatitude  *float64 `json:"pickup_latitude" form:"pickup_latitude"`
 	PickupLongitude *float64 `json:"pickup_longitude" form:"pickup_longitude"`
 

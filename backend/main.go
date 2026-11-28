@@ -15,7 +15,6 @@ import (
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/aiservice"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/emaildns"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/fcm"
-	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/geocoding"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/logging"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/config"
@@ -145,7 +144,6 @@ func main() {
 	)
 
 	ports.RegisterHomeFeedRoutes(router, supabase.NewSupabaseHomeFeedRepository(supabaseClient), authGateway)
-	ports.RegisterLocationRoutes(router, geocoding.NewClient(cfg.GeocodingURL, nil), geocoding.NewPhotonClient(cfg.PlaceSuggestionsURL, nil))
 	// รัน Server แบบ Background (Non-blocking)
 	go func() {
 		slog.Info("Server is starting...", slog.String("port", cfg.Port), slog.String("mode", cfg.Mode))

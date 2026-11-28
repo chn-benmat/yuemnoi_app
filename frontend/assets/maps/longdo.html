@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <style>
+    html, body, #map { height: 100%; width: 100%; margin: 0; }
+    body { background: #f1f5f9; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+  let map;
+  let marker;
+  let selectCenter = false;
+  let warming = false;
+  let initialized = false;
+  let attributionInitialized = false;
+  let routeBounds;
+  const thaiConsonants = 'กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮ';
+  const thaiMapNameLabel = [
+    'let', 'localName', ['string', ['get', 'name_l'], ''],
+    'englishName', ['string', ['get', 'name_e'], ''],
+    ['case',
+      ['==', ['var', 'englishName'], ''], ['var', 'localName'],
+      ['any', ...Array.from(thaiConsonants, letter => ['in', letter, ['var', 'localName']])], ['var', 'localName'],
+      ['var', 'englishName']]
+  ];
+  const send = (type, data = null) =>
+    window.YuemnoiMap.postMessage(JSON.stringify({ type, data }));
+
+  function initializeAttribution(placeholder) {
+    if (attributionInitialized) return;
+    const attribution = placeholder.querySelector(
+      '.maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-attrib-empty)'
+    );
+    const button = attribution?.querySelector('.maplibregl-ctrl-attrib-button');
+    if (!button) return;
+    attributionInitialized = true;
+    // ใช้ปุ่มข้อมูลของแผนที่ย่อเครดิตเฉพาะตอนเปิดครั้งแรก
+    if (attribution.classList.contains('maplibregl-compact-show')) button.click();
+  }
+
+  function useThaiMapNames() {
+    const renderer = map.Renderer;
+    for (const layer of renderer?.getStyle()?.layers ?? []) {
+      const label = layer.layout?.['text-field'];
+      if (layer.type !== 'symbol' || !Array.isArray(label)) continue;
+      if (label[0] === 'let' && label[1] === 'localName') continue;
+      if (/"name_[le]"/.test(JSON.stringify(label))) {
+        renderer.setLayoutProperty(layer.id, 'text-field', thaiMapNameLabel);
+      }
+    }
+  }
+
+  function start(center, zoom, selectable, {
+    preload = false, showLeftControls = true, preferThaiLabels = false,
+    waitForFirstFrame = false, collapseAttribution = false
+  } = {}) {
+    const placeholder = document.getElementById('map');
+    const useThaiNames = selectable || preferThaiLabels;
+    selectCenter = selectable;
+    try {
+      if (map) {
+        warming = false;
+        const current = map.location();
+        if (Math.abs(current.lat - center.lat) > 1e-7 || Math.abs(current.lon - center.lon) > 1e-7) {
+          map.location(center, false);
+        }
+        if (map.zoom() !== zoom) map.zoom(zoom, false);
+        placeholder.style.width = '';
+        placeholder.style.height = '';
+        map.resize();
+        if (selectable) initializeAttribution(placeholder);
+        placeholder.style.opacity = '';
+        if (initialized) send('ready');
+        return;
+      }
+      warming = preload;
+      if (warming || waitForFirstFrame) placeholder.style.opacity = '0';
+      if (warming) {
+        // ให้ Longdo เริ่มโหลดภาพแผนที่ก่อนที่ WebView จะมีขนาดจริง
+        placeholder.style.width = '390px';
+        placeholder.style.height = '600px';
+      }
+      map = new longdo.Map({
+        placeholder,
+        location: center,
+        zoom,
+        language: 'th',
+        lastView: false,
+        ...(collapseAttribution && {
+          attributionControl: {
+            compact: true,
+            customAttribution: '<a href="https://maplibre.org/" target="_blank">MapLibre</a>'
+          }
+        })
+      });
+      if (selectable) {
+        initializeAttribution(placeholder);
+      }
+      if (useThaiNames) map.Renderer?.on('style.load', useThaiMapNames);
+      map.Event.bind(longdo.EventName.Ready, () => {
+        for (const control of ['Geolocation', 'Toolbar', 'DPad', 'LayerSelector', 'Fullscreen']) {
+          map.Ui[control]?.visible(false);
+        }
+        map.Ui.Crosshair?.visible(selectable);
+        map.Search.enablePopup(false);
+        map.Route.enableContextMenu(false);
+        if (useThaiNames) useThaiMapNames();
+        if (selectable || !showLeftControls) {
+          map.Ui.Zoombar?.visible(false);
+          map.Ui.Terrain?.visible(false);
+        }
+        if (selectable) {
+          initializeAttribution(placeholder);
+          map.Event.bind(longdo.EventName.Click, point => {
+            const coordinates = point && Number.isFinite(point.lat) && Number.isFinite(point.lon)
+              ? point : map.location(point);
+            if (!coordinates) return;
+            map.location(coordinates, false);
+            send('pick', coordinates);
+          });
+          map.Event.bind(longdo.EventName.Drop, () => send('pick', map.location()));
+        }
+        map.Event.bind(longdo.EventName.GuideComplete, () => {
+          send('route', map.Route.distance(true));
+          const route = map.Route.exportRouteLine();
+          if (typeof route?.bound === 'function') routeBounds = route.bound();
+          fitRoute();
+        });
+        map.Event.bind(longdo.EventName.GuideError, () => send('route', null));
+        const finishStart = () => {
+          if (collapseAttribution) initializeAttribution(placeholder);
+          initialized = true;
+          if (warming) {
+            window.YuemnoiMap.postMessage('map-preloaded');
+          } else {
+            placeholder.style.opacity = '';
+            send('ready');
+          }
+        };
+        const renderer = map.Renderer;
+        if (waitForFirstFrame && renderer) {
+          // Longdo พร้อมก่อนที่ MapLibre จะวาดภาพแผนที่เฟรมแรกเสร็จ
+          const revealMap = () => {
+            if (!renderer.loaded()) return;
+            renderer.off('render', revealMap);
+            finishStart();
+          };
+          renderer.on('render', revealMap);
+          renderer.triggerRepaint();
+        } else {
+          finishStart();
+        }
+      });
+    } catch (_) {
+      if (preload) {
+        map = null;
+        warming = false;
+        attributionInitialized = false;
+        placeholder.replaceChildren();
+        placeholder.removeAttribute('style');
+        window.YuemnoiMap.postMessage('map-preload-error');
+      } else {
+        send('error');
+      }
+    }
+  }
+
+  function setPin(point, recenter, zoom) {
+    if (marker) map.Overlays.remove(marker);
+    marker = point && !selectCenter ? new longdo.Marker(point) : null;
+    if (marker) map.Overlays.add(marker);
+    if (recenter && point) {
+      map.location(point, false);
+      if (zoom != null) map.zoom(zoom, false);
+    }
+  }
+
+  function centerOn(point) {
+    map.location(point);
+  }
+
+  function fitRoute() {
+    if (routeBounds) {
+      map.bound(routeBounds, { padding: { top: 80, bottom: 34, left: 34, right: 74 }, maxZoom: 16 });
+    }
+  }
+
+  async function searchPlaces(query, requestId) {
+    let result = null;
+    try {
+      const response = await map.Search.search(query, { limit: 7, smart: true });
+      result = typeof response === 'string' ? JSON.parse(response) : response;
+    } catch (_) {
+      // ฝั่ง Flutter ยังเปิดให้ผู้ใช้ปักหมุดหรือกรอกจุดนัดเองได้
+    }
+    send('search', { requestId, result });
+  }
+
+  async function addressAt(point, requestId) {
+    let result = null;
+    try {
+      const response = await map.Search.address(point);
+      result = typeof response === 'string' ? JSON.parse(response) : response;
+    } catch (_) {
+      // พิกัดหมุดยังใช้ได้แม้ Longdo ไม่ส่งข้อมูลที่อยู่กลับมา
+    }
+    send('pin-address', { requestId, result });
+  }
+
+  function showRoute(origin, destination, lockMarkers = false) {
+    try {
+      map.Route.clear();
+      routeBounds = {
+        minLat: Math.min(origin.lat, destination.lat),
+        maxLat: Math.max(origin.lat, destination.lat),
+        minLon: Math.min(origin.lon, destination.lon),
+        maxLon: Math.max(origin.lon, destination.lon)
+      };
+      map.Route.auto(false);
+      if (marker) map.Overlays.remove(marker);
+      map.Route.add(origin);
+      map.Route.add(destination);
+      if (lockMarkers) {
+        for (const pin of map.Route.list()) pin.update({ draggable: false });
+      }
+      map.Route.search();
+    } catch (_) {
+      send('route', null);
+    }
+  }
+
+  const script = document.createElement('script');
+  script.src = __YUEMNOI_LONGDO_SDK_URL__;
+  script.onload = () => window.YuemnoiMap.postMessage('sdk-ready');
+  script.onerror = () => window.YuemnoiMap.postMessage('sdk-error');
+  document.head.appendChild(script);
+</script>
+</body>
+</html>

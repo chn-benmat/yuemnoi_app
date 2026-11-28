@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:frontend/core/navigation/app_routes.dart';
 import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/core/services/booking_confirmation_tracker.dart';
@@ -9,7 +8,6 @@ import 'package:frontend/features/chat/domain/entities/chat_message.dart';
 import 'package:frontend/features/chat/presentation/widgets/booking_request_bubble_card.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -50,6 +48,7 @@ void main() {
       startTime: const TimeOfDay(hour: 10, minute: 0),
       endTime: const TimeOfDay(hour: 10, minute: 0),
       location: 'Pickup point',
+      locationAddress: '123 Siam Square, Bangkok',
       latitude: 13.7466,
       longitude: 100.5393,
       status: bookingStatus,
@@ -225,7 +224,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('opens the pickup map for an offer without a booking ID', (
+  testWidgets('opens pickup details for an offer without a booking ID', (
     tester,
   ) async {
     AuthSession.saveAccessToken('test-token');
@@ -242,9 +241,8 @@ void main() {
       find.text('ไม่พบรายการเช่านี้ กรุณาเปิดหน้าจากรายการเช่าของคุณ'),
       findsNothing,
     );
-    final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
-    expect(map.options.initialCenter, const LatLng(13.7466, 100.5393));
-    expect(find.byTooltip('นำทางด้วย Google Maps'), findsOneWidget);
+    expect(find.text('นัดรับอุปกรณ์'), findsOneWidget);
+    expect(find.text('123 Siam Square, Bangkok'), findsOneWidget);
     expect(find.text('โทรหาผู้เช่า'), findsNothing);
     expect(find.text('ส่งมอบอุปกรณ์'), findsNothing);
     expect(tester.takeException(), isNull);

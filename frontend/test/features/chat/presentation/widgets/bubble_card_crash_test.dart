@@ -6,7 +6,7 @@ import 'package:frontend/core/widgets/rental_countdown_timer_widget.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
 import 'package:frontend/features/chat/presentation/widgets/booking_request_bubble_card.dart';
-import 'package:frontend/features/profile/presentation/pages/rentals/rental_tracking_map_page.dart';
+import 'package:frontend/features/profile/presentation/pages/rentals/rental_handover_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
@@ -78,9 +78,9 @@ void main() {
     await tester.tap(pickupDetails);
     await tester.pumpAndSettle();
 
-    final mapPage = find.byType(RentalTrackingMapPage);
+    final mapPage = find.byType(RentalHandoverPage);
     expect(mapPage, findsOneWidget);
-    final map = tester.widget<RentalTrackingMapPage>(mapPage);
+    final map = tester.widget<RentalHandoverPage>(mapPage);
     expect(map.bookingData?.bookingId, 2072);
     expect(map.bookingData?.conversationId, 'conv-1');
     expect(map.bookingData?.location, 'เซ็นทรัลเวิลด์');

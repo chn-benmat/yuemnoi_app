@@ -1028,7 +1028,7 @@ class _ChatDetailViewState extends State<_ChatDetailView>
       return;
     }
     final pickup = itemDetail.pickupLocation;
-    if (pickup == null) {
+    if (pickup == null || !pickup.hasCoordinates) {
       showAppPopup(
         context,
         content: Text(
@@ -1073,7 +1073,6 @@ class _ChatDetailViewState extends State<_ChatDetailView>
       startTime: const TimeOfDay(hour: 9, minute: 0),
       endTime: const TimeOfDay(hour: 17, minute: 0),
       location: pickup.name,
-      locationNote: pickup.note,
       locationAddress: pickup.address,
       latitude: pickup.latitude,
       longitude: pickup.longitude,

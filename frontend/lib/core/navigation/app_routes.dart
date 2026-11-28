@@ -3,6 +3,7 @@ import '../../features/rental_item/domain/entities/rental_item.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'item_detail_route_args.dart';
 import '../../features/identity/data/identity_api_repository.dart';
@@ -18,11 +19,12 @@ import '../../features/auth/presentation/pages/forget_password.dart';
 import '../../features/auth/presentation/pages/login.dart';
 import '../../features/auth/presentation/pages/one_time_verification.dart';
 import '../../features/auth/presentation/pages/register.dart';
+import '../models/pickup_location.dart';
 import '../network/api_client.dart';
 import '../network/auth_session.dart';
 import '../utils/auth_guard.dart';
 import '../../features/booking/presentation/pages/booking.dart';
-import '../../features/booking/presentation/pages/location_picker_map_page.dart';
+import '../../features/booking/presentation/pages/pickup_details_page.dart';
 import '../../features/booking/data/datasources/rental_request_remote_data_source.dart';
 import '../../features/booking/data/repositories/rental_request_repository_impl.dart';
 import '../../features/booking/domain/usecases/submit_rental_request_usecase.dart';
@@ -75,7 +77,7 @@ import '../../features/profile/presentation/pages/profile/user_profile_view_scre
 import '../../features/profile/presentation/pages/rentals/rental_history_screen.dart';
 import '../../features/profile/presentation/pages/rentals/rental_income_screen.dart';
 import '../../features/profile/presentation/pages/rentals/rental_status_screen.dart';
-import '../../features/profile/presentation/pages/rentals/rental_tracking_map_page.dart';
+import '../../features/profile/presentation/pages/rentals/rental_handover_page.dart';
 import '../../features/profile/presentation/pages/support/contact_screen.dart';
 import '../../features/profile/presentation/pages/support/faq_screen.dart';
 import '../../features/wallet/presentation/pages/wallet.dart';
@@ -109,7 +111,7 @@ abstract final class AppRoutes {
   static const contact = '/profile/contact';
   static const faq = '/profile/faq';
   static const rentalStatus = '/profile/rental-status';
-  static const rentalTrackingMap = '/rental-tracking-map';
+  static const rentalHandover = '/rental-tracking-map';
   static const favorite = '/profile/favorite';
   static const rentalIncome = '/profile/rental-income';
   static const rentalHistory = '/profile/rental-history';
@@ -311,13 +313,13 @@ abstract final class AppRoutes {
           ),
         ),
         GoRoute(
-          path: rentalTrackingMap,
+          path: rentalHandover,
           pageBuilder: (context, state) {
             final extra = state.extra;
             if (extra is BookingRequestData) {
               return MaterialPage<void>(
                 key: state.pageKey,
-                child: RentalTrackingMapPage(
+                child: RentalHandoverPage(
                   bookingData: extra,
                   requireBookingId: true,
                 ),
@@ -325,14 +327,15 @@ abstract final class AppRoutes {
             } else if (extra is Map<String, dynamic>) {
               return MaterialPage<void>(
                 key: state.pageKey,
-                child: RentalTrackingMapPage(
+                child: RentalHandoverPage(
                   bookingData: extra['bookingData'] as BookingRequestData?,
                   itemTitle: extra['itemTitle'] as String?,
                   itemImageUrl: extra['itemImageUrl'] as String?,
                   pickupLocation: extra['pickupLocation'] as String?,
-                  pickupNote: extra['pickupNote'] as String?,
-                  destinationLat: (extra['destinationLat'] as num?)?.toDouble(),
-                  destinationLng: (extra['destinationLng'] as num?)?.toDouble(),
+                  pickupAddress: extra['pickupAddress'] as String?,
+                  pickupLatitude: (extra['pickupLatitude'] as num?)?.toDouble(),
+                  pickupLongitude: (extra['pickupLongitude'] as num?)
+                      ?.toDouble(),
                   ownerName: extra['ownerName'] as String?,
                   ownerPhone: extra['ownerPhone'] as String?,
                   periodText: extra['periodText'] as String?,
@@ -350,7 +353,7 @@ abstract final class AppRoutes {
             }
             return MaterialPage<void>(
               key: state.pageKey,
-              child: const RentalTrackingMapPage(requireBookingId: true),
+              child: const RentalHandoverPage(requireBookingId: true),
             );
           },
         ),
@@ -893,26 +896,16 @@ abstract final class AppRoutes {
     return context.push<bool>(bookingConfirmation, extra: bookingData);
   }
 
-  static Future<LocationPickerResult?> openLocationPicker(
+  static Future<PickupLocation?> openPickupDetails(
     BuildContext context, {
-    String? initialLocationName,
-    String? initialNote,
-    double? initialLatitude,
-    double? initialLongitude,
-    String title = 'เลือกจุดนัดรับอุปกรณ์',
-    String placeNameHint = 'ชื่อสถานที่นัดพบ...',
-    String confirmLabel = 'ยืนยันสถานที่นัดพบนี้',
+    PickupLocation? initialLocation,
+    Future<Position?>? initialDevicePosition,
   }) {
-    return Navigator.of(context).push<LocationPickerResult>(
+    return Navigator.of(context).push<PickupLocation>(
       MaterialPageRoute(
-        builder: (_) => LocationPickerMapPage(
-          initialLocationName: initialLocationName,
-          initialNote: initialNote,
-          initialLatitude: initialLatitude,
-          initialLongitude: initialLongitude,
-          title: title,
-          placeNameHint: placeNameHint,
-          confirmLabel: confirmLabel,
+        builder: (_) => PickupDetailsPage(
+          initialLocation: initialLocation,
+          initialDevicePosition: initialDevicePosition,
         ),
       ),
     );
@@ -1028,7 +1021,7 @@ abstract final class AppRoutes {
     );
   }
 
-  static Future<void> openRentalTrackingMap(
+  static Future<void> openRentalHandover(
     BuildContext context, {
     BookingRequestData? bookingData,
     Map<String, dynamic>? trackingArgs,
@@ -1041,15 +1034,15 @@ abstract final class AppRoutes {
         ? rawStartDate
         : DateTime.tryParse(rawStartDate?.toString() ?? '');
 
-    final page = RentalTrackingMapPage(
+    final page = RentalHandoverPage(
       bookingData:
           bookingData ?? (trackingArgs?['bookingData'] as BookingRequestData?),
       itemTitle: trackingArgs?['itemTitle'] as String?,
       itemImageUrl: trackingArgs?['itemImageUrl'] as String?,
       pickupLocation: trackingArgs?['pickupLocation'] as String?,
-      pickupNote: trackingArgs?['pickupNote'] as String?,
-      destinationLat: (trackingArgs?['destinationLat'] as num?)?.toDouble(),
-      destinationLng: (trackingArgs?['destinationLng'] as num?)?.toDouble(),
+      pickupAddress: trackingArgs?['pickupAddress'] as String?,
+      pickupLatitude: (trackingArgs?['pickupLatitude'] as num?)?.toDouble(),
+      pickupLongitude: (trackingArgs?['pickupLongitude'] as num?)?.toDouble(),
       ownerName: trackingArgs?['ownerName'] as String?,
       ownerPhone: trackingArgs?['ownerPhone'] as String?,
       periodText: trackingArgs?['periodText'] as String?,
@@ -1066,7 +1059,7 @@ abstract final class AppRoutes {
 
     return Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        settings: const RouteSettings(name: rentalTrackingMap),
+        settings: const RouteSettings(name: rentalHandover),
         builder: (_) => page,
       ),
     );

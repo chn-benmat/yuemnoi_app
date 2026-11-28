@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
+
+import '../../../../core/models/pickup_location.dart';
 import 'package:intl/intl.dart';
 import 'package:json_annotation/json_annotation.dart';
 
@@ -118,10 +121,17 @@ class BookingRequestData {
   final TimeOfDay startTime;
   final TimeOfDay endTime;
   final String location;
-  final String locationNote;
   final String? locationAddress;
   final double? latitude;
   final double? longitude;
+
+  LatLng? get pickupCoordinates =>
+      mapPoint(latitude, longitude) ??
+      matchingListingPoint(
+        location,
+        item.defaultLocation,
+        mapPoint(item.latitude, item.longitude),
+      );
   final String? conversationId;
   final String? ownerId;
   final String? originalMessageId;
@@ -148,7 +158,6 @@ class BookingRequestData {
     required this.startTime,
     required this.endTime,
     required this.location,
-    this.locationNote = 'เลือกโดยผู้ปล่อยเช่า',
     this.locationAddress,
     this.latitude,
     this.longitude,
@@ -199,7 +208,6 @@ class BookingRequestData {
       'endHour': endTime.hour,
       'endMinute': endTime.minute,
       'location': location,
-      'locationNote': locationNote,
       'locationAddress': locationAddress,
       'latitude': latitude,
       'longitude': longitude,
@@ -300,8 +308,6 @@ $tag$jsonString$metaEndTag''';
           startTime: startTime,
           endTime: endTime,
           location: map['location'] as String? ?? 'นัดรับตามตกลง',
-          locationNote:
-              map['locationNote'] as String? ?? 'เลือกโดยผู้ปล่อยเช่า',
           locationAddress: map['locationAddress'] as String?,
           latitude: (map['latitude'] as num?)?.toDouble(),
           longitude: (map['longitude'] as num?)?.toDouble(),
@@ -466,7 +472,6 @@ $tag$jsonString$metaEndTag''';
     TimeOfDay? startTime,
     TimeOfDay? endTime,
     String? location,
-    String? locationNote,
     String? locationAddress,
     double? latitude,
     double? longitude,
@@ -486,7 +491,6 @@ $tag$jsonString$metaEndTag''';
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       location: location ?? this.location,
-      locationNote: locationNote ?? this.locationNote,
       locationAddress: locationAddress ?? this.locationAddress,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
