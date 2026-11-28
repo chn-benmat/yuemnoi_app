@@ -50,7 +50,7 @@ class ItemDetailRemoteDataSource {
           await _client
               .from('item_tb')
               .select(
-                'id,user_id,item_name,item_image_url,description,category,price,daily_price,damage_fee,late_return_fee,damage_terms,status,type,owner_hidden,pickup_location,pickup_address,pickup_latitude,pickup_longitude,is_rental_occupied,is_rental_queue_held',
+                'id,user_id,item_name,item_image_url,description,category,price,daily_price,hourly_rate,daily_rate,damage_fee,late_return_fee,damage_terms,status,type,owner_hidden,pickup_location,pickup_address,pickup_latitude,pickup_longitude,is_rental_occupied,is_rental_queue_held',
               )
               .eq('id', itemId)
               .maybeSingle();

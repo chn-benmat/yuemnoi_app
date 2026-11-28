@@ -26,6 +26,8 @@ type Item struct {
 	Category              string    `json:"category"`
 	Price                 int       `json:"price"`
 	DailyPrice            *int      `json:"daily_price,omitempty"`
+	HourlyRate            *int      `json:"hourly_rate"` // ฐานคำนวณจาก price/type อ่านอย่างเดียว
+	DailyRate             *int      `json:"daily_rate"`  // ฐานคำนวณจาก daily_price หรือ price รายวัน
 	DamageFee             int       `json:"damage_fee,omitempty"`
 	LateReturnFee         int       `json:"late_return_fee,omitempty"`
 	DamageTerms           string    `json:"damage_terms,omitempty"`

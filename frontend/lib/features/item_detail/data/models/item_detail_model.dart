@@ -44,6 +44,7 @@ abstract final class ItemDetailModel {
       ownerHidden: item['owner_hidden'] == true,
       pickupLocation: PickupLocation.fromJson(item),
       isOwner: currentUserId != null && currentUserId == ownerId,
+      rates: _rates(item),
     );
   }
 
@@ -80,8 +81,18 @@ abstract final class ItemDetailModel {
       ownerHidden: item['owner_hidden'] == true,
       pickupLocation: PickupLocation.fromJson(item),
       isOwner: currentUserId != null && currentUserId == ownerId,
+      rates: _rates(item),
     );
   }
+
+  // ใช้เรตจากฐานเมื่อแถวมีคอลัมน์ hourly_rate/daily_rate (ค่า null คือไม่มีเรตหน่วยนั้น)
+  static ({int? hourly, int? daily})? _rates(Map<String, dynamic> item) =>
+      item.containsKey('hourly_rate') || item.containsKey('daily_rate')
+      ? (
+          hourly: _optionalInt(item['hourly_rate']),
+          daily: _optionalInt(item['daily_rate']),
+        )
+      : null;
 
   static ItemOwner _owner(String userId, Map<String, dynamic>? profile) {
     final displayName = _string(profile?['display_name']);

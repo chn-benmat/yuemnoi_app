@@ -57,6 +57,7 @@ class ItemDetail extends Equatable {
     required this.isOwner,
     this.ownerHidden = false,
     this.pickupLocation,
+    this.rates,
   });
 
   final int id;
@@ -77,10 +78,16 @@ class ItemDetail extends Equatable {
   final bool ownerHidden;
   final PickupLocation? pickupLocation;
 
+  /// เรตต่อหน่วยที่ฐานคำนวณจาก price/type/daily_price (hourly_rate/daily_rate)
+  /// เป็น null เมื่อสร้างจากข้อมูลในเครื่อง เช่น พรีวิวก่อนบันทึก
+  final ({int? hourly, int? daily})? rates;
+
   bool get _isHourly => rentalType == 'hourly' || rentalType == 'รายชั่วโมง';
   String get unitLabel => _isHourly ? 'ชั่วโมง' : 'วัน';
-  int? get hourlyPrice => _isHourly ? price : null;
-  int? get dailyPrice => _isHourly ? additionalDailyPrice : price;
+  int? get hourlyPrice =>
+      rates != null ? rates!.hourly : (_isHourly ? price : null);
+  int? get dailyPrice =>
+      rates != null ? rates!.daily : (_isHourly ? additionalDailyPrice : price);
 
   ItemDetail withVisibility({required bool hidden}) => ItemDetail(
     id: id,
@@ -100,6 +107,7 @@ class ItemDetail extends Equatable {
     isOwner: isOwner,
     ownerHidden: hidden,
     pickupLocation: pickupLocation,
+    rates: rates,
   );
 
   double get averageRating {
@@ -127,6 +135,7 @@ class ItemDetail extends Equatable {
     isOwner,
     ownerHidden,
     pickupLocation,
+    rates,
   ];
 }
 

@@ -47,3 +47,36 @@ func TestItemDetailUsesOwnerAccountName(t *testing.T) {
 		})
 	}
 }
+
+func TestItemDetailCarriesDatabaseRates(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/rest/v1/account_deletion_item_v":
+			_, _ = w.Write([]byte(`[{"id":12,"user_id":"owner-12","price":400,"type":"daily","hourly_rate":null,"daily_rate":400}]`))
+		case "/rest/v1/public_profile_v":
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	repo := supabaseadapter.NewSupabaseItemRepository(supabaseclient.CreateClient(server.URL, "test-key"), "test-key")
+	item, err := repo.FindByID(context.Background(), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response map[string]any
+	if err := json.Unmarshal(body, &response); err != nil {
+		t.Fatal(err)
+	}
+	// แอปต้องแยกได้ว่าไม่มีเรตรายชั่วโมง (null) กับไม่ได้ส่งคอลัมน์มา
+	hourly, hasHourly := response["hourly_rate"]
+	if !hasHourly || hourly != nil || response["daily_rate"] != float64(400) {
+		t.Fatalf("rates in response = hourly %v (%v), daily %v", hourly, hasHourly, response["daily_rate"])
+	}
+}
