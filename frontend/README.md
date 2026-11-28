@@ -365,7 +365,7 @@ frontend/
 ## Package adapters และ local cache
 
 - ช่อง OTP ใช้ `pinput 6.0.2` โดยยังส่งรหัสเมื่อกดยืนยัน; validators และเบอร์โทรใช้ `form_builder_validators` กับ `phone_numbers_parser` ผ่าน helpers กลาง เบอร์ไทยตรวจตาม metadata ของ package
-- Skeleton ใช้ `skeletonizer`; หน้าดูภาพใช้ `photo_view`; แชตผู้ใช้และ AI ใช้ `flutter_chat_ui 2.11.1` จัดการรายการข้อความ พร้อม custom builders สำหรับการ์ดเช่า/คืนและแบบสอบถามเดิม ตรึง pinput/chat UI รุ่นนี้เพื่อให้ใช้ Flutter Material ชุดเดียวกับแอป
+- Skeleton ใช้ `shimmer`; หน้าดูภาพใช้ `photo_view`; แชตผู้ใช้และ AI ใช้ `flutter_chat_ui 2.11.1` จัดการรายการข้อความ พร้อม custom builders สำหรับการ์ดเช่า/คืนและแบบสอบถามเดิม ตรึง pinput/chat UI รุ่นนี้เพื่อให้ใช้ Flutter Material ชุดเดียวกับแอป
 - JSON DTO ที่เป็นการแปลงข้อมูลตรงใช้ `json_serializable`; aliases และ coercions อยู่ใน converters ส่วนการรวมหลาย records และการคำนวณ business state ยังอยู่ใน mapper เดิม
 - SSE ใช้ EventFlux ผ่าน adapter ของ logical lines จาก `ApiClient` จึงคง Dio, app headers, HTTP error mapping และการยกเลิกคำขอไว้ส่วนกลาง ไม่เปิด reconnect POST อัตโนมัติ
 - Drift เก็บ Home snapshot และข้อความแชตที่ server ยืนยันแล้ว 50 รายการล่าสุดต่อห้อง โดยแยก owner ของแต่ละบัญชี ล้าง cache บัญชีเมื่อออกจากระบบ และไม่สร้าง offline outbox ภาพ signed URL ยังต้องเข้าถึง Storage ได้

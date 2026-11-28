@@ -48,8 +48,8 @@ class ChatMessageComposer extends StatelessWidget {
                 child: FilledButton.tonalIcon(
                   onPressed: onRequestRentalQueue,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFF0E5FC),
-                    foregroundColor: AppColors.primaryColor,
+                    backgroundColor: AppColors.primaryColor,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     textStyle: const TextStyle(
                       fontSize: 13,

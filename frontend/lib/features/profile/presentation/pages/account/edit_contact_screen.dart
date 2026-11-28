@@ -1,5 +1,6 @@
 import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../core/constants/colors.dart';
@@ -111,9 +112,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
           return Scaffold(
             backgroundColor: const Color(0xFFFAF9FD),
             appBar: AppBar(
-              backgroundColor: const Color(0xFFFAF9FD),
-              foregroundColor: const Color(0xFF292235),
-              surfaceTintColor: Colors.transparent,
               leading: const BackButton(),
               title: const Text(
                 'ข้อมูลติดต่อ',
@@ -160,9 +158,16 @@ class _EditContactScreenState extends State<EditContactScreen> {
                     EditContactField(
                       controller: _phoneCtrl,
                       label: 'เบอร์โทรศัพท์',
-                      hint: '08X-XXX-XXXX',
+                      hint: '0812345678',
                       icon: Icons.phone_outlined,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(
+                          10,
+                          maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                        ),
+                      ],
                       validator: AppFormValidators.thaiPhone(),
                     ),
                     const SizedBox(height: 28),

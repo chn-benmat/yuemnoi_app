@@ -10,6 +10,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(theme: AppTheme.lightTheme, home: const FaqScreen()),
     );
+    expect(find.text('มีอะไรให้ช่วยไหม?'), findsNothing);
+    expect(
+      find.text('รวมเรื่องที่ควรรู้ ก่อนเช่าและปล่อยเช่าบน Yuemnoi'),
+      findsNothing,
+    );
     expect(find.text('เริ่มต้นใช้งาน · 5 คำถาม'), findsOneWidget);
     expect(find.byType(SelectableText), findsOneWidget);
     final question = find.text('การลงทะเบียนและการยืนยันตัวตน');

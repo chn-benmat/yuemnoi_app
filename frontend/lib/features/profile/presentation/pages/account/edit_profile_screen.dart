@@ -196,9 +196,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           return Scaffold(
             backgroundColor: const Color(0xFFFAF9FD),
             appBar: AppBar(
-              backgroundColor: const Color(0xFFFAF9FD),
-              foregroundColor: const Color(0xFF292235),
-              surfaceTintColor: Colors.transparent,
               leading: const BackButton(),
               title: const Text(
                 'แก้ไขโปรไฟล์',

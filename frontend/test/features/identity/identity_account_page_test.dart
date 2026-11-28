@@ -244,10 +244,9 @@ void main() {
     expect(cubit.state.details, isNotNull);
     expect(repo.evidenceReads, 0);
     expect(addresses.loads, 0);
-    expect(
-      TickerMode.of(tester.element(find.byType(SkeletonShimmer))),
-      isFalse,
-    );
+    final skeletons = tester.elementList(find.byType(SkeletonShimmer));
+    expect(skeletons, isNotEmpty);
+    expect(skeletons.map(TickerMode.of), everyElement(isFalse));
     expect(find.byKey(const ValueKey('citizen_id')), findsNothing);
     final heading = find.text('1. ข้อมูลที่เก็บ');
     final sectionTop = tester.getTopLeft(heading).dy;
@@ -396,12 +395,14 @@ void main() {
     expect(field.validator!('1101700207030'), isNull);
   });
 
-  testWidgets('บัญชีอนุมัติที่ยินยอมแล้วเปิดหน้าได้โดยไม่มีเงื่อนไข', (
+  testWidgets('บัญชีที่ยินยอมแล้วเปิดฟอร์มพร้อมรูปที่บันทึกไว้', (
     tester,
   ) async {
     final gate = Completer<void>();
+    final evidenceGate = Completer<void>();
     final repo = AccountRepository()
       ..loadGate = gate
+      ..evidenceGate = evidenceGate
       ..consentVersion = 'identity-v2';
     final cubit = IdentityAccountCubit(
       repo,
@@ -420,7 +421,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 150));
     final dialog = find.byKey(const ValueKey('identity_consent_dialog'));
     expect(dialog, findsNothing);
-    expect(find.byType(SkeletonShimmer), findsOneWidget);
+    expect(find.byType(SkeletonShimmer), findsWidgets);
     expect(
       find.ancestor(
         of: find.byType(AppBar),
@@ -441,9 +442,18 @@ void main() {
     final buttonRect = tester.getRect(save);
 
     gate.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(repo.evidenceReads, 2);
+    expect(dialog, findsNothing);
+    expect(find.byType(SkeletonShimmer), findsWidgets);
+    expect(find.byKey(const ValueKey('first_name')), findsNothing);
+
+    evidenceGate.complete();
     await tester.pumpAndSettle();
     expect(find.byType(SkeletonShimmer), findsNothing);
     expect(dialog, findsNothing);
+    expect(find.byType(Image), findsNWidgets(2));
     expect(tester.getRect(save), buttonRect);
     expect(find.text('เงื่อนไขการเก็บข้อมูลบัตรประชาชน'), findsNothing);
     await tester.ensureVisible(find.byKey(const ValueKey('first_name')));

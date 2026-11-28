@@ -1040,15 +1040,9 @@ class _IdentityPageState extends State<IdentityPage> {
             child: Scaffold(
               backgroundColor: IdentityColors.canvas,
               appBar: AppBar(
-                backgroundColor: IdentityColors.canvas,
-                surfaceTintColor: IdentityColors.canvas,
                 title: const Text(
                   'ยืนยันตัวตน',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    color: IdentityColors.ink,
-                  ),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                 ),
                 centerTitle: true,
                 leading: IconButton(

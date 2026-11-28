@@ -2,6 +2,7 @@ import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../../core/services/skeleton_layout_cache.dart';
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/utils/auth_guard.dart';
@@ -196,12 +197,15 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
       bloc: _storefront,
       builder: (context, state) {
         final data = state.data;
+        if (data != null) {
+          SkeletonLayoutCache.instance.writeCount(
+            'profile_items.${_storefront.userId}',
+            data.items.length,
+          );
+        }
         return Scaffold(
           backgroundColor: const Color(0xFFF8F8FA),
           appBar: AppBar(
-            backgroundColor: Colors.white,
-            surfaceTintColor: Colors.white,
-            foregroundColor: const Color(0xFF22212A),
             elevation: 0,
             scrolledUnderElevation: 0,
             leading: const BackButton(),
@@ -225,7 +229,12 @@ class _UserProfileViewScreenState extends State<UserProfileViewScreen> {
                 )
               : null,
           body: state.isLoading && data == null
-              ? const UserProfileLoadingSkeleton()
+              ? UserProfileLoadingSkeleton(
+                  count: SkeletonLayoutCache.instance.count(
+                    'profile_items.${_storefront.userId}',
+                    fallback: 4,
+                  ),
+                )
               : RefreshIndicator(
                   color: AppColors.primaryColor,
                   onRefresh: _storefront.load,

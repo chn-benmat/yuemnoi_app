@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../widgets/account/account_page_intro.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../widgets/support/faq_widgets.dart';
 
@@ -50,9 +49,6 @@ class _FaqScreenState extends State<FaqScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFAF9FD),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFAF9FD),
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: const Color(0xFF292235),
         leading: const BackButton(),
         title: const Text(
           'คำถามที่พบบ่อย',
@@ -70,10 +66,6 @@ class _FaqScreenState extends State<FaqScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const AccountPageIntro(
-              title: 'มีอะไรให้ช่วยไหม?',
-              description: 'รวมเรื่องที่ควรรู้ ก่อนเช่าและปล่อยเช่าบน Yuemnoi',
-            ),
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(

@@ -56,7 +56,7 @@ void main() {
     expect(find.text('ปิดการแจ้งเตือนทั้งหมดชั่วคราว'), findsNothing);
   });
 
-  testWidgets('deletion confirmation explains the 30-day recovery period', (
+  testWidgets('deletion confirmation shows Yuemnoi and the recovery period', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -65,29 +65,73 @@ void main() {
     await openDeletionDialog(tester);
 
     final dialog = find.byType(AlertDialog);
-    expect(
-      find.descendant(
-        of: dialog,
-        matching: find.textContaining('บัญชีจะถูกลบถาวรหลัง 30 วัน'),
+    final title = find.descendant(
+      of: dialog,
+      matching: find.text('ลบบัญชีผู้ใช้'),
+    );
+    final mascot = find.descendant(
+      of: dialog,
+      matching: find.image(
+        const AssetImage('assets/images/yuemnoi_crying.png'),
       ),
+    );
+    expect(mascot, findsOneWidget);
+    expect(
+      tester.getBottomLeft(title).dy,
+      lessThan(tester.getTopLeft(mascot).dy),
+    );
+    expect(
+      find.textContaining('โปรไฟล์และประกาศจะถูกซ่อนทันที'),
       findsOneWidget,
     );
     expect(
-      find.descendant(
-        of: dialog,
-        matching: find.textContaining('เข้าสู่ระบบเพื่อกู้คืนบัญชี'),
-      ),
+      find.textContaining('บัญชีจะถูกลบถาวรเมื่อครบ 30 วัน'),
+      findsOneWidget,
+    );
+    expect(find.text('กู้คืนได้ภายใน 30 วัน'), findsOneWidget);
+    expect(
+      find.text('เข้าสู่ระบบอีกครั้ง แล้วกดยืนยันการกู้คืน'),
       findsOneWidget,
     );
     await tester.tap(find.text('ยกเลิก'));
     await tester.pumpAndSettle();
-    expect(find.text('ยืนยันลบบัญชี'), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
     verifyNever(
       () => repository.scheduleAccountDeletion(
         accessToken: any(named: 'accessToken'),
       ),
     );
   });
+
+  testWidgets(
+    'deletion actions stay reachable on a small screen with large text',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 480);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(
+        withAuth(
+          MaterialApp(
+            builder: (context, child) => MediaQuery.withClampedTextScaling(
+              minScaleFactor: 2,
+              maxScaleFactor: 2,
+              child: child!,
+            ),
+            home: const ChangeAccountScreen(),
+          ),
+        ),
+      );
+      await openDeletionDialog(tester);
+
+      expect(find.text('ลบบัญชี').hitTestable(), findsOneWidget);
+      final cancel = find.text('ยกเลิก').hitTestable();
+      expect(cancel, findsOneWidget);
+      await tester.tap(cancel);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+    },
+  );
 
   testWidgets('active rentals show the error and preserve the session', (
     tester,
@@ -101,7 +145,7 @@ void main() {
       withAuth(const MaterialApp(home: ChangeAccountScreen())),
     );
     await openDeletionDialog(tester);
-    await tester.tap(find.text('ยืนยันลบบัญชี'));
+    await tester.tap(find.text('ลบบัญชี'));
     await tester.pumpAndSettle();
 
     expect(find.text(message), findsOneWidget);
@@ -131,7 +175,7 @@ void main() {
     addTearDown(router.dispose);
     await tester.pumpWidget(withAuth(MaterialApp.router(routerConfig: router)));
     await openDeletionDialog(tester);
-    await tester.tap(find.text('ยืนยันลบบัญชี'));
+    await tester.tap(find.text('ลบบัญชี'));
     await tester.pumpAndSettle();
 
     expect(find.text('Login screen'), findsOneWidget);

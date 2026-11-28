@@ -25,9 +25,6 @@ class LegalDocumentPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFFAF9FD),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFAF9FD),
-        foregroundColor: const Color(0xFF292235),
-        surfaceTintColor: Colors.transparent,
         title: Text(
           title,
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),

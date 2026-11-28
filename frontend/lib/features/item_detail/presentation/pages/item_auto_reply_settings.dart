@@ -187,9 +187,6 @@ class _ItemAutoReplyScreenState extends State<ItemAutoReplyScreen> {
   Widget _buildScreen(ItemAutoReplyState state) => Scaffold(
     backgroundColor: const Color(0xFFF7F6FA),
     appBar: AppBar(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      foregroundColor: const Color(0xFF211C35),
       centerTitle: true,
       leading: IconButton(
         tooltip: 'ย้อนกลับ',

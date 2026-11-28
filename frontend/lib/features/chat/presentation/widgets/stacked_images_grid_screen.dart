@@ -78,9 +78,6 @@ class _GalleryContentState extends State<_GalleryContent> {
       child: Scaffold(
         backgroundColor: MediaGalleryStyle.background,
         appBar: AppBar(
-          backgroundColor: MediaGalleryStyle.background,
-          surfaceTintColor: MediaGalleryStyle.background,
-          foregroundColor: MediaGalleryStyle.ink,
           elevation: 0,
           scrolledUnderElevation: 0,
           toolbarHeight: 72,
@@ -112,7 +109,7 @@ class _GalleryContentState extends State<_GalleryContent> {
               padding: EdgeInsets.only(right: 24),
               child: Icon(
                 Icons.photo_library_outlined,
-                color: MediaGalleryStyle.accent,
+                color: Colors.white,
                 size: 24,
               ),
             ),

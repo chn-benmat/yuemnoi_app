@@ -12,7 +12,7 @@ abstract final class AuthGuard {
   static Future<bool> requireAuth(
     BuildContext context, {
     String title = LoginRequiredDialog.defaultTitle,
-    String message = LoginRequiredDialog.defaultMessage,
+    String? message,
   }) async {
     if (isAuthenticated) return true;
 

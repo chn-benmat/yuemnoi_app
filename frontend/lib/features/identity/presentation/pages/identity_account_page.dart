@@ -58,6 +58,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
   bool _allowExit = false, _capturing = false, _dialogOpen = false;
   bool _removedCard = false, _removedSelfie = false;
   bool _consent = false, _showingInitialConsent = false;
+  bool _hadConsentOnOpen = false;
   Uint8List? _photoBytes(IdentityAccountState state, bool selfie) => selfie
       ? (_removedSelfie ? null : _selfie ?? state.photos['selfie'])
       : (_removedCard ? null : _card ?? state.photos['card']);
@@ -89,7 +90,10 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     onDetailsLoaded: (hasConsent) async {
       if (!mounted || _allowExit) return;
       if (hasConsent) {
-        setState(() => _consent = true);
+        setState(() {
+          _consent = true;
+          _hadConsentOnOpen = true;
+        });
       } else if (!_consent) {
         setState(() => _showingInitialConsent = true);
         await _showConsent();
@@ -908,6 +912,7 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
     builder: (context, state) {
       final showLoading =
           _showingInitialConsent ||
+          (_hadConsentOnOpen && state.loading) ||
           (state.details == null && (state.loading || state.error == null));
       if (!showLoading && _loaded == null && state.details != null) {
         _hydrate(state.details!);
@@ -926,9 +931,6 @@ class _IdentityAccountPageState extends State<IdentityAccountPage> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             centerTitle: true,
-            backgroundColor: Colors.white,
-            foregroundColor: IdentityColors.ink,
-            surfaceTintColor: Colors.transparent,
             leading: BackButton(onPressed: _back),
           ),
           body: showLoading

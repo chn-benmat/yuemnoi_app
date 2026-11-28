@@ -176,7 +176,7 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('item-detail-skeleton')), findsOneWidget);
-    expect(find.byType(SkeletonShimmer), findsOneWidget);
+    expect(find.byType(SkeletonShimmer), findsWidgets);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 }

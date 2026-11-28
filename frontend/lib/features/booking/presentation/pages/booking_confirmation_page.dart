@@ -565,7 +565,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                       child: ElevatedButton.icon(
                         key: const ValueKey('view-handover-details-button'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
+                          backgroundColor: AppColors.primaryColor,
                           foregroundColor: Colors.white,
                           elevation: 1,
                           shape: RoundedRectangleBorder(

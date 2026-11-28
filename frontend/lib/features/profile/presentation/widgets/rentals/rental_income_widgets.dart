@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/widgets/skeleton_shimmer.dart';
 import '../../../domain/entities/rental_income.dart';
 
 class RentalIncomeStatCard extends StatelessWidget {
@@ -62,6 +63,89 @@ class RentalIncomeStatCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// skeleton ของการ์ดประวัติการรับเงิน ใช้กรอบ ระยะ และขนาดเดียวกับ
+/// [RentalIncomeTransactionItem] เพื่อไม่ให้หน้ากระโดดตอนข้อมูลจริงมาแทน
+class RentalIncomeTransactionSkeleton extends StatelessWidget {
+  const RentalIncomeTransactionSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // พื้นการ์ดสีขาวอยู่นอก shimmer เพราะ shimmer จะทาสีทับทุกพิกเซลที่ทึบ
+    return Container(
+      key: const ValueKey('rental-income-transaction-skeleton'),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: const SkeletonShimmer(
+        child: Row(
+          children: [
+            // ไอคอนเงินขนาด 48 มุมโค้ง 12
+            SkeletonBox(width: 48, height: 48, borderRadius: 12),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ชื่ออุปกรณ์ 15px ตัวหนา
+                  SizedBox(
+                    height: 22,
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: FractionallySizedBox(
+                        widthFactor: 0.6,
+                        child: SkeletonBox(height: 15, borderRadius: 7),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  // วันเวลา dd/MM/yyyy HH:mm 13px
+                  SizedBox(
+                    height: 19,
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: SkeletonBox(
+                        width: 110,
+                        height: 12,
+                        borderRadius: 6,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // ยอดเงิน +฿xxx.xx
+                SizedBox(
+                  height: 22,
+                  child: Center(
+                    child: SkeletonBox(width: 72, height: 15, borderRadius: 7),
+                  ),
+                ),
+                SizedBox(height: 4),
+                // ป้ายช่องทางรับเงิน
+                SkeletonBox(width: 56, height: 22, borderRadius: 8),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

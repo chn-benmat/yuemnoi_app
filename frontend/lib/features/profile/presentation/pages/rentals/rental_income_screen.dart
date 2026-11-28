@@ -93,14 +93,11 @@ class _RentalIncomeScreenState extends State<RentalIncomeScreen> {
       );
     }
 
+    // ระหว่างโหลดครั้งแรก summary เป็น null: ส่วนหัวแสดงขีดแทนตัวเลข
+    // เพื่อไม่ให้เข้าใจผิดว่ารายได้เป็น 0 และใช้ skeleton เฉพาะส่วนประวัติ
     final summary = _summary;
-    if (summary == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryColor),
-      );
-    }
-
-    final transactions = summary.transactions;
+    final isLoading = summary == null;
+    final transactions = summary?.transactions ?? const <RentalIncomeEntry>[];
     return RefreshIndicator(
       color: AppColors.primaryColor,
       onRefresh: _loadRentalIncome,
@@ -123,7 +120,9 @@ class _RentalIncomeScreenState extends State<RentalIncomeScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '฿ ${(summary.totalSatang / 100).toStringAsFixed(2)}',
+                    isLoading
+                        ? '฿ –'
+                        : '฿ ${(summary.totalSatang / 100).toStringAsFixed(2)}',
                     style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
                       fontSize: 36,
@@ -134,7 +133,9 @@ class _RentalIncomeScreenState extends State<RentalIncomeScreen> {
                   const SizedBox(height: 24),
                   RentalIncomeStatCard(
                     title: 'ยืนยันรับเงินแล้ว',
-                    value: '${transactions.length} รายการ',
+                    value: isLoading
+                        ? '– รายการ'
+                        : '${transactions.length} รายการ',
                     icon: Icons.check_circle_outline_rounded,
                     color: const Color(0xFF81C784),
                   ),
@@ -156,7 +157,15 @@ class _RentalIncomeScreenState extends State<RentalIncomeScreen> {
               ),
             ),
           ),
-          if (transactions.isEmpty)
+          if (isLoading)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList.builder(
+                itemCount: 4,
+                itemBuilder: (_, _) => const RentalIncomeTransactionSkeleton(),
+              ),
+            )
+          else if (transactions.isEmpty)
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.all(32),
