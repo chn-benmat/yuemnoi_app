@@ -37,10 +37,8 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 		"item_name":         item.ItemName,
 		"description":       item.Description,
 		"category":          item.Category,
-		"price":             item.Price,
 		"status":            item.Status,
 		"moderation_hidden": true,
-		"type":              item.Type,
 		"pickup_location":   item.PickupLocation,
 		"pickup_address":    item.PickupAddress,
 		"pickup_latitude":   item.PickupLatitude,
@@ -49,8 +47,11 @@ func (r *supabaseItemRepository) Insert(ctx context.Context, item *domain.Item, 
 	if item.ItemImageURL != nil {
 		payload["item_image_url"] = item.ItemImageURL
 	}
-	if item.DailyPrice != nil {
-		payload["daily_price"] = *item.DailyPrice
+	if item.HourlyRate != nil {
+		payload["hourly_rate"] = *item.HourlyRate
+	}
+	if item.DailyRate != nil {
+		payload["daily_rate"] = *item.DailyRate
 	}
 	if item.DamageFee > 0 {
 		payload["damage_fee"] = item.DamageFee
@@ -136,10 +137,8 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 			"item_image_url",
 			"description",
 			"category",
-			"price",
 			"status",
 			"is_rental_occupied",
-			"type",
 			"hourly_rate",
 			"daily_rate",
 			"created_at",

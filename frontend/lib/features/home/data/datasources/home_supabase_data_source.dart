@@ -363,7 +363,7 @@ class HomeSupabaseDataSource {
   static const int _catalogPageSize = 100;
   static const int _enrichmentBatchSize = 100;
   static const _listingColumns =
-      'id,user_id,item_name,item_image_url,description,category,price,type,'
+      'id,user_id,item_name,item_image_url,description,category,'
       'hourly_rate,daily_rate,pickup_location,is_rental_occupied';
   static const _rankedListingColumns =
       '$_listingColumns,rating,review_count,paid_booking_count';

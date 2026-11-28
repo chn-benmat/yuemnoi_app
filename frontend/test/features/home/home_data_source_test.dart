@@ -435,7 +435,7 @@ void main() {
     );
     expect(
       rankedQueries.first['select'],
-      'id,user_id,item_name,item_image_url,description,category,price,type,'
+      'id,user_id,item_name,item_image_url,description,category,'
       'hourly_rate,daily_rate,pickup_location,is_rental_occupied,rating,review_count,paid_booking_count',
     );
   });
@@ -475,7 +475,7 @@ void main() {
     final query = itemQueries.single;
     expect(
       query['select'],
-      'id,user_id,item_name,item_image_url,description,category,price,type,'
+      'id,user_id,item_name,item_image_url,description,category,'
       'hourly_rate,daily_rate,pickup_location,is_rental_occupied,pickup_latitude,pickup_longitude',
     );
     expect(query['owner_hidden'], 'eq.false');

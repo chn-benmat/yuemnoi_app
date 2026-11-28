@@ -38,8 +38,7 @@ void main() {
     name: 'ชุดรวมเลนส์รวม',
     category: 'กล้องและอุปกรณ์ถ่ายภาพ',
     description: 'รายละเอียดใหม่',
-    rentalType: 'รายวัน',
-    price: 1200,
+    dailyRate: 1200,
     retainedImageUrls: ['https://example.com/lens.jpg'],
     newImages: [],
   );

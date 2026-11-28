@@ -24,16 +24,11 @@ begin
   update profiles.profile_tb set phone = '0812345678' where user_id = any(array[lender, renter]);
 
   -- แอปและฟังก์ชันรุ่นเดิมยังส่งค่าภาษาไทยได้ ฐานเก็บเป็นรหัสมาตรฐาน
-  insert into public.item_tb(user_id, item_name, description, price, daily_price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-    values (lender, 'ขาตั้งกล้อง', 'ทดสอบ', 50, 300, 'พร้อมใช้งาน', 'รายชั่วโมง', 'จุดรับ', 'ที่อยู่', 13.75, 100.5)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+    values (lender, 'ขาตั้งกล้อง', 'ทดสอบ', 'พร้อมใช้งาน', 'จุดรับ', 'ที่อยู่', 13.75, 100.5, 50, 300)
     returning id into listed;
-  select type, status into strict stored from public.item_tb where id = listed;
-  assert stored.type = 'hourly' and stored.status = 'available', format('item stored %s', stored);
-
-  update public.item_tb set type = 'รายวัน', daily_price = null where id = listed;
-  select type into strict stored from public.item_tb where id = listed;
-  assert stored.type = 'daily', format('item updated %s', stored);
+  select status into strict stored from public.item_tb where id = listed;
+  assert stored.status = 'available', format('item stored %s', stored);
 
   insert into public.booking_tb(user_id, item_id, status, type, price, total_price,
     start_at, end_at, pickup_location, pickup_address, latitude, longitude)
@@ -42,12 +37,6 @@ begin
     returning id into booked;
   select type, status into strict stored from public.booking_tb where id = booked;
   assert stored.type = 'daily' and stored.status = 'awaiting_return', format('booking stored %s', stored);
-
-  begin
-    update public.item_tb set type = 'weekly' where id = listed;
-    raise exception 'unknown item type was accepted';
-  exception when check_violation then null;
-  end;
 
   begin
     update public.booking_tb set type = 'weekly' where id = booked;

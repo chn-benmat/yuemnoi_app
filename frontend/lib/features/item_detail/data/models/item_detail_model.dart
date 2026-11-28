@@ -1,5 +1,6 @@
 import '../../../../core/models/pickup_location.dart';
 import '../../../../core/models/rental_penalty_terms.dart';
+import '../../../../core/models/rental_rates.dart';
 import '../../domain/entities/item_detail.dart';
 
 abstract final class ItemDetailModel {
@@ -33,13 +34,13 @@ abstract final class ItemDetailModel {
       imageUrls: _imageUrls(item['item_image_url']),
       description: _string(item['description']),
       category: _fallbackString(item['category'], 'อุปกรณ์'),
-      price: _optionalInt(item['price']) ?? 0,
-      additionalDailyPrice: _optionalInt(item['daily_price']),
+      price: _optionalInt(_priced(item)['price']) ?? 0,
+      additionalDailyPrice: _additionalDailyPrice(item),
       penaltyTerms: RentalPenaltyTerms.fromJson(item),
       status: _string(item['status']),
       isRentalOccupied: item['is_rental_occupied'] == true,
       isRentalQueueHeld: item['is_rental_queue_held'] == true,
-      rentalType: _normalizeRentalType(item['type']),
+      rentalType: _normalizeRentalType(_priced(item)['type']),
       reviews: mappedReviews,
       ownerHidden: item['owner_hidden'] == true,
       pickupLocation: PickupLocation.fromJson(item),
@@ -70,19 +71,29 @@ abstract final class ItemDetailModel {
       imageUrls: _imageUrls(item['item_image_url']),
       description: _string(item['description']),
       category: _fallbackString(item['category'], 'อุปกรณ์'),
-      price: _optionalInt(item['price']) ?? 0,
-      additionalDailyPrice: _optionalInt(item['daily_price']),
+      price: _optionalInt(_priced(item)['price']) ?? 0,
+      additionalDailyPrice: _additionalDailyPrice(item),
       penaltyTerms: RentalPenaltyTerms.fromJson(item),
       status: _string(item['status']),
       isRentalOccupied: item['is_rental_occupied'] == true,
       isRentalQueueHeld: item['is_rental_queue_held'] == true,
-      rentalType: _normalizeRentalType(item['type']),
+      rentalType: _normalizeRentalType(_priced(item)['type']),
       reviews: const [],
       ownerHidden: item['owner_hidden'] == true,
       pickupLocation: PickupLocation.fromJson(item),
       isOwner: currentUserId != null && currentUserId == ownerId,
       rates: _rates(item),
     );
+  }
+
+  static Map<String, dynamic> _priced(Map<String, dynamic> item) =>
+      RentalRates.withPrimaryRate(item);
+
+  // ราคาต่อวันที่แสดงคู่กับราคาต่อชั่วโมง (ไม่มีเมื่อราคาหลักเป็นรายวันอยู่แล้ว)
+  static int? _additionalDailyPrice(Map<String, dynamic> item) {
+    final rates = _rates(item);
+    if (rates == null) return _optionalInt(item['daily_price']);
+    return rates.hourly == null ? null : rates.daily;
   }
 
   // ใช้เรตจากฐานเมื่อแถวมีคอลัมน์ hourly_rate/daily_rate (ค่า null คือไม่มีเรตหน่วยนั้น)

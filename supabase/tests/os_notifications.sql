@@ -31,9 +31,8 @@ begin
   update identity_private.identity_requests set status = 'approved' where user_id = renter_id;
   assert exists (select 1 from notifications.notification_tb n where n.user_id = renter_id and n.type = 'identity_approved');
 
-  insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-    values (owner_id, 'กล้อง', 'ทดสอบ', 100, 'pending_review', 'daily', 'จุดรับ', 'ที่อยู่', 13.75, 100.50)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+    values (owner_id, 'กล้อง', 'ทดสอบ', 'pending_review', 'จุดรับ', 'ที่อยู่', 13.75, 100.50, null, 100)
     returning id into item_id;
   perform public.admin_review_item(staff_id, item_id, 'approved', 'อนุมัติทดสอบ');
   update public.item_tb set status = 'pending_review' where id = item_id;

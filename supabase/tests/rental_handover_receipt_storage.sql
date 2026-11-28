@@ -19,9 +19,8 @@ begin
   select u,'approved','ผู้ใช้ทดสอบ','*********1234',md5(u::text)||md5(u::text),false
   from unnest(array[lender,renter]) u;
   update profiles.profile_tb set phone='0812345678' where user_id=any(array[lender,renter]);
-  insert into public.item_tb(user_id,item_name,description,price,type,status,
-    pickup_location,pickup_address,pickup_latitude,pickup_longitude)
-  values(lender,'กล้องทดสอบ','ทดสอบ',100,'daily','available','จุดรับ','ที่อยู่',13.75,100.5)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+  values(lender,'กล้องทดสอบ','ทดสอบ','available','จุดรับ','ที่อยู่',13.75,100.5, null, 100)
   returning id into equipment_id;
   insert into public.booking_tb(user_id,item_id,status,type,price,total_price,payment_method,
     start_at,end_at,pickup_location,pickup_address,latitude,longitude)

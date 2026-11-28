@@ -109,9 +109,8 @@ class _AddRentalItemScreenState extends State<AddRentalItemScreen> {
                 name: value.name,
                 category: value.category!,
                 description: value.description,
-                rentalType: value.rentalType,
-                price: value.price!,
-                additionalDailyPrice: value.additionalDailyPrice,
+                hourlyRate: value.hourlyRate,
+                dailyRate: value.dailyRate,
                 penaltyTerms: value.penaltyTerms,
                 images: value.photos
                     .map((photo) => photo.localImage!)

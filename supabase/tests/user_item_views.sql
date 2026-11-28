@@ -23,10 +23,9 @@ begin
     values (other_viewer, 'approved', 'ผู้ใช้ทดสอบ', '*********1234',
       md5(other_viewer::text) || md5(other_viewer::text), false);
   update profiles.profile_tb set phone = '0812345678' where user_id = other_viewer;
-  insert into public.item_tb(user_id, item_name, description, price, type, status, category,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-    values (other_viewer, 'กล้องทดสอบ', 'อุปกรณ์ทดสอบ', 150, 'รายชั่วโมง', 'available', 'กล้อง',
-      'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.5)
+  insert into public.item_tb(user_id, item_name, description, status, category, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+    values (other_viewer, 'กล้องทดสอบ', 'อุปกรณ์ทดสอบ', 'available', 'กล้อง',
+      'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.5, 150, null)
     returning id into equipment_id;
 
   set local role anon;

@@ -18,9 +18,8 @@ begin
   insert into identity_private.identity_profiles(user_id, status, legal_name, masked_id, citizen_hmac, is_minor)
     values (seller, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(seller::text) || md5(seller::text), false);
   update profiles.profile_tb set phone = '0812345678' where user_id = seller;
-  insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-    values (seller, 'Tripod', 'Test', 150, 'available', 'daily', 'Test', 'Test', 13.75, 100.50)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+    values (seller, 'Tripod', 'Test', 'available', 'Test', 'Test', 13.75, 100.50, null, 150)
     returning id into listed;
 
   set local role service_role;

@@ -100,9 +100,8 @@ class _EditItemScreenState extends State<EditItemScreen> {
                   name: value.name,
                   category: value.category!,
                   description: value.description,
-                  rentalType: value.rentalType,
-                  price: value.price!,
-                  additionalDailyPrice: value.additionalDailyPrice,
+                  hourlyRate: value.hourlyRate,
+                  dailyRate: value.dailyRate,
                   penaltyTerms: value.penaltyTerms,
                   retainedImageUrls: value.photos
                       .where((photo) => photo.remoteUrl != null)

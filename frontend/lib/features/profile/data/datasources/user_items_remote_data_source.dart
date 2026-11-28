@@ -82,7 +82,7 @@ class UserItemsRemoteDataSource {
       final response = await client
           .from('item_tb')
           .select(
-            'id, user_id, item_name, item_image_url, description, category, price, status, type, hourly_rate, daily_rate, owner_hidden, moderation_hidden, is_rental_occupied',
+            'id, user_id, item_name, item_image_url, description, category, status, hourly_rate, daily_rate, owner_hidden, moderation_hidden, is_rental_occupied',
           )
           .eq('user_id', userId)
           .order('id', ascending: false)
@@ -108,7 +108,9 @@ class UserItemsRemoteDataSource {
             throw const ApiClientException(ApiClientErrorType.invalidResponse);
           }
           return FavoriteItemModel.fromJson(
-            Map<String, dynamic>.from(response.data as Map),
+            RentalRates.withPrimaryRate(
+              Map<String, dynamic>.from(response.data as Map),
+            ),
           );
         }),
       );

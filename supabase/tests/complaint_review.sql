@@ -26,13 +26,11 @@ begin
     (owner_id, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(owner_id::text) || md5(reporter::text), false),
     (reporter, 'approved', 'ผู้เช่าทดสอบ', '*********4321', md5(reporter::text) || md5(owner_id::text), false);
   insert into ops_private.staff_accounts(user_id) values (staff_id);
-  insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-  values (owner_id, 'โต๊ะทดสอบ', 'ทดสอบระบบ', 100, 'available', 'daily', 'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+  values (owner_id, 'โต๊ะทดสอบ', 'ทดสอบระบบ', 'available', 'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50, null, 100)
   returning id into listing;
-  insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-  values (owner_id, 'เก้าอี้ทดสอบ', 'ทดสอบระบบ', 100, 'available', 'daily', 'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+  values (owner_id, 'เก้าอี้ทดสอบ', 'ทดสอบระบบ', 'available', 'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50, null, 100)
   returning id into other_listing;
   select id into previous_booking from public.create_rental_request(
     reporter, listing, now() + interval '1 day', now() + interval '2 days', 'daily', 'จุดรับ');

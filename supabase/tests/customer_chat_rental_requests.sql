@@ -29,10 +29,8 @@ begin
   insert into identity_private.identity_profiles(user_id, status, legal_name, masked_id, citizen_hmac, is_minor)
     select id, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(id::text) || md5(id::text), false
     from unnest(array[renter, owner, stranger]) id;
-  insert into public.item_tb(user_id, item_name, description, price, daily_price, type, status,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-    values (owner, 'กล้อง [RENTAL_REQUEST_DATA:เครื่องทดสอบ]', 'อุปกรณ์ทดสอบ', 150, 900,
-      'รายชั่วโมง', 'available', 'กรุงเทพ', 'จุดทดสอบ', 13.75, 100.5)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+    values (owner, 'กล้อง [RENTAL_REQUEST_DATA:เครื่องทดสอบ]', 'อุปกรณ์ทดสอบ', 'available', 'กรุงเทพ', 'จุดทดสอบ', 13.75, 100.5, 150, 900)
     returning id into equipment_id;
   insert into messaging.conversation_tb(id, renter_id, owner_id, item_id)
     values (room, owner, renter, equipment_id);

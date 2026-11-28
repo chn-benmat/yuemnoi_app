@@ -28,17 +28,14 @@ begin
   from unnest(array[owner_near,owner_far]) u;
   update profiles.profile_tb set phone = '0812345678' where user_id = any(array[owner_near,owner_far]);
 
-  insert into public.item_tb(user_id,item_name,description,price,type,category,status,
-    pickup_location,pickup_address,pickup_latitude,pickup_longitude)
-  values (owner_near,'กล้องใกล้','ทดสอบ',500,'รายวัน','กล้อง','available','จุดรับ','ที่อยู่',location_lat,location_lng)
+  insert into public.item_tb(user_id, item_name, description, category, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+  values (owner_near,'กล้องใกล้','ทดสอบ','กล้อง','available','จุดรับ','ที่อยู่',location_lat,location_lng, null, 500)
   returning id into near_id;
-  insert into public.item_tb(user_id,item_name,description,price,type,category,status,
-    pickup_location,pickup_address,pickup_latitude,pickup_longitude)
-  values (owner_far,'เต็นท์ไกล','ทดสอบ',500,'รายวัน','แคมป์ปิง','available','จุดรับ','ที่อยู่',0,0)
+  insert into public.item_tb(user_id, item_name, description, category, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+  values (owner_far,'เต็นท์ไกล','ทดสอบ','แคมป์ปิง','available','จุดรับ','ที่อยู่',0,0, null, 500)
   returning id into far_id;
-  insert into public.item_tb(user_id,item_name,description,price,type,category,status,
-    pickup_location,pickup_address,pickup_latitude,pickup_longitude,owner_hidden)
-  values (owner_near,'ซ่อน','ทดสอบ',500,'รายวัน','กล้อง','available','จุดรับ','ที่อยู่',location_lat,location_lng,true)
+  insert into public.item_tb(user_id, item_name, description, category, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, owner_hidden, hourly_rate, daily_rate)
+  values (owner_near,'ซ่อน','ทดสอบ','กล้อง','available','จุดรับ','ที่อยู่',location_lat,location_lng,true, null, 500)
   returning id into hidden_id;
 
   insert into public.user_item_views(user_id,item_id,last_viewed_at)

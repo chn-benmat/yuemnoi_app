@@ -6,15 +6,13 @@ void main() {
     const value = RentalItemFormValue(hourlyPrice: '50', dailyPrice: '300');
 
     expect(value.rentalType, 'hourly');
-    expect(value.price, 50);
-    expect(value.additionalDailyPrice, 300);
+    expect((value.hourlyRate, value.dailyRate), (50, 300));
   });
 
   test('daily-only listing sends the canonical daily type', () {
     const value = RentalItemFormValue(dailyPrice: '300');
 
     expect(value.rentalType, 'daily');
-    expect(value.price, 300);
-    expect(value.additionalDailyPrice, isNull);
+    expect((value.hourlyRate, value.dailyRate), (null, 300));
   });
 }

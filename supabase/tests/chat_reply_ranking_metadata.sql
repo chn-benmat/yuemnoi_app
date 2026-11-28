@@ -22,13 +22,11 @@ begin
     select u, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(u::text) || md5(u::text), false
     from unnest(array[merchant, outsider]) u;
   update profiles.profile_tb set phone = '0812345678' where user_id = any(array[merchant, outsider]);
-  insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-    values (merchant, 'Tripod', 'Test', 150, 'available', 'daily', 'Test', 'Test', 13.75, 100.50)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+    values (merchant, 'Tripod', 'Test', 'available', 'Test', 'Test', 13.75, 100.50, null, 150)
     returning id into listed;
-  insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-    values (outsider, 'Lens', 'Test', 150, 'available', 'daily', 'Test', 'Test', 13.75, 100.50)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+    values (outsider, 'Lens', 'Test', 'available', 'Test', 'Test', 13.75, 100.50, null, 150)
     returning id into unrelated;
   -- This account pair already had a room with the opposite roles.
   insert into messaging.conversation_tb(id, owner_id, renter_id) values (room, customer, merchant);

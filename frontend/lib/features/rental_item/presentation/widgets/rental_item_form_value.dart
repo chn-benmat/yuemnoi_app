@@ -29,7 +29,9 @@ class RentalItemFormValue {
 
   String get rentalType =>
       int.tryParse(hourlyPrice) != null ? 'hourly' : 'daily';
-  int? get price => int.tryParse(hourlyPrice) ?? int.tryParse(dailyPrice);
+  int? get hourlyRate => int.tryParse(hourlyPrice);
+  int? get dailyRate => int.tryParse(dailyPrice);
+  int? get price => hourlyRate ?? dailyRate;
   int? get additionalDailyPrice =>
       rentalType == 'hourly' ? int.tryParse(dailyPrice) : null;
   RentalPenaltyTerms get penaltyTerms => RentalPenaltyTerms(

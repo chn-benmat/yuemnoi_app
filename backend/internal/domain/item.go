@@ -24,10 +24,8 @@ type Item struct {
 	ItemImageURL          []string  `json:"item_image_url"`
 	Description           string    `json:"description"`
 	Category              string    `json:"category"`
-	Price                 int       `json:"price"`
-	DailyPrice            *int      `json:"daily_price,omitempty"`
-	HourlyRate            *int      `json:"hourly_rate"` // ฐานคำนวณจาก price/type อ่านอย่างเดียว
-	DailyRate             *int      `json:"daily_rate"`  // ฐานคำนวณจาก daily_price หรือ price รายวัน
+	HourlyRate            *int      `json:"hourly_rate"` // ราคาต่อชั่วโมง null เมื่อไม่ให้เช่ารายชั่วโมง
+	DailyRate             *int      `json:"daily_rate"`  // ราคาต่อวัน null เมื่อไม่ให้เช่ารายวัน
 	DamageFee             int       `json:"damage_fee,omitempty"`
 	LateReturnFee         int       `json:"late_return_fee,omitempty"`
 	DamageTerms           string    `json:"damage_terms,omitempty"`
@@ -37,7 +35,6 @@ type Item struct {
 	ModerationHidden      bool      `json:"moderation_hidden"`
 	OwnerHidden           bool      `json:"owner_hidden"`
 	AccountDeletionHidden bool      `json:"account_deletion_hidden,omitempty"`
-	Type                  string    `json:"type"` // "hourly" หรือ "daily" (ฐานแปลงคำพ้องเดิมให้)
 	OwnerName             string    `json:"owner_name,omitempty"`
 	IsVerified            bool      `json:"is_verified"`
 	OwnerAvatarURL        string    `json:"owner_avatar_url,omitempty"`

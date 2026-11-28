@@ -145,9 +145,8 @@ class ItemEditDraft extends Equatable {
     required this.name,
     required this.category,
     required this.description,
-    required this.rentalType,
-    required this.price,
-    this.additionalDailyPrice,
+    this.hourlyRate,
+    this.dailyRate,
     this.penaltyTerms,
     required this.retainedImageUrls,
     required this.newImages,
@@ -159,9 +158,10 @@ class ItemEditDraft extends Equatable {
   final String name;
   final String category;
   final String description;
-  final String rentalType;
-  final int price;
-  final int? additionalDailyPrice;
+
+  /// ราคาต่อหน่วย ค่า null คือเลิกให้เช่าหน่วยนั้น
+  final int? hourlyRate;
+  final int? dailyRate;
   final RentalPenaltyTerms? penaltyTerms;
   final List<String> retainedImageUrls;
   final List<RentalItemImage> newImages;
@@ -203,9 +203,8 @@ class ItemEditDraft extends Equatable {
     name,
     category,
     description,
-    rentalType,
-    price,
-    additionalDailyPrice,
+    hourlyRate,
+    dailyRate,
     penaltyTerms,
     retainedImageUrls,
     newImages,

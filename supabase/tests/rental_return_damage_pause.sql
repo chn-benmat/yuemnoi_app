@@ -20,15 +20,13 @@ begin
     from unnest(array[lender, renter, next_renter]) id;
   update profiles.profile_tb set phone = '0812345678'
     where user_id = any(array[lender, renter, next_renter]);
-  insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude, damage_fee, damage_terms)
-    values (lender, 'กล้อง', 'ทดสอบ', 100, 'available', 'daily',
-      'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50, 200, 'เลนส์แตก')
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, damage_fee, damage_terms, hourly_rate, daily_rate)
+    values (lender, 'กล้อง', 'ทดสอบ', 'available',
+      'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50, 200, 'เลนส์แตก', null, 100)
     returning id into damaged_item;
-  insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude, late_return_fee)
-    values (lender, 'ขาตั้งกล้อง', 'ทดสอบ', 100, 'available', 'daily',
-      'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50, 50)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, late_return_fee, hourly_rate, daily_rate)
+    values (lender, 'ขาตั้งกล้อง', 'ทดสอบ', 'available',
+      'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50, 50, null, 100)
     returning id into late_item;
   insert into public.rental_promptpay_account_tb(user_id, phone) values (lender, '0812345678');
 

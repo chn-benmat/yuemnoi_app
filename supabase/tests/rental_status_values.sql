@@ -20,9 +20,8 @@ begin
     from unnest(array[lender, renter]) u;
   update profiles.profile_tb set phone = '0812345678' where user_id = any(array[lender, renter]);
 
-  insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
-    values (lender, 'ขาตั้งกล้อง', 'ทดสอบ', 300, 'available', 'daily', 'จุดรับ', 'ที่อยู่', 13.75, 100.5)
+  insert into public.item_tb(user_id, item_name, description, status, pickup_location, pickup_address, pickup_latitude, pickup_longitude, hourly_rate, daily_rate)
+    values (lender, 'ขาตั้งกล้อง', 'ทดสอบ', 'available', 'จุดรับ', 'ที่อยู่', 13.75, 100.5, null, 300)
     returning id into listed;
 
   -- ทุกสถานะที่ระบบเขียนจริงต้องบันทึกได้
