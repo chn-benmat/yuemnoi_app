@@ -4,13 +4,17 @@ do $$
 declare
     first_profile bigint;
     second_profile bigint;
+    first_user uuid := gen_random_uuid();
+    second_user uuid := gen_random_uuid();
     initial_username text;
     change_time timestamptz;
     test_username text := 'test_' || replace(gen_random_uuid()::text, '-', '');
 begin
-    insert into profiles.profile_tb default values
-        returning id, username into first_profile, initial_username;
-    insert into profiles.profile_tb default values returning id into second_profile;
+    insert into auth.users(id) values (first_user), (second_user);
+    select id, username into strict first_profile, initial_username
+      from profiles.profile_tb where user_id = first_user;
+    select id into strict second_profile
+      from profiles.profile_tb where user_id = second_user;
 
     assert initial_username ~ '^[A-Za-z0-9._]+$', 'expected a valid default username';
 

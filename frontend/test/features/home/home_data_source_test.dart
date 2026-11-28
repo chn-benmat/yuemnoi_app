@@ -357,6 +357,135 @@ void main() {
     expect(ordinaryFeed.map((item) => item.distanceKm), everyElement(isNull));
   });
 
+  test('search reads projected ranked listings beyond the first page', () async {
+    final rankedQueries = <Map<String, String>>[];
+    final profileFilters = <String>[];
+    final rows = [
+      for (var id = 1; id <= 101; id++)
+        {
+          'id': id,
+          'user_id': 'owner-$id',
+          'item_name': id == 101 ? 'แคมป์กันฝน' : 'Camera $id',
+          'category': id == 101 ? 'แคมป์ปิง' : 'กล้อง',
+          'pickup_location': 'กรุงเทพ',
+          'rating': 4.8,
+          'review_count': 2,
+          'paid_booking_count': 3,
+          'is_rental_occupied': true,
+        },
+    ];
+    final client = SupabaseClient(
+      'https://example.test',
+      'public-test-key',
+      httpClient: MockClient((request) async {
+        final query = request.url.queryParameters;
+        final List<Object> result;
+        switch (request.url.path) {
+          case '/rest/v1/home_feed_ranked_v':
+            rankedQueries.add(query);
+            final offset = int.tryParse(query['offset'] ?? '') ?? 0;
+            final limit = int.tryParse(query['limit'] ?? '') ?? 100;
+            result = rows.skip(offset).take(limit).toList();
+          case '/rest/v1/item_tb':
+            result = [];
+          case '/rest/v1/public_profile_v':
+            final owners = query['user_id']!;
+            profileFilters.add(owners);
+            result = owners.contains('"owner-101"')
+                ? [
+                    {
+                      'user_id': 'owner-101',
+                      'display_name': 'เจ้าของเต็นท์',
+                      'is_verified': true,
+                    },
+                  ]
+                : [];
+          default:
+            throw StateError('Unexpected request: ${request.url.path}');
+        }
+        return http.Response(
+          jsonEncode(result),
+          200,
+          request: request,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+    addTearDown(client.dispose);
+    final source = HomeSupabaseDataSource(supabaseClient: client);
+
+    final items = await source.fetchNearbyItems(
+      searchQuery: 'กันฝน เจ้าของเต็นท์',
+    );
+
+    expect(items.single.id, '101');
+    expect(items.single.locationName, 'กรุงเทพ');
+    expect(items.single.rating, 4.8);
+    expect(items.single.reviewCount, 2);
+    expect(items.single.paidBookingCount, 3);
+    expect(items.single.isRentalOccupied, isTrue);
+    expect(items.single.isVerified, isTrue);
+    expect(profileFilters.first.split(','), hasLength(100));
+    expect(profileFilters.last, 'in.("owner-101")');
+    expect(rankedQueries.map((query) => query['offset']), ['0', '100']);
+    expect(rankedQueries.map((query) => query['limit']), everyElement('100'));
+    expect(
+      rankedQueries.map((query) => query['order']),
+      everyElement('rank_position.asc.nullslast'),
+    );
+    expect(
+      rankedQueries.first['select'],
+      'id,user_id,item_name,item_image_url,description,category,price,type,'
+      'pickup_location,is_rental_occupied,rating,review_count,paid_booking_count',
+    );
+  });
+
+  test('an empty ranked view uses a projected visible-item page', () async {
+    final itemQueries = <Map<String, String>>[];
+    final client = SupabaseClient(
+      'https://example.test',
+      'public-test-key',
+      httpClient: MockClient((request) async {
+        final body = switch (request.url.path) {
+          '/rest/v1/home_feed_ranked_v' => '[]',
+          '/rest/v1/item_tb' => () {
+            itemQueries.add(request.url.queryParameters);
+            return '[{"id":7,"item_name":"Camera",'
+                '"pickup_location":"กรุงเทพ","pickup_latitude":13.01,'
+                '"pickup_longitude":100,"is_rental_occupied":true}]';
+          }(),
+          _ => throw StateError('Unexpected request: ${request.url.path}'),
+        };
+        return http.Response(
+          body,
+          200,
+          request: request,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+    addTearDown(client.dispose);
+    final source = HomeSupabaseDataSource(supabaseClient: client);
+
+    final item = (await source.fetchNearbyItems()).single;
+
+    expect(item.id, '7');
+    expect(item.pickupLatitude, 13.01);
+    expect(item.isRentalOccupied, isTrue);
+    final query = itemQueries.single;
+    expect(
+      query['select'],
+      'id,user_id,item_name,item_image_url,description,category,price,type,'
+      'pickup_location,is_rental_occupied,pickup_latitude,pickup_longitude',
+    );
+    expect(query['owner_hidden'], 'eq.false');
+    expect(query['moderation_hidden'], 'eq.false');
+    expect(query['status'], 'in.("available","พร้อมใช้งาน")');
+    expect(query['order'], 'created_at.desc.nullslast,id.desc.nullslast');
+    expect(query['offset'], '0');
+    expect(query['limit'], '100');
+  });
+
   test(
     'a cold feed reports a connection failure without sample listings',
     () async {

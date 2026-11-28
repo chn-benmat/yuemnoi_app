@@ -18,6 +18,10 @@ begin
     'Chat messages must have a server receipt timestamp';
   insert into auth.users(id, email)
     select u, u || '@example.invalid' from unnest(array[customer, merchant, outsider]) u;
+  insert into identity_private.identity_profiles(user_id, status, legal_name, masked_id, citizen_hmac, is_minor)
+    select u, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(u::text) || md5(u::text), false
+    from unnest(array[merchant, outsider]) u;
+  update profiles.profile_tb set phone = '0812345678' where user_id = any(array[merchant, outsider]);
   insert into public.item_tb(user_id, item_name, description, price, status, type,
     pickup_location, pickup_address, pickup_latitude, pickup_longitude)
     values (merchant, 'Tripod', 'Test', 150, 'available', 'daily', 'Test', 'Test', 13.75, 100.50)
@@ -87,6 +91,7 @@ begin
   update messaging.chat_message_tb set sender_id = null where sender_id = merchant;
   update messaging.conversation_tb set renter_id = null where id = room;
   delete from public.item_tb where id = listed;
+  delete from identity_private.identity_profiles where user_id = merchant;
   delete from auth.users where id = merchant;
   assert exists (select from messaging.chat_message_tb where id = inquiry and inquiry_owner_id is null
     and server_received_at = received), 'Retained chat must release a permanently deleted owner ID';

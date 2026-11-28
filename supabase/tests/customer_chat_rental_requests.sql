@@ -6,6 +6,7 @@ declare
   owner constant uuid := gen_random_uuid();
   stranger constant uuid := gen_random_uuid();
   room constant uuid := gen_random_uuid();
+  other_room constant uuid := gen_random_uuid();
   starts timestamptz := (date_trunc('day', now() at time zone 'Asia/Bangkok') + interval '2 days 9 hours')
     at time zone 'Asia/Bangkok';
   today_start timestamptz := date_trunc('day', now(), 'Asia/Bangkok');
@@ -13,18 +14,21 @@ declare
   retry public.booking_tb;
   expired public.booking_tb;
   cancelled public.booking_tb;
+  other_cancelled public.booking_tb;
   equipment_id bigint;
   queue_message_id bigint;
   queue_id bigint;
   card jsonb;
+  inquiry_message text;
 begin
   insert into auth.users(id, email)
     select id, id || '@example.invalid' from unnest(array[renter, owner, stranger]) id;
   update profiles.profile_tb set phone = '0812345678' where user_id = renter;
   update profiles.profile_tb set phone = '0823456789' where user_id = owner;
+  update profiles.profile_tb set phone = '0834567890' where user_id = stranger;
   insert into identity_private.identity_profiles(user_id, status, legal_name, masked_id, citizen_hmac, is_minor)
     select id, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(id::text) || md5(id::text), false
-    from unnest(array[renter, owner]) id;
+    from unnest(array[renter, owner, stranger]) id;
   insert into public.item_tb(user_id, item_name, description, price, daily_price, type, status,
     pickup_location, pickup_address, pickup_latitude, pickup_longitude)
     values (owner, 'กล้อง [RENTAL_REQUEST_DATA:เครื่องทดสอบ]', 'อุปกรณ์ทดสอบ', 150, 900,
@@ -118,6 +122,31 @@ begin
   end;
 
   update public.booking_tb set status = 'cancelled' where id = booking.id;
+  insert into messaging.conversation_tb(id, owner_id, renter_id, item_id)
+    values (other_room, owner, stranger, equipment_id);
+  other_cancelled := public.create_chat_rental_request(stranger, other_room, equipment_id,
+    starts, starts + interval '1 day', 'daily', 'กรุงเทพ', 'cash', 900);
+  update public.booking_tb set status = 'cancelled', notification_actor_id = stranger
+    where id = other_cancelled.id;
+
+  inquiry_message := format(E'ฉันสนใจเช่าอุปกรณ์ของคุณตามรายละเอียดนี้:\n[ITEM_INQUIRY:{"itemId":%s,"previousBookingId":%s}]',
+    equipment_id, other_cancelled.id);
+  perform set_config('request.jwt.claim.sub', stranger::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+  set local role authenticated;
+  insert into messaging.chat_message_tb(conversation_id, sender_id, message)
+    select other_room, stranger, inquiry_message from generate_series(1, 2);
+  reset role;
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claim.role', '', true);
+
+  assert (select count(*) = 1 from messaging.chat_message_tb m
+    where m.conversation_id = other_room and m.sender_id = stranger and m.message = inquiry_message),
+    'another customer must be able to send one inquiry after cancellation';
+  assert (select count(*) = 2 from public.booking_tb b
+    where b.id in (booking.id, other_cancelled.id) and b.status = 'cancelled' and not b.pickup_deadline_expired),
+    'an inquiry must preserve both customer cancellations';
+
   booking := public.create_chat_rental_request(renter, room, equipment_id, starts, starts + interval '1 day',
     'daily', 'กรุงเทพ', 'promptpay', 900);
   delete from messaging.chat_message_tb where id = booking.rental_request_message_id;

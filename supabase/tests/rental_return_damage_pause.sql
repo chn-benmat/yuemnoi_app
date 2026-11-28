@@ -18,6 +18,8 @@ begin
   insert into identity_private.identity_profiles(user_id, status, legal_name, masked_id, citizen_hmac, is_minor)
     select id, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(id::text) || md5(id::text), false
     from unnest(array[lender, renter, next_renter]) id;
+  update profiles.profile_tb set phone = '0812345678'
+    where user_id = any(array[lender, renter, next_renter]);
   insert into public.item_tb(user_id, item_name, description, price, status, type,
     pickup_location, pickup_address, pickup_latitude, pickup_longitude, damage_fee, damage_terms)
     values (lender, 'กล้อง', 'ทดสอบ', 100, 'available', 'daily',
@@ -33,16 +35,16 @@ begin
   perform set_config('yuemnoi.expected_return_penalty_terms',
     '{"damage_fee":200,"late_return_fee":0,"damage_terms":"เลนส์แตก"}', true);
   insert into public.booking_tb(user_id, item_id, status, type, price, total_price,
-    start_date, end_date, start_at, end_at)
+    start_at, end_at, pickup_location, pickup_address, latitude, longitude)
     values (renter, damaged_item, 'active', 'daily', 100, 100,
-      current_date - 2, current_date - 1, now() - interval '2 days', now() - interval '1 day')
+      now() - interval '2 days', now() - interval '1 day', 'จุดรับ', 'ที่อยู่ทดสอบ', '13.75', '100.50')
     returning id into damaged_booking;
   perform set_config('yuemnoi.expected_return_penalty_terms',
     '{"damage_fee":0,"late_return_fee":50,"damage_terms":""}', true);
   insert into public.booking_tb(user_id, item_id, status, type, price, total_price,
-    start_date, end_date, start_at, end_at)
+    start_at, end_at, pickup_location, pickup_address, latitude, longitude)
     values (renter, late_item, 'active', 'daily', 100, 100,
-      current_date - 2, current_date - 1, now() - interval '2 days', now() - interval '1 day')
+      now() - interval '2 days', now() - interval '1 day', 'จุดรับ', 'ที่อยู่ทดสอบ', '13.75', '100.50')
     returning id into late_booking;
   perform set_config('yuemnoi.expected_return_penalty_terms', '', true);
 

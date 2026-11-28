@@ -359,6 +359,15 @@ class HomeSupabaseDataSource {
   Set<String> _deferPreviouslyShownIds = {};
   static const int _curatedItemCount = 4;
   static const int _recentRecommendationWindow = 12;
+  static const int _catalogPageSize = 100;
+  static const int _enrichmentBatchSize = 100;
+  static const _listingColumns =
+      'id,user_id,item_name,item_image_url,description,category,price,type,'
+      'pickup_location,is_rental_occupied';
+  static const _rankedListingColumns =
+      '$_listingColumns,rating,review_count,paid_booking_count';
+  static const _itemListingColumns =
+      '$_listingColumns,pickup_latitude,pickup_longitude';
 
   String _recentItemsKey(String ownerId) =>
       'home_recent_recommendations_$ownerId';
@@ -749,6 +758,17 @@ class HomeSupabaseDataSource {
     return null;
   }
 
+  Future<PostgrestList> _readCatalogPages(
+    PostgrestTransformBuilder<PostgrestList> query,
+  ) async {
+    final rows = <Map<String, dynamic>>[];
+    for (var offset = 0; ; offset += _catalogPageSize) {
+      final page = await query.range(offset, offset + _catalogPageSize - 1);
+      rows.addAll(page);
+      if (page.length < _catalogPageSize) return rows;
+    }
+  }
+
   /// ดึงข้อมูลรายการอุปกรณ์จริงจาก Supabase โดยตรง (Tier 1)
   Future<List<FeedItemModel>> _fetchFromSupabaseDirectly() async {
     final client = _activeSupabaseClient;
@@ -756,12 +776,14 @@ class HomeSupabaseDataSource {
       throw const FormatException('Supabase client is not available');
     }
 
-    List<dynamic>? rawItems;
+    PostgrestList? rawItems;
     try {
-      rawItems = await client
-          .from('home_feed_ranked_v')
-          .select('*,is_rental_occupied')
-          .order('rank_position', ascending: true);
+      rawItems = await _readCatalogPages(
+        client
+            .from('home_feed_ranked_v')
+            .select(_rankedListingColumns)
+            .order('rank_position', ascending: true),
+      );
     } catch (e) {
       debugPrint(
         'Direct Supabase home_feed_ranked_v error: $e, fallback to item_tb',
@@ -770,13 +792,16 @@ class HomeSupabaseDataSource {
 
     if (rawItems == null || rawItems.isEmpty) {
       try {
-        rawItems = await client
-            .from('item_tb')
-            .select('*,is_rental_occupied')
-            .eq('owner_hidden', false)
-            .eq('moderation_hidden', false)
-            .inFilter('status', ['available', 'พร้อมใช้งาน'])
-            .order('created_at', ascending: false);
+        rawItems = await _readCatalogPages(
+          client
+              .from('item_tb')
+              .select(_itemListingColumns)
+              .eq('owner_hidden', false)
+              .eq('moderation_hidden', false)
+              .inFilter('status', ['available', 'พร้อมใช้งาน'])
+              .order('created_at', ascending: false)
+              .order('id', ascending: false),
+        );
       } catch (e) {
         debugPrint('Direct Supabase item_tb fallback error: $e');
       }
@@ -787,38 +812,53 @@ class HomeSupabaseDataSource {
     }
     if (rawItems.isEmpty) return const [];
 
-    final rawList = rawItems;
-    final userIds = rawList
-        .map((r) => (r as Map)['user_id']?.toString())
+    final (profilesMap, pickupDetails) = await (
+      _fetchProfiles(client, rawItems),
+      _fetchPickupDetails(rawItems),
+    ).wait;
+    return _mapRawListToFeedItems(
+      rawItems,
+      profilesMap: profilesMap,
+      pickupDetails: pickupDetails,
+    );
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _fetchProfiles(
+    SupabaseClient client,
+    PostgrestList items,
+  ) async {
+    final userIds = items
+        .map((row) => row['user_id']?.toString())
         .whereType<String>()
         .where((id) => id.isNotEmpty)
         .toSet()
         .toList();
 
-    Map<String, Map<String, dynamic>> profilesMap = {};
-    if (userIds.isNotEmpty) {
+    final profilesMap = <String, Map<String, dynamic>>{};
+    for (
+      var offset = 0;
+      offset < userIds.length;
+      offset += _enrichmentBatchSize
+    ) {
       try {
-        final List<dynamic> profiles = await client
+        final profiles = await client
             .schema('profiles')
             .from('public_profile_v')
             .select('user_id, display_name, user_image_url, is_verified')
-            .inFilter('user_id', userIds);
-        for (final p in profiles) {
-          final uid = (p as Map)['user_id']?.toString();
-          if (uid != null) {
-            profilesMap[uid] = Map<String, dynamic>.from(p);
-          }
+            .inFilter(
+              'user_id',
+              userIds.skip(offset).take(_enrichmentBatchSize).toList(),
+            );
+        for (final profile in profiles) {
+          final uid = profile['user_id']?.toString();
+          if (uid != null) profilesMap[uid] = profile;
         }
       } catch (e) {
         debugPrint('Profiles query error for home items: $e');
+        break;
       }
     }
-
-    return _mapRawListToFeedItems(
-      rawList,
-      profilesMap: profilesMap,
-      pickupDetails: await _fetchPickupDetails(rawList),
-    );
+    return profilesMap;
   }
 
   Future<Map<String, Map<String, dynamic>>> _fetchPickupDetails(
@@ -838,12 +878,19 @@ class HomeSupabaseDataSource {
 
     final result = <String, Map<String, dynamic>>{};
     final listingIds = ids.toList();
-    for (var offset = 0; offset < listingIds.length; offset += 100) {
+    for (
+      var offset = 0;
+      offset < listingIds.length;
+      offset += _enrichmentBatchSize
+    ) {
       try {
         final rows = await client
             .from('item_tb')
             .select('id,pickup_location,pickup_latitude,pickup_longitude')
-            .inFilter('id', listingIds.skip(offset).take(100).toList())
+            .inFilter(
+              'id',
+              listingIds.skip(offset).take(_enrichmentBatchSize).toList(),
+            )
             .eq('owner_hidden', false)
             .eq('moderation_hidden', false)
             .inFilter('status', ['available', 'พร้อมใช้งาน']);

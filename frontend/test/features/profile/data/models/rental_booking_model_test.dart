@@ -8,8 +8,8 @@ void main() {
       final booking = {
         'id': 101,
         'item_id': 202,
-        'start_date': '2026-09-10T10:00:00Z',
-        'end_date': '2026-09-12T10:00:00Z',
+        'start_at': '2026-09-10T10:00:00Z',
+        'end_at': '2026-09-12T10:00:00Z',
         'status': 'confirmed',
         'total_price': 1500.0,
         'pickup_location': 'BTS Siam',
@@ -50,7 +50,19 @@ void main() {
       expect(model.longitude, 100.534);
       expect(model.toEntity().pickupAddress, 'Rama I Road, Bangkok');
       expect(model.isOwner, false);
+      expect(model.startDate, DateTime.utc(2026, 9, 10, 10));
+      expect(model.endDate, DateTime.utc(2026, 9, 12, 10));
       expect(model.duration, 'เช่า 2 วัน');
+    });
+
+    test('keeps booking times absent when only legacy dates are present', () {
+      final model = RentalBookingModel.fromSupabase(
+        booking: {'start_date': '2026-09-10', 'end_date': '2026-09-12'},
+        isOwner: false,
+      );
+
+      expect(model.startDate, isNull);
+      expect(model.endDate, isNull);
     });
 
     test('uses a listing pin only when it matches the saved meeting point', () {

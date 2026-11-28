@@ -23,14 +23,22 @@ begin
 
   insert into auth.users(id,email)
   select u, u::text||'@example.invalid' from unnest(array[viewer,owner_near,owner_far]) u;
-  insert into public.item_tb(user_id,item_name,description,price,type,category,status,pickup_latitude,pickup_longitude)
-  values (owner_near,'กล้องใกล้','ทดสอบ',500,'รายวัน','กล้อง','available',location_lat,location_lng)
+  insert into identity_private.identity_profiles(user_id,status,legal_name,masked_id,citizen_hmac,is_minor)
+  select u,'approved','ผู้ใช้ทดสอบ','*********1234',md5(u::text)||md5(u::text),false
+  from unnest(array[owner_near,owner_far]) u;
+  update profiles.profile_tb set phone = '0812345678' where user_id = any(array[owner_near,owner_far]);
+
+  insert into public.item_tb(user_id,item_name,description,price,type,category,status,
+    pickup_location,pickup_address,pickup_latitude,pickup_longitude)
+  values (owner_near,'กล้องใกล้','ทดสอบ',500,'รายวัน','กล้อง','available','จุดรับ','ที่อยู่',location_lat,location_lng)
   returning id into near_id;
-  insert into public.item_tb(user_id,item_name,description,price,type,category,status,pickup_latitude,pickup_longitude)
-  values (owner_far,'เต็นท์ไกล','ทดสอบ',500,'รายวัน','แคมป์ปิง','available',0,0)
+  insert into public.item_tb(user_id,item_name,description,price,type,category,status,
+    pickup_location,pickup_address,pickup_latitude,pickup_longitude)
+  values (owner_far,'เต็นท์ไกล','ทดสอบ',500,'รายวัน','แคมป์ปิง','available','จุดรับ','ที่อยู่',0,0)
   returning id into far_id;
-  insert into public.item_tb(user_id,item_name,description,price,type,category,status,pickup_latitude,pickup_longitude,owner_hidden)
-  values (owner_near,'ซ่อน','ทดสอบ',500,'รายวัน','กล้อง','available',location_lat,location_lng,true)
+  insert into public.item_tb(user_id,item_name,description,price,type,category,status,
+    pickup_location,pickup_address,pickup_latitude,pickup_longitude,owner_hidden)
+  values (owner_near,'ซ่อน','ทดสอบ',500,'รายวัน','กล้อง','available','จุดรับ','ที่อยู่',location_lat,location_lng,true)
   returning id into hidden_id;
 
   insert into public.user_item_views(user_id,item_id,last_viewed_at)
@@ -65,6 +73,17 @@ begin
     raise exception 'cursor ไม่ถูกต้องได้รับการยอมรับ';
   exception when invalid_parameter_value then null;
   end;
+
+  insert into public.review_tb(user_id,item_id,rating)
+  values (viewer,near_id,'4'),(owner_far,near_id,'5');
+  guest_result := public.get_home_feed_v2(null,location_lat,location_lng,'{camera}',null,48);
+  assert exists (
+    select 1 from jsonb_array_elements(guest_result->'items') item
+    where (item->>'id')::bigint = near_id and (item->>'rating')::numeric = 4.5
+      and (item->>'review_count')::integer = 2
+  ), 'ฟีด v2 คำนวณคะแนนรีวิวไม่ตรงกับที่บันทึก';
+  assert exists (select 1 from public.home_feed_ranked_v where id = near_id and rating = 4.5 and review_count = 2),
+    'view ฟีดคำนวณคะแนนรีวิวไม่ตรงกับที่บันทึก';
 end;
 $test$;
 

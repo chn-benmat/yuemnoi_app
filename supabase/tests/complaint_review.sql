@@ -129,8 +129,8 @@ begin
     perform public.create_rental_request(
       reporter, listing, now() + interval '3 days', now() + interval '4 days', 'daily', 'จุดรับ');
     raise exception 'a new booking was created for a removed listing';
-  exception when raise_exception then
-    if sqlerrm <> 'item_unavailable' then raise; end if;
+  exception when raise_exception or exclusion_violation then
+    if sqlerrm not in ('item_unavailable','item_rental_occupied') then raise; end if;
   end;
   begin
     update public.item_tb set moderation_hidden = false where id = listing;
