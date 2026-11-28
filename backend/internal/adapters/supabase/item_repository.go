@@ -138,8 +138,9 @@ func (r *supabaseItemRepository) FindAll(ctx context.Context) ([]domain.RankedIt
 func (r *supabaseItemRepository) FindByID(ctx context.Context, id int64) (*domain.Item, error) {
 	var items []domain.Item
 
-	err := r.client.DB.From("account_deletion_item_v").
-		Select("*", "is_rental_occupied", "is_rental_queue_held").
+	// account_deletion_hidden เป็น computed field ของ item_tb จึงอ่านตารางตรงได้โดยไม่ต้องผ่าน view
+	err := r.client.DB.From("item_tb").
+		Select("*", "is_rental_occupied", "is_rental_queue_held", "account_deletion_hidden").
 		Eq("id", strconv.FormatInt(id, 10)).
 		ExecuteWithContext(ctx, &items)
 	if err != nil {
