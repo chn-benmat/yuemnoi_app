@@ -24,3 +24,18 @@ abstract class HomeRepository {
   /// ล้างแคชในหน่วยความจำเพื่อบังคับโหลดข้อมูลใหม่
   void clearCache({bool rotateRecommendations = true}) {}
 }
+
+typedef RankedHomePage = ({List<FeedItem> items, String? nextCursor});
+
+class RankedHomeCursorInvalid implements Exception {
+  const RankedHomeCursorInvalid();
+}
+
+abstract interface class RankedHomeFeedRepository {
+  Future<RankedHomePage?> getRankedItems({
+    double? latitude,
+    double? longitude,
+    List<String> recentCategories = const [],
+    String? cursor,
+  });
+}

@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+import '../../features/notification/domain/app_notification.dart';
 
 class ChatNotificationService {
   ChatNotificationService({
@@ -23,7 +26,18 @@ class ChatNotificationService {
   Future<void>? _initializing;
 
   String? _pendingTap;
+  Map<String, dynamic>? _pendingPushTap;
+  void Function(Map<String, dynamic>)? _onPushNotificationTapped;
   void Function(String conversationId)? _onNotificationTapped;
+
+  set onPushNotificationTapped(void Function(Map<String, dynamic>)? callback) {
+    _onPushNotificationTapped = callback;
+    final pending = _pendingPushTap;
+    if (pending != null && callback != null) {
+      _pendingPushTap = null;
+      callback(pending);
+    }
+  }
 
   set onNotificationTapped(void Function(String conversationId)? callback) {
     _onNotificationTapped = callback;
@@ -49,9 +63,7 @@ class ChatNotificationService {
 
   Future<void> _initialize() async {
     try {
-      const androidSettings = AndroidInitializationSettings(
-        '@mipmap/ic_launcher',
-      );
+      const androidSettings = AndroidInitializationSettings('ic_notification');
       const iosSettings = DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -86,6 +98,18 @@ class ChatNotificationService {
           sound: const RawResourceAndroidNotificationSound('message_tone'),
         );
         await androidPlatform.createNotificationChannel(chatChannel);
+        for (final details in [_appUpdates, _rentalUpdates, _returnReminder]) {
+          await androidPlatform.createNotificationChannel(
+            AndroidNotificationChannel(
+              details.channelId,
+              details.channelName,
+              importance: details.importance,
+              enableVibration: details.enableVibration,
+              vibrationPattern: details.vibrationPattern,
+              sound: details.sound,
+            ),
+          );
+        }
       }
 
       final launchDetails = await _notificationsPlugin
@@ -103,7 +127,25 @@ class ChatNotificationService {
 
   void _handleNotificationTap(NotificationResponse response) {
     final payload = response.payload;
-    if (payload == null || payload.isEmpty || payload.startsWith('push:')) {
+    if (payload == null || payload.isEmpty) return;
+    if (payload.startsWith('push:')) {
+      try {
+        final data = jsonDecode(payload.substring(5)) as Map<String, dynamic>;
+        if (data['notification_id'] is! String ||
+            data['recipient_id'] is! String) {
+          return;
+        }
+        final pushCallback = _onPushNotificationTapped;
+        if (pushCallback == null) {
+          _pendingPushTap = data;
+        } else {
+          pushCallback(data);
+        }
+      } on FormatException {
+        // ข้อมูลแจ้งเตือนรุ่นเก่าบางรายการไม่มีเส้นทางที่เปิดได้
+      } on TypeError {
+        // ข้าม payload ที่ OS ส่งกลับมาในรูปแบบอื่น
+      }
       return;
     }
     final callback = _onNotificationTapped;
@@ -136,6 +178,88 @@ class ChatNotificationService {
 
   final Map<String, List<String>> _conversationMessages = {};
   final Set<String> _processedMessageKeys = {};
+
+  static const _appUpdates = AndroidNotificationDetails(
+    'yuemnoi_app_updates_v1',
+    'การแจ้งเตือน Yuemnoi',
+    importance: Importance.high,
+    priority: Priority.high,
+    visibility: NotificationVisibility.private,
+  );
+
+  static const _rentalUpdates = AndroidNotificationDetails(
+    'yuemnoi_rental_updates_v1',
+    'การเช่าสินค้า',
+    importance: Importance.high,
+    priority: Priority.high,
+    visibility: NotificationVisibility.private,
+  );
+
+  static final _returnReminder = AndroidNotificationDetails(
+    'yuemnoi_return_reminders_v1',
+    'เตือนเวลาคืนสินค้า',
+    importance: Importance.max,
+    priority: Priority.high,
+    category: AndroidNotificationCategory.reminder,
+    visibility: NotificationVisibility.private,
+    enableVibration: true,
+    vibrationPattern: Int64List.fromList([0, 500, 250, 500]),
+  );
+
+  Future<void> showPushNotification(
+    AppNotification notification,
+    Map<String, dynamic> data,
+  ) async {
+    final eventKey = data['event_key']?.toString() ?? notification.id;
+    if (notification.id.isEmpty || !_processedMessageKeys.add(eventKey)) return;
+    if (_processedMessageKeys.length > 300) {
+      _processedMessageKeys.remove(_processedMessageKeys.first);
+    }
+    await initialize();
+    final isChat = data['category'] == 'chat';
+    final android = notification.isReturnReminder
+        ? _returnReminder
+        : isChat
+        ? const AndroidNotificationDetails(
+            'yuemnoi_chat_messages_v3',
+            'ข้อความแชท Yuemnoi',
+            importance: Importance.max,
+            priority: Priority.high,
+            category: AndroidNotificationCategory.message,
+            visibility: NotificationVisibility.private,
+            sound: RawResourceAndroidNotificationSound('message_tone'),
+          )
+        : data['category'] == 'rental'
+        ? _rentalUpdates
+        : _appUpdates;
+    try {
+      await _notificationsPlugin.show(
+        id:
+            (notification.type == 'chat_message'
+                    ? notification.conversationId ?? notification.id
+                    : notification.id)
+                .hashCode,
+        title: notification.title,
+        body: notification.type == 'chat_message'
+            ? _cleanNotificationBody(notification.body)
+            : notification.body,
+        notificationDetails: NotificationDetails(
+          android: android,
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBanner: true,
+            presentList: true,
+            presentSound: true,
+            threadIdentifier: notification.conversationId,
+          ),
+        ),
+        payload: 'push:${jsonEncode(data)}',
+      );
+    } catch (_) {
+      _processedMessageKeys.remove(eventKey);
+      debugPrint('แสดงการแจ้งเตือนของระบบไม่สำเร็จ');
+    }
+  }
 
   /// ล้างประวัติการแจ้งเตือนของห้องแชทนั้นๆ เมื่อผู้ใช้เปิดเข้าไปอ่าน
   Future<void> clearConversationNotifications(String conversationId) async {

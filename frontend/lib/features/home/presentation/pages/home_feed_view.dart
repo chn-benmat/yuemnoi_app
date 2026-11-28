@@ -34,6 +34,7 @@ class _HomeFeedViewState extends State<HomeFeedView> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_maybeLoadNextPage);
     final homeBloc = context.read<HomeBloc>();
     if (homeBloc.state is HomeLoaded) {
       final loaded = homeBloc.state as HomeLoaded;
@@ -59,6 +60,24 @@ class _HomeFeedViewState extends State<HomeFeedView> {
       itemId: itemId,
       ownerLoadingLayout: item.isOwner,
     );
+  }
+
+  void _maybeLoadNextPage() {
+    if (!mounted ||
+        !_scrollController.hasClients ||
+        !_scrollController.position.hasContentDimensions ||
+        _scrollController.position.extentAfter > 400) {
+      return;
+    }
+    final bloc = context.read<HomeBloc>();
+    if (bloc.state case HomeLoaded(
+      :final nextCursor?,
+      isRefreshing: false,
+      isLoadingMore: false,
+      loadMoreFailed: false,
+    )) {
+      bloc.add(LoadMoreHomeFeedRequested(nextCursor));
+    }
   }
 
   /// รวมและตัดรายการสินค้าซ้ำ
@@ -102,6 +121,13 @@ class _HomeFeedViewState extends State<HomeFeedView> {
         body: BlocConsumer<HomeBloc, HomeState>(
           listener: (context, state) {
             if (state is HomeLoaded) {
+              if (state.nextCursor != null &&
+                  !state.isLoadingMore &&
+                  !state.loadMoreFailed) {
+                WidgetsBinding.instance.addPostFrameCallback(
+                  (_) => _maybeLoadNextPage(),
+                );
+              }
               final favoriteError = state.favoriteErrorMessage;
               if (favoriteError != null) {
                 ScaffoldMessenger.of(context)
@@ -126,6 +152,12 @@ class _HomeFeedViewState extends State<HomeFeedView> {
               );
             }
             if (state is HomeLoaded) {
+              if (state.hasRankedOrder) {
+                return _buildFeedContent(
+                  state,
+                  displayedItems: state.nearbyItems,
+                );
+              }
               return ValueListenableBuilder(
                 valueListenable:
                     RecommendationLocationService.instance.position,
@@ -209,14 +241,17 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                   backgroundColor: Colors.white,
                   onRefresh: () async {
                     final bloc = context.read<HomeBloc>();
-                    bloc.add(const RefreshHomeFeedRequested());
-                    await bloc.stream
-                        .skipWhile((state) => state is! HomeLoading)
+                    final refresh = bloc.stream
+                        .skipWhile(
+                          (state) => state is HomeLoaded && !state.isRefreshing,
+                        )
                         .firstWhere(
                           (state) =>
                               (state is HomeLoaded && !state.isRefreshing) ||
                               state is HomeError,
                         );
+                    bloc.add(const RefreshHomeFeedRequested());
+                    await refresh;
                   },
                   child: CustomScrollView(
                     controller: _scrollController,
@@ -238,6 +273,20 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                         _buildProductGridSliver(
                           displayedItems,
                           state.searchQuery,
+                        ),
+
+                      if (state.isLoadingMore)
+                        const SliverToBoxAdapter(
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      if (state.loadMoreFailed && state.nextCursor != null)
+                        SliverToBoxAdapter(
+                          child: TextButton(
+                            onPressed: () => context.read<HomeBloc>().add(
+                              LoadMoreHomeFeedRequested(state.nextCursor!),
+                            ),
+                            child: const Text('ลองโหลดเพิ่มเติมอีกครั้ง'),
+                          ),
                         ),
 
                       // ระยะห่างด้านล่างสำหรับ FloatingActionButton & Bottom Navigation Bar
@@ -293,21 +342,29 @@ class _HomeFeedViewState extends State<HomeFeedView> {
           }
 
           final label = CategoryFilterChips.getCategoryLabel(categoryId);
+          final bloc = context.read<HomeBloc>();
+          final recordCategory = bloc.captureCategoryInterest();
+          recordCategory(categoryId);
           await AppRoutes.openSearch(
             context,
             initialQuery: label,
             categories: state?.categories ?? const [],
+            onCategoryInterest: recordCategory,
           );
-          if (mounted &&
-              ((state?.selectedCategoryId ?? 'all') != 'all' ||
-                  _searchController.text.isNotEmpty)) {
+          if (!mounted || bloc.isClosed) return;
+          final current = bloc.state;
+          if (current is HomeLoaded &&
+              (current.selectedCategoryId != 'all' ||
+                  current.searchQuery.isNotEmpty)) {
             _searchController.clear();
             _applyFilter(
               categoryId: 'all',
-              minPrice: state?.minPrice,
-              maxPrice: state?.maxPrice,
-              minRating: state?.minRating,
+              minPrice: current.minPrice,
+              maxPrice: current.maxPrice,
+              minRating: current.minRating,
             );
+          } else {
+            bloc.add(const HomeRecommendationsChanged());
           }
         },
       ),
@@ -337,7 +394,11 @@ class _HomeFeedViewState extends State<HomeFeedView> {
                   minPrice: state?.minPrice,
                   maxPrice: state?.maxPrice,
                   minRating: state?.minRating,
+                  onCategoryInterest: bloc.captureCategoryInterest(),
                 );
+                if (mounted && !bloc.isClosed) {
+                  bloc.add(const HomeRecommendationsChanged());
+                }
               },
               onChanged: (query) => bloc.add(SearchQueryChanged(query)),
               onClear: () {

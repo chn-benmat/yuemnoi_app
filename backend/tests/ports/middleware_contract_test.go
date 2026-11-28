@@ -35,16 +35,34 @@ func TestRemovedAdminActionsReturnNotFound(t *testing.T) {
 	}
 }
 
-func TestRemovedNotificationEndpointsReturnNotFound(t *testing.T) {
+func TestNotificationRoutesRequireAuthentication(t *testing.T) {
 	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, nil, nil, nil, nil, "test-secret")
 	t.Cleanup(func() { _ = app.Shutdown() })
 	for _, route := range []struct{ method, path string }{
 		{http.MethodGet, "/api/notifications"},
-		{http.MethodPost, "/api/notifications/read-all"},
-		{http.MethodPost, "/api/notifications/read-conversation"},
 		{http.MethodPost, "/api/notifications/10000000-0000-4000-8000-000000000001/read"},
 		{http.MethodPut, "/api/notifications/devices"},
 		{http.MethodDelete, "/api/notifications/devices/test-installation"},
+	} {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			req := httptest.NewRequest(route.method, route.path, nil)
+			req.Header.Set("X-App-Secret", "test-secret")
+			res, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusUnauthorized)
+			}
+		})
+	}
+}
+
+func TestRemovedClientPushEndpointsReturnNotFound(t *testing.T) {
+	app := ports.SetupRouterWithOperations(domain.OperationsOptions{}, nil, nil, nil, nil, nil, "test-secret")
+	t.Cleanup(func() { _ = app.Shutdown() })
+	for _, route := range []struct{ method, path string }{
 		{http.MethodPost, "/api/push/chat"},
 		{http.MethodPost, "/api/user/fcm-token"},
 	} {

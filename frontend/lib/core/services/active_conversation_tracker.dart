@@ -4,21 +4,24 @@ class ActiveConversationTracker {
   static final ActiveConversationTracker instance =
       ActiveConversationTracker._();
 
-  String? _activeConversationId;
+  final List<String> _activeConversations = [];
 
-  String? get activeConversationId => _activeConversationId;
+  String? get activeConversationId => _activeConversations.lastOrNull;
 
   bool isConversationActive(String conversationId) {
-    return _activeConversationId == conversationId;
+    return activeConversationId == conversationId;
   }
 
   void setActive(String conversationId) {
-    _activeConversationId = conversationId;
+    _activeConversations.add(conversationId);
   }
 
   void clearActive([String? conversationId]) {
-    if (conversationId == null || _activeConversationId == conversationId) {
-      _activeConversationId = null;
+    if (conversationId == null) {
+      _activeConversations.clear();
+      return;
     }
+    final index = _activeConversations.lastIndexOf(conversationId);
+    if (index >= 0) _activeConversations.removeAt(index);
   }
 }

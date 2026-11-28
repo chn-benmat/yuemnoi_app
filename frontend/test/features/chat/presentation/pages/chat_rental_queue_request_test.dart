@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/models/pickup_location.dart';
+import 'package:frontend/core/navigation/app_routes.dart';
 import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
+import 'package:frontend/features/booking/presentation/pages/booking_request_page.dart';
 import 'package:frontend/features/chat/data/datasources/rental_queue_remote_data_source.dart';
 import 'package:frontend/features/chat/domain/entities/chat_conversation.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
@@ -14,6 +17,8 @@ import 'package:frontend/features/chat/presentation/bloc/chat_detail_bloc.dart';
 import 'package:frontend/features/chat/presentation/pages/chat_detail.dart';
 import 'package:frontend/features/chat/presentation/widgets/item_inquiry_bubble_card.dart';
 import 'package:frontend/features/chat/presentation/widgets/rental_queue_card.dart';
+import 'package:frontend/features/item_detail/domain/entities/item_detail.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -213,10 +218,11 @@ void main() {
     );
     addTearDown(bloc.close);
     final queue = _MockRentalQueue();
+    final acceptQueue = Completer<Map<String, dynamic>>();
     when(() => queue.listItems(conversation.id)).thenAnswer((_) async => []);
     when(
       () => queue.runAction(conversation.id, 'accept', messageId: 10),
-    ).thenAnswer((_) async => {'message_id': 10});
+    ).thenAnswer((_) => acceptQueue.future);
     ChatMessage message(int id, String content, {bool isMine = true}) =>
         ChatMessage(
           id: '$id',
@@ -245,15 +251,51 @@ void main() {
       '"requestedByRenter":true,"readyMessageId":"12"}}',
     );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ChatDetailScreen(
-          conversation: conversation,
-          chatDetailBloc: bloc,
-          rentalQueueSource: queue,
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => ChatDetailScreen(
+            conversation: conversation,
+            chatDetailBloc: bloc,
+            rentalQueueSource: queue,
+            fetchItemDetail: (itemId) async => ItemDetail(
+              id: itemId,
+              owner: const ItemOwner(
+                userId: 'item-owner',
+                displayName: 'ผู้ปล่อยเช่า',
+                imageUrl: '',
+              ),
+              name: 'กล้อง',
+              imageUrls: const [],
+              description: '',
+              category: '',
+              price: 50,
+              additionalDailyPrice: 1000,
+              status: 'available',
+              isRentalQueueHeld: true,
+              rentalType: 'รายชั่วโมง',
+              reviews: const [],
+              isOwner: false,
+              pickupLocation: const PickupLocation(
+                name: 'จุดนัดรับ',
+                address: 'กรุงเทพฯ',
+                latitude: 13.7,
+                longitude: 100.5,
+              ),
+            ),
+          ),
         ),
-      ),
+        GoRoute(
+          path: AppRoutes.booking,
+          builder: (_, state) => BookingRequestPage(
+            initialData: state.extra as BookingRequestData,
+          ),
+        ),
+      ],
     );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     stream.add([waiting, otherQueue]);
     await tester.pumpAndSettle();
     final camera = find.text('กล้อง');
@@ -283,6 +325,19 @@ void main() {
     verify(
       () => queue.runAction(conversation.id, 'accept', messageId: 10),
     ).called(1);
+    expect(find.byType(BookingRequestPage), findsNothing);
+
+    acceptQueue.complete({'message_id': 10});
+    await tester.pumpAndSettle();
+    expect(find.text('คำขอการเช่า'), findsOneWidget);
+    final requestPage = tester.widget<BookingRequestPage>(
+      find.byType(BookingRequestPage),
+    );
+    expect(requestPage.initialData?.item.id, 8);
+    expect(requestPage.initialData?.conversationId, conversation.id);
+    expect(requestPage.initialData?.rentalQueueMessageId, 10);
+    expect(requestPage.initialData?.isCustomerRequest, isTrue);
+    expect(find.text('ส่งคำขอการเช่า'), findsOneWidget);
 
     stream.add([
       message(
@@ -294,6 +349,8 @@ void main() {
       otherQueue,
       notice,
     ]);
+    await tester.pumpAndSettle();
+    router.pop();
     await tester.pumpAndSettle();
     expect(
       tester.getTopLeft(camera).dy,

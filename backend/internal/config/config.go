@@ -25,6 +25,8 @@ type Config struct {
 	LegacyMode             string        `env:"GIN_MODE" envDefault:"debug"`
 	SupabaseURL            string        `env:"SUPABASE_URL,notEmpty"`
 	SupabaseServiceRoleKey string        `env:"SUPABASE_SERVICE_ROLE_KEY,notEmpty"`
+	FirebaseSAPath         string        `env:"FIREBASE_SERVICE_ACCOUNT_PATH"`
+	FirebaseSAJSON         string        `env:"FIREBASE_SERVICE_ACCOUNT_KEY"`
 	AppSecretKey           string        `env:"APP_SECRET_KEY"`
 	AppSecretKeys          string        `env:"APP_SECRET_KEYS"`
 	InternalServiceKey     string        `env:"INTERNAL_SERVICE_KEY"`

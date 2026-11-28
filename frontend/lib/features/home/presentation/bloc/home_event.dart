@@ -17,6 +17,19 @@ class LoadHomeFeedStarted extends HomeFeedQueryEvent {
   const LoadHomeFeedStarted();
 }
 
+class LoadMoreHomeFeedRequested extends HomeFeedQueryEvent {
+  const LoadMoreHomeFeedRequested(this.cursor);
+
+  final String cursor;
+
+  @override
+  List<Object?> get props => [cursor];
+}
+
+class HomeRecommendationsChanged extends HomeFeedQueryEvent {
+  const HomeRecommendationsChanged();
+}
+
 /// อีเวนต์เปลี่ยนหมวดหมู่ตัวกรอง
 class CategoryFilterChanged extends HomeFeedQueryEvent {
   const CategoryFilterChanged(this.categoryId);

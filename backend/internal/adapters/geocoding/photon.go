@@ -25,27 +25,27 @@ type PhotonClient struct {
 	http    *http.Client
 	mu      sync.Mutex
 	limiter *rate.Limiter
-	cache   map[string]suggestionCache
+	cache   map[[2]string]suggestionCache
 }
 
 func NewPhotonClient(baseURL string, client *http.Client) *PhotonClient {
 	if client == nil {
 		client = &http.Client{Timeout: 8 * time.Second}
 	}
-	return &PhotonClient{baseURL: strings.TrimRight(baseURL, "/"), http: client, cache: make(map[string]suggestionCache), limiter: rate.NewLimiter(rate.Every(350*time.Millisecond), 1)}
+	return &PhotonClient{baseURL: strings.TrimRight(baseURL, "/"), http: client, cache: make(map[[2]string]suggestionCache), limiter: rate.NewLimiter(rate.Every(350*time.Millisecond), 1)}
 }
 
 func (c *PhotonClient) Suggest(ctx context.Context, query string) ([]domain.Place, error) {
-	query = normalizePlaceQuery(query)
+	query, number, area := normalizePlaceQuery(query)
+	cacheKey := [2]string{query, number}
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	c.mu.Lock()
-	if entry, ok := c.cache[query]; ok && time.Since(entry.at) < 30*time.Minute {
+	if entry, ok := c.cache[cacheKey]; ok && time.Since(entry.at) < 30*time.Minute {
 		c.mu.Unlock()
 		return append([]domain.Place{}, entry.places...), nil
 	}
 	c.mu.Unlock()
-	number, area := splitHouseQuery(query)
 	variants := []string{query}
 	if number != "" && area != "" {
 		variants = append(variants, area)
@@ -55,7 +55,11 @@ func (c *PhotonClient) Suggest(ctx context.Context, query string) ([]domain.Plac
 	}
 	places := []domain.Place{}
 	for index, variant := range variants {
-		found, err := c.fetchSuggestions(ctx, variant)
+		exactNumber := ""
+		if index == 0 {
+			exactNumber = number
+		}
+		found, err := c.fetchSuggestions(ctx, variant, exactNumber)
 		if err != nil {
 			return nil, err
 		}
@@ -77,12 +81,12 @@ func (c *PhotonClient) Suggest(ctx context.Context, query string) ([]domain.Plac
 	if len(c.cache) >= 512 {
 		clear(c.cache)
 	}
-	c.cache[query] = suggestionCache{places: places, at: time.Now()}
+	c.cache[cacheKey] = suggestionCache{places: places, at: time.Now()}
 	c.mu.Unlock()
 	return places, nil
 }
 
-func (c *PhotonClient) fetchSuggestions(ctx context.Context, query string) ([]domain.Place, error) {
+func (c *PhotonClient) fetchSuggestions(ctx context.Context, query, number string) ([]domain.Place, error) {
 	// ทุก query สำรองรอโควตาเดียวกัน ไม่เพิ่ม burst ไปยังบริการสาธารณะ
 	if err := c.limiter.Wait(ctx); err != nil {
 		return nil, err
@@ -133,7 +137,8 @@ func (c *PhotonClient) fetchSuggestions(ctx context.Context, query string) ([]do
 		if feature.Geometry.Type != "Point" || len(coords) != 2 || math.IsNaN(coords[0]) || math.IsNaN(coords[1]) || math.IsInf(coords[0], 0) || math.IsInf(coords[1], 0) || math.Abs(coords[0]) > 180 || math.Abs(coords[1]) > 90 {
 			return nil, fmt.Errorf("invalid suggestion coordinates")
 		}
-		street := strings.TrimSpace(text("housenumber") + " " + text("street"))
+		houseNumber := text("housenumber")
+		street := strings.TrimSpace(houseNumber + " " + text("street"))
 		name := text("name")
 		if name == "" {
 			name = street
@@ -145,8 +150,7 @@ func (c *PhotonClient) fetchSuggestions(ctx context.Context, query string) ([]do
 			continue
 		}
 		// เลขที่บ้านต้องตรงคำค้น ไม่ใช้การเดาตัวเลขของ fuzzy search เป็นที่อยู่จริง
-		number, _ := splitHouseQuery(query)
-		if number != "" && !strings.HasPrefix(text("housenumber"), number) {
+		if number != "" && !hasHouseNumber(houseNumber, number) {
 			continue
 		}
 
@@ -163,7 +167,7 @@ func (c *PhotonClient) fetchSuggestions(ctx context.Context, query string) ([]do
 			continue
 		}
 		seen[key] = true
-		places = append(places, preferThaiPlace(domain.Place{Name: name, DisplayName: strings.Join(parts, ", "), Latitude: coords[1], Longitude: coords[0], Type: text("osm_value")}, text("street"), text("locality"), text("district"), text("city")))
+		places = append(places, domain.Place{Name: name, DisplayName: strings.Join(parts, ", "), Latitude: coords[1], Longitude: coords[0], Type: text("osm_value")})
 	}
 	return places, nil
 }

@@ -57,6 +57,7 @@ class ChatDetailScreen extends StatelessWidget {
     this.initialMessageId,
     this.chatDetailBloc,
     this.rentalQueueSource,
+    this.fetchItemDetail,
     this.getUnavailableRentalItemIds,
     this.watchRentalAvailabilityChanges,
     this.getContactPhone,
@@ -67,6 +68,7 @@ class ChatDetailScreen extends StatelessWidget {
   final String? initialMessageId;
   final ChatDetailBloc? chatDetailBloc;
   final RentalQueueRemoteDataSource? rentalQueueSource;
+  final Future<ItemDetail> Function(int)? fetchItemDetail;
   final Future<Set<int>> Function(Set<int>)? getUnavailableRentalItemIds;
   final Stream<void> Function(int)? watchRentalAvailabilityChanges;
   final GetConversationContactPhoneUseCase? getContactPhone;
@@ -84,6 +86,7 @@ class ChatDetailScreen extends StatelessWidget {
       phoneCallService: phoneCallService,
       initialMessageId: initialMessageId,
       rentalQueueSource: rentalQueueSource,
+      fetchItemDetail: fetchItemDetail,
       getUnavailableRentalItemIds:
           getUnavailableRentalItemIds ??
           remoteDataSource.getUnavailableRentalItemIds,
@@ -120,6 +123,7 @@ class _ChatDetailView extends StatefulWidget {
     required this.watchRentalAvailabilityChanges,
     this.initialMessageId,
     this.rentalQueueSource,
+    this.fetchItemDetail,
   });
 
   final ChatConversation conversation;
@@ -127,6 +131,7 @@ class _ChatDetailView extends StatefulWidget {
   final PhoneCallService phoneCallService;
   final String? initialMessageId;
   final RentalQueueRemoteDataSource? rentalQueueSource;
+  final Future<ItemDetail> Function(int)? fetchItemDetail;
   final Future<Set<int>> Function(Set<int>) getUnavailableRentalItemIds;
   final Stream<void> Function(int) watchRentalAvailabilityChanges;
 
@@ -156,6 +161,7 @@ class _ChatDetailViewState extends State<_ChatDetailView>
   bool _isStartingPhoneCall = false;
   bool _selectingRentalQueueItem = false;
   bool _loadingRentalQueueItems = false;
+  bool _openingQueuedRentalRequest = false;
   bool _isCurrentRoute = false;
   bool _refreshRentalQueueItemsAgain = false;
   bool _hasLoadedRentalQueueItems = false;
@@ -819,16 +825,22 @@ class _ChatDetailViewState extends State<_ChatDetailView>
     }
   }
 
-  Future<void> _updateRentalQueue(String messageId, String action) async {
-    final id = int.tryParse(messageId);
+  Future<void> _updateRentalQueue(ChatMessage message, String action) async {
+    final id = int.tryParse(message.id);
     if (id == null) return;
     try {
       await _rentalQueue.runAction(_conversation.id, action, messageId: id);
     } on RentalQueueRemoteException catch (error) {
       if (mounted) showAppPopup(context, content: Text(error.message));
+      return;
     } finally {
       if (mounted) unawaited(_refreshRentalQueueItems(afterAction: true));
     }
+
+    if (!mounted || action != 'accept') return;
+    final queue = RentalQueueCardData.fromMessage(message.message);
+    if (queue == null) return;
+    await _openQueuedRentalRequest(message.id, queue, justAccepted: true);
   }
 
   VoidCallback? _queuedRentalRequestAction(
@@ -842,18 +854,32 @@ class _ChatDetailViewState extends State<_ChatDetailView>
         !_canSendQueuedRentalRequest(message.id, state)) {
       return null;
     }
-    return () => _openBookingRequest(
-      ItemInquiryData(
-        itemId: queue.itemId,
-        itemName: queue.name,
-        price: queue.price?.toDouble(),
-        unitLabel: queue.unitLabel,
-      ),
-      queueMessageId: message.id,
-    );
+    return () => _openQueuedRentalRequest(message.id, queue);
   }
 
-  bool _canSendQueuedRentalRequest(String messageId, ChatDetailState state) {
+  Future<void> _openQueuedRentalRequest(
+    String messageId,
+    RentalQueueCardData queue, {
+    bool justAccepted = false,
+  }) async {
+    if (_openingQueuedRentalRequest) return;
+    _openingQueuedRentalRequest = true;
+    try {
+      await _openBookingRequest(
+        ItemInquiryData(itemId: queue.itemId, itemName: queue.name),
+        queueMessageId: messageId,
+        justAcceptedQueue: justAccepted,
+      );
+    } finally {
+      _openingQueuedRentalRequest = false;
+    }
+  }
+
+  bool _canSendQueuedRentalRequest(
+    String messageId,
+    ChatDetailState state, {
+    bool justAccepted = false,
+  }) {
     final id = int.tryParse(messageId);
     if (id == null) return false;
     final card = state.messages
@@ -861,13 +887,15 @@ class _ChatDetailViewState extends State<_ChatDetailView>
         .firstOrNull;
     if (card == null) return false;
     final queue = RentalQueueCardData.fromMessage(card.message);
-    if (queue == null ||
-        queue.status != RentalQueueStatus.accepted ||
-        !queue.isRenterView(isSender: card.isMine)) {
+    if (queue == null || !queue.isRenterView(isSender: card.isMine)) {
       return false;
     }
+    // หลังยืนยันกับเซิร์ฟเวอร์สำเร็จ การ์ดอาจยังรออัปเดตจาก Realtime
+    final isAccepted = queue.status == RentalQueueStatus.accepted;
+    final awaitingUpdate =
+        justAccepted && queue.status == RentalQueueStatus.ready;
     final acceptedAt = queue.acceptedAt;
-    if (acceptedAt == null ||
+    if ((!awaitingUpdate && (!isAccepted || acceptedAt == null)) ||
         queue.expiresAt?.isAfter(DateTime.now()) == false) {
       return false;
     }
@@ -876,7 +904,7 @@ class _ChatDetailViewState extends State<_ChatDetailView>
       final request = BookingRequestData.fromChatMessage(message.message);
       if (request == null ||
           request.rentalQueueMessageId != id ||
-          message.createdAt.isBefore(acceptedAt)) {
+          (acceptedAt != null && message.createdAt.isBefore(acceptedAt))) {
         continue;
       }
       return _canRetryRentalRequest(request);
@@ -941,13 +969,20 @@ class _ChatDetailViewState extends State<_ChatDetailView>
     ItemInquiryData inquiry, {
     String? queueMessageId,
     String? retryMessageId,
+    bool justAcceptedQueue = false,
   }) async {
     final itemId = inquiry.itemId;
     if (itemId == null) return;
     bool canSend() {
       final state = context.read<ChatDetailBloc>().state;
       if (queueMessageId != null) {
-        return _canSendQueuedRentalRequest(queueMessageId, state);
+        return _isCurrentRoute &&
+            !_conversation.isOtherUserUnavailable &&
+            _canSendQueuedRentalRequest(
+              queueMessageId,
+              state,
+              justAccepted: justAcceptedQueue,
+            );
       }
       if (retryMessageId != null) {
         final latest = _latestRentalRequestForItem(state, itemId);
@@ -958,10 +993,11 @@ class _ChatDetailViewState extends State<_ChatDetailView>
 
     if (!canSend()) return;
 
-    final itemSource = ItemDetailRemoteDataSource();
     final ItemDetail itemDetail;
     try {
-      itemDetail = await itemSource.fetchById(itemId);
+      final fetchItemDetail =
+          widget.fetchItemDetail ?? ItemDetailRemoteDataSource().fetchById;
+      itemDetail = await fetchItemDetail(itemId);
     } catch (_) {
       if (mounted)
         showAppPopup(
@@ -1366,7 +1402,7 @@ class _ChatDetailViewState extends State<_ChatDetailView>
                                     _conversation.isOtherUserUnavailable
                                     ? null
                                     : (action) => _updateRentalQueue(
-                                        item.message.id,
+                                        item.message,
                                         action,
                                       ),
                                 onSendQueuedRequest: _queuedRentalRequestAction(
@@ -1421,7 +1457,7 @@ class _ChatDetailViewState extends State<_ChatDetailView>
                                       _conversation.isOtherUserUnavailable
                                       ? null
                                       : (action) => _updateRentalQueue(
-                                          attachedQueue.message.id,
+                                          attachedQueue.message,
                                           action,
                                         ),
                                   onSendQueuedRequest:

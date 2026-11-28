@@ -4,13 +4,33 @@ import '../../domain/repositories/home_repository.dart';
 import '../datasources/home_supabase_data_source.dart';
 
 /// การนำสัญญา HomeRepository ไปใช้งานจริง ดึงข้อมูลจริงจาก Supabase
-class HomeRepositoryImpl implements HomeRepository {
+class HomeRepositoryImpl implements HomeRepository, RankedHomeFeedRepository {
   HomeRepositoryImpl({HomeSupabaseDataSource? dataSource})
     : _dataSource = dataSource ?? HomeSupabaseDataSource();
 
   final HomeSupabaseDataSource _dataSource;
 
   Stream<void> watchFeedChanges() => _dataSource.watchFeedChanges();
+
+  @override
+  Future<RankedHomePage?> getRankedItems({
+    double? latitude,
+    double? longitude,
+    List<String> recentCategories = const [],
+    String? cursor,
+  }) async {
+    final page = await _dataSource.fetchRankedItems(
+      latitude: latitude,
+      longitude: longitude,
+      recentCategories: recentCategories,
+      cursor: cursor,
+    );
+    if (page == null) return null;
+    return (
+      items: page.items.map((item) => item.toEntity()).toList(),
+      nextCursor: page.nextCursor,
+    );
+  }
 
   @override
   Future<List<FeedCategory>> getCategories() async {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/aiservice"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/emaildns"
+	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/fcm"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/geocoding"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/logging"
 	"github.com/chn-benmat/yuemnoi_app/backend/internal/adapters/supabase"
@@ -78,6 +79,25 @@ func main() {
 	ops.AccountDeletion = supabase.NewAccountDeletionRepository(supabaseClient, cfg.SupabaseServiceRoleKey)
 	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
 	defer stopCleanup()
+	notifications := supabase.NewSupabaseNotificationRepository(supabaseClient)
+	ops.Notifications = notifications
+	var deviceSender domain.DevicePushSender
+	if sender, err := fcm.NewFCMSender(cfg.FirebaseSAPath, cfg.FirebaseSAJSON, nil); err != nil {
+		slog.Warn("ไม่ได้เปิดใช้งานการส่ง Firebase", slog.String("reason", "firebase_configuration_unavailable"))
+	} else {
+		deviceSender = sender
+	}
+	var notificationWakeups chan struct{}
+	if deviceSender != nil {
+		listener, err := supabase.NewNotificationRealtimeListener(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey)
+		if err != nil {
+			slog.Warn("ตั้งค่า WebSocket สำหรับแจ้งเตือนไม่สำเร็จ", slog.Any("error", err))
+		} else {
+			notificationWakeups = make(chan struct{}, 1)
+			go listener.Run(cleanupCtx, notificationWakeups)
+		}
+	}
+	go domain.NewNotificationWorker(notifications, deviceSender).Run(cleanupCtx, notificationWakeups)
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -124,6 +144,7 @@ func main() {
 		fiber.Config{ReadTimeout: cfg.ReadTimeout, WriteTimeout: cfg.WriteTimeout},
 	)
 
+	ports.RegisterHomeFeedRoutes(router, supabase.NewSupabaseHomeFeedRepository(supabaseClient), authGateway)
 	ports.RegisterLocationRoutes(router, geocoding.NewClient(cfg.GeocodingURL, nil), geocoding.NewPhotonClient(cfg.PlaceSuggestionsURL, nil))
 	// รัน Server แบบ Background (Non-blocking)
 	go func() {

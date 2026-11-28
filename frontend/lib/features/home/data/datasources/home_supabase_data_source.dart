@@ -7,12 +7,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/cache/app_cache.dart';
 import '../../../../core/cache/cache_database.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/favorite_service.dart';
+import '../../domain/repositories/home_repository.dart';
 import '../models/feed_category_model.dart';
 import '../models/feed_item_model.dart';
 
-/// Data Source สำหรับดึงข้อมูลล่าสุดจาก Supabase หรือ Go Backend REST API (`/api/items`)
+/// ดึงฟีดจัดอันดับจาก Go และใช้แค็ตตาล็อกเดิมสำหรับค้นหาหรือโหลดสำรอง
 /// ใช้แคชจากข้อมูลจริงของฟีดเมื่อโหลดข้อมูลสดไม่ได้
 class HomeSupabaseDataSource {
   HomeSupabaseDataSource({
@@ -29,6 +31,61 @@ class HomeSupabaseDataSource {
 
   final SupabaseClient? _supabaseClient;
   final ApiClient _apiClient;
+
+  Future<({List<FeedItemModel> items, String? nextCursor})?> fetchRankedItems({
+    double? latitude,
+    double? longitude,
+    List<String> recentCategories = const [],
+    String? cursor,
+  }) async {
+    final userId = AuthSession.userId;
+    final token = AuthSession.accessToken;
+    if (userId != AuthSession.accountChanges.value.userId) return null;
+    try {
+      final response = await _apiClient.post(
+        '/api/home/feed',
+        data: {
+          if (latitude != null && longitude != null) ...{
+            'latitude': latitude,
+            'longitude': longitude,
+          },
+          if (recentCategories.isNotEmpty)
+            'recent_categories': recentCategories,
+          'cursor': ?cursor,
+        },
+        headers: token == null ? null : {'Authorization': 'Bearer $token'},
+      );
+      if (cursor != null && response.statusCode == 400) {
+        throw const RankedHomeCursorInvalid();
+      }
+      if (response.statusCode != 200 || response.data is! Map) return null;
+      final rawItems = (response.data as Map)['items'];
+      final nextCursor = (response.data as Map)['next_cursor'];
+      if (rawItems is! List || (nextCursor != null && nextCursor is! String)) {
+        return null;
+      }
+      if (userId != AuthSession.userId) return null;
+      await FavoriteService.instance.init();
+      if (userId != AuthSession.userId) return null;
+      final items = _mapRawListToFeedItems(
+        rawItems,
+        isRanked: true,
+        userId: userId,
+      );
+      return (
+        items: items,
+        nextCursor: nextCursor is String && nextCursor.isNotEmpty
+            ? nextCursor
+            : null,
+      );
+    } on ApiClientException {
+      return null;
+    } on FormatException {
+      return null;
+    } on TypeError {
+      return null;
+    }
+  }
 
   static final _feedChangesByClient = Expando<Stream<void>>();
 
@@ -551,14 +608,21 @@ class HomeSupabaseDataSource {
     List rawItems, {
     Map<String, Map<String, dynamic>>? profilesMap,
     Map<String, Map<String, dynamic>>? pickupDetails,
+    bool isRanked = false,
+    String? userId,
   }) {
     final List<FeedItemModel> items = [];
-    final currentUserId = _activeSupabaseClient?.auth.currentUser?.id;
+    final currentUserId = isRanked
+        ? userId
+        : _activeSupabaseClient?.auth.currentUser?.id;
     for (int i = 0; i < rawItems.length; i++) {
       final item = rawItems[i] is Map<String, dynamic>
           ? rawItems[i] as Map<String, dynamic>
           : Map<String, dynamic>.from(rawItems[i] as Map);
       final id = item['id'].toString();
+      if (isRanked && (item['id'] == null || id.isEmpty)) {
+        throw const FormatException('ไม่มีรหัสอุปกรณ์ในฟีด');
+      }
       final title = item['item_name']?.toString() ?? 'อุปกรณ์ให้เช่า';
       final description = item['description']?.toString() ?? '';
       final rawCategory = item['category']?.toString();
@@ -641,6 +705,9 @@ class HomeSupabaseDataSource {
           reviewCount: reviewCount,
           paidBookingCount: int.tryParse('${item['paid_booking_count']}') ?? 0,
           isRentalOccupied: item['is_rental_occupied'] == true,
+          distanceKm: isRanked
+              ? double.tryParse('${item['distance_km']}')
+              : null,
           isVerified:
               item['is_verified'] == true ||
               profilesMap?[item['user_id']?.toString()]?['is_verified'] == true,
@@ -650,7 +717,7 @@ class HomeSupabaseDataSource {
               item['user_id']?.toString() == currentUserId,
           ownerAvatarUrl: ownerAvatar,
           imageUrl: imageUrl,
-          isCurated: i < _curatedItemCount,
+          isCurated: !isRanked && i < _curatedItemCount,
           isFavorite: FavoriteService.instance.isItemFavorite(
             int.tryParse(id) ?? -1,
           ),

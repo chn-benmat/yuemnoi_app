@@ -22,7 +22,7 @@ func TestHouseAddressFallsBackToMatchingStreetWithoutInventingHousePin(t *testin
 		}
 	}))
 	defer server.Close()
-	for _, query := range []string{"719/259 พุดตาน", "บ้านเลขที่ ๗๑๙/๒๕๙ ถ.พุดตาน", "719/259พุดตาน"} {
+	for _, query := range []string{"719/259 พุดตาน", "บ้านเลขที่ ๗๑๙ / ๒๕๙ ถ.พุดตาน", "719/259พุดตาน"} {
 		places, err := geocoding.NewPhotonClient(server.URL, server.Client()).Suggest(context.Background(), query)
 		if err != nil || len(places) != 1 || places[0].Name != "ถนนพุดตานใน" {
 			t.Fatalf("matching street missing: %v err=%v", places, err)
@@ -75,6 +75,45 @@ func TestSuggestionsDoNotInventHouseNumbers(t *testing.T) {
 		}
 	}
 
+}
+
+func TestSuggestionsUseExactHouseNumberAndKeepPlaceName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"features":[
+			{"properties":{"name":"Another address","housenumber":"991/2","countrycode":"TH"},"geometry":{"type":"Point","coordinates":[100.53,13.74]}},
+			{"properties":{"name":"Siam Paragon","housenumber":"๙๙๑","street":"ถนนพระรามที่ 1","countrycode":"TH"},"geometry":{"type":"Point","coordinates":[100.534954,13.7467785]}}
+		]}`))
+	}))
+	defer server.Close()
+	places, err := geocoding.NewPhotonClient(server.URL, server.Client()).Suggest(context.Background(), "991 ถนนพระรามที่ 1")
+	if err != nil || len(places) != 1 || places[0].Name != "Siam Paragon" || places[0].IsApproximate {
+		t.Fatalf("expected the named place at the exact address: %v err=%v", places, err)
+	}
+}
+
+func TestSuggestionsKeepNumericStoreNamesSearchable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"features":[{"properties":{"name":"24 Fitness","street":"ถนนสุขุมวิท","countrycode":"TH"},"geometry":{"type":"Point","coordinates":[100.56,13.73]}}]}`))
+	}))
+	defer server.Close()
+	places, err := geocoding.NewPhotonClient(server.URL, server.Client()).Suggest(context.Background(), "24 Fitness")
+	if err != nil || len(places) != 1 || places[0].Name != "24 Fitness" || places[0].IsApproximate {
+		t.Fatalf("expected the actual store name: %v err=%v", places, err)
+	}
+}
+
+func TestExplicitHouseNumberIsFilteredEvenWithoutThaiStreetName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"features":[
+			{"properties":{"name":"Wrong house","housenumber":"123/3","countrycode":"TH"},"geometry":{"type":"Point","coordinates":[100.53,13.74]}},
+			{"properties":{"name":"Exact house","housenumber":"123","street":"Sukhumvit","countrycode":"TH"},"geometry":{"type":"Point","coordinates":[100.54,13.74]}}
+		]}`))
+	}))
+	defer server.Close()
+	places, err := geocoding.NewPhotonClient(server.URL, server.Client()).Suggest(context.Background(), "บ้านเลขที่ 123 Sukhumvit")
+	if err != nil || len(places) != 1 || places[0].Name != "Exact house" || places[0].IsApproximate {
+		t.Fatalf("explicit house number was not enforced: %v err=%v", places, err)
+	}
 }
 
 func TestSuggestionsRejectBadResponseAndUpstreamFailure(t *testing.T) {

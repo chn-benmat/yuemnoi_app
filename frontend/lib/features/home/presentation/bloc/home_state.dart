@@ -33,6 +33,10 @@ class HomeLoaded extends HomeState {
     this.maxPrice,
     this.minRating,
     this.isRefreshing = false,
+    this.hasRankedOrder = false,
+    this.nextCursor,
+    this.isLoadingMore = false,
+    this.loadMoreFailed = false,
     this.favoriteErrorMessage,
     this.searchErrorMessage,
   });
@@ -63,6 +67,10 @@ class HomeLoaded extends HomeState {
 
   /// กำลังรีเฟรชข้อมูลในเบื้องหลังหรือไม่
   final bool isRefreshing;
+  final bool hasRankedOrder;
+  final String? nextCursor;
+  final bool isLoadingMore;
+  final bool loadMoreFailed;
 
   /// Error จากการบันทึก favorite ให้หน้า Home แสดงแก่ผู้ใช้
   final String? favoriteErrorMessage;
@@ -87,6 +95,10 @@ class HomeLoaded extends HomeState {
     int? Function()? maxPrice,
     double? Function()? minRating,
     bool? isRefreshing,
+    bool? hasRankedOrder,
+    String? Function()? nextCursor,
+    bool? isLoadingMore,
+    bool? loadMoreFailed,
     String? favoriteErrorMessage,
     String? searchErrorMessage,
   }) {
@@ -100,6 +112,10 @@ class HomeLoaded extends HomeState {
       maxPrice: maxPrice != null ? maxPrice() : this.maxPrice,
       minRating: minRating != null ? minRating() : this.minRating,
       isRefreshing: isRefreshing ?? this.isRefreshing,
+      hasRankedOrder: hasRankedOrder ?? this.hasRankedOrder,
+      nextCursor: nextCursor == null ? this.nextCursor : nextCursor(),
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      loadMoreFailed: loadMoreFailed ?? this.loadMoreFailed,
       favoriteErrorMessage: favoriteErrorMessage,
       searchErrorMessage: searchErrorMessage,
     );
@@ -116,6 +132,10 @@ class HomeLoaded extends HomeState {
     maxPrice,
     minRating,
     isRefreshing,
+    hasRankedOrder,
+    nextCursor,
+    isLoadingMore,
+    loadMoreFailed,
     favoriteErrorMessage,
     searchErrorMessage,
   ];

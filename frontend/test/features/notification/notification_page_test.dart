@@ -3,12 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/notification/presentation/pages/page.dart';
 
 void main() {
-  testWidgets('shows the maintenance state without account or data setup', (
+  testWidgets('asks guests to sign in before loading notifications', (
     tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: NotificationPage()));
 
     expect(find.text('การแจ้งเตือน'), findsOneWidget);
-    expect(find.text('ระบบแจ้งเตือนกำลังปรับปรุง'), findsOneWidget);
+    expect(find.text('เข้าสู่ระบบเพื่อดูการแจ้งเตือน'), findsOneWidget);
   });
 }

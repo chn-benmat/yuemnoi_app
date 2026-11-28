@@ -20,6 +20,14 @@ func RegisterLocationRoutes(router *fiber.App, geocoder domain.Geocoder, suggest
 	}
 }
 
+func RegisterHomeFeedRoutes(router *fiber.App, repository domain.HomeFeedRepository, authGateway domain.AuthGateway) {
+	var verifier domain.TokenVerifier
+	if authGateway != nil {
+		verifier = appTokenVerifier{authGateway}
+	}
+	router.Post("/api/home/feed", homeFeedHandler(repository, verifier))
+}
+
 func SetupRouterWithOperations(
 	operations domain.OperationsOptions,
 	itemRepo domain.ItemRepository,
@@ -62,6 +70,13 @@ func SetupRouterWithOperations(
 	// จัดการกลุ่มเส้นทาง API
 	api := router.Group("/api")
 	{
+		notifications := api.Group("/notifications")
+		notificationController := NewNotificationHandler(operations.Notifications, appGateway)
+		notifications.Get("", notificationController.ListNotifications)
+		notifications.Post("/:id/read", notificationController.MarkNotificationRead)
+		notifications.Put("/devices", notificationController.RegisterDevice)
+		notifications.Delete("/devices/:installation_id", notificationController.UnregisterDevice)
+
 		// ทุกอย่างเกี่ยวกับการยืนยันตัวตน (Authentication) - มี Rate Limit ป้องกัน Brute-force
 		user := api.Group("/auth")
 		authRateLimit := RateLimitMiddleware(authRateLimiter, "คุณส่งคำขอยืนยันตัวตนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่")
