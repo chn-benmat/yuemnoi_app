@@ -55,15 +55,30 @@ class SupabaseRepository(ItemRepositoryInterface):
             "Accept": "application/json",
         }
 
-    def _map_row_to_item(self, row: dict) -> Item:
-        if row.get("price") is None or not isinstance(row.get("type"), str) or not row["type"].strip():
+    @staticmethod
+    def _rates(row: dict) -> dict[str, float]:
+        """อ่านทุกเรตที่ประกาศไว้ เรียงรายชั่วโมงก่อนรายวัน ตัวแรกจึงเป็นเรตหลักเหมือนการ์ดในแอป"""
+        rates: dict[str, float] = {}
+        for column, unit in (("hourly_rate", "hourly"), ("daily_rate", "daily")):
+            raw = row.get(column)
+            if raw is None:
+                continue
+            if isinstance(raw, bool):
+                raise DatabaseException("Catalog price is invalid")
+            try:
+                price = float(raw)
+            except (TypeError, ValueError):
+                raise DatabaseException("Catalog price is invalid") from None
+            if not isfinite(price) or price < 0:
+                raise DatabaseException("Catalog price is invalid")
+            rates[unit] = price
+        if not rates:
             raise DatabaseException("Catalog pricing data is incomplete")
-        try:
-            price = float(row["price"])
-        except (TypeError, ValueError):
-            raise DatabaseException("Catalog price is invalid") from None
-        if isinstance(row["price"], bool) or not isfinite(price) or price < 0:
-            raise DatabaseException("Catalog price is invalid")
+        return rates
+
+    def _map_row_to_item(self, row: dict) -> Item:
+        rates = self._rates(row)
+        unit, price = next(iter(rates.items()))
         raw_images = row.get("item_image_url")
         image_urls: List[str] = []
         if isinstance(raw_images, list):
@@ -83,7 +98,8 @@ class SupabaseRepository(ItemRepositoryInterface):
             name=row.get("item_name") or "",
             category=row.get("category") or "",
             price=price,
-            type=row["type"],
+            type=unit,
+            rates=rates,
             status=row.get("status") or "unknown",
             image_urls=image_urls,
             description=row.get("description") or "",
@@ -97,7 +113,7 @@ class SupabaseRepository(ItemRepositoryInterface):
                 return cached
 
         endpoint = (f"{self._base_url}/rest/v1/item_tb"
-                    "?select=id,item_name,category,price,type,status,item_image_url,description"
+                    "?select=id,item_name,category,hourly_rate,daily_rate,status,item_image_url,description"
                     "&owner_hidden=eq.false&moderation_hidden=eq.false")
         try:
             await self.start()

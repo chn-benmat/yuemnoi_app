@@ -20,7 +20,8 @@ func TestRemovedAdminActionsReturnNotFound(t *testing.T) {
 	app := ports.NewHTTPApp()
 	handler := ports.NewOperationsHandler(domain.OperationsOptions{}, nil)
 	app.Post("/api/admin/actions/:action/:target", handler.Action)
-	for _, action := range []string{"pilot", "guardian-review", "revoke-guardian"} {
+	// settings เคยใช้ปิดข้อกำหนดยืนยันตัวตน ซึ่งตอนนี้บังคับเสมอแล้ว
+	for _, action := range []string{"pilot", "guardian-review", "revoke-guardian", "settings"} {
 		t.Run(action, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/admin/actions/"+action+"/target", nil)
 			res, err := app.Test(req)

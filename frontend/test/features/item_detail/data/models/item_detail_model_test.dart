@@ -81,6 +81,50 @@ void main() {
     }
   });
 
+  test('uses the per-unit rates computed by the database', () {
+    // ฐานเป็นผู้ตีความ price/type/daily_price แอปจึงใช้เรตที่ฐานส่งมาตรง ๆ
+    final row = {
+      'id': 7,
+      'user_id': 'owner-id',
+      'price': 75,
+      'daily_price': null,
+      'type': 'hourly',
+      'hourly_rate': 80,
+      'daily_rate': 420,
+    };
+    final items = [
+      ItemDetailModel.fromRecords(
+        item: row,
+        profilesByUserId: const {},
+        reviews: const [],
+        currentUserId: null,
+      ),
+      ItemDetailModel.fromApiResponse(item: row, currentUserId: null),
+    ];
+    for (final item in items) {
+      expect(item.hourlyPrice, 80);
+      expect(item.dailyPrice, 420);
+      expect(item.withVisibility(hidden: true).dailyPrice, 420);
+    }
+  });
+
+  test('keeps a missing database rate absent for that unit', () {
+    final item = ItemDetailModel.fromApiResponse(
+      item: {
+        'id': 7,
+        'user_id': 'owner-id',
+        'price': 400,
+        'type': 'daily',
+        'hourly_rate': null,
+        'daily_rate': 400,
+      },
+      currentUserId: null,
+    );
+
+    expect(item.hourlyPrice, isNull);
+    expect(item.dailyPrice, 400);
+  });
+
   test('models a queue hold separately from an open rental', () {
     final row = {
       'id': 7,

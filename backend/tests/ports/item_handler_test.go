@@ -37,17 +37,18 @@ func (r *itemManagementRepository) Insert(_ context.Context, item *domain.Item, 
 	return item, nil
 }
 
-func TestCreateItemWithHourlyAndDailyPrice(t *testing.T) {
-	app := ports.NewHTTPApp()
-	defer app.Shutdown()
-	app.Post("/api/items", ports.NewItemHandler(&itemManagementRepository{}, itemManagementVerifier{}).CreateItem)
+func createItemForm(t *testing.T, pricing map[string]string) (*bytes.Buffer, string) {
+	t.Helper()
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
-	for name, value := range map[string]string{
+	fields := map[string]string{
 		"item_name": "Camera", "description": "Includes lens", "category": "Camera",
-		"price": "75", "daily_price": "410", "type": "รายชั่วโมง",
 		"pickup_location": "Station", "pickup_latitude": "13.75", "pickup_longitude": "100.5",
-	} {
+	}
+	for name, value := range pricing {
+		fields[name] = value
+	}
+	for name, value := range fields {
 		if err := form.WriteField(name, value); err != nil {
 			t.Fatal(err)
 		}
@@ -55,37 +56,82 @@ func TestCreateItemWithHourlyAndDailyPrice(t *testing.T) {
 	if err := form.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest("POST", "/api/items", &body)
-	req.Header.Set("Content-Type", form.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer owner")
-	res, err := app.Test(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer res.Body.Close()
-	var item struct {
-		Price      int `json:"price"`
-		DailyPrice int `json:"daily_price"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&item); err != nil {
-		t.Fatal(err)
-	}
-	if res.StatusCode != 201 || item.Price != 75 || item.DailyPrice != 410 {
-		t.Fatalf("status=%d, price=%d, daily_price=%d", res.StatusCode, item.Price, item.DailyPrice)
+	return &body, form.FormDataContentType()
+}
+
+func TestCreateItemStoresPerUnitRates(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		pricing       map[string]string
+		status        int
+		hourly, daily *int
+	}{
+		{"both rates", map[string]string{"hourly_rate": "75", "daily_rate": "410"}, 201, intPtr(75), intPtr(410)},
+		{"daily only", map[string]string{"daily_rate": "410"}, 201, nil, intPtr(410)},
+		{"legacy hourly app", map[string]string{"price": "75", "daily_price": "410", "type": "รายชั่วโมง"}, 201, intPtr(75), intPtr(410)},
+		{"legacy daily app", map[string]string{"price": "410", "type": "daily"}, 201, nil, intPtr(410)},
+		{"no rate", map[string]string{}, 400, nil, nil},
+		{"zero rate", map[string]string{"hourly_rate": "0"}, 400, nil, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := ports.NewHTTPApp()
+			defer app.Shutdown()
+			app.Post("/api/items", ports.NewItemHandler(&itemManagementRepository{}, itemManagementVerifier{}).CreateItem)
+			body, contentType := createItemForm(t, tc.pricing)
+			req := httptest.NewRequest("POST", "/api/items", body)
+			req.Header.Set("Content-Type", contentType)
+			req.Header.Set("Authorization", "Bearer owner")
+			res, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+			if res.StatusCode != tc.status {
+				t.Fatalf("status=%d want %d", res.StatusCode, tc.status)
+			}
+			if tc.status != 201 {
+				return
+			}
+			var item map[string]any
+			if err := json.NewDecoder(res.Body).Decode(&item); err != nil {
+				t.Fatal(err)
+			}
+			for key := range map[string]bool{"price": true, "type": true, "daily_price": true} {
+				if _, ok := item[key]; ok {
+					t.Fatalf("response still carries legacy %s: %v", key, item)
+				}
+			}
+			if !sameRate(item["hourly_rate"], tc.hourly) || !sameRate(item["daily_rate"], tc.daily) {
+				t.Fatalf("rates = %v / %v", item["hourly_rate"], item["daily_rate"])
+			}
+		})
 	}
 }
 
-func TestUpdateItemDailyPrice(t *testing.T) {
+func intPtr(value int) *int { return &value }
+
+func sameRate(got any, want *int) bool {
+	if want == nil {
+		return got == nil
+	}
+	return got == float64(*want)
+}
+
+func TestUpdateItemRates(t *testing.T) {
 	for _, tc := range []struct {
 		name, pricing string
-		want          interface{}
 		status        int
+		want          map[string]interface{}
 	}{
-		{"sets daily rate", `"type":"รายชั่วโมง","price":75,"daily_price":410`, 410, 200},
-		{"removes daily rate", `"type":"รายชั่วโมง","price":75,"daily_price":0`, nil, 200},
-		{"clears additional rate on legacy daily-only edits", `"type":"รายวัน","price":410`, nil, 200},
-		{"rejects negative daily rate", `"type":"รายชั่วโมง","price":75,"daily_price":-1`, nil, 400},
-		{"requires an hourly rate when adding the daily rate", `"type":"รายชั่วโมง","daily_price":410`, nil, 400},
+		{"sets both rates", `"hourly_rate":75,"daily_rate":410`, 200, map[string]interface{}{"hourly_rate": 75, "daily_rate": 410}},
+		{"removes the daily rate", `"hourly_rate":75,"daily_rate":0`, 200, map[string]interface{}{"hourly_rate": 75, "daily_rate": nil}},
+		{"changes only the daily rate", `"daily_rate":420`, 200, map[string]interface{}{"daily_rate": 420}},
+		{"legacy hourly edit", `"type":"รายชั่วโมง","price":75,"daily_price":410`, 200, map[string]interface{}{"hourly_rate": 75, "daily_rate": 410}},
+		{"legacy removes daily rate", `"type":"รายชั่วโมง","price":75,"daily_price":0`, 200, map[string]interface{}{"hourly_rate": 75, "daily_rate": nil}},
+		{"legacy daily-only edit", `"type":"รายวัน","price":410`, 200, map[string]interface{}{"hourly_rate": nil, "daily_rate": 410}},
+		{"rejects removing every rate", `"hourly_rate":0,"daily_rate":0`, 400, nil},
+		{"rejects a negative rate", `"hourly_rate":-1`, 400, nil},
+		{"rejects a legacy daily rate without the hourly rate", `"type":"รายชั่วโมง","daily_price":410`, 400, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &itemManagementRepository{}
@@ -103,13 +149,37 @@ func TestUpdateItemDailyPrice(t *testing.T) {
 			if res.StatusCode != tc.status {
 				t.Fatalf("status=%d want %d", res.StatusCode, tc.status)
 			}
-			if tc.status == 200 {
-				if price, ok := repo.fields["daily_price"]; !ok || price != tc.want {
-					t.Fatalf("fields=%v, want daily_price=%v", repo.fields, tc.want)
+			if tc.status != 200 {
+				return
+			}
+			for _, legacy := range []string{"price", "type", "daily_price"} {
+				if _, ok := repo.fields[legacy]; ok {
+					t.Fatalf("update still writes %s: %v", legacy, repo.fields)
 				}
+			}
+			for key, want := range tc.want {
+				got, ok := repo.fields[key]
+				if !ok {
+					t.Fatalf("fields=%v, missing %s", repo.fields, key)
+				}
+				if want == nil {
+					if got != nil {
+						t.Fatalf("%s=%v want nil", key, got)
+					}
+				} else if got != want {
+					t.Fatalf("%s=%v want %v", key, got, want)
+				}
+			}
+			if _, ok := repo.fields["hourly_rate"]; ok != (tc.want["hourly_rate"] != nil || hasKey(tc.want, "hourly_rate")) {
+				t.Fatalf("unexpected hourly_rate write: %v", repo.fields)
 			}
 		})
 	}
+}
+
+func hasKey(values map[string]interface{}, key string) bool {
+	_, ok := values[key]
+	return ok
 }
 
 func (r *itemManagementRepository) FindByID(_ context.Context, id int64) (*domain.Item, error) {

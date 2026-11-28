@@ -473,9 +473,6 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
     child: Scaffold(
       backgroundColor: ChatbotDesign.canvas,
       appBar: AppBar(
-        backgroundColor: ChatbotDesign.surface,
-        foregroundColor: ChatbotDesign.ink,
-        surfaceTintColor: Colors.transparent,
         centerTitle: false,
         elevation: 0,
         bottom: const PreferredSize(
@@ -491,11 +488,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
         title: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.auto_awesome_rounded,
-              color: ChatbotDesign.primary,
-              size: 18,
-            ),
+            Icon(Icons.auto_awesome_rounded, size: 18),
             SizedBox(width: 8),
             Flexible(
               child: ResponsiveAppBarTitle(
@@ -504,7 +497,6 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
                   fontFamily: 'Prompt',
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
-                  color: ChatbotDesign.ink,
                 ),
               ),
             ),

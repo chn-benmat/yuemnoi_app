@@ -5,8 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/recommendation_location_service.dart';
+import '../../../../core/widgets/app_page_header.dart';
 import '../../../../core/widgets/product_card_grid.dart';
-import '../../../../core/widgets/skeleton_shimmer.dart';
+import '../../../../core/widgets/product_listing_card.dart';
 import '../../data/repositories/home_repository_impl.dart';
 import '../../domain/entities/feed_category.dart';
 import '../../domain/entities/feed_item.dart';
@@ -406,6 +407,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       child: Scaffold(
         backgroundColor: const Color(0xFFF9FAFB),
         body: SafeArea(
+          top: false,
           child: Column(
             children: [
               // Search Bar ด้านบนสุด
@@ -437,12 +439,8 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
   // ==========================================
 
   Widget _buildTopSearchBar() {
-    return Container(
+    return AppPageHeader(
       padding: const EdgeInsets.fromLTRB(10, 10, 16, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE4E4E7), width: 1)),
-      ),
       child: Row(
         children: [
           // ปุ่มย้อนกลับ
@@ -452,7 +450,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
             onPressed: _handleBackAction,
             icon: const Icon(
               Icons.arrow_back_rounded,
-              color: Color(0xFF18181B),
+              color: Colors.white,
               size: 22,
             ),
             splashRadius: 22,
@@ -546,12 +544,12 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
-                color: AppColors.primaryColor.withValues(alpha: 0.08),
+                color: Colors.white.withValues(alpha: 0.16),
               ),
               child: const Text(
                 'ค้นหา',
                 style: TextStyle(
-                  color: AppColors.primaryColor,
+                  color: Colors.white,
                   fontSize: 14.5,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.2,
@@ -704,7 +702,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         sliver: ProductCardGrid(
           itemCount: 4,
-          itemBuilder: (context, index) => const _SearchItemSkeletonCard(),
+          itemBuilder: (context, index) => const ProductCardSkeleton(),
         ),
       );
     }
@@ -756,7 +754,7 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
                   sliver: ProductCardGrid(
                     itemCount: 4,
                     itemBuilder: (context, index) =>
-                        const _SearchItemSkeletonCard(),
+                        const ProductCardSkeleton(),
                   ),
                 ),
               ],
@@ -982,50 +980,6 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchItemSkeletonCard extends StatelessWidget {
-  const _SearchItemSkeletonCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE4E4E7), width: 1),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: const SkeletonShimmer(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1.0,
-              child: ColoredBox(color: Color(0xFFE4E4E7)),
-            ),
-            Padding(
-              padding: EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SkeletonBox(
-                    width: double.infinity,
-                    height: 13,
-                    borderRadius: 6,
-                  ),
-                  SizedBox(height: 6),
-                  SkeletonBox(width: 90, height: 13, borderRadius: 6),
-                  SizedBox(height: 10),
-                  SkeletonBox(width: 70, height: 16, borderRadius: 6),
-                ],
               ),
             ),
           ],

@@ -94,13 +94,10 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
           ),
           const SizedBox(height: 4),
           Text(data.name, style: Theme.of(context).textTheme.titleMedium),
-          if (data.price case final price?)
-            Text(
-              '${numberFormat.format(price)} บาท'
-              '${data.unitLabel == null ? '' : ' / ${data.unitLabel}'}',
-            ),
-          if (data.additionalDailyPrice case final dailyPrice?)
-            Text('${numberFormat.format(dailyPrice)} บาท / วัน'),
+          if (data.displayRates.hourly case final hourly?)
+            Text('${numberFormat.format(hourly)} บาท / ชั่วโมง'),
+          if (data.displayRates.daily case final daily?)
+            Text('${numberFormat.format(daily)} บาท / วัน'),
           const SizedBox(height: 8),
           Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
           if (data.dueAt case final due?)
@@ -109,6 +106,10 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
             Text('ยืนยันการเช่าภายใน ${date.format(expires.toLocal())} น.'),
           if (action != null && widget.onAction != null)
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryColor,
+                foregroundColor: Colors.white,
+              ),
               onPressed: _busy ? null : () => _perform(action),
               child: Text(
                 action == 'join' ? 'ขอคิวเช่าต่อ' : 'ยืนยันสิทธิ์และนัดรับ',
@@ -118,11 +119,18 @@ class _RentalQueueCardState extends State<RentalQueueCard> {
               data.status == RentalQueueStatus.accepted &&
               widget.onSendRequest != null)
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryColor,
+                foregroundColor: Colors.white,
+              ),
               onPressed: widget.onSendRequest,
               child: const Text('ส่งคำขอเช่า'),
             ),
           if (canLeave && widget.onAction != null)
             TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primaryColor,
+              ),
               onPressed: _busy ? null : () => _perform('leave'),
               child: const Text('ออกจากคิว'),
             ),

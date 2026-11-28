@@ -354,7 +354,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
         final exactBooking = await client
             .from('booking_tb')
             .select(
-              'id, status, created_at, start_at, end_at, start_date, end_date, user_id, payment_method',
+              'id, status, created_at, start_at, end_at, user_id, payment_method',
             )
             .eq('id', targetBookingId)
             .maybeSingle();
@@ -367,16 +367,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
             rawDbStatus != null &&
             rawDbStatus.isNotEmpty &&
             isCurrentCheck()) {
-          final DateTime? parsedEndAt;
-          if (exactBooking['end_at'] != null) {
-            parsedEndAt = DateTime.tryParse(exactBooking['end_at'].toString());
-          } else if (exactBooking['end_date'] != null) {
-            parsedEndAt = DateTime.tryParse(
-              exactBooking['end_date'].toString(),
-            );
-          } else {
-            parsedEndAt = null;
-          }
+          final parsedEndAt = DateTime.tryParse(
+            exactBooking['end_at']?.toString() ?? '',
+          );
           final databasePaymentMethod = exactBooking['payment_method']
               ?.toString();
 
@@ -935,9 +928,7 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _isExpired
                         ? const Color(0xFFDC2626)
-                        : (isOwnerUser
-                              ? const Color(0xFF10B981)
-                              : AppColors.primaryColor),
+                        : AppColors.primaryColor,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shadowColor: Colors.transparent,
@@ -1140,6 +1131,10 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                       'rejected',
                     }.contains(_rentalStatus)))
               FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryColor,
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: widget.onRequestRentalQueue,
                 child: const Text('ชวนเข้าคิวเช่าต่อ'),
               )
@@ -1155,6 +1150,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                     (_rentalStatus == 'pending' &&
                         widget.bookingData.hasCustomerRequestStartPassed)))
               TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primaryColor,
+                ),
                 onPressed: widget.customerRequestAvailabilityPending
                     ? null
                     : widget.onRetryCustomerRequest,
@@ -1170,6 +1168,9 @@ class _BookingRequestBubbleCardState extends State<BookingRequestBubbleCard> {
                   ),
                 ),
               OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryColor,
+                ),
                 onPressed: _retryBookingStatus,
                 child: const Text('ลองตรวจสอบอีกครั้ง'),
               ),

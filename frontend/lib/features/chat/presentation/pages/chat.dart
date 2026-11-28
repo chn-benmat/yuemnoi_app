@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/services/skeleton_layout_cache.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/chat_pin_service.dart';
+import '../../../../core/widgets/app_page_header.dart';
 import '../../data/datasources/chat_remote_data_source.dart';
 import '../../data/repositories/chat_repository_impl.dart';
 import '../../domain/entities/chat_conversation.dart';
@@ -26,7 +28,16 @@ class ChatScreen extends StatelessWidget {
   final ChatListBloc? chatListBloc;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      // ใช้ขนาดหัวเดียวกับหน้าการแจ้งเตือนเพื่อให้แท็บหลักสอดคล้องกัน
+      const AppPageTitleHeader(title: 'แชท'),
+      Expanded(child: _buildChatContent(context)),
+    ],
+  );
+
+  Widget _buildChatContent(BuildContext context) {
     if (chatListBloc != null) {
       return BlocProvider.value(
         value: chatListBloc!,
@@ -122,6 +133,10 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primaryColor,
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: () => Navigator.pop(context),
                   child: const Text('เสร็จสิ้น'),
                 ),
@@ -240,30 +255,13 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
 
   Widget _buildChatMainView(BuildContext context) {
     return SafeArea(
+      top: false,
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'แชท',
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF292235),
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'คุยรายละเอียด แล้วนัดรับของกัน',
-              style: TextStyle(
-                fontSize: 15,
-                height: 1.5,
-                color: Color(0xFF665D73),
-              ),
-            ),
-            const SizedBox(height: 22),
             TextField(
               key: const ValueKey('chat-search-field'),
               controller: _searchController,
@@ -316,7 +314,12 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                   if ((state.status == ChatListStatus.loading ||
                           state.status == ChatListStatus.initial) &&
                       state.conversations.isEmpty) {
-                    return const ChatListLoadingSkeleton();
+                    return ChatListLoadingSkeleton(
+                      count: SkeletonLayoutCache.instance.count(
+                        'chat_list.${AuthSession.userId}',
+                        fallback: 7,
+                      ),
+                    );
                   }
 
                   if (state.status == ChatListStatus.failure &&
@@ -338,6 +341,10 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                           ),
                           const SizedBox(height: 16),
                           FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primaryColor,
+                              foregroundColor: Colors.white,
+                            ),
                             onPressed: () => context.read<ChatListBloc>().add(
                               const LoadChatListStarted(),
                             ),
@@ -351,6 +358,12 @@ class _ChatScreenContentState extends State<_ChatScreenContent> {
                   final visibleConversations = _filterConversations(
                     state.conversations,
                   );
+                  if (state.status == ChatListStatus.success) {
+                    SkeletonLayoutCache.instance.writeCount(
+                      'chat_list.${AuthSession.userId}',
+                      state.conversations.length,
+                    );
+                  }
 
                   final isSearching = _searchController.text.trim().isNotEmpty;
                   if (visibleConversations.isEmpty) {

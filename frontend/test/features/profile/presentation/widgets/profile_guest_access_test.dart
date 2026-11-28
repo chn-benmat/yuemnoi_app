@@ -115,6 +115,10 @@ void main() {
       await tester.tap(find.text('อุปกรณ์ของฉัน'));
       await tester.pumpAndSettle();
       expect(find.text('เข้าสู่ระบบเพื่อดูอุปกรณ์'), findsOneWidget);
+      expect(
+        find.text('กรุณาเข้าสู่ระบบก่อนจัดการอุปกรณ์ที่คุณปล่อยเช่า'),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -145,7 +149,17 @@ void main() {
 
     active.value = true;
     await tester.pumpAndSettle();
-    expect(find.byType(LoginRequiredDialog), findsOneWidget);
+    final dialog = find.byType(LoginRequiredDialog);
+    expect(dialog, findsOneWidget);
+    expect(find.text('เข้าสู่ระบบก่อนใช้งาน'), findsOneWidget);
+    expect(find.textContaining('เพื่อเช่าอุปกรณ์ พูดคุย'), findsNothing);
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.byIcon(Icons.person_outline_rounded),
+      ),
+      findsNothing,
+    );
     await tester.tap(find.byTooltip('ปิด'));
     await tester.pumpAndSettle();
     expect(find.byType(LoginRequiredDialog), findsNothing);

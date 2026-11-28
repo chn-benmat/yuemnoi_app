@@ -36,8 +36,7 @@ void main() {
         name: 'Camera',
         category: 'Photography',
         description: 'Camera with lens',
-        rentalType: 'Daily',
-        price: 200,
+        dailyRate: 200,
         images: images,
       );
 
@@ -103,8 +102,7 @@ void main() {
       name: 'กล้อง',
       category: 'ถ่ายภาพ',
       description: 'กล้องพร้อมเลนส์',
-      rentalType: 'รายชั่วโมง',
-      price: 200,
+      hourlyRate: 200,
       images: [image(1)],
     );
 
@@ -120,7 +118,7 @@ void main() {
       ),
     );
 
-    expect(repository.submittedDraft?.rentalType, 'รายชั่วโมง');
+    expect(repository.submittedDraft?.hourlyRate, 200);
     expect(repository.submittedDraft?.images, hasLength(1));
   });
 }

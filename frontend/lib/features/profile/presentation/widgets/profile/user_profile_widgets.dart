@@ -509,65 +509,144 @@ class UserProfileMessage extends StatelessWidget {
 }
 
 class UserProfileLoadingSkeleton extends StatelessWidget {
-  const UserProfileLoadingSkeleton({super.key});
+  const UserProfileLoadingSkeleton({super.key, this.count = 4});
+
+  /// จำนวนอุปกรณ์ที่โปรไฟล์นี้แสดงครั้งล่าสุด ให้ skeleton มีการ์ดเท่าข้อมูลจริง
+  final int count;
   @override
-  Widget build(BuildContext context) => SkeletonShimmer(
+  Widget build(BuildContext context) => ExcludeSemantics(
     key: const ValueKey('user-profile-loading-skeleton'),
     child: ListView(
-      padding: const EdgeInsets.all(20),
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
       children: [
-        const Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SkeletonBox(width: 76, height: 76, shape: BoxShape.circle),
-            SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SkeletonBox(width: 100, height: 12),
-                  SizedBox(height: 12),
-                  SkeletonBox(height: 24),
-                  SizedBox(height: 12),
-                  SkeletonBox(width: 100, height: 14),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 32),
-        const SkeletonBox(width: 180, height: 18),
-        const SizedBox(height: 20),
-        for (var i = 0; i < 2; i++) ...[
-          Row(
-            children: [
-              for (var col = 0; col < 2; col++) ...[
-                if (col == 1) const SizedBox(width: 12),
-                const Expanded(
+        // ส่วนหัวพื้นขาวแบบ UserProfileHeaderSection
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: const SkeletonShimmer(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SkeletonBox(width: 76, height: 76, shape: BoxShape.circle),
+                SizedBox(width: 16),
+                Expanded(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      AspectRatio(
-                        aspectRatio: 1,
-                        child: SkeletonBox(
-                          height: double.infinity,
-                          borderRadius: 16,
+                      SkeletonBox(width: 84, height: 12, borderRadius: 5),
+                      SizedBox(height: 6),
+                      SkeletonBox(width: 170, height: 24, borderRadius: 8),
+                      SizedBox(height: 10),
+                      // แถวรีวิวสูงอย่างน้อย 44
+                      SizedBox(
+                        height: 44,
+                        child: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: SkeletonBox(
+                            width: 120,
+                            height: 14,
+                            borderRadius: 6,
+                          ),
                         ),
                       ),
-                      SizedBox(height: 12),
-                      SkeletonBox(height: 16),
-                      SizedBox(height: 12),
-                      SkeletonBox(height: 16),
-                      SizedBox(height: 12),
-                      SkeletonBox(height: 12),
                     ],
                   ),
                 ),
               ],
-            ],
+            ),
           ),
-          const SizedBox(height: 24),
-        ],
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 24, 20, 16),
+          child: SkeletonShimmer(
+            child: SizedBox(
+              height: 25,
+              child: Row(
+                children: [
+                  SkeletonBox(width: 120, height: 18, borderRadius: 7),
+                  Spacer(),
+                  SkeletonBox(width: 56, height: 13, borderRadius: 6),
+                ],
+              ),
+            ),
+          ),
+        ),
+        for (var row = 0; row < (count + 1) ~/ 2; row++)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var col = 0; col < 2; col++) ...[
+                  if (col == 1) const SizedBox(width: 12),
+                  Expanded(
+                    child: row * 2 + col < count
+                        ? const _RentalCardSkeleton()
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ],
+            ),
+          ),
       ],
+    ),
+  );
+}
+
+/// สัดส่วนเดียวกับ UserProfileRentalCard: รูปจัตุรัส padding 10 แล้วข้อความ 12/2/12/14
+class _RentalCardSkeleton extends StatelessWidget {
+  const _RentalCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: _line),
+    ),
+    child: SkeletonShimmer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const AspectRatio(
+            aspectRatio: 1,
+            child: Padding(
+              padding: EdgeInsets.all(10),
+              child: SkeletonBox(height: double.infinity, borderRadius: 12),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 2, 12, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ชื่อจองพื้นที่ 2 บรรทัดเท่าการ์ดจริง
+                SizedBox(
+                  height: MediaQuery.textScalerOf(context).scale(14) * 3,
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      SkeletonBox(height: 13, borderRadius: 6),
+                      FractionallySizedBox(
+                        widthFactor: 0.6,
+                        child: SkeletonBox(height: 13, borderRadius: 6),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const SkeletonBox(width: 80, height: 20, borderRadius: 7),
+                const SizedBox(height: 7),
+                const SkeletonBox(width: 70, height: 12, borderRadius: 5),
+                const SizedBox(height: 8),
+                const SkeletonBox(width: 90, height: 11, borderRadius: 5),
+              ],
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }

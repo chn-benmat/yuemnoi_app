@@ -38,6 +38,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+  bool _hasSubmitted = false;
   Uint8List? _profileImageBytes;
   String? _profileImageFileName;
   String? _errorMessage;
@@ -87,11 +88,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _register() {
-    if (_isLoading || !(_formKey.currentState?.validate() ?? false)) {
+    if (_isLoading) return;
+
+    final invalidFields = _formKey.currentState?.validateGranularly();
+    if (invalidFields == null) return;
+    setState(() {
+      _hasSubmitted = true;
+      _errorMessage = null;
+    });
+    if (invalidFields.isNotEmpty) {
+      final firstInvalid = invalidFields.first;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!firstInvalid.mounted) return;
+        Scrollable.ensureVisible(
+          firstInvalid.context,
+          alignment: 0.15,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      });
       return;
     }
 
-    setState(() => _errorMessage = null);
     FocusScope.of(context).unfocus();
     context.read<AuthBloc>().add(
       AuthRegisterRequested(
@@ -156,6 +174,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             _errorMessage = null;
           });
         } else if (state is RegisterSuccess) {
+          TextInput.finishAutofillContext();
           _showEmailConfirmation(state.email);
         } else if (state is RegisterFailure) {
           setState(() {
@@ -180,133 +199,162 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         body: ResponsivePageBody(
           verticalPadding: 24,
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 16),
-                // Optional profile photo picker
-                RegisterProfileImagePicker(
-                  profileImageBytes: _profileImageBytes,
-                  onTap: _pickProfileImage,
-                ),
-                const SizedBox(height: 24),
-                // Name Field
-                AppTextFormField(
-                  label: 'ชื่อโปรไฟล์',
-                  hintText: 'กรุณากรอกชื่อโปรไฟล์',
-                  controller: _nameController,
-                  onChanged: (_) => _clearFormError(),
-                  validator: AppFormValidators.required('กรุณากรอกชื่อโปรไฟล์'),
-                ),
-                const SizedBox(height: 16),
-                // Email Field
-                AppTextFormField(
-                  label: 'อีเมล',
-                  hintText: 'name@exemple.com',
-                  controller: _emailController,
-                  onChanged: (_) => _clearFormError(),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: AppFormValidators.email(),
-                ),
-                const SizedBox(height: 16),
-                // Phone Field
-                AppTextFormField(
-                  label: 'เบอร์โทรศัพท์',
-                  hintText: '0812345678',
-                  controller: _phoneController,
-                  onChanged: (_) => _clearFormError(),
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(10),
-                  ],
-                  validator: AppFormValidators.thaiPhone(localInputOnly: true),
-                ),
-                const SizedBox(height: 16),
-                // Password Field
-                AppTextFormField(
-                  label: 'รหัสผ่าน',
-                  hintText: 'กรุณากรอกรหัสผ่าน',
-                  obscureText: _obscurePassword,
-                  controller: _passwordController,
-                  onChanged: (_) => _clearFormError(),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      color: AppColors.fieldIconColor,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
+          child: AutofillGroup(
+            onDisposeAction: AutofillContextAction.cancel,
+            child: Form(
+              key: _formKey,
+              autovalidateMode: _hasSubmitted
+                  ? AutovalidateMode.onUserInteraction
+                  : AutovalidateMode.disabled,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 16),
+                  // Optional profile photo picker
+                  RegisterProfileImagePicker(
+                    profileImageBytes: _profileImageBytes,
+                    onTap: _pickProfileImage,
                   ),
-                  validator: AppFormValidators.password(),
-                ),
-                const SizedBox(height: 16),
-                // Confirm Password Field
-                AppTextFormField(
-                  label: 'ยืนยันรหัสผ่าน',
-                  hintText: 'กรุณากรอกรหัสยืนยันผ่าน',
-                  obscureText: _obscureConfirmPassword,
-                  controller: _confirmPasswordController,
-                  onChanged: (_) => _clearFormError(),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureConfirmPassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      color: AppColors.fieldIconColor,
+                  const SizedBox(height: 24),
+                  // Name Field
+                  AppTextFormField(
+                    label: 'ชื่อโปรไฟล์',
+                    hintText: 'กรุณากรอกชื่อโปรไฟล์',
+                    controller: _nameController,
+                    onChanged: (_) => _clearFormError(),
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.nickname],
+                    validator: AppFormValidators.required(
+                      'กรุณากรอกชื่อโปรไฟล์',
                     ),
-                    onPressed: () {
-                      setState(() {
-                        _obscureConfirmPassword = !_obscureConfirmPassword;
-                      });
-                    },
                   ),
-                  validator: AppFormValidators.confirmation(
-                    () => _passwordController.text,
+                  const SizedBox(height: 16),
+                  // Email Field
+                  AppTextFormField(
+                    label: 'อีเมล',
+                    hintText: 'name@exemple.com',
+                    controller: _emailController,
+                    onChanged: (_) => _clearFormError(),
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.email],
+                    validator: AppFormValidators.email(),
                   ),
-                ),
-                const SizedBox(height: 32),
-                AuthInlineError(message: _errorMessage),
-                // Register Button
-                AppPrimaryButton(
-                  text: 'สร้างบัญชี',
-                  isLoading: _isLoading,
-                  onPressed: _register,
-                ),
-                const SizedBox(height: 24),
-                // Footer text
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    const Text(
-                      'มีบัญชีแล้ว? ',
-                      style: TextStyle(color: Colors.black54, fontSize: 15),
+                  const SizedBox(height: 16),
+                  // Phone Field
+                  AppTextFormField(
+                    label: 'เบอร์โทรศัพท์',
+                    hintText: '0812345678',
+                    controller: _phoneController,
+                    onChanged: (_) => _clearFormError(),
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
+                    validator: AppFormValidators.thaiPhone(
+                      localInputOnly: true,
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        AppRoutes.pop(context);
+                  ),
+                  const SizedBox(height: 16),
+                  // Password Field
+                  AppTextFormField(
+                    label: 'รหัสผ่าน',
+                    hintText: 'กรุณากรอกรหัสผ่าน',
+                    obscureText: _obscurePassword,
+                    controller: _passwordController,
+                    onChanged: (_) => _clearFormError(),
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.newPassword],
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: AppColors.fieldIconColor,
+                      ),
+                      tooltip: _obscurePassword
+                          ? 'แสดงรหัสผ่าน'
+                          : 'ซ่อนรหัสผ่าน',
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
                       },
-                      child: const Text(
-                        'เข้าสู่ระบบ',
-                        style: TextStyle(
-                          color: AppColors.primaryColor,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
+                    ),
+                    validator: AppFormValidators.password(),
+                  ),
+                  const SizedBox(height: 16),
+                  // Confirm Password Field
+                  AppTextFormField(
+                    label: 'ยืนยันรหัสผ่าน',
+                    hintText: 'กรุณากรอกรหัสยืนยันผ่าน',
+                    obscureText: _obscureConfirmPassword,
+                    controller: _confirmPasswordController,
+                    onChanged: (_) => _clearFormError(),
+                    onFieldSubmitted: (_) => _register(),
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.newPassword],
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: AppColors.fieldIconColor,
+                      ),
+                      tooltip: _obscureConfirmPassword
+                          ? 'แสดงรหัสผ่านยืนยัน'
+                          : 'ซ่อนรหัสผ่านยืนยัน',
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
+                    validator: AppFormValidators.confirmation(
+                      () => _passwordController.text,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Semantics(
+                    liveRegion: true,
+                    child: AuthInlineError(message: _errorMessage),
+                  ),
+                  // Register Button
+                  AppPrimaryButton(
+                    text: 'สร้างบัญชี',
+                    isLoading: _isLoading,
+                    onPressed: _register,
+                  ),
+                  const SizedBox(height: 24),
+                  // Footer text
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Text(
+                        'มีบัญชีแล้ว? ',
+                        style: TextStyle(color: Colors.black54, fontSize: 15),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          AppRoutes.pop(context);
+                        },
+                        child: const Text(
+                          'เข้าสู่ระบบ',
+                          style: TextStyle(
+                            color: AppColors.primaryColor,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-              ],
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
         ),

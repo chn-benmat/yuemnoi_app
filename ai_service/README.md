@@ -96,10 +96,10 @@ SSE ส่งคำตอบฉบับครบใน event `ready` แล้�
 AI อ่าน `item_tb` ผ่าน Supabase REST โดยใช้ columns:
 
 ```text
-id, item_name, category, price, type, status, item_image_url, description
+id, item_name, category, hourly_rate, daily_rate, status, item_image_url, description
 ```
 
-ราคาเป็นตัวเลข finite ที่ไม่ติดลบ, `type` ต้องไม่ว่าง และสถานะพร้อมเช่าที่ domain ใช้คือ `available` เมื่อเทียบแบบ lowercase รูปอาจเป็น URL เดี่ยว, list หรือ JSON-encoded list จำนวนสินค้าขึ้นกับฐานข้อมูลจริง
+ต้องมีอย่างน้อยหนึ่งเรตเป็นตัวเลข finite ที่ไม่ติดลบ สินค้าเก็บทุกเรตไว้ใน `rates` และใช้รายชั่วโมง (ถ้ามี) เป็น `price`/`type` สำหรับแสดงผล งบประมาณเทียบกับเรตของหน่วยที่ผู้ใช้ระบุโดยไม่แปลงหน่วย สถานะพร้อมเช่าที่ domain ใช้คือ `available` เมื่อเทียบแบบ lowercase รูปอาจเป็น URL เดี่ยว, list หรือ JSON-encoded list จำนวนสินค้าขึ้นกับฐานข้อมูลจริง
 
 Service นี้อ่าน URL รูปที่มีอยู่แล้ว ไม่มีการอัปโหลด Storage, ไม่ใช้ Firebase service account และไม่ต้องใช้ direct PostgreSQL connection ขอ schema / permissions ของ environment ตาม [Backend setup](../backend/README.md#setup) เพราะไม่มี SQL bootstrap ในส่วน AI
 

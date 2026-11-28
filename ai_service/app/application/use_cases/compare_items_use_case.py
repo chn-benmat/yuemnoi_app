@@ -49,7 +49,7 @@ class CompareItemsUseCase:
         )
 
         catalog_context = "\n".join(
-            f"- {i.name} (หมวดหมู่: {i.category}, ค่าเช่า: {i.price} บาท/{i.type}, สถานะ: {i.status}"
+            f"- {i.name} (หมวดหมู่: {i.category}, ค่าเช่า: {', '.join(f'{rate} บาท/{unit}' for unit, rate in i.rates.items())}, สถานะ: {i.status}"
             + (f", รายละเอียด: {i.description}" if i.description else "")
             + ")"
             for i in candidate_items

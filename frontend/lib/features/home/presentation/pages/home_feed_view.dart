@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/services/skeleton_layout_cache.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/services/recommendation_location_service.dart';
 import '../../../../core/widgets/product_card_grid.dart';
 import '../../../../core/widgets/product_listing_card.dart';
-import '../../../../core/widgets/skeleton_shimmer.dart';
 import '../../domain/entities/feed_item.dart';
 import '../../domain/usecases/rank_items_by_distance.dart';
 import '../bloc/home_bloc.dart';
@@ -183,6 +183,13 @@ class _HomeFeedViewState extends State<HomeFeedView> {
     VoidCallback? onRetry,
     List<FeedItem> displayedItems = const [],
   }) {
+    // จำฟีดหน้าแรกที่ไม่ได้ค้นหา ให้ skeleton รอบหน้ามีจำนวนการ์ดและบรรทัด
+    // "กำลังถูกเช่า" ตรงกับที่กำลังจะแสดง (เขียนซ้ำค่าเดิมจะถูกข้าม)
+    if (state != null && !state.isRefreshing && state.searchQuery.isEmpty) {
+      SkeletonLayoutCache.instance.write(_HomeLoadingView.cacheKey, [
+        for (final item in displayedItems) item.isRentalOccupied ? 'o' : 'n',
+      ], max: 6);
+    }
     return Column(
       children: [
         // ── 1. Top Control Deck: Search Bar + แถบ navbar ของอุปกรณ์ประเภทต่างๆ (PINNED / ตรึงอยู่กับที่ ไม่เลื่อนตาม และไม่ถูกดึงลงเมื่อรีเฟรช) ──
@@ -474,22 +481,25 @@ class _HomeFeedViewState extends State<HomeFeedView> {
 class _HomeLoadingView extends StatelessWidget {
   const _HomeLoadingView();
 
+  static const cacheKey = 'home_feed';
+
   @override
   Widget build(BuildContext context) {
-    return SkeletonShimmer(
-      child: Container(
-        key: const ValueKey('home-feed-skeleton'),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          child: CustomScrollView(
-            physics: const NeverScrollableScrollPhysics(),
-            slivers: [
-              ProductCardGrid(
-                itemCount: 6,
-                itemBuilder: (context, index) => const ProductCardSkeleton(),
-              ),
-            ],
-          ),
+    final layout =
+        SkeletonLayoutCache.instance.read(cacheKey) ?? List.filled(6, 'n');
+    return ExcludeSemantics(
+      key: const ValueKey('home-feed-skeleton'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+        child: CustomScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          slivers: [
+            ProductCardGrid(
+              itemCount: layout.length,
+              itemBuilder: (context, index) =>
+                  ProductCardSkeleton(isRentalOccupied: layout[index] == 'o'),
+            ),
+          ],
         ),
       ),
     );

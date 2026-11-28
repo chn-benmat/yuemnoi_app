@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/services/skeleton_layout_cache.dart';
 import 'package:frontend/core/network/auth_session.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/chat/data/datasources/rental_queue_remote_data_source.dart';
@@ -19,6 +20,7 @@ import 'package:frontend/features/chat/presentation/widgets/chat_skeleton_loadin
 import 'package:frontend/features/chat/presentation/widgets/item_inquiry_bubble_card.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shimmer/shimmer.dart';
 
 class _Messages extends Mock implements StreamMessagesUseCase {}
 
@@ -284,11 +286,17 @@ void main() {
       tester,
     ) async {
       final stream = await openChat(tester, preview: 'ยังไม่มีข้อความ');
+      final skeleton = find.byType(ChatSkeletonLoadingView);
       expect(find.byType(ChatEmptyView), findsNothing);
-      expect(find.byType(ChatSkeletonLoadingView), findsOneWidget);
+      expect(skeleton, findsOneWidget);
+      expect(
+        find.descendant(of: skeleton, matching: find.byType(Shimmer)),
+        findsWidgets,
+      );
 
       stream.add([if (hasMessages) message('ข้อความเดิมในห้องแชท')]);
       await tester.pumpAndSettle();
+      expect(skeleton, findsNothing);
       expect(
         find.byType(ChatEmptyView),
         hasMessages ? findsNothing : findsOneWidget,
@@ -297,6 +305,12 @@ void main() {
         find.text('ข้อความเดิมในห้องแชท'),
         hasMessages ? findsOneWidget : findsNothing,
       );
+      if (hasMessages) {
+        // ขนาดข้อความจริงถูกจำไว้ ให้ skeleton ครั้งหน้าวาดรายการเดียวตามนี้
+        final layout = SkeletonLayoutCache.instance.read('chat.room');
+        expect(layout, hasLength(1));
+        expect(layout!.single, startsWith('o|t|'));
+      }
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }

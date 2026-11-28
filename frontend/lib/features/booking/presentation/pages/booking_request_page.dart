@@ -639,9 +639,6 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F7FC),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF8F7FC),
-        foregroundColor: const Color(0xFF242033),
-        surfaceTintColor: Colors.transparent,
         leading: IconButton(
           tooltip: 'กลับ',
           icon: const Icon(Icons.arrow_back_rounded),

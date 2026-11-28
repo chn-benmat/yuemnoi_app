@@ -514,7 +514,7 @@ func adminItemID(value any) (int64, bool) {
 func (h *OperationsHandler) Action(c fiber.Ctx) error {
 	action := c.Params("action")
 	switch action {
-	case "identity-review", "suspend-user", "hide-item", "review-item", "hide-review", "staff", "revoke-identity", "complaint", "settings":
+	case "identity-review", "suspend-user", "hide-item", "review-item", "hide-review", "staff", "revoke-identity", "complaint":
 	default:
 		return c.SendStatus(404)
 	}

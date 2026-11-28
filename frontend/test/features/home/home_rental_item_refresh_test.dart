@@ -62,7 +62,7 @@ class _CatalogRepository implements HomeRepository, RentalItemRepository {
         id: '1',
         title: draft.name,
         categoryId: 'camera',
-        price: draft.price,
+        price: draft.hourlyRate ?? draft.dailyRate ?? 0,
         priceUnit: '/วัน',
         rating: 0,
         reviewCount: 0,
@@ -165,8 +165,7 @@ void main() {
               name: 'กล้องที่เพิ่งเพิ่ม',
               category: 'กล้องและอุปกรณ์ถ่ายภาพ',
               description: 'อุปกรณ์ทดสอบ',
-              rentalType: 'รายวัน',
-              price: 540,
+              dailyRate: 540,
               images: [
                 RentalItemImage(bytes: Uint8List(1), fileName: 'camera.png'),
               ],

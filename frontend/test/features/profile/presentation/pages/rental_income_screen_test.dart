@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/network/api_client.dart';
@@ -6,6 +8,7 @@ import 'package:frontend/features/profile/data/datasources/rental_management_rem
 import 'package:frontend/features/profile/data/repositories/rental_management_repository_impl.dart';
 import 'package:frontend/features/profile/domain/usecases/get_rental_income_usecase.dart';
 import 'package:frontend/features/profile/presentation/pages/rentals/rental_income_screen.dart';
+import 'package:frontend/features/profile/presentation/widgets/rentals/rental_income_widgets.dart';
 import 'package:mocktail/mocktail.dart';
 
 class _MockApiClient extends Mock implements ApiClient {}
@@ -68,6 +71,46 @@ void main() {
     expect(find.textContaining('เงินสด'), findsOneWidget);
     expect(find.textContaining('PromptPay'), findsOneWidget);
     expect(find.text('+฿150.25'), findsOneWidget);
+  });
+
+  testWidgets('shows history skeleton instead of a spinner while loading', (
+    tester,
+  ) async {
+    final api = _MockApiClient();
+    final response = Completer<ApiResponse>();
+    when(
+      () => api.get(path, headers: headers),
+    ).thenAnswer((_) => response.future);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RentalIncomeScreen(
+          getRentalIncomeUseCase: GetRentalIncomeUseCase(
+            RentalManagementRepositoryImpl(
+              remoteDataSource: RentalManagementRemoteDataSource(
+                apiClient: api,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('ประวัติการรับเงิน'), findsOneWidget);
+    expect(find.byType(RentalIncomeTransactionSkeleton), findsWidgets);
+    expect(find.text('฿ 0.00'), findsNothing);
+
+    response.complete(
+      const ApiResponse(
+        statusCode: 200,
+        data: {'total_satang': 0, 'transactions': []},
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(RentalIncomeTransactionSkeleton), findsNothing);
+    expect(find.text('฿ 0.00'), findsOneWidget);
   });
 
   testWidgets('shows a zero total when there are no confirmed receipts', (

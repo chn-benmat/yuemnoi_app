@@ -50,7 +50,7 @@ class ItemDetailRemoteDataSource {
           await _client
               .from('item_tb')
               .select(
-                'id,user_id,item_name,item_image_url,description,category,price,daily_price,damage_fee,late_return_fee,damage_terms,status,type,owner_hidden,pickup_location,pickup_address,pickup_latitude,pickup_longitude,is_rental_occupied,is_rental_queue_held',
+                'id,user_id,item_name,item_image_url,description,category,hourly_rate,daily_rate,damage_fee,late_return_fee,damage_terms,status,owner_hidden,pickup_location,pickup_address,pickup_latitude,pickup_longitude,is_rental_occupied,is_rental_queue_held',
               )
               .eq('id', itemId)
               .maybeSingle();
@@ -151,9 +151,9 @@ class ItemDetailRemoteDataSource {
           'item_name': draft.name.trim(),
           'category': draft.category.trim(),
           'description': draft.description.trim(),
-          'type': draft.rentalType,
-          'price': draft.price,
-          'daily_price': draft.additionalDailyPrice ?? 0,
+          // 0 คือเลิกให้เช่าหน่วยนั้น
+          'hourly_rate': draft.hourlyRate ?? 0,
+          'daily_rate': draft.dailyRate ?? 0,
           ...?draft.penaltyTerms?.toJson(),
           ...?draft.pickupLocation?.toJson(),
           'item_image_url': imageUrls,

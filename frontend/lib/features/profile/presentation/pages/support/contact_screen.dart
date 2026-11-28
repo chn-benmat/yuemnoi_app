@@ -115,16 +115,6 @@ class _ContactScreenState extends State<ContactScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'ติดต่อYuemnoi',
-              style: TextStyle(
-                fontFamily: AppTextStyles.fontFamily,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1A1A2E),
-              ),
-            ),
-            const SizedBox(height: 16),
             SupportContactItem(
               iconWidget: const Icon(
                 Icons.chat_rounded,

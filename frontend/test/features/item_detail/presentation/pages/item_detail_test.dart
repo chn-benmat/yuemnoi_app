@@ -80,6 +80,7 @@ void main() {
     bool preview = false,
     bool dualPricing = false,
     ApiClient? complaintApi,
+    String contactPhone = '',
   }) async {
     final repository = _MockItemDetailRepository();
     final bloc = ItemDetailBloc(
@@ -113,6 +114,7 @@ void main() {
             complaintDataSource: ItemComplaintRemoteDataSource(
               apiClient: complaintApi,
             ),
+            loadContactPhone: () async => contactPhone,
           ),
         ),
       ),
@@ -365,6 +367,19 @@ void main() {
     expect(find.text('กรุณาใส่เบอร์โทรศัพท์สำหรับการติดต่อ'), findsOneWidget);
     expect(find.text('ยกเลิก'), findsOneWidget);
     expect(find.text('เพิ่มเบอร์โทร'), findsOneWidget);
+  });
+
+  testWidgets('a saved profile phone opens the rental chat without asking', (
+    tester,
+  ) async {
+    AuthSession.saveAccessToken('test-access-token');
+    addTearDown(AuthSession.clear);
+    await pumpDetail(tester, isOwner: false, contactPhone: '0812345678');
+
+    await tester.tap(find.text('แชทสอบถาม'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('กรุณาใส่เบอร์โทรศัพท์สำหรับการติดต่อ'), findsNothing);
   });
 
   testWidgets(

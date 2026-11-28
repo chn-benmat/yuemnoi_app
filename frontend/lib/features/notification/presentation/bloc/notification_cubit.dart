@@ -21,7 +21,9 @@ class NotificationInboxState {
 }
 
 class NotificationCubit extends Cubit<NotificationInboxState> {
-  NotificationCubit() : super(const NotificationInboxState());
+  NotificationCubit({NotificationRemoteDataSource? source})
+    : _source = source,
+      super(const NotificationInboxState());
 
   static const _pageSize = 40;
   NotificationRemoteDataSource? _source;

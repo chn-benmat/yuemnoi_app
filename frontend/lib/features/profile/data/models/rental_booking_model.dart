@@ -131,24 +131,10 @@ class RentalBookingModel {
     );
   }
 
-  static (DateTime?, DateTime?) _parseDates(Map<String, dynamic> b) {
-    DateTime? start;
-    DateTime? end;
-
-    if (b['start_at'] != null) {
-      start = DateTime.tryParse(b['start_at'].toString());
-    } else if (b['start_date'] != null) {
-      start = DateTime.tryParse(b['start_date'].toString());
-    }
-
-    if (b['end_at'] != null) {
-      end = DateTime.tryParse(b['end_at'].toString());
-    } else if (b['end_date'] != null) {
-      end = DateTime.tryParse(b['end_date'].toString());
-    }
-
-    return (start, end);
-  }
+  static (DateTime?, DateTime?) _parseDates(Map<String, dynamic> b) => (
+    DateTime.tryParse(b['start_at']?.toString() ?? ''),
+    DateTime.tryParse(b['end_at']?.toString() ?? ''),
+  );
 
   static String _calculateDuration(
     Map<String, dynamic> b,
@@ -157,7 +143,10 @@ class RentalBookingModel {
   ) {
     if (start != null && end != null) {
       final diff = end.difference(start);
-      if (b['type'] == 'รายชั่วโมง' || diff.inDays == 0) {
+      final type = b['type']?.toString().trim().toLowerCase();
+      final isHourly =
+          type == 'hourly' || type == 'hour' || type == 'รายชั่วโมง';
+      if (isHourly || diff.inDays == 0) {
         final hours = diff.inHours > 0 ? diff.inHours : 1;
         return 'เช่า $hours ชั่วโมง';
       } else {

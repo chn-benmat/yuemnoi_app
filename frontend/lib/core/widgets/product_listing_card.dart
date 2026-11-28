@@ -208,7 +208,10 @@ class ProductListingCard extends StatelessWidget {
 }
 
 class ProductCardSkeleton extends StatelessWidget {
-  const ProductCardSkeleton({super.key});
+  const ProductCardSkeleton({super.key, this.isRentalOccupied = false});
+
+  /// การ์ดจริงที่กำลังถูกเช่ามีบรรทัด "กำลังถูกเช่า" เพิ่ม ทำให้การ์ดสูงขึ้น
+  final bool isRentalOccupied;
 
   @override
   Widget build(BuildContext context) {
@@ -216,34 +219,100 @@ class ProductCardSkeleton extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: SkeletonBox(
-              width: double.infinity,
-              height: double.infinity,
-              borderRadius: 0,
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(10, 8, 10, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SkeletonBox(width: 116, height: 16, borderRadius: 4),
-                SizedBox(height: 6),
-                SkeletonBox(width: 76, height: 20, borderRadius: 4),
-                SizedBox(height: 4),
-                SkeletonBox(width: 96, height: 14, borderRadius: 4),
-              ],
-            ),
+        // เงาเดียวกับ ProductListingCard เพื่อให้ขอบการ์ดไม่เปลี่ยนตอนโหลดเสร็จ
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
+      child: SkeletonShimmer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const AspectRatio(
+              aspectRatio: 1,
+              child: SkeletonBox(height: double.infinity, borderRadius: 0),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ชื่อ 13px สูงบรรทัด 1.25
+                  const _SkeletonLine(height: 16, bone: 12, widthFactor: 0.7),
+                  if (isRentalOccupied) ...[
+                    const SizedBox(height: 4),
+                    const SizedBox(
+                      height: 15,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: SkeletonBox(
+                          width: 56,
+                          height: 11,
+                          borderRadius: 4,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  // ราคา 17px ตัวหนา
+                  const _SkeletonLine(height: 23, bone: 17, widthFactor: 0.4),
+                  const SizedBox(height: 4),
+                  // จุดนัดรับ: ไอคอน 12 กับข้อความ 11
+                  const SizedBox(
+                    height: 15,
+                    child: Row(
+                      children: [
+                        SkeletonBox(
+                          width: 12,
+                          height: 12,
+                          shape: BoxShape.circle,
+                        ),
+                        SizedBox(width: 2),
+                        Expanded(
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: 0.6,
+                            child: SkeletonBox(height: 10, borderRadius: 4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
+
+class _SkeletonLine extends StatelessWidget {
+  const _SkeletonLine({
+    required this.height,
+    required this.bone,
+    required this.widthFactor,
+  });
+
+  final double height;
+  final double bone;
+  final double widthFactor;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: height,
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: FractionallySizedBox(
+        widthFactor: widthFactor,
+        child: SkeletonBox(height: bone, borderRadius: 5),
+      ),
+    ),
+  );
 }

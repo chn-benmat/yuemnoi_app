@@ -31,10 +31,8 @@ class RentalItemRemoteDataSource {
           'item_name': draft.name.trim(),
           'category': draft.category.trim(),
           'description': draft.description.trim(),
-          'type': draft.rentalType,
-          'price': draft.price.toString(),
-          if (draft.additionalDailyPrice case final price?)
-            'daily_price': price.toString(),
+          if (draft.hourlyRate case final rate?) 'hourly_rate': rate.toString(),
+          if (draft.dailyRate case final rate?) 'daily_rate': rate.toString(),
           if (!draft.penaltyTerms.isEmpty)
             ...draft.penaltyTerms.toJson().map(
               (key, value) => MapEntry(key, value.toString()),

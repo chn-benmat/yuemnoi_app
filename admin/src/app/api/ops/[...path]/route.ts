@@ -25,7 +25,6 @@ const actions = new Set([
   "staff",
   "revoke-identity",
   "complaint",
-  "settings",
 ]);
 type Context = { params: Promise<{ path: string[] }> };
 async function proxy(request: Request, context: Context) {

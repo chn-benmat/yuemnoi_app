@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:skeletonizer/skeletonizer.dart';
+import 'package:shimmer/shimmer.dart';
 
-/// คงรูปทรงระหว่างรอข้อมูล แล้วให้แพ็กเกจจัดการแสงและวงจรแอนิเมชัน
+const _skeletonBaseColor = Color(0xFFE3E5E8);
+
+/// ใส่แสงวิ่งให้ placeholder ระหว่างรอข้อมูล
 class SkeletonShimmer extends StatelessWidget {
   const SkeletonShimmer({super.key, required this.child});
 
@@ -10,14 +12,17 @@ class SkeletonShimmer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ExcludeSemantics(
-      child: RepaintBoundary(
-        child: Skeletonizer(
-          effect: const ShimmerEffect(
-            baseColor: Color(0xFFE3E5E8),
-            highlightColor: Color(0xFFF7F8FA),
-            duration: Duration(milliseconds: 1400),
+      child: IgnorePointer(
+        child: RepaintBoundary(
+          child: Shimmer.fromColors(
+            baseColor: _skeletonBaseColor,
+            highlightColor: const Color(0xFFF7F8FA),
+            period: const Duration(milliseconds: 1400),
+            direction: Directionality.of(context) == TextDirection.rtl
+                ? ShimmerDirection.rtl
+                : ShimmerDirection.ltr,
+            child: child,
           ),
-          child: child,
         ),
       ),
     );
@@ -41,13 +46,26 @@ class SkeletonBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Bone(
+    // ไม่ระบุ width ให้กว้างเต็มพื้นที่ เหมือนข้อความจริงในคอลัมน์ที่ชิดซ้าย
+    // LimitedBox กันกรณีความกว้างไม่จำกัด เช่นอยู่ใน Row โดยไม่มี Expanded
+    return SizedBox(
       width: width,
       height: height,
-      shape: shape,
-      borderRadius: shape == BoxShape.rectangle
-          ? BorderRadius.circular(borderRadius)
-          : null,
+      child: LimitedBox(
+        maxWidth: 0,
+        maxHeight: 0,
+        child: SizedBox.expand(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: _skeletonBaseColor,
+              shape: shape,
+              borderRadius: shape == BoxShape.rectangle
+                  ? BorderRadius.circular(borderRadius)
+                  : null,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

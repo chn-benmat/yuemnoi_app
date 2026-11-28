@@ -34,7 +34,7 @@ class ChatRemoteDataSource {
   ApiClient? _apiClient;
   static const _chatBucket = 'chat_bk';
   static const _conversationItemColumns =
-      'id,item_name,item_image_url,price,type,user_id';
+      'id,item_name,item_image_url,hourly_rate,daily_rate,user_id';
   static final _signedImages =
       <
         (SupabaseClient, String, String),
@@ -354,61 +354,19 @@ class ChatRemoteDataSource {
         }
       }
 
-      // ดึงโปรไฟล์ทั้งหมด (พร้อม try-catch ป้องกัน sub-query error)
-      final profilesMap = <String, Map<String, dynamic>>{};
-      var profileLookupSucceeded = true;
-      if (otherUserIds.isNotEmpty) {
-        try {
-          final profiles = await client
-              .schema('profiles')
-              .from('public_profile_v')
-              .select(
-                'user_id,user_image_url,is_online,last_seen_at,display_name',
-              )
-              .inFilter('user_id', otherUserIds.toList(growable: false));
-          for (final p in (profiles as List).cast<Map<String, dynamic>>()) {
-            final uid = p['user_id']?.toString();
-            if (uid != null) profilesMap[uid] = p;
-          }
-        } catch (e) {
-          profileLookupSucceeded = false;
-          debugPrint('getConversations profiles sub-query error: $e');
-        }
-      }
-
-      // ดึงข้อมูล item ทั้งหมด (พร้อม try-catch ป้องกัน sub-query error)
-      final itemsMap = <int, Map<String, dynamic>>{};
-      if (itemIds.isNotEmpty) {
-        try {
-          final items = await client
-              .from('item_tb')
-              .select(_conversationItemColumns)
-              .inFilter('id', itemIds.toList(growable: false));
-          for (final item in (items as List).cast<Map<String, dynamic>>()) {
-            final id = item['id'] is num
-                ? (item['id'] as num).toInt()
-                : int.tryParse(item['id'].toString());
-            if (id != null) itemsMap[id] = item;
-          }
-        } catch (e) {
-          debugPrint('getConversations items sub-query error: $e');
-        }
-      }
-
-      // ดึงรายชื่อ conversation_id ที่มีข้อความที่ยังไม่ได้อ่าน
-      Set<String> unreadConvIds = {};
-      try {
-        final unreadRows = await client
-            .schema('messaging')
-            .from('chat_message_tb')
-            .select('conversation_id')
-            .or('sender_id.neq.$currentUserId,sender_id.is.null')
-            .eq('is_read', false);
-        unreadConvIds = (unreadRows as List)
-            .map((r) => r['conversation_id']?.toString())
-            .whereType<String>()
-            .toSet();
-      } catch (_) {}
+      final conversationIds = conversations
+          .map((conversation) => conversation['id']?.toString())
+          .whereType<String>()
+          .toList(growable: false);
+      final (
+        (profilesMap, profileLookupSucceeded),
+        itemsMap,
+        unreadConvIds,
+      ) = await (
+        _loadConversationProfiles(client, otherUserIds),
+        _loadConversationItems(client, itemIds),
+        _loadUnreadConversationIds(client, conversationIds),
+      ).wait;
 
       return conversations
           .map((conv) {
@@ -442,6 +400,78 @@ class ChatRemoteDataSource {
     } catch (e, stack) {
       debugPrint('getConversations error: $e\n$stack');
       throw const ChatRemoteException('ไม่สามารถดึงข้อมูลแชทได้ กรุณาลองใหม่');
+    }
+  }
+
+  Future<(Map<String, Map<String, dynamic>>, bool)> _loadConversationProfiles(
+    SupabaseClient client,
+    Set<String> otherUserIds,
+  ) async {
+    final profilesMap = <String, Map<String, dynamic>>{};
+    if (otherUserIds.isEmpty) return (profilesMap, true);
+
+    try {
+      final profiles = await client
+          .schema('profiles')
+          .from('public_profile_v')
+          .select('user_id,user_image_url,is_online,last_seen_at,display_name')
+          .inFilter('user_id', otherUserIds.toList(growable: false));
+      for (final profile in profiles) {
+        final userId = profile['user_id']?.toString();
+        if (userId != null) profilesMap[userId] = profile;
+      }
+      return (profilesMap, true);
+    } catch (e) {
+      debugPrint('getConversations profiles sub-query error: $e');
+      return (profilesMap, false);
+    }
+  }
+
+  Future<Map<int, Map<String, dynamic>>> _loadConversationItems(
+    SupabaseClient client,
+    Set<int> itemIds,
+  ) async {
+    final itemsMap = <int, Map<String, dynamic>>{};
+    if (itemIds.isEmpty) return itemsMap;
+
+    try {
+      final items = await client
+          .from('item_tb')
+          .select(_conversationItemColumns)
+          .inFilter('id', itemIds.toList(growable: false));
+      for (final item in items) {
+        final rawId = item['id'];
+        final id = rawId is num
+            ? rawId.toInt()
+            : int.tryParse(rawId.toString());
+        if (id != null) itemsMap[id] = item;
+      }
+    } catch (e) {
+      debugPrint('getConversations items sub-query error: $e');
+    }
+    return itemsMap;
+  }
+
+  Future<Set<String>> _loadUnreadConversationIds(
+    SupabaseClient client,
+    List<String> conversationIds,
+  ) async {
+    if (conversationIds.isEmpty) return const {};
+
+    try {
+      final rows = await client
+          .schema('public')
+          .rpc<PostgrestList>(
+            'chat_unread_conversation_ids',
+            params: {'p_conversation_ids': conversationIds},
+          );
+      return rows
+          .map((row) => row['conversation_id']?.toString())
+          .whereType<String>()
+          .toSet();
+    } catch (e) {
+      debugPrint('getConversations unread sub-query error: $e');
+      return const {};
     }
   }
 
@@ -522,7 +552,8 @@ class ChatRemoteDataSource {
           .from('chat_message_tb')
           .update({'is_read': true})
           .eq('conversation_id', conversationId)
-          .or('sender_id.neq.$currentUserId,sender_id.is.null');
+          .or('sender_id.neq.$currentUserId,sender_id.is.null')
+          .not('is_read', 'is', true);
       // Trigger ซิงก์ประวัติแจ้งเตือนให้ทุกเครื่องจากสถานะอ่านของข้อความจริง
     } catch (_) {}
   }
@@ -1187,54 +1218,7 @@ class ChatRemoteDataSource {
           .delete()
           .eq('id', parsedId);
 
-      // อัปเดตข้อความล่าสุด (last_message) ใน conversation_tb ให้เป็นข้อความล่าสุดที่เหลืออยู่
-      try {
-        final latestMsg = await client
-            .schema('messaging')
-            .from('chat_message_tb')
-            .select('message, image_url, created_at')
-            .eq('conversation_id', conversationId)
-            .order('created_at', ascending: false)
-            .limit(1)
-            .maybeSingle();
-
-        if (latestMsg != null) {
-          final lastText = latestMsg['message']?.toString().trim() ?? '';
-          final lastImg = latestMsg['image_url']?.toString();
-          final displayLastMsg =
-              lastImg != null &&
-                  lastImg.isNotEmpty &&
-                  (lastText.isEmpty || lastText == '📷 ส่งรูปภาพ')
-              ? '[รูปภาพ]'
-              : lastText;
-          final lastAt =
-              latestMsg['created_at']?.toString() ??
-              DateTime.now().toUtc().toIso8601String();
-
-          await client
-              .schema('messaging')
-              .from('conversation_tb')
-              .update({
-                'last_message': displayLastMsg,
-                'last_message_at': lastAt,
-                'updated_at': DateTime.now().toUtc().toIso8601String(),
-              })
-              .eq('id', conversationId);
-        } else {
-          await client
-              .schema('messaging')
-              .from('conversation_tb')
-              .update({
-                'last_message': '',
-                'updated_at': DateTime.now().toUtc().toIso8601String(),
-              })
-              .eq('id', conversationId);
-        }
-      } catch (e) {
-        debugPrint(
-          'Failed to update conversation last_message after delete: $e',
-        );
-      }
+      // ฐานอัปเดต preview ของห้อง (last_message) เองเมื่อข้อความถูกลบ
     } on PostgrestException catch (e) {
       throw ChatRemoteException('ลบข้อความไม่สำเร็จ: ${e.message}');
     } catch (_) {
@@ -1290,21 +1274,7 @@ class ChatRemoteDataSource {
           .from('chat_message_tb')
           .update({'message': newMessage})
           .eq('id', parsedId);
-
-      if (conversationId != null && conversationId.isNotEmpty) {
-        final nowIso = DateTime.now().toUtc().toIso8601String();
-        try {
-          await client
-              .schema('messaging')
-              .from('conversation_tb')
-              .update({
-                'last_message': newMessage.trim(),
-                'last_message_at': nowIso,
-                'updated_at': nowIso,
-              })
-              .eq('id', conversationId);
-        } catch (_) {}
-      }
+      // ฐานอัปเดต preview ของห้องเองเมื่อแก้ข้อความล่าสุด
     } on PostgrestException catch (e) {
       throw ChatRemoteException('แก้ไขข้อความไม่สำเร็จ: ${e.message}');
     } catch (_) {

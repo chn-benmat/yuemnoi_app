@@ -142,9 +142,6 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
         backgroundColor: MediaGalleryStyle.viewerBackground,
         appBar: AppBar(
           systemOverlayStyle: MediaGalleryStyle.darkSystemUi,
-          backgroundColor: MediaGalleryStyle.viewerBackground,
-          surfaceTintColor: MediaGalleryStyle.viewerBackground,
-          foregroundColor: MediaGalleryStyle.surface,
           elevation: 0,
           toolbarHeight: 72,
           leadingWidth: 72,
@@ -173,10 +170,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
               if (urls.isNotEmpty)
                 Text(
                   '${_currentIndex + 1}/${urls.length}',
-                  style: const TextStyle(
-                    color: MediaGalleryStyle.viewerMuted,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
                 ),
             ],
           ),

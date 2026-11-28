@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/constants/colors.dart';
 import 'package:frontend/core/theme/app_theme.dart';
 import 'package:frontend/features/profile/data/datasources/profile_remote_data_source.dart';
 import 'package:frontend/features/profile/data/models/user_profile_model.dart';
@@ -61,6 +62,34 @@ void main() {
   ) async {
     await tester.pumpWidget(const MaterialApp(home: EditProfileScreen()));
     expect(find.text('สิทธิ์ตำแหน่ง'), findsNothing);
+  });
+
+  testWidgets('contact page uses a purple app bar with a white title', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.lightTheme, home: const EditContactScreen()),
+    );
+
+    final appBar = find.byType(AppBar);
+    expect(
+      find.descendant(
+        of: appBar,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Material && widget.color == AppColors.primaryColor,
+        ),
+      ),
+      findsOneWidget,
+    );
+    final title = find.descendant(
+      of: appBar,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText && widget.text.toPlainText() == 'ข้อมูลติดต่อ',
+      ),
+    );
+    expect(tester.widget<RichText>(title).text.style?.color, Colors.white);
   });
 
   testWidgets('username stays read-only during loading and its cooldown', (
@@ -148,6 +177,27 @@ void main() {
         .toList();
     expect(fields.first.readOnly, isTrue);
     expect(fields.last.readOnly, isFalse);
+  });
+
+  testWidgets('contact phone accepts at most ten digits', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: EditContactScreen()));
+    final phoneField = find.byType(TextField).last;
+    final controller = tester.widget<TextField>(phoneField).controller!;
+
+    await tester.enterText(phoneField, '0812345678');
+    expect(controller.text, '0812345678');
+
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: '08123456789',
+        selection: TextSelection.collapsed(offset: 11),
+      ),
+    );
+    expect(controller.text, '0812345678');
+
+    await tester.enterText(phoneField, '');
+    await tester.enterText(phoneField, '089-876-5432 ext 1');
+    expect(controller.text, '0898765432');
   });
 
   testWidgets('password form asks only for values used by the session API', (

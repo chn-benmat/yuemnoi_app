@@ -1,5 +1,6 @@
 import 'package:frontend/core/widgets/app_popup.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../core/constants/colors.dart';
@@ -34,13 +35,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
         ? SupabaseConfig.client.auth.currentUser
         : null;
 
-    final rawPhone = (user?.userMetadata?['phone'] ?? user?.phone ?? '')
-        .toString();
-
     _emailCtrl = TextEditingController(text: user?.email ?? '');
-    _phoneCtrl = TextEditingController(
-      text: PhoneFormatter.formatForDisplay(rawPhone),
-    );
+    // เบอร์ตั้งต้นมาจากโปรไฟล์เมื่อโหลดเสร็จ (profile_tb.phone)
+    _phoneCtrl = TextEditingController();
 
     final session = SupabaseConfig.isInitialized
         ? SupabaseConfig.client.auth.currentSession
@@ -115,9 +112,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
           return Scaffold(
             backgroundColor: const Color(0xFFFAF9FD),
             appBar: AppBar(
-              backgroundColor: const Color(0xFFFAF9FD),
-              foregroundColor: const Color(0xFF292235),
-              surfaceTintColor: Colors.transparent,
               leading: const BackButton(),
               title: const Text(
                 'ข้อมูลติดต่อ',
@@ -164,9 +158,16 @@ class _EditContactScreenState extends State<EditContactScreen> {
                     EditContactField(
                       controller: _phoneCtrl,
                       label: 'เบอร์โทรศัพท์',
-                      hint: '08X-XXX-XXXX',
+                      hint: '0812345678',
                       icon: Icons.phone_outlined,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(
+                          10,
+                          maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                        ),
+                      ],
                       validator: AppFormValidators.thaiPhone(),
                     ),
                     const SizedBox(height: 28),

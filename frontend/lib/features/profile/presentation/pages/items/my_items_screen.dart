@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../../core/network/auth_session.dart';
+import '../../../../../core/services/skeleton_layout_cache.dart';
 import '../../../../../core/constants/colors.dart';
 import '../../../../../core/navigation/app_routes.dart';
 import '../../../../../core/network/supabase_client.dart';
@@ -132,10 +133,6 @@ class _MyItemsScreenState extends State<MyItemsScreen> {
     child: Scaffold(
       backgroundColor: const Color(0xFFF7F7FA),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF242132),
-        surfaceTintColor: Colors.transparent,
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
         leading: const BackButton(),
         title: const Text(
           'อุปกรณ์ของฉัน',
@@ -156,12 +153,23 @@ class _MyItemsScreenState extends State<MyItemsScreen> {
           builder: (context, state) {
             final loaded = state is MyItemsLoaded ? state : null;
             final visibleItems = loaded?.visibleItems ?? const <UserItem>[];
+            if (loaded != null && state.statusFilter == null) {
+              SkeletonLayoutCache.instance.writeCount(
+                'my_items.${AuthSession.userId}',
+                loaded.items.length,
+              );
+            }
             return Column(
               children: [
                 _buildSearchToolbar(state),
                 Expanded(
                   child: state is MyItemsLoading || state is MyItemsInitial
-                      ? const MyItemsLoadingSkeleton()
+                      ? MyItemsLoadingSkeleton(
+                          count: SkeletonLayoutCache.instance.count(
+                            'my_items.${AuthSession.userId}',
+                            fallback: 5,
+                          ),
+                        )
                       : RefreshIndicator(
                           color: AppColors.primaryColor,
                           onRefresh: _fetchItems,

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/network/auth_session.dart';
+import 'package:frontend/core/services/skeleton_layout_cache.dart';
 import 'package:frontend/features/profile/data/repositories/promptpay_account_repository.dart';
 import 'package:frontend/features/profile/presentation/bloc/promptpay_account_cubit.dart';
 import 'package:frontend/features/profile/presentation/pages/account/promptpay_account_screen.dart';
@@ -40,6 +43,44 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('keeps save accessible above the keyboard on a small screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+    final api = _MockApiClient();
+    const phone = '0812345678';
+    when(() => api.get(path, headers: headers)).thenAnswer(
+      (_) async =>
+          const ApiResponse(statusCode: 200, data: <String, dynamic>{}),
+    );
+    when(
+      () => api.put(path, headers: headers, data: {'promptpay_phone': phone}),
+    ).thenAnswer(
+      (_) async => const ApiResponse(
+        statusCode: 200,
+        data: {'promptpay_id_type': 'phone', 'promptpay_phone': phone},
+      ),
+    );
+
+    await openScreen(tester, api, textScale: 1.8);
+    expect(find.text('รับค่าเช่าผ่านพร้อมเพย์'), findsNothing);
+    final field = find.byType(TextFormField);
+    await tester.ensureVisible(field);
+    await tester.enterText(field, phone);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 360);
+    await tester.pumpAndSettle();
+
+    final save = find.text('บันทึกพร้อมเพย์').hitTestable();
+    expect(save, findsOneWidget);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(find.text('บันทึกพร้อมเพย์แล้ว'), findsOneWidget);
+  });
 
   testWidgets(
     'switches the saved phone to a national ID and clears the input',
@@ -182,4 +223,68 @@ void main() {
       expect(find.text('บันทึกพร้อมเพย์แล้ว'), findsOneWidget);
     },
   );
+
+  for (final nationalId in [false, true]) {
+    testWidgets(
+      'loading skeleton lines up with the loaded form (nationalId: $nationalId)',
+      (tester) async {
+        tester.view.physicalSize = const Size(412, 892);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final api = _MockApiClient();
+        final response = Completer<ApiResponse>();
+        when(
+          () => api.get(path, headers: headers),
+        ).thenAnswer((_) => response.future);
+        // จำว่าบัญชีนี้ใช้ประเภทไหน เหมือนเคยเปิดหน้านี้มาก่อน
+        SkeletonLayoutCache.instance.write('promptpay.${AuthSession.userId}', [
+          nationalId ? 'n' : 'p',
+          nationalId ? '4' : '-',
+          '-',
+        ]);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: BlocProvider(
+              create: (_) => PromptPayAccountCubit(
+                PromptPayAccountRepository(apiClient: api),
+              )..load(),
+              child: const PromptPayAccountScreen(),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(
+          find.byKey(const ValueKey('promptpay-loading-skeleton')),
+          findsOneWidget,
+        );
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+        Rect rectOf(Finder finder) => tester.getRect(finder.first);
+        final skeleton = (
+          segments: rectOf(find.byType(SegmentedButton<bool>)),
+          field: rectOf(find.byType(InputDecorator)),
+        );
+
+        response.complete(
+          ApiResponse(
+            statusCode: 200,
+            data: nationalId
+                ? {
+                    'promptpay_id_type': 'national_id',
+                    'national_id_last_four': '1234',
+                  }
+                : <String, dynamic>{},
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('promptpay-loading-skeleton')),
+          findsNothing,
+        );
+        expect(rectOf(find.byType(SegmentedButton<bool>)), skeleton.segments);
+        expect(rectOf(find.byType(InputDecorator)), skeleton.field);
+      },
+    );
+  }
 }

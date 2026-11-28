@@ -57,7 +57,7 @@ export const sections = [
     id: "settings",
     label: "ตั้งค่า",
     title: "ตั้งค่า",
-    description: "จัดการข้อกำหนดการยืนยันตัวตนก่อนปล่อยเช่า",
+    description: "ดูข้อกำหนดการยืนยันตัวตนและนโยบายหลักฐาน",
   },
   {
     id: "health",

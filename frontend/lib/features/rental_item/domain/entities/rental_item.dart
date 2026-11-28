@@ -31,9 +31,8 @@ class RentalItemDraft {
     required this.name,
     required this.category,
     required this.description,
-    required this.rentalType,
-    required this.price,
-    this.additionalDailyPrice,
+    this.hourlyRate,
+    this.dailyRate,
     this.penaltyTerms = const RentalPenaltyTerms(),
     required this.images,
     this.pickupLocation,
@@ -42,9 +41,10 @@ class RentalItemDraft {
   final String name;
   final String category;
   final String description;
-  final String rentalType;
-  final int price;
-  final int? additionalDailyPrice;
+
+  /// ราคาต่อหน่วย ต้องมีอย่างน้อยหนึ่งแบบ ค่า null คือไม่ให้เช่าหน่วยนั้น
+  final int? hourlyRate;
+  final int? dailyRate;
   final RentalPenaltyTerms penaltyTerms;
   final List<RentalItemImage> images;
   final PickupLocation? pickupLocation;

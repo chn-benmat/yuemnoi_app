@@ -181,6 +181,47 @@ func TestRentalCreationMapsDatabaseRejections(t *testing.T) {
 	}
 }
 
+func TestOccupiedRentalExplainsTheReason(t *testing.T) {
+	for _, tc := range []struct{ detail, reason, message string }{
+		{"item_unavailable", "item_unavailable", "ประกาศนี้ปิดให้เช่าชั่วคราวหรือกำลังรอตรวจสอบ"},
+		{"item_rented", "item_rented", "อุปกรณ์นี้กำลังถูกเช่าอยู่ กรุณาต่อคิวเพื่อเช่าต่อ"},
+		{"queue_held", "queue_held", "มีผู้ได้คิวเช่าต่อก่อนคุณ กรุณารอคิวถัดไป"},
+		{"queue_turn_unconfirmed", "queue_turn_unconfirmed", "ถึงคิวของคุณแล้ว กรุณากดยืนยันสิทธิ์ในการ์ดคิวก่อนส่งคำขอเช่า"},
+		{"queue_turn_use_card", "queue_turn_use_card", "คุณได้สิทธิ์คิวแล้ว กรุณาส่งคำขอเช่าจากการ์ดคิวในแชต"},
+		{"queue_turn_expired", "queue_turn_expired", "สิทธิ์คิวของคุณหมดเวลาแล้ว กรุณาต่อคิวใหม่"},
+		{"pickup_time_passed", "pickup_time_passed", "เวลานัดรับต้องอยู่ภายในเวลาที่ระบบกำหนด กรุณาเลือกวันและเวลาใหม่"},
+		{"", "", "อุปกรณ์นี้อยู่ระหว่างเช่าหรือมีคิวเช่าต่อ กรุณาตรวจสอบสิทธิ์อีกครั้ง"},
+		{"something_new", "", "อุปกรณ์นี้อยู่ระหว่างเช่าหรือมีคิวเช่าต่อ กรุณาตรวจสอบสิทธิ์อีกครั้ง"},
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			fmt.Fprintf(w, `{"code":"23P01","message":"item_rental_occupied","details":%q}`, tc.detail)
+		}))
+		repository := supabase.NewSupabaseRentalRepository(supabaseclient.CreateClient(server.URL, "test-key"))
+		app := ports.NewHTTPApp()
+		app.Post("/api/rentals", ports.NewRentalHandler(repository, offerConfirmationVerifier{}).CreateRentalOrder)
+		request := httptest.NewRequest(http.MethodPost, "/api/rentals", strings.NewReader(
+			`{"item_id":7,"start_at":"2026-11-27T02:00:00Z","end_at":"2026-11-27T03:00:00Z","rental_type":"hourly","pickup_location":"Pickup"}`,
+		))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer renter-token")
+		response, err := app.Test(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body struct{ Code, Reason, Error string }
+		err = json.NewDecoder(response.Body).Decode(&body)
+		response.Body.Close()
+		_ = app.Shutdown()
+		server.Close()
+		if err != nil || response.StatusCode != http.StatusConflict || body.Code != "item_rental_occupied" ||
+			body.Reason != tc.reason || body.Error != tc.message {
+			t.Fatalf("detail %q: status=%d body=%+v err=%v", tc.detail, response.StatusCode, body, err)
+		}
+	}
+}
+
 func TestOwnerOfferStaysPendingUntilExplicitConfirmation(t *testing.T) {
 	checkOwnerOfferConfirmation(t, "daily", "รายวัน", "promptpay", time.Date(2026, 10, 19, 2, 0, 0, 0, time.UTC), false)
 }

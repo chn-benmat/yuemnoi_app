@@ -69,9 +69,7 @@ class _RentalStatusScreenState extends State<RentalStatusScreen>
                 try {
                   itemData = await client
                       .from('item_tb')
-                      .select(
-                        'item_name, category, price, item_image_url, user_id',
-                      )
+                      .select('item_name, category, item_image_url, user_id')
                       .eq('id', itemId)
                       .maybeSingle();
                 } catch (_) {}
@@ -628,9 +626,7 @@ class _StatusCard extends StatelessWidget {
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: item.isLender
-                        ? const Color(0xFF10B981)
-                        : AppColors.primaryColor,
+                    backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(

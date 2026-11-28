@@ -10,19 +10,18 @@ class LoginRequiredDialog extends StatelessWidget {
   const LoginRequiredDialog({
     super.key,
     this.title = defaultTitle,
-    this.message = defaultMessage,
+    this.message,
   });
 
   static const defaultTitle = 'เข้าสู่ระบบก่อนใช้งาน';
-  static const defaultMessage =
-      'เพื่อเช่าอุปกรณ์ พูดคุย\nและติดตามรายการของคุณ';
+
   final String title;
-  final String message;
+  final String? message;
 
   static Future<LoginPromptAction?> show(
     BuildContext context, {
     String title = defaultTitle,
-    String message = defaultMessage,
+    String? message,
   }) {
     return showDialog<LoginPromptAction>(
       context: context,
@@ -49,21 +48,6 @@ class LoginRequiredDialog extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1E5FF),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.person_outline_rounded,
-                      color: AppColors.primaryColor,
-                      size: 28,
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 14),
                 Text(
                   title,
@@ -75,17 +59,19 @@ class LoginRequiredDialog extends StatelessWidget {
                     color: Color(0xFF32134F),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 13,
-                    height: 1.6,
-                    color: Color(0xFF756681),
+                if (message case final messageText?) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    messageText,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 13,
+                      height: 1.6,
+                      color: Color(0xFF756681),
+                    ),
                   ),
-                ),
+                ],
                 const SizedBox(height: 20),
                 AppPrimaryButton(
                   text: 'เข้าสู่ระบบ',

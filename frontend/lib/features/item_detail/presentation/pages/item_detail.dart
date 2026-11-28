@@ -13,10 +13,13 @@ import '../../../../core/widgets/rental_penalty_summary.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
+import '../../../profile/data/datasources/profile_remote_data_source.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/utils/auth_guard.dart';
 import '../../../../core/navigation/item_deep_link.dart';
+import '../../../../core/widgets/app_page_header.dart';
 import '../../../../core/widgets/product_card_grid.dart';
 import '../../../../core/widgets/product_listing_card.dart';
 import '../../../../core/widgets/skeleton_shimmer.dart';
@@ -66,6 +69,7 @@ class ItemDetailScreen extends StatefulWidget {
     this.previewItem,
     this.previewPhotos,
     this.complaintDataSource = const ItemComplaintRemoteDataSource(),
+    this.loadContactPhone,
   });
 
   final int itemId;
@@ -74,6 +78,9 @@ class ItemDetailScreen extends StatefulWidget {
   final ItemDetail? previewItem;
   final List<RentalItemPhoto>? previewPhotos;
   final ItemComplaintRemoteDataSource complaintDataSource;
+
+  /// อ่านเบอร์ติดต่อของผู้ใช้ปัจจุบัน ค่าเริ่มต้นอ่านจากโปรไฟล์ (profile_tb.phone)
+  final Future<String> Function()? loadContactPhone;
 
   @override
   State<ItemDetailScreen> createState() => _ItemDetailScreenState();
@@ -144,13 +151,25 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     await completed;
   }
 
-  bool _hasCurrentUserPhone() {
-    if (!SupabaseConfig.isInitialized) return false;
+  Future<bool> _hasContactPhone() async {
+    try {
+      final phone = await (widget.loadContactPhone ?? _profileContactPhone)();
+      return PhoneFormatter.isValidPhone(phone);
+    } catch (_) {
+      return false;
+    }
+  }
 
+  // เบอร์ติดต่อของแอปอยู่ที่โปรไฟล์ ไม่ใช่ metadata ของ Auth
+  static Future<String> _profileContactPhone() async {
+    if (!SupabaseConfig.isInitialized) return '';
     final user = SupabaseConfig.client.auth.currentUser;
-    final rawPhone =
-        user?.userMetadata?['phone']?.toString() ?? user?.phone ?? '';
-    return PhoneFormatter.isValidPhone(rawPhone);
+    if (user == null) return '';
+    final profile = await ProfileRemoteDataSource().getProfile(
+      userId: user.id,
+      accessToken: AuthSession.accessToken,
+    );
+    return profile.phone;
   }
 
   Future<void> _showMissingPhoneDialog() async {
@@ -196,7 +215,8 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
     if (item.isOwner) return;
 
-    if (!_hasCurrentUserPhone()) {
+    if (!await _hasContactPhone()) {
+      if (!mounted) return;
       await _showMissingPhoneDialog();
       return;
     }
@@ -466,8 +486,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           );
         }
         return AnnotatedRegion<SystemUiOverlayStyle>(
-          value: SystemUiOverlayStyle.dark.copyWith(
-            statusBarColor: Colors.transparent,
+          value: const SystemUiOverlayStyle(
             systemNavigationBarColor: _DetailStyle.surface,
             systemNavigationBarIconBrightness: Brightness.dark,
           ),
@@ -482,26 +501,21 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                         ? null
                         : () => _openChat(item),
                   ),
-            body: Stack(
+            body: Column(
               children: [
-                _body(state),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: _DetailFloatingTopBar(
-                    isFavorite: _isFavorite,
-                    onFavorite: widget.previewItem != null || item == null
-                        ? null
-                        : _handleFavoriteToggle,
-                    onShare: widget.previewItem != null || item == null
-                        ? null
-                        : () => _handleShare(item),
-                    onReport: widget.previewItem != null || item == null
-                        ? null
-                        : () => _openReportOptions(item),
-                  ),
+                _DetailTopBar(
+                  isFavorite: _isFavorite,
+                  onFavorite: widget.previewItem != null || item == null
+                      ? null
+                      : _handleFavoriteToggle,
+                  onShare: widget.previewItem != null || item == null
+                      ? null
+                      : () => _handleShare(item),
+                  onReport: widget.previewItem != null || item == null
+                      ? null
+                      : () => _openReportOptions(item),
                 ),
+                Expanded(child: _body(state)),
               ],
             ),
           ),
@@ -513,9 +527,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   Widget _ownerLayout(Widget child) => Scaffold(
     backgroundColor: const Color(0xFFF7F6FA),
     appBar: AppBar(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      foregroundColor: const Color(0xFF211C35),
       elevation: 0,
       centerTitle: true,
       leading: IconButton(
@@ -593,56 +604,121 @@ class _ItemDetailLoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final galleryHeight = _DetailStyle.galleryHeight(context);
+    final topInset = MediaQuery.paddingOf(context).top;
 
-    return SkeletonShimmer(
+    return ExcludeSemantics(
       key: const ValueKey('item-detail-skeleton'),
       child: SingleChildScrollView(
         physics: const NeverScrollableScrollPhysics(),
         child: Column(
           children: [
-            SkeletonBox(height: galleryHeight, borderRadius: 0),
+            // รูปจริงวางในกรอบเว้นขอบเดียวกับ _ImageGallery ไม่ได้เต็มจอ
+            SizedBox(
+              height: galleryHeight,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, topInset + 20, 16, 36),
+                child: const SkeletonShimmer(
+                  child: SkeletonBox(height: double.infinity, borderRadius: 16),
+                ),
+              ),
+            ),
             Transform.translate(
               offset: const Offset(0, -20),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-                decoration: const BoxDecoration(
-                  color: _DetailStyle.surface,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SkeletonBox(width: 160, height: 24, borderRadius: 8),
-                    SizedBox(height: 12),
-                    SkeletonBox(width: 250, height: 30, borderRadius: 8),
-                    SizedBox(height: 24),
-                    SkeletonBox(width: 130, height: 18, borderRadius: 8),
-                    SizedBox(height: 16),
-                    SkeletonBox(
-                      width: double.infinity,
-                      height: 14,
-                      borderRadius: 7,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SkeletonShimmer(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // ป้ายหมวดหมู่ 11px + padding 6
+                              SkeletonBox(
+                                width: 76,
+                                height: 27,
+                                borderRadius: 8,
+                              ),
+                              SizedBox(height: 12),
+                              // ชื่ออุปกรณ์ 26px สูงบรรทัด 1.3
+                              SizedBox(
+                                height: 34,
+                                child: Align(
+                                  alignment: AlignmentDirectional.centerStart,
+                                  child: SkeletonBox(
+                                    width: 230,
+                                    height: 26,
+                                    borderRadius: 8,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 12),
+                              // แถวจุดนัดรับ: ไอคอน 18 กับข้อความ 13
+                              Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: Row(
+                                  children: [
+                                    SkeletonBox(
+                                      width: 18,
+                                      height: 18,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    SizedBox(width: 6),
+                                    SkeletonBox(
+                                      width: 170,
+                                      height: 13,
+                                      borderRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: 20),
+                              SizedBox(
+                                height: 22,
+                                child: Align(
+                                  alignment: AlignmentDirectional.centerStart,
+                                  child: SkeletonBox(
+                                    width: 120,
+                                    height: 16,
+                                    borderRadius: 7,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 12),
+                              // คำอธิบาย 3 บรรทัด 14px สูงบรรทัด 1.7
+                              _DescriptionLineSkeleton(widthFactor: 1),
+                              _DescriptionLineSkeleton(widthFactor: 1),
+                              _DescriptionLineSkeleton(widthFactor: 0.6),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 18),
+                        _OwnerCardSkeleton(),
+                        SizedBox(height: 24),
+                        SkeletonShimmer(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SkeletonBox(
+                                width: 92,
+                                height: 16,
+                                borderRadius: 7,
+                              ),
+                              SizedBox(height: 10),
+                              SkeletonBox(
+                                width: 180,
+                                height: 13,
+                                borderRadius: 6,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 10),
-                    SkeletonBox(
-                      width: double.infinity,
-                      height: 14,
-                      borderRadius: 7,
-                    ),
-                    SizedBox(height: 10),
-                    SkeletonBox(width: 210, height: 14, borderRadius: 7),
-                    SizedBox(height: 24),
-                    _OwnerCardSkeleton(),
-                    SizedBox(height: 28),
-                    SkeletonBox(width: 92, height: 15, borderRadius: 8),
-                    SizedBox(height: 18),
-                    SkeletonBox(
-                      width: double.infinity,
-                      height: 80,
-                      borderRadius: 16,
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -653,44 +729,65 @@ class _ItemDetailLoadingView extends StatelessWidget {
   }
 }
 
+class _DescriptionLineSkeleton extends StatelessWidget {
+  const _DescriptionLineSkeleton({required this.widthFactor});
+
+  final double widthFactor;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 24,
+    child: Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: FractionallySizedBox(
+        widthFactor: widthFactor,
+        child: const SkeletonBox(height: 13, borderRadius: 6),
+      ),
+    ),
+  );
+}
+
 class _OwnerCardSkeleton extends StatelessWidget {
   const _OwnerCardSkeleton();
 
   @override
   Widget build(BuildContext context) {
+    // กรอบเดียวกับ _OwnerCard: padding 16 อวาตาร์ 44 และลิงก์ดูโปรไฟล์ด้านขวา
     return Container(
-      height: 80,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _DetailStyle.surface,
         border: Border.all(color: _DetailStyle.accentSurface),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: const Row(
-        children: [
-          SkeletonBox(height: 44, width: 44, shape: BoxShape.circle),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SkeletonBox(width: 82, height: 12, borderRadius: 6),
-                SizedBox(height: 6),
-                SkeletonBox(width: 100, height: 16, borderRadius: 8),
-              ],
+      child: const SkeletonShimmer(
+        child: Row(
+          children: [
+            SkeletonBox(height: 44, width: 44, shape: BoxShape.circle),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SkeletonBox(width: 64, height: 11, borderRadius: 5),
+                  SizedBox(height: 6),
+                  SkeletonBox(width: 120, height: 15, borderRadius: 7),
+                  SizedBox(height: 6),
+                  SkeletonBox(width: 90, height: 11, borderRadius: 5),
+                ],
+              ),
             ),
-          ),
-          SizedBox(width: 12),
-          SkeletonBox(width: 72, height: 14, borderRadius: 6),
-        ],
+            SizedBox(width: 8),
+            SkeletonBox(width: 70, height: 14, borderRadius: 6),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _DetailFloatingTopBar extends StatelessWidget {
-  const _DetailFloatingTopBar({
+class _DetailTopBar extends StatelessWidget {
+  const _DetailTopBar({
     required this.isFavorite,
     required this.onFavorite,
     required this.onShare,
@@ -704,63 +801,60 @@ class _DetailFloatingTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: [
-            _CircleActionButton(
-              tooltip: 'ย้อนกลับ',
-              icon: Icons.arrow_back_rounded,
-              onPressed: () => AppRoutes.pop(context),
-            ),
-            const Spacer(),
-            _CircleActionButton(
-              tooltip: 'แชร์',
-              icon: Icons.share_outlined,
-              iconSize: 20,
-              onPressed: onShare,
-            ),
-            const SizedBox(width: 8),
-            _CircleActionButton(
-              tooltip: isFavorite ? 'นำออกจากรายการโปรด' : 'เพิ่มในรายการโปรด',
-              icon: isFavorite
-                  ? Icons.favorite_rounded
-                  : Icons.favorite_border_rounded,
-              iconColor: isFavorite ? _DetailStyle.favorite : _DetailStyle.ink,
-              onPressed: onFavorite,
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: _CircleActionButton.decoration,
-              child: PopupMenuButton<String>(
-                tooltip: 'เพิ่มเติม',
-                enabled: onReport != null,
-                icon: const Icon(Icons.more_horiz_rounded),
-                iconColor: _DetailStyle.ink,
-                color: _DetailStyle.surface,
-                surfaceTintColor: _DetailStyle.surface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                onSelected: (_) => onReport?.call(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'report',
-                    child: Row(
-                      children: [
-                        Icon(Icons.flag_outlined, size: 20),
-                        SizedBox(width: 10),
-                        Text('รายงานปัญหา'),
-                      ],
-                    ),
-                  ),
-                ],
+    return AppPageHeader(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          _CircleActionButton(
+            tooltip: 'ย้อนกลับ',
+            icon: Icons.arrow_back_rounded,
+            onPressed: () => AppRoutes.pop(context),
+          ),
+          const Spacer(),
+          _CircleActionButton(
+            tooltip: 'แชร์',
+            icon: Icons.share_outlined,
+            iconSize: 20,
+            onPressed: onShare,
+          ),
+          const SizedBox(width: 8),
+          _CircleActionButton(
+            tooltip: isFavorite ? 'นำออกจากรายการโปรด' : 'เพิ่มในรายการโปรด',
+            icon: isFavorite
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
+            iconColor: isFavorite ? _DetailStyle.favorite : _DetailStyle.ink,
+            onPressed: onFavorite,
+          ),
+          const SizedBox(width: 8),
+          Container(
+            decoration: _CircleActionButton.decoration,
+            child: PopupMenuButton<String>(
+              tooltip: 'เพิ่มเติม',
+              enabled: onReport != null,
+              icon: const Icon(Icons.more_horiz_rounded),
+              iconColor: _DetailStyle.ink,
+              color: _DetailStyle.surface,
+              surfaceTintColor: _DetailStyle.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
+              onSelected: (_) => onReport?.call(),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'report',
+                  child: Row(
+                    children: [
+                      Icon(Icons.flag_outlined, size: 20),
+                      SizedBox(width: 10),
+                      Text('รายงานปัญหา'),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1459,11 +1553,9 @@ class _RelatedItemsSection extends StatelessWidget {
           ),
         )
       else if (status == RelatedItemsStatus.loading)
-        SkeletonShimmer(
-          child: ProductCardGrid.box(
-            itemCount: 2,
-            itemBuilder: (_, _) => const ProductCardSkeleton(),
-          ),
+        ProductCardGrid.box(
+          itemCount: 2,
+          itemBuilder: (_, _) => const ProductCardSkeleton(),
         )
       else
         ProductCardGrid.box(

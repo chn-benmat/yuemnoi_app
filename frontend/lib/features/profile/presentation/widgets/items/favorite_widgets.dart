@@ -6,11 +6,14 @@ import '../../../../../core/widgets/skeleton_shimmer.dart';
 import '../../../domain/entities/favorite_item.dart';
 
 class FavoriteLoadingSkeleton extends StatelessWidget {
-  const FavoriteLoadingSkeleton({super.key});
+  const FavoriteLoadingSkeleton({super.key, this.count = 6});
+
+  /// จำนวนรายการที่หน้านี้แสดงครั้งล่าสุด ให้ skeleton มีจำนวนเท่าข้อมูลจริง
+  final int count;
 
   @override
   Widget build(BuildContext context) {
-    return SkeletonShimmer(
+    return ExcludeSemantics(
       key: const ValueKey('favorite-loading-skeleton'),
       child: GridView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -22,7 +25,7 @@ class FavoriteLoadingSkeleton extends StatelessWidget {
           mainAxisExtent:
               270 + (MediaQuery.textScalerOf(context).scale(14) - 14) * 4,
         ),
-        itemCount: 6,
+        itemCount: count,
         itemBuilder: (context, index) => const _FavoriteSkeletonCard(),
       ),
     );
@@ -34,27 +37,63 @@ class _FavoriteSkeletonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ขอบ มุม 20 และรูปชิดขอบการ์ดแบบเดียวกับ FavoriteItemCard
     return Container(
-      padding: const EdgeInsets.all(5),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD8BFF0)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Expanded(
-            child: SkeletonBox(height: double.infinity, borderRadius: 12),
-          ),
-          const SizedBox(height: 8),
-          const SkeletonBox(height: 14, borderRadius: 7),
-          const SizedBox(height: 6),
-          const FractionallySizedBox(
-            widthFactor: 0.7,
-            child: SkeletonBox(height: 10, borderRadius: 5),
-          ),
-          const SizedBox(height: 6),
-        ],
+      child: const SkeletonShimmer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SkeletonBox(height: double.infinity, borderRadius: 0),
+            ),
+            Padding(
+              padding: EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ชื่อ 14px สูงบรรทัด 1.5 สูงสุด 2 บรรทัด
+                  SizedBox(
+                    height: 21,
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: SkeletonBox(height: 13, borderRadius: 6),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 21,
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: FractionallySizedBox(
+                        widthFactor: 0.6,
+                        child: SkeletonBox(height: 13, borderRadius: 6),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      SkeletonBox(width: 14, height: 14, borderRadius: 4),
+                      SizedBox(width: 4),
+                      Expanded(
+                        child: FractionallySizedBox(
+                          alignment: AlignmentDirectional.centerStart,
+                          widthFactor: 0.6,
+                          child: SkeletonBox(height: 11, borderRadius: 5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

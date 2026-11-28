@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/cache/app_cache.dart';
 import '../../../../core/cache/cache_database.dart';
+import '../../../../core/models/rental_rates.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/supabase_client.dart';
@@ -359,6 +360,13 @@ class HomeSupabaseDataSource {
   Set<String> _deferPreviouslyShownIds = {};
   static const int _curatedItemCount = 4;
   static const int _recentRecommendationWindow = 12;
+  static const int _catalogPageSize = 100;
+  static const int _enrichmentBatchSize = 100;
+  static const _listingColumns =
+      'id,user_id,item_name,item_image_url,description,category,'
+      'hourly_rate,daily_rate,pickup_location,is_rental_occupied';
+  static const _itemListingColumns =
+      '$_listingColumns,pickup_latitude,pickup_longitude';
 
   String _recentItemsKey(String ownerId) =>
       'home_recent_recommendations_$ownerId';
@@ -627,14 +635,20 @@ class HomeSupabaseDataSource {
       final description = item['description']?.toString() ?? '';
       final rawCategory = item['category']?.toString();
       final categoryId = mapDbCategoryToId(rawCategory);
-      final price = (item['price'] is num)
-          ? (item['price'] as num).toInt()
-          : int.tryParse(item['price']?.toString() ?? '0') ?? 0;
-      final type = item['type']?.toString().toLowerCase().trim();
-      final priceUnit =
-          (type == 'รายชั่วโมง' || type == 'hourly' || type == 'hour')
-          ? '/ ชม.'
-          : '/ วัน';
+      // การ์ดแสดงเรตหลัก: รายชั่วโมงถ้ามี ไม่งั้นรายวัน
+      final rates =
+          RentalRates.fromKeys(
+            item,
+            hourlyKey: 'hourly_rate',
+            dailyKey: 'daily_rate',
+          ) ??
+          RentalRates.legacy(
+            price: item['price'],
+            type: item['type'],
+            dailyPrice: item['daily_price'],
+          );
+      final price = rates.hourly ?? rates.daily ?? 0;
+      final priceUnit = rates.hourly != null ? '/ ชม.' : '/ วัน';
 
       String imageUrl = '';
       if (item['item_image_url'] is List &&
@@ -749,37 +763,38 @@ class HomeSupabaseDataSource {
     return null;
   }
 
-  /// ดึงข้อมูลรายการอุปกรณ์จริงจาก Supabase โดยตรง (Tier 1)
+  Future<PostgrestList> _readCatalogPages(
+    PostgrestTransformBuilder<PostgrestList> query,
+  ) async {
+    final rows = <Map<String, dynamic>>[];
+    for (var offset = 0; ; offset += _catalogPageSize) {
+      final page = await query.range(offset, offset + _catalogPageSize - 1);
+      rows.addAll(page);
+      if (page.length < _catalogPageSize) return rows;
+    }
+  }
+
+  /// ทางสำรองเมื่อ Go ใช้ไม่ได้: อ่านประกาศที่แสดงได้จาก Supabase โดยตรง (เรียงตามเวลาสร้าง)
   Future<List<FeedItemModel>> _fetchFromSupabaseDirectly() async {
     final client = _activeSupabaseClient;
     if (client == null) {
       throw const FormatException('Supabase client is not available');
     }
 
-    List<dynamic>? rawItems;
+    PostgrestList? rawItems;
     try {
-      rawItems = await client
-          .from('home_feed_ranked_v')
-          .select('*,is_rental_occupied')
-          .order('rank_position', ascending: true);
-    } catch (e) {
-      debugPrint(
-        'Direct Supabase home_feed_ranked_v error: $e, fallback to item_tb',
-      );
-    }
-
-    if (rawItems == null || rawItems.isEmpty) {
-      try {
-        rawItems = await client
+      rawItems = await _readCatalogPages(
+        client
             .from('item_tb')
-            .select('*,is_rental_occupied')
+            .select(_itemListingColumns)
             .eq('owner_hidden', false)
             .eq('moderation_hidden', false)
-            .inFilter('status', ['available', 'พร้อมใช้งาน'])
-            .order('created_at', ascending: false);
-      } catch (e) {
-        debugPrint('Direct Supabase item_tb fallback error: $e');
-      }
+            .eq('status', 'available')
+            .order('created_at', ascending: false)
+            .order('id', ascending: false),
+      );
+    } catch (e) {
+      debugPrint('Direct Supabase item_tb fallback error: $e');
     }
 
     if (rawItems == null) {
@@ -787,38 +802,53 @@ class HomeSupabaseDataSource {
     }
     if (rawItems.isEmpty) return const [];
 
-    final rawList = rawItems;
-    final userIds = rawList
-        .map((r) => (r as Map)['user_id']?.toString())
+    final (profilesMap, pickupDetails) = await (
+      _fetchProfiles(client, rawItems),
+      _fetchPickupDetails(rawItems),
+    ).wait;
+    return _mapRawListToFeedItems(
+      rawItems,
+      profilesMap: profilesMap,
+      pickupDetails: pickupDetails,
+    );
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _fetchProfiles(
+    SupabaseClient client,
+    PostgrestList items,
+  ) async {
+    final userIds = items
+        .map((row) => row['user_id']?.toString())
         .whereType<String>()
         .where((id) => id.isNotEmpty)
         .toSet()
         .toList();
 
-    Map<String, Map<String, dynamic>> profilesMap = {};
-    if (userIds.isNotEmpty) {
+    final profilesMap = <String, Map<String, dynamic>>{};
+    for (
+      var offset = 0;
+      offset < userIds.length;
+      offset += _enrichmentBatchSize
+    ) {
       try {
-        final List<dynamic> profiles = await client
+        final profiles = await client
             .schema('profiles')
             .from('public_profile_v')
             .select('user_id, display_name, user_image_url, is_verified')
-            .inFilter('user_id', userIds);
-        for (final p in profiles) {
-          final uid = (p as Map)['user_id']?.toString();
-          if (uid != null) {
-            profilesMap[uid] = Map<String, dynamic>.from(p);
-          }
+            .inFilter(
+              'user_id',
+              userIds.skip(offset).take(_enrichmentBatchSize).toList(),
+            );
+        for (final profile in profiles) {
+          final uid = profile['user_id']?.toString();
+          if (uid != null) profilesMap[uid] = profile;
         }
       } catch (e) {
         debugPrint('Profiles query error for home items: $e');
+        break;
       }
     }
-
-    return _mapRawListToFeedItems(
-      rawList,
-      profilesMap: profilesMap,
-      pickupDetails: await _fetchPickupDetails(rawList),
-    );
+    return profilesMap;
   }
 
   Future<Map<String, Map<String, dynamic>>> _fetchPickupDetails(
@@ -838,15 +868,22 @@ class HomeSupabaseDataSource {
 
     final result = <String, Map<String, dynamic>>{};
     final listingIds = ids.toList();
-    for (var offset = 0; offset < listingIds.length; offset += 100) {
+    for (
+      var offset = 0;
+      offset < listingIds.length;
+      offset += _enrichmentBatchSize
+    ) {
       try {
         final rows = await client
             .from('item_tb')
             .select('id,pickup_location,pickup_latitude,pickup_longitude')
-            .inFilter('id', listingIds.skip(offset).take(100).toList())
+            .inFilter(
+              'id',
+              listingIds.skip(offset).take(_enrichmentBatchSize).toList(),
+            )
             .eq('owner_hidden', false)
             .eq('moderation_hidden', false)
-            .inFilter('status', ['available', 'พร้อมใช้งาน']);
+            .eq('status', 'available');
         for (final row in rows) {
           result['${row['id']}'] = row;
         }
@@ -880,13 +917,19 @@ class HomeSupabaseDataSource {
       return _withCurrentFavoriteState(_cachedFeedItems!);
     }
 
+    // แคตตาล็อกจาก Go จัดอันดับด้วยสูตรเดียวกับฟีดหน้าแรก (get_home_catalog)
     List<FeedItemModel>? freshItems;
-    if (_activeSupabaseClient != null) {
-      try {
-        freshItems = await _fetchFromSupabaseDirectly();
-      } catch (_) {
-        // ลอง Go API ต่อเมื่อการอ่าน Supabase ล้มเหลวเท่านั้น
+    try {
+      final response = await _apiClient.get('/api/items');
+      if (response.statusCode == 200 && response.data is List) {
+        final rawItems = response.data as List;
+        freshItems = _mapRawListToFeedItems(
+          rawItems,
+          pickupDetails: await _fetchPickupDetails(rawItems),
+        );
       }
+    } catch (_) {
+      // อ่านจาก Supabase โดยตรงต่อเมื่อ Go ใช้ไม่ได้
     }
     if (ownerId != _cacheOwner) {
       return _fetchAllSupabaseItems(
@@ -894,18 +937,11 @@ class HomeSupabaseDataSource {
         allowOfflineCache: allowOfflineCache,
       );
     }
-    if (freshItems == null) {
+    if (freshItems == null && _activeSupabaseClient != null) {
       try {
-        final response = await _apiClient.get('/api/items');
-        if (response.statusCode == 200 && response.data is List) {
-          final rawItems = response.data as List;
-          freshItems = _mapRawListToFeedItems(
-            rawItems,
-            pickupDetails: await _fetchPickupDetails(rawItems),
-          );
-        }
+        freshItems = await _fetchFromSupabaseDirectly();
       } catch (_) {
-        // ลองแหล่งข้อมูลถัดไปและแจ้ง error หากเชื่อมต่อไม่ได้ทั้งหมด
+        // แจ้ง error หากเชื่อมต่อไม่ได้ทั้งหมด
       }
     }
     if (ownerId != _cacheOwner) {
