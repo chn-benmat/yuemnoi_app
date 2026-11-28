@@ -7,6 +7,7 @@ import '../../../../core/network/auth_session.dart';
 import '../../../../core/network/app_session_validator.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/chat_notification_service.dart';
+import '../../../../core/services/fcm_service.dart';
 import '../../../../core/services/favorite_service.dart';
 import '../../../../core/services/user_presence_service.dart';
 import '../../data/datasources/auth_remote_data_source.dart'; // สำหรับ AuthApiException
@@ -55,6 +56,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 _handledAccessToken = null;
                 AuthSession.clear(purgeCache: true);
                 UserPresenceService.instance.dispose();
+                unawaited(FcmService.instance.unregisterCurrentDevice());
                 unawaited(
                   ChatNotificationService.instance.cancelAllNotifications(),
                 );
@@ -341,6 +343,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _signOutLocally({String? userId}) async {
+    await FcmService.instance.unregisterCurrentDevice();
     await AuthSession.reject(userId: userId);
     _accountRestoreSession = null;
     _handledAccessToken = null;
@@ -354,6 +357,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (SupabaseConfig.isInitialized) {
       unawaited(FavoriteService.instance.init(forceRefresh: true));
       UserPresenceService.instance.initialize();
+      unawaited(FcmService.instance.syncDevice(signedIn: true));
     }
 
     if (isGoogle) {

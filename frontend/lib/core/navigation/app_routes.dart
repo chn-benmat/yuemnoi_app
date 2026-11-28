@@ -202,6 +202,7 @@ abstract final class AppRoutes {
             int? maxPrice;
             double? minRating;
             List<FeedCategory>? categories;
+            ValueChanged<String>? onCategoryInterest;
             if (extra is List<FeedItem>) {
               curatedItems = extra;
             } else if (extra is Map<String, dynamic>) {
@@ -212,6 +213,8 @@ abstract final class AppRoutes {
               maxPrice = extra['maxPrice'] as int?;
               minRating = extra['minRating'] as double?;
               categories = extra['categories'] as List<FeedCategory>?;
+              onCategoryInterest =
+                  extra['onCategoryInterest'] as ValueChanged<String>?;
             }
             return CustomTransitionPage<void>(
               key: state.pageKey,
@@ -223,6 +226,7 @@ abstract final class AppRoutes {
                 initialMaxPrice: maxPrice,
                 initialMinRating: minRating,
                 initialCategories: categories,
+                onCategoryInterest: onCategoryInterest,
               ),
               transitionDuration: const Duration(milliseconds: 200),
               transitionsBuilder:
@@ -1165,6 +1169,7 @@ abstract final class AppRoutes {
     int? maxPrice,
     double? minRating,
     List<FeedCategory>? categories,
+    ValueChanged<String>? onCategoryInterest,
   }) {
     try {
       return context.push<void>(
@@ -1177,6 +1182,7 @@ abstract final class AppRoutes {
           'maxPrice': ?maxPrice,
           'minRating': ?minRating,
           'categories': ?categories,
+          'onCategoryInterest': ?onCategoryInterest,
         },
       );
     } catch (_) {

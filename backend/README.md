@@ -132,7 +132,13 @@ Supabase Storage ใช้ HTTP adapter ที่ส่ง context และค�
 | Auth → Profile | Trigger สร้างแถว `profiles.profile_tb` เมื่อสร้าง Auth user และฐานข้อมูลกำหนดชื่อผู้ใช้เริ่มต้น |
 | Permissions    | grants / RLS / Storage policies ให้ตรงกับทั้ง Backend และ Flutter ที่เข้าถึงโดยตรง                    |
 
-ใช้ [migration แยก schema ตามโมดูล](../supabase/README.md) พร้อม Backend และ Flutter รุ่นนี้ โดย notification tables อยู่ใน `notifications` และ RPC คงชื่อเดิมใน `public`
+ใช้ [migration แยก schema ตามโมดูล](../supabase/README.md) พร้อม Backend และ Flutter รุ่นนี้ โดยตารางแจ้งเตือนอยู่ใน `notifications` และ RPC ที่ Go เรียกอยู่ใน `public`
+
+ติดตั้ง [migration การแจ้งเตือนของระบบ](../supabase/migrations/20261127164344_restore_os_notifications.sql) หลัง migration ของแชทและคิว ก่อนเริ่ม Backend รุ่นนี้ ตั้ง `FIREBASE_SERVICE_ACCOUNT_PATH` ให้ชี้ไปยังไฟล์ service account ของ Firebase project เดียวกับแอป หรือส่ง JSON ผ่าน `FIREBASE_SERVICE_ACCOUNT_KEY` จากระบบจัดการ secrets ฝั่งเซิร์ฟเวอร์
+
+ติดตั้ง [migration WebSocket สำหรับคิวส่งแจ้งเตือน](../supabase/migrations/20261127172624_notification_outbox_realtime.sql) เพื่อให้ Supabase Realtime ส่งสัญญาณบนช่องส่วนตัวเมื่อมีงานใหม่ Go เชื่อมต่อด้วย service-role key ที่ใช้กับ Supabase แล้วดึงงานจากคิวเพื่อส่งผ่าน FCM ตามอุปกรณ์ที่ผูกกับบัญชี เมื่อเริ่มหรือเชื่อมต่อใหม่ Go จะเก็บงานค้าง และตรวจสำรองทุก 30 วินาทีสำหรับงานตกหล่นหรืองานที่ถึงรอบส่งซ้ำ
+
+การเตือนคืนใช้ `booking_tb.end_at` และตรวจสถานะการเช่าอีกครั้งก่อนส่ง API `/api/notifications` อ่านประวัติจากบัญชีของ Bearer token ส่วน `PUT /api/notifications/devices` และ `DELETE /api/notifications/devices/:installation_id` ใช้ผูกและถอนอุปกรณ์เมื่อเข้าสู่ระบบหรือออกจากระบบ
 
 Backend ใช้ตัวแปรชื่อ `SUPABASE_SERVICE_ROLE_KEY` และ SDK / adapters ตามเวอร์ชันในตาราง ให้ใช้ server credential ที่ตรงกับ integration นี้และเก็บไว้ฝั่งเซิร์ฟเวอร์ ดู [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys) ก่อนเลือกหรือเปลี่ยนชนิดคีย์; README นี้ไม่ได้เปลี่ยน implementation ให้รองรับการย้ายคีย์แบบใหม่
 
@@ -463,4 +469,4 @@ Domain ไม่ควร import Fiber หรือ infrastructure ส่วน 
 
 ### ภาษาแสดงผลสถานที่
 
-Nominatim ขอ `namedetails=1` พร้อม `accept-language=th,en` และเลือก `name:th` เฉพาะเมื่อเป็นข้อความไทยจริง Photon ใช้ `lang=default` เพื่อชื่อท้องถิ่น ไม่บังคับอังกฤษตามภาษาคำค้น (public Photon ไม่รองรับ `lang=th`) ถ้าชื่อยังเป็นอังกฤษ ใช้ชื่อจุดนัดรับตามถนน/พื้นที่ภาษาไทยจริง หรือ “จุดนัดรับที่เลือก” เมื่อไม่มีข้อมูลชื่อไทย พร้อมคืน `original_name` ให้ UI แสดงชื่อเดิมแยกไว้ ไม่เดาคำแปลชื่อเฉพาะหรือเปลี่ยนพิกัด
+Nominatim ขอ `namedetails=1` พร้อม `accept-language=th,en` และเลือก `name:th` เฉพาะเมื่อเป็นข้อความไทยจริง Photon ใช้ `lang=default` เพื่อชื่อท้องถิ่น ผลค้นหาคงชื่อจริงของสถานที่เมื่อไม่มีชื่อไทย ส่วนการแปลงพิกัดเป็นที่อยู่ใช้ชื่อจุดนัดรับตามถนนหรือพื้นที่ภาษาไทยเมื่อจำเป็น พร้อมคืน `original_name` ให้ UI แสดงชื่อเดิม

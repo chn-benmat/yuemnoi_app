@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../cache/app_cache.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_session_validator.dart';
@@ -21,6 +22,13 @@ class AuthSession {
   static String? _accessToken;
   static String? _authorizedUserId;
   static int _validationRevision = 0;
+  static final _account = ValueNotifier<({String? userId, int revision})>((
+    userId: null,
+    revision: 0,
+  ));
+
+  static ValueListenable<({String? userId, int revision})> get accountChanges =>
+      _account;
 
   static String? get accessToken {
     if (_accessToken == null) return null;
@@ -99,7 +107,8 @@ class AuthSession {
     Session session, {
     AppSessionValidator? validator,
   }) async {
-    clear();
+    _invalidateAccess();
+    if (_account.value.userId != session.user.id) _publishAccount(null);
     final revision = _validationRevision;
     final checker = validator ?? AppSessionValidator();
     try {
@@ -112,6 +121,9 @@ class AuthSession {
       }
       _authorizedUserId = session.user.id;
       saveAccessToken(session.accessToken);
+    } catch (_) {
+      if (revision == _validationRevision) _publishAccount(null);
+      rethrow;
     } finally {
       if (validator == null) checker.close();
     }
@@ -136,12 +148,22 @@ class AuthSession {
 
   static void saveAccessToken(String token) {
     _accessToken = token;
+    _publishAccount(userId);
   }
 
   static void clear({bool purgeCache = false}) {
-    _validationRevision++;
-    final userId = _authorizedUserId;
+    final userId = _account.value.userId;
     if (purgeCache && userId != null) unawaited(AppCache.forgetUser(userId));
+    _invalidateAccess();
+    _publishAccount(null);
+  }
+
+  static void _publishAccount(String? userId) {
+    _account.value = (userId: userId, revision: _validationRevision);
+  }
+
+  static void _invalidateAccess() {
+    _validationRevision++;
     _accessToken = null;
     _authorizedUserId = null;
   }

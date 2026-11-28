@@ -14,6 +14,7 @@ import '../../bloc/profile_cubit.dart';
 import '../../bloc/profile_state.dart';
 import '../../../../../core/network/auth_session.dart';
 import '../../../../../core/services/chat_notification_service.dart';
+import '../../../../../core/services/fcm_service.dart';
 import '../../../../../core/services/favorite_service.dart';
 import '../../../../../core/utils/auth_guard.dart';
 import '../../../../auth/presentation/bloc/auth_event.dart';
@@ -272,6 +273,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _performLogout() async {
+    await FcmService.instance.unregisterCurrentDevice();
     await ChatNotificationService.instance.cancelAllNotifications();
     try {
       if (SupabaseConfig.isInitialized) {

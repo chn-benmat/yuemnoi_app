@@ -13,7 +13,6 @@ import 'core/network/supabase_client.dart';
 import 'core/services/app_orientation_service.dart';
 import 'core/services/chat_notification_service.dart';
 
-import 'core/services/rental_notification_service.dart';
 import 'core/services/chat_pin_service.dart';
 import 'core/services/favorite_service.dart';
 import 'core/services/user_presence_service.dart';
@@ -48,7 +47,6 @@ Future<void> main() async {
   unawaited(FavoriteService.instance.init(forceRefresh: true));
   if (startupAuth.state == AuthStartupState.authenticated) {
     UserPresenceService.instance.initialize();
-    unawaited(RentalNotificationService.instance.initialize());
   }
 
   await ChatNotificationService.instance.initialize();

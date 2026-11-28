@@ -9,11 +9,14 @@ import 'package:supabase_flutter/supabase_flutter.dart' show Session;
 
 import 'core/navigation/app_routes.dart';
 import 'core/navigation/item_deep_link.dart';
+import 'core/navigation/notification_navigation.dart';
 import 'core/network/auth_session.dart';
 import 'core/network/supabase_client.dart';
 import 'core/services/app_orientation_service.dart';
 import 'core/services/app_permission_service.dart';
+import 'core/services/active_conversation_tracker.dart';
 import 'core/services/chat_notification_service.dart';
+import 'core/services/fcm_service.dart';
 import 'core/services/recommendation_location_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
@@ -70,6 +73,15 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
           unawaited(_openConversation(conversationId));
         }
       };
+      final push = FcmService.instance;
+      push.isConversationVisible = (id) =>
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
+          _router.state.matchedLocation == AppRoutes.chatDetail &&
+          ActiveConversationTracker.instance.isConversationActive(id);
+      push.onOpened = (notification) =>
+          unawaited(openAppNotification(_router, notification));
+      push.flushTap();
+      unawaited(push.initialize());
       unawaited(_requestFirstLaunchPermissions());
     });
   }
@@ -92,6 +104,7 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
         }
       }
       if (!mounted) return;
+      unawaited(FcmService.instance.syncDevice());
       final requestLocation =
           prefs.getBool(_locationPermissionRequested) != true;
       await RecommendationLocationService.instance.refresh(
@@ -171,6 +184,9 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       AppOrientationService.setupOrientation();
       if (_startupPermissionsComplete) {
+        unawaited(FcmService.instance.syncDevice());
+      }
+      if (_startupPermissionsComplete) {
         unawaited(RecommendationLocationService.instance.refresh());
       }
     }
@@ -181,6 +197,8 @@ class _YuemnoiAppState extends State<YuemnoiApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_deepLinkSubscription?.cancel());
     ChatNotificationService.instance.onNotificationTapped = null;
+    FcmService.instance.onOpened = null;
+    FcmService.instance.isConversationVisible = null;
     _router.dispose();
     super.dispose();
   }

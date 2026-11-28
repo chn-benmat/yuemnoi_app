@@ -202,14 +202,6 @@ class FavoriteService {
         debugPrint('Favorite sync failed for $userId: $error');
         throw FavoriteServiceException('บันทึกรายการโปรดไม่สำเร็จ: $error');
       }
-
-      if (isFavoriteNow) {
-        await _recordEvent(
-          userId: userId,
-          itemId: itemId,
-          eventType: 'favorite',
-        );
-      }
     }
 
     if (_ownerKey != owner) return isFavoriteNow;
@@ -240,41 +232,23 @@ class FavoriteService {
   /// บันทึกการเปิดหน้ารายละเอียดให้บัญชีที่ล็อกอินเพื่อใช้ประกอบคำแนะนำ
   Future<void> recordItemView(int itemId) async {
     if (itemId <= 0) return;
-    final userId = _authenticatedUserId;
-    if (userId == null) {
+    if (_authenticatedUserId == null) {
       if (_hasUnusableSupabaseSession) {
         debugPrint(
-          'Skipped item view event: Supabase session is not valid for app usage',
+          'Skipped item view: Supabase session is not valid for app usage',
         );
       }
       return;
     }
-    await _recordEvent(userId: userId, itemId: itemId, eventType: 'view');
-  }
 
-  Future<void> _recordEvent({
-    required String userId,
-    required int itemId,
-    required String eventType,
-  }) async {
     try {
-      if (eventType == 'view') {
-        // The database function serializes concurrent opens for this user/item
-        // and only inserts when the previous view is older than 30 minutes.
-        await SupabaseConfig.client.rpc(
-          'record_item_view_event',
-          params: {'p_item_id': itemId},
-        );
-      } else {
-        await SupabaseConfig.client.from('user_item_events').insert({
-          'user_id': userId,
-          'item_id': itemId,
-          'event_type': eventType,
-        });
-      }
+      await SupabaseConfig.client.rpc(
+        'record_item_view_event',
+        params: {'p_item_id': itemId},
+      );
     } catch (error) {
-      // Event ใช้ประกอบคำแนะนำ; ไม่ให้การบันทึก event ที่ล้มเหลวขัดขวาง UI
-      debugPrint('Failed to record $eventType event for item $itemId: $error');
+      // การบันทึกประวัติที่ล้มเหลวต้องไม่ขัดขวางการเปิดหน้ารายละเอียด
+      debugPrint('Failed to record item view: $error');
     }
   }
 }

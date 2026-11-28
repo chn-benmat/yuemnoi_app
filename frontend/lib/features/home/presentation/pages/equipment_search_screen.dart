@@ -31,6 +31,7 @@ class EquipmentSearchScreen extends StatefulWidget {
     this.initialMinRating,
     this.initialCategories,
     this.homeRepository,
+    this.onCategoryInterest,
   });
 
   final List<FeedItem>? initialCuratedItems;
@@ -41,6 +42,7 @@ class EquipmentSearchScreen extends StatefulWidget {
   final double? initialMinRating;
   final List<FeedCategory>? initialCategories;
   final HomeRepository? homeRepository;
+  final ValueChanged<String>? onCategoryInterest;
 
   @override
   State<EquipmentSearchScreen> createState() => _EquipmentSearchScreenState();
@@ -273,6 +275,22 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
 
     if (trimmed.isNotEmpty) await _saveSearchQuery(trimmed);
 
+    final explicitCategory = _selectedCategoryId != 'all'
+        ? _selectedCategoryId
+        : _categories
+              .where(
+                (category) =>
+                    category.name == trimmed ||
+                    category.id == trimmed.toLowerCase() ||
+                    CategoryFilterChips.getCategoryLabel(category.id) ==
+                        trimmed,
+              )
+              .firstOrNull
+              ?.id;
+    if (explicitCategory != null) {
+      widget.onCategoryInterest?.call(explicitCategory);
+    }
+
     try {
       final results = await _repository.getNearbyItems(
         categoryId: _selectedCategoryId != 'all' ? _selectedCategoryId : null,
@@ -283,6 +301,12 @@ class _EquipmentSearchScreenState extends State<EquipmentSearchScreen> {
       );
 
       if (mounted) {
+        if (explicitCategory == null &&
+            trimmed.isNotEmpty &&
+            _lastSubmittedQuery == trimmed &&
+            results.isNotEmpty) {
+          widget.onCategoryInterest?.call(results.first.categoryId);
+        }
         setState(() {
           _searchResults = results;
           _isLoadingResults = false;
