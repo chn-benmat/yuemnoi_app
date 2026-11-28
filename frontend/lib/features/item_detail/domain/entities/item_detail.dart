@@ -77,7 +77,7 @@ class ItemDetail extends Equatable {
   final bool ownerHidden;
   final PickupLocation? pickupLocation;
 
-  bool get _isHourly => rentalType == 'รายชั่วโมง';
+  bool get _isHourly => rentalType == 'hourly' || rentalType == 'รายชั่วโมง';
   String get unitLabel => _isHourly ? 'ชั่วโมง' : 'วัน';
   int? get hourlyPrice => _isHourly ? price : null;
   int? get dailyPrice => _isHourly ? additionalDailyPrice : price;

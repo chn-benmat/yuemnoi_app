@@ -35,7 +35,7 @@ type Item struct {
 	ModerationHidden      bool      `json:"moderation_hidden"`
 	OwnerHidden           bool      `json:"owner_hidden"`
 	AccountDeletionHidden bool      `json:"account_deletion_hidden,omitempty"`
-	Type                  string    `json:"type"` // เช่น "รายวัน", "รายชั่วโมง"
+	Type                  string    `json:"type"` // "hourly" หรือ "daily" (ฐานแปลงคำพ้องเดิมให้)
 	OwnerName             string    `json:"owner_name,omitempty"`
 	IsVerified            bool      `json:"is_verified"`
 	OwnerAvatarURL        string    `json:"owner_avatar_url,omitempty"`

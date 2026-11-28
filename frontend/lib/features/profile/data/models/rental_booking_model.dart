@@ -143,7 +143,10 @@ class RentalBookingModel {
   ) {
     if (start != null && end != null) {
       final diff = end.difference(start);
-      if (b['type'] == 'รายชั่วโมง' || diff.inDays == 0) {
+      final type = b['type']?.toString().trim().toLowerCase();
+      final isHourly =
+          type == 'hourly' || type == 'hour' || type == 'รายชั่วโมง';
+      if (isHourly || diff.inDays == 0) {
         final hours = diff.inHours > 0 ? diff.inHours : 1;
         return 'เช่า $hours ชั่วโมง';
       } else {

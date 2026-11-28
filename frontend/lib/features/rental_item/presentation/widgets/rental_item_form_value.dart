@@ -28,10 +28,10 @@ class RentalItemFormValue {
   final PickupLocation? pickupLocation;
 
   String get rentalType =>
-      int.tryParse(hourlyPrice) != null ? 'รายชั่วโมง' : 'รายวัน';
+      int.tryParse(hourlyPrice) != null ? 'hourly' : 'daily';
   int? get price => int.tryParse(hourlyPrice) ?? int.tryParse(dailyPrice);
   int? get additionalDailyPrice =>
-      rentalType == 'รายชั่วโมง' ? int.tryParse(dailyPrice) : null;
+      rentalType == 'hourly' ? int.tryParse(dailyPrice) : null;
   RentalPenaltyTerms get penaltyTerms => RentalPenaltyTerms(
     damageFee: int.tryParse(damageFee) ?? 0,
     lateReturnFee: int.tryParse(lateReturnFee) ?? 0,

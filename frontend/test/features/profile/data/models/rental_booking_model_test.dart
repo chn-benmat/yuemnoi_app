@@ -116,6 +116,25 @@ void main() {
       expect(model.isOwner, true);
     });
 
+    test('fromSupabase counts canonical hourly bookings in hours', () {
+      final model = RentalBookingModel.fromSupabase(
+        booking: {
+          'id': 103,
+          'item_id': 203,
+          'start_at': '2026-09-01T08:00:00Z',
+          'end_at': '2026-09-02T10:00:00Z',
+          'type': 'hourly',
+          'status': 'active',
+          'price': 50.0,
+        },
+        itemData: {'item_name': 'Tripod'},
+        partnerName: 'Renter',
+        isOwner: true,
+      );
+
+      expect(model.duration, 'เช่า 26 ชั่วโมง');
+    });
+
     test('toEntity converts RentalBookingModel to RentalBooking entity', () {
       const model = RentalBookingModel(
         bookingId: 50,
