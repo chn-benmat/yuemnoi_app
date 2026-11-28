@@ -41,7 +41,7 @@ class PriceRequirement(GuidanceModel):
 class SelectedItem(GuidanceModel):
     id: str = Field(min_length=1)
     reason: str = Field(min_length=1)
-    evidence_fields: List[Literal["name", "category", "description", "price", "type", "status"]] = Field(
+    evidence_fields: List[Literal["name", "category", "description", "price", "type", "rates", "status"]] = Field(
         min_length=1, description="An array of individual catalog field names used as evidence for this item. Put the field names directly in the array.",
         json_schema_extra={"x-provider-description": True})
 

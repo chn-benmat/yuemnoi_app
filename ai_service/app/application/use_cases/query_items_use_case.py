@@ -33,7 +33,7 @@ class QueryItemsUseCase:
         if not items:
             return CatalogSelection([], "no_matches", [], "", [], snapshot)
         id_map = {item.id: item for item in items}
-        units = {item.type for item in items if item.type.strip()}
+        units = set().union(*(item.units for item in items))
 
         def validate(plan: SelectionPlan):
             ids = [selected.id for selected in plan.selected_items]
@@ -58,7 +58,7 @@ class QueryItemsUseCase:
                 if plan.purpose == "recommendation" and not item.is_available:
                     raise PydanticCustomError("catalog_unavailable_items_cannot_be_recommendations", "Unavailable items cannot be recommendations")
                 if requirement is not None:
-                    if item.type not in requirement.catalog_units or item.price > requirement.maximum:
+                    if not item.fits_budget(requirement.catalog_units, requirement.maximum):
                         raise PydanticCustomError("catalog_selected_item_violates_price_or_billing_unit", "Selected item violates price or billing unit")
 
         plan = await generate_reviewed(self._llm, self._policy, {
@@ -70,7 +70,7 @@ class QueryItemsUseCase:
         fresh_items = await self._item_repo.get_all_items(refresh=True)
         fresh_snapshot = catalog_snapshot(fresh_items)
         fresh_map = {item.id: item for item in fresh_items}
-        fields = {"id", "name", "category", "price", "type", "status", "description"}
+        fields = {"id", "name", "category", "price", "type", "rates", "status", "description"}
         for selected in plan.selected_items:
             if selected.id not in fresh_map or (
                 id_map[selected.id].model_dump(include=fields) != fresh_map[selected.id].model_dump(include=fields)
@@ -93,7 +93,7 @@ class QueryItemsUseCase:
         fresh = await self._item_repo.get_all_items(refresh=True)
         snapshot = catalog_snapshot(fresh)
         fresh_map = {item.id: item for item in fresh}
-        fields = {"id", "name", "category", "price", "type", "status", "description"}
+        fields = {"id", "name", "category", "price", "type", "rates", "status", "description"}
         for item in selection.items:
             if item.id not in fresh_map or item.model_dump(include=fields) != fresh_map[item.id].model_dump(include=fields):
                 raise GuidanceGenerationError("catalog_changed")
@@ -125,7 +125,7 @@ class QueryItemsUseCase:
                 raise PydanticCustomError("catalog_budget_ceiling_changed", "Budget ceiling changed")
             if decision.budget_unit is None or requirement.user_unit != decision.budget_unit:
                 raise PydanticCustomError("catalog_unknown_or_changed_budget_period", "Unknown or changed budget period")
-            if not set(requirement.catalog_units) <= {item.type for item in items}:
+            if not set(requirement.catalog_units) <= set().union(*(item.units for item in items)):
                 raise PydanticCustomError("catalog_unknown_catalog_period", "Unknown catalog period")
             if set(requirement.catalog_units) != {decision.budget_unit}:
                 raise PydanticCustomError("catalog_a_price_period_conversion_requires_authoritative_conversion_evidence", "A price period conversion requires authoritative conversion evidence")
@@ -135,7 +135,7 @@ class QueryItemsUseCase:
             item = id_map[item_id]
             if plan.purpose == "recommendation" and not item.is_available:
                 raise PydanticCustomError("catalog_unavailable_recommendation", "Unavailable recommendation")
-            if requirement and (item.type not in requirement.catalog_units or item.price > requirement.maximum):
+            if requirement and not item.fits_budget(requirement.catalog_units, requirement.maximum):
                 raise PydanticCustomError("catalog_budget_violation", "Budget violation")
 
     def selection_from_snapshot(self, plan: SelectionPlan, decision, items: List[Item]):

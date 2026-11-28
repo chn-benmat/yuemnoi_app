@@ -39,6 +39,8 @@ def test_catalog_reads_the_rates_computed_by_the_database():
 
     # รายชั่วโมงเป็นเรตหลักเมื่อมี ไม่งั้นใช้รายวัน เหมือนการ์ดในแอป
     assert [(item.price, item.type) for item in items] == [(80, "hourly"), (400, "daily")]
+    # เก็บทุกเรตไว้ เพื่อให้งบรายวันเทียบกับราคารายวันได้แม้เรตหลักเป็นรายชั่วโมง
+    assert [item.rates for item in items] == [{"hourly": 80, "daily": 300}, {"daily": 400}]
     assert {"hourly_rate", "daily_rate"} <= set(seen["select"])
     assert not {"price", "type"} & set(seen["select"])
 

@@ -56,8 +56,9 @@ class SupabaseRepository(ItemRepositoryInterface):
         }
 
     @staticmethod
-    def _primary_rate(row: dict) -> tuple[float, str]:
-        """ฐานคำนวณ hourly_rate/daily_rate ไว้แล้ว เรตหลักคือรายชั่วโมงถ้ามี ไม่งั้นรายวัน"""
+    def _rates(row: dict) -> dict[str, float]:
+        """อ่านทุกเรตที่ประกาศไว้ เรียงรายชั่วโมงก่อนรายวัน ตัวแรกจึงเป็นเรตหลักเหมือนการ์ดในแอป"""
+        rates: dict[str, float] = {}
         for column, unit in (("hourly_rate", "hourly"), ("daily_rate", "daily")):
             raw = row.get(column)
             if raw is None:
@@ -70,11 +71,14 @@ class SupabaseRepository(ItemRepositoryInterface):
                 raise DatabaseException("Catalog price is invalid") from None
             if not isfinite(price) or price < 0:
                 raise DatabaseException("Catalog price is invalid")
-            return price, unit
-        raise DatabaseException("Catalog pricing data is incomplete")
+            rates[unit] = price
+        if not rates:
+            raise DatabaseException("Catalog pricing data is incomplete")
+        return rates
 
     def _map_row_to_item(self, row: dict) -> Item:
-        price, unit = self._primary_rate(row)
+        rates = self._rates(row)
+        unit, price = next(iter(rates.items()))
         raw_images = row.get("item_image_url")
         image_urls: List[str] = []
         if isinstance(raw_images, list):
@@ -95,6 +99,7 @@ class SupabaseRepository(ItemRepositoryInterface):
             category=row.get("category") or "",
             price=price,
             type=unit,
+            rates=rates,
             status=row.get("status") or "unknown",
             image_urls=image_urls,
             description=row.get("description") or "",

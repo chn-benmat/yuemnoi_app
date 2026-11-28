@@ -241,7 +241,8 @@ class PlanChatTurnUseCase:
         price_groups = {}
         for item in items:
             if item.is_available:
-                price_groups.setdefault((item.category, item.type), []).append(item.price)
+                for unit, rate in item.rates.items():
+                    price_groups.setdefault((item.category, unit), []).append(rate)
         conversation = conversation_context(request.history, self._limits, include_source_ids=True)
         planning_request=request_evidence(request,self._limits)
         for message,view in zip(conversation['messages'],planning_request['history']):
@@ -289,7 +290,7 @@ class PlanChatTurnUseCase:
         }
         planning_catalog_summary = payload['catalog_summary']
         payload = compact_planning_input(payload)
-        units=tuple(sorted({item.type for item in items}))
+        units=tuple(sorted(set().union(*(item.units for item in items))))
         period_schema=create_model('CatalogBudgetPeriod',__base__=NativeBudgetPeriod,
             catalog_unit=(Literal[units] | None if units else type(None),NativeBudgetPeriod.model_fields['catalog_unit']))
         # รหัสหลักฐานมาจากข้อความจริง ป้องกันนำรหัสสินค้าหรือบทความมาอ้างเป็นคำตอบผู้ใช้
@@ -372,9 +373,9 @@ class PlanChatTurnUseCase:
             candidates = category_items
             if decision.catalog_operation == "selection":
                 candidates = [i for i in candidates if i.is_available]
-            price_filter_applied = decision.catalog_operation == 'selection' and decision.budget_max is not None and decision.budget_unit in {i.type for i in candidates}
+            price_filter_applied = decision.catalog_operation == 'selection' and decision.budget_max is not None and decision.budget_unit in set().union(*(i.units for i in candidates))
             if price_filter_applied:
-                candidates = [i for i in candidates if i.type == decision.budget_unit and i.price <= decision.budget_max]
+                candidates = [i for i in candidates if i.fits_budget([decision.budget_unit], decision.budget_max)]
             candidate_ids = {i.id for i in candidates}
             evidence_catalog = presented_catalog(catalog_snapshot(fresh_items), fresh_items, self._interpretation['catalog_presentation'])
             web = await self._search.search(decision.search_query, max_results=self._policy.max_items) if decision.needs_external_search else []
@@ -406,8 +407,8 @@ class PlanChatTurnUseCase:
                     render_catalog_text(reply, fresh_items, presentation=self._interpretation['catalog_presentation'])
 
             allowed_purposes = ["recommendation"] if decision.catalog_operation == "selection" else ["inspection"]
-            established_unit = decision.budget_unit if decision.catalog_operation == 'selection' and decision.budget_max is not None and decision.budget_unit in {
-                item.type for item in fresh_items} else None
+            established_unit = decision.budget_unit if decision.catalog_operation == 'selection' and decision.budget_max is not None and decision.budget_unit in set().union(
+                *(item.units for item in fresh_items)) else None
             price_schema = create_model("EstablishedPriceRequirement", __base__=PriceRequirement,
                 maximum=(float, Field(ge=decision.budget_max, le=decision.budget_max)), user_unit=(Literal[established_unit], ...),
                 catalog_units=(list[Literal[established_unit]], Field(min_length=1))) if established_unit else PriceRequirement
@@ -625,7 +626,7 @@ class PlanChatTurnUseCase:
                 "allowed_search_ids": list(web_map),
                 "price_contract": {"ceiling": decision.budget_max if decision.catalog_operation == 'selection' else None,
                                    "established_period": decision.budget_unit if decision.catalog_operation == 'selection' else None,
-                                   "catalog_periods": sorted({i.type for i in fresh_items}),
+                                   "catalog_periods": sorted(set().union(*(i.units for i in fresh_items))),
                                    "permitted_catalog_periods": [established_unit] if established_unit else [],
                                    "conversion_allowed": False},
                 "understanding": understanding, "catalog": compact_catalog(evidence_catalog),
