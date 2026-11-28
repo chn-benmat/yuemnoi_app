@@ -41,6 +41,20 @@ func TestSearchPrefersActualThaiNameDetails(t *testing.T) {
 	}
 }
 
+func TestSearchRejectsOtherHouseNumbersAndKeepsTheMatchedName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`[
+			{"name":"Other address","display_name":"991/2, ถนนพระรามที่ 1","lat":"13.74","lon":"100.53","address":{"house_number":"991/2"}},
+			{"name":"Siam Paragon","display_name":"Siam Paragon, 991, ถนนพระรามที่ 1","lat":"13.7467785","lon":"100.534954","address":{"house_number":"991","road":"ถนนพระรามที่ 1"}}
+		]`))
+	}))
+	defer server.Close()
+	places, err := geocoding.NewClient(server.URL, server.Client()).Search(context.Background(), "991 ถนนพระรามที่ 1")
+	if err != nil || len(places) != 1 || places[0].Name != "Siam Paragon" || places[0].Longitude != 100.534954 {
+		t.Fatalf("expected the named place at the exact address: %v err=%v", places, err)
+	}
+}
+
 func TestSearchRealPlacesCachesAndSharesReverseQuota(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

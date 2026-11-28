@@ -4,8 +4,57 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:frontend/core/services/location_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/booking/presentation/pages/location_picker_map_page.dart';
+import 'package:geolocator/geolocator.dart';
 
 void main() {
+  testWidgets(
+    'pasting coordinates keeps the exact pin even when an earlier GPS lookup completes',
+    (tester) async {
+      final service = _SearchService();
+      await tester.pumpWidget(
+        MaterialApp(home: LocationPickerMapPage(locationService: service)),
+      );
+      final search = find.descendant(
+        of: find.byKey(const ValueKey('pickup-location-search')),
+        matching: find.byType(TextField),
+      );
+      await tester.tap(find.byTooltip('ตำแหน่งปัจจุบันของคุณ'));
+      await tester.tap(search);
+      await tester.enterText(
+        search,
+        'https://www.google.com/maps/search/?api=1&query=13.7467785%2C100.534954',
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(service.suggestionQueries, isEmpty);
+      expect(service.queries, isEmpty);
+      await tester.tap(find.text('ปักหมุดตามพิกัด'));
+      service.currentPosition.complete(
+        Position(
+          latitude: 13.71,
+          longitude: 100.43,
+          timestamp: DateTime(2026),
+          accuracy: 2,
+          altitude: 0,
+          altitudeAccuracy: 0,
+          heading: 0,
+          headingAccuracy: 0,
+          speed: 0,
+          speedAccuracy: 0,
+        ),
+      );
+      await tester.pump();
+      final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+      expect(map.mapController!.camera.center.latitude, 13.7467785);
+      expect(map.mapController!.camera.center.longitude, 100.534954);
+      await tester.pumpAndSettle();
+      final tip = tester.getRect(
+        find.byKey(const ValueKey('pickup-map-pin-tip')),
+      );
+      expect(tip.bottom, tester.getCenter(find.byType(FlutterMap)).dy);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   testWidgets(
     'Thai meeting point title is shown while keeping the upstream name separate',
     (tester) async {
@@ -73,6 +122,7 @@ void main() {
         find.textContaining('ถนน/พื้นที่ (ยังไม่พบเลขบ้าน)'),
         findsOneWidget,
       );
+      expect(find.text('ค้นหาใน Google Maps'), findsOneWidget);
       await tester.tap(find.text('ถนนพุดตานใน'));
       await tester.pump();
       expect(
@@ -206,6 +256,11 @@ void main() {
         reason:
             'Reverse geocoding must not overwrite a selected search result.',
       );
+      tester.view.resetViewInsets();
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.add_rounded));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text(_park.displayName), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
@@ -325,6 +380,11 @@ const _park = LocationSearchResult(
 );
 
 class _SearchService extends LocationService {
+  final currentPosition = Completer<Position?>();
+
+  @override
+  Future<Position?> getCurrentPosition() => currentPosition.future;
+
   final suggestionQueries = <String>[];
   final suggestions = <Completer<List<LocationSearchResult>>>[];
   @override

@@ -72,11 +72,12 @@ func (p osmPlace) place() (domain.Place, error) {
 		originalName = p.Name
 		displayName = strings.Replace(displayName, p.Name, name, 1)
 	}
-	return preferThaiPlace(domain.Place{Name: name, OriginalName: originalName, DisplayName: displayName, Latitude: lat, Longitude: lon, Type: p.Type}, p.Address.Road, p.Address.Neighbourhood, p.Address.Quarter, p.Address.Suburb, p.Address.City), nil
+	return domain.Place{Name: name, OriginalName: originalName, DisplayName: displayName, Latitude: lat, Longitude: lon, Type: p.Type}, nil
 }
 
 func (c *Client) Search(ctx context.Context, query string) ([]domain.Place, error) {
-	raw, err := c.fetch(ctx, "search", url.Values{"q": {normalizePlaceQuery(query)}, "countrycodes": {"th"}, "limit": {"10"}})
+	query, number, _ := normalizePlaceQuery(query)
+	raw, err := c.fetch(ctx, "search", url.Values{"q": {query}, "countrycodes": {"th"}, "limit": {"10"}})
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +87,7 @@ func (c *Client) Search(ctx context.Context, query string) ([]domain.Place, erro
 	}
 	places := make([]domain.Place, 0, len(source))
 	for _, p := range source {
-		number, _ := splitHouseQuery(normalizePlaceQuery(query))
-		if number != "" && !strings.HasPrefix(p.Address.HouseNumber, number) {
+		if number != "" && !hasHouseNumber(p.Address.HouseNumber, number) {
 			continue
 		}
 		place, err := p.place()
@@ -108,7 +108,11 @@ func (c *Client) Reverse(ctx context.Context, lat, lon float64) (domain.Place, e
 	if err := json.Unmarshal(raw, &source); err != nil {
 		return domain.Place{}, err
 	}
-	return source.place()
+	place, err := source.place()
+	if err != nil {
+		return domain.Place{}, err
+	}
+	return preferThaiPlace(place, source.Address.Road, source.Address.Neighbourhood, source.Address.Quarter, source.Address.Suburb, source.Address.City), nil
 }
 
 func (c *Client) fetch(ctx context.Context, path string, params url.Values) ([]byte, error) {

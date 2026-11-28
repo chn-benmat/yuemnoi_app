@@ -135,18 +135,16 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
 
   void _onSearchFocusChanged() {
     if (!mounted) return;
+    if (_searchFocusNode.hasFocus) {
+      _scheduleSuggestions();
+      return;
+    }
+    _searchDebounce?.cancel();
+    ++_searchVersion;
     setState(() {
-      if (_searchFocusNode.hasFocus) {
-        _searchMessage = _searchController.text.trim().isEmpty
-            ? 'พิมพ์ชื่อสถานที่หรือที่อยู่อย่างน้อย 2 ตัวอักษร'
-            : _searchMessage;
-      } else {
-        _searchDebounce?.cancel();
-        ++_searchVersion;
-        _searchResults = [];
-        _searchMessage = null;
-        _isSearching = false;
-      }
+      _searchResults = [];
+      _searchMessage = null;
+      _isSearching = false;
     });
   }
 
@@ -166,20 +164,21 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
   void _onSearchQueryChanged() {
     if (_searchController.text == _lastSearchText) return;
     _lastSearchText = _searchController.text;
+    if (mounted && _searchFocusNode.hasFocus) _scheduleSuggestions();
+  }
+
+  void _scheduleSuggestions() {
     _searchDebounce?.cancel();
     ++_searchVersion;
-    if (!mounted) return;
     final query = _searchController.text.trim();
-    final canSuggest =
-        _searchFocusNode.hasFocus &&
-        query.runes.length >= 2 &&
-        query.runes.length <= 200;
+    if (_showCoordinateResult(query)) return;
+    final canSuggest = query.runes.length >= 2 && query.runes.length <= 200;
     setState(() {
       _searchResults = [];
       _isSearching = canSuggest;
       _searchMessage = canSuggest
           ? null
-          : 'พิมพ์ชื่อสถานที่หรือที่อยู่อย่างน้อย 2 ตัวอักษร';
+          : 'พิมพ์ชื่อสถานที่ ที่อยู่ หรือวางพิกัดละติจูด, ลองจิจูด';
     });
     if (canSuggest) {
       _searchDebounce = Timer(
@@ -189,14 +188,29 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
     }
   }
 
+  bool _showCoordinateResult(String query) {
+    final pin = LocationService.pinFromQuery(query);
+    if (pin == null) return false;
+    setState(() {
+      _searchResults = [pin];
+      _searchMessage = null;
+      _isSearching = false;
+    });
+    return true;
+  }
+
   Future<void> _submitSearch([String? _]) => _loadSearch();
 
   Future<void> _loadSearch({bool suggestions = false}) async {
     _searchDebounce?.cancel();
     final query = _searchController.text.trim();
     final version = ++_searchVersion;
+    if (_showCoordinateResult(query)) return;
     if (query.runes.length < 2 || query.runes.length > 200) {
-      setState(() => _searchMessage = 'กรุณาระบุคำค้นหา 2–200 ตัวอักษร');
+      setState(() {
+        _isSearching = false;
+        _searchMessage = 'กรุณาระบุคำค้นหา 2–200 ตัวอักษร';
+      });
       return;
     }
     setState(() {
@@ -225,6 +239,18 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
         _searchMessage =
             'ค้นหาสถานที่ไม่ได้ ลองแก้คำค้นหรือกดค้นหาบนคีย์บอร์ดอีกครั้ง';
       });
+    }
+  }
+
+  Future<void> _searchInGoogleMaps() async {
+    final opened = await LocationService.searchInExternalMaps(
+      _searchController.text,
+    );
+    if (!opened && mounted) {
+      showAppPopup(
+        context,
+        content: const Text('ไม่สามารถเปิด Google Maps ได้ในขณะนี้'),
+      );
     }
   }
 
@@ -261,26 +287,33 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
     });
   }
 
-  void _animateMapTo(
-    LatLng target, {
-    double? zoom,
-    bool updateLocationName = true,
-  }) {
-    final targetZoom = zoom ?? _currentZoom;
-    _pinAnimController.forward().then((_) => _pinAnimController.reverse());
-    _mapController.move(target, targetZoom);
+  void _animateMapTo(LatLng target, {double? zoom}) {
+    _pinAnimController.forward().then((_) {
+      if (mounted) _pinAnimController.reverse();
+    });
+    _mapController.move(target, zoom ?? _currentZoom);
     setState(() {
       _currentCenter = target;
-      _currentZoom = targetZoom;
+      _currentZoom = _mapController.camera.zoom;
     });
-    _triggerReverseGeocode(target, updateLocationName: updateLocationName);
+    _triggerReverseGeocode(target, updateLocationName: true);
+  }
+
+  void _zoomBy(double delta) {
+    _mapController.move(
+      _currentCenter,
+      (_currentZoom + delta).clamp(4.0, 20.0),
+    );
+    _currentZoom = _mapController.camera.zoom;
   }
 
   Future<void> _handleGoToCurrentLocation() async {
+    final version = _geocodeVersion;
     setState(() => _isLocatingUser = true);
     final pos = await _locationService.getCurrentPosition();
     if (!mounted) return;
     setState(() => _isLocatingUser = false);
+    if (version != _geocodeVersion) return;
 
     if (pos != null) {
       final userLatLng = LatLng(pos.latitude, pos.longitude);
@@ -337,6 +370,12 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
 
   @override
   Widget build(BuildContext context) {
+    final query = _searchController.text.trim();
+    final queryLength = query.runes.length;
+    final canSearchExternally =
+        queryLength >= 2 &&
+        queryLength <= 200 &&
+        LocationService.pinFromQuery(query) == null;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -371,8 +410,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                       _isSearching) {
                     _closeSearch();
                   }
-                  _currentCenter = camera.center;
                   _currentZoom = camera.zoom;
+                  if (camera.center == _currentCenter) return;
+                  _currentCenter = camera.center;
                   _triggerReverseGeocode(
                     camera.center,
                     updateLocationName: true,
@@ -402,8 +442,9 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
 
           // 2. หมุดปักกึ่งกลางแผนที่ (Center Marker Pin)
           Center(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 38), // ชดเชยความสูงของหมุด
+            child: FractionalTranslation(
+              // ปลายหมุดต้องตรงกับพิกัดกึ่งกลางแผนที่แม้ความสูงของข้อความจะเปลี่ยน
+              translation: const Offset(0, -0.5),
               child: AnimatedBuilder(
                 animation: _pinJumpAnimation,
                 builder: (context, child) {
@@ -477,19 +518,12 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                       ),
                     ),
                     Container(
+                      key: const ValueKey('pickup-map-pin-tip'),
                       width: 4,
                       height: 6,
                       decoration: BoxDecoration(
                         color: AppColors.primaryColor,
                         borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    Container(
-                      width: 10,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(5),
                       ),
                     ),
                   ],
@@ -619,22 +653,45 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                                   ),
                                 ),
                               )
-                            : _searchMessage != null
-                            ? Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Text(_searchMessage!),
-                              )
                             : ListView.separated(
                                 shrinkWrap: true,
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 6,
                                 ),
-                                itemCount: _searchResults.length,
+                                itemCount:
+                                    (_searchMessage == null
+                                        ? _searchResults.length
+                                        : 1) +
+                                    (canSearchExternally ? 1 : 0),
                                 separatorBuilder: (_, _) => const Divider(
                                   height: 1,
                                   color: Color(0xFFF1F5F9),
                                 ),
                                 itemBuilder: (context, index) {
+                                  if (canSearchExternally &&
+                                      index ==
+                                          (_searchMessage == null
+                                              ? _searchResults.length
+                                              : 1)) {
+                                    return ListTile(
+                                      dense: true,
+                                      leading: const Icon(
+                                        Icons.open_in_new,
+                                        color: AppColors.primaryColor,
+                                      ),
+                                      title: const Text('ค้นหาใน Google Maps'),
+                                      subtitle: const Text(
+                                        'คัดลอกพิกัดแล้วนำมาวางในช่องค้นหา',
+                                      ),
+                                      onTap: _searchInGoogleMaps,
+                                    );
+                                  }
+                                  if (_searchMessage != null) {
+                                    return Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Text(_searchMessage!),
+                                    );
+                                  }
                                   final item = _searchResults[index];
                                   return ListTile(
                                     dense: true,
@@ -665,7 +722,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                                       item.isApproximate
                                           ? 'ถนน/พื้นที่ (ยังไม่พบเลขบ้าน)\n${item.displayName}'
                                           : item.displayName,
-                                      maxLines: item.isApproximate ? 3 : 1,
+                                      maxLines: item.isApproximate ? 3 : 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontFamily: AppTextStyles.fontFamily,
@@ -792,13 +849,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                     foregroundColor: const Color(0xFF334155),
                     elevation: 4,
                     tooltip: 'ซูมเข้า',
-                    onPressed: () {
-                      _animateMapTo(
-                        _currentCenter,
-                        zoom: _currentZoom + 1,
-                        updateLocationName: false,
-                      );
-                    },
+                    onPressed: () => _zoomBy(1),
                     child: const Icon(Icons.add_rounded, size: 22),
                   ),
                   const SizedBox(height: 6),
@@ -810,13 +861,7 @@ class _LocationPickerMapPageState extends State<LocationPickerMapPage>
                     foregroundColor: const Color(0xFF334155),
                     elevation: 4,
                     tooltip: 'ซูมออก',
-                    onPressed: () {
-                      _animateMapTo(
-                        _currentCenter,
-                        zoom: _currentZoom - 1,
-                        updateLocationName: false,
-                      );
-                    },
+                    onPressed: () => _zoomBy(-1),
                     child: const Icon(Icons.remove_rounded, size: 22),
                   ),
                 ],

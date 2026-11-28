@@ -329,24 +329,67 @@ class LocationService {
 
   /// แปลงพิกัดที่ผู้ใช้เลือกผ่านโควตาเดียวกับการค้นหา
   Future<LocationSearchResult?> reverseGeocode(double lat, double lon) async {
-    for (final landmark in popularLandmarks) {
-      if ((landmark.latitude - lat).abs() < 0.001 &&
-          (landmark.longitude - lon).abs() < 0.001) {
-        return landmark;
-      }
-    }
     try {
       final response = await _apiClient.get(
         '/api/locations/reverse',
         queryParameters: {'lat': lat, 'lon': lon},
       );
-      if (response.statusCode == 200) return _parsePlace(response.data);
+      if (response.statusCode == 200) {
+        final address = _parsePlace(response.data);
+        // ผลค้นหาที่อยู่เป็นของสิ่งที่อยู่ใกล้ที่สุด พิกัดยังใช้จุดที่ผู้ใช้เลือก
+        return LocationSearchResult(
+          name: address.name,
+          displayName: address.displayName,
+          latitude: lat,
+          longitude: lon,
+          type: address.type,
+          originalName: address.originalName,
+        );
+      }
     } catch (_) {
       // ยังยืนยันพิกัดที่เลือกได้เมื่อบริการที่อยู่ไม่พร้อม
     }
     return LocationSearchResult(
       name: 'พิกัดที่ปักหมุด',
       displayName: '${lat.toStringAsFixed(5)}, ${lon.toStringAsFixed(5)}',
+      latitude: lat,
+      longitude: lon,
+    );
+  }
+
+  static final _coordinatePair = RegExp(
+    r'^([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)$',
+  );
+
+  static LocationSearchResult? pinFromQuery(String query) {
+    var text = query.trim();
+    final uri = Uri.tryParse(text);
+    if (uri != null &&
+        uri.scheme == 'https' &&
+        const {
+          'www.google.com',
+          'google.com',
+          'maps.google.com',
+        }.contains(uri.host) &&
+        (uri.host == 'maps.google.com' ||
+            uri.path == '/maps' ||
+            uri.path.startsWith('/maps/'))) {
+      // ใช้เฉพาะพิกัดหมุดในคำค้น ละเว้นตำแหน่งกล้องของแผนที่
+      try {
+        final parameters = uri.queryParameters;
+        text = (parameters['query'] ?? parameters['q'] ?? '').trim();
+      } on FormatException {
+        return null;
+      }
+    }
+    final match = _coordinatePair.firstMatch(text);
+    if (match == null) return null;
+    final lat = double.parse(match[1]!);
+    final lon = double.parse(match[2]!);
+    if (lat.abs() > 90 || lon.abs() > 180) return null;
+    return LocationSearchResult(
+      name: 'ปักหมุดตามพิกัด',
+      displayName: '$lat, $lon',
       latitude: lat,
       longitude: lon,
     );
@@ -409,24 +452,24 @@ class LocationService {
   }
 
   /// เปิดตำแหน่งในแอป Google Maps หรือเบราว์เซอร์ภายนอก
-  static Uri buildGoogleMapsUri(double latitude, double longitude) {
-    return Uri.https('www.google.com', '/maps/search/', {
-      'api': '1',
-      'query': '$latitude,$longitude',
-    });
-  }
+  static Uri buildGoogleMapsUri(double latitude, double longitude) =>
+      _googleMapsSearchUri('$latitude,$longitude');
 
-  static Future<bool> openInExternalMaps(
-    double latitude,
-    double longitude,
-  ) async {
-    final googleMapsUrl = buildGoogleMapsUri(latitude, longitude);
+  static Uri _googleMapsSearchUri(String query) => Uri.https(
+    'www.google.com',
+    '/maps/search/',
+    {'api': '1', 'query': query},
+  );
 
+  static Future<bool> openInExternalMaps(double latitude, double longitude) =>
+      _openMapUri(buildGoogleMapsUri(latitude, longitude));
+
+  static Future<bool> searchInExternalMaps(String query) =>
+      _openMapUri(_googleMapsSearchUri(query.trim()));
+
+  static Future<bool> _openMapUri(Uri uri) async {
     try {
-      return await launchUrl(
-        googleMapsUrl,
-        mode: LaunchMode.externalApplication,
-      );
+      return await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {
       debugPrint('Cannot launch map: $e');
       return false;

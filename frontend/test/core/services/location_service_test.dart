@@ -164,6 +164,67 @@ void main() {
     expect(uri.queryParameters, isNot(contains('query_place_id')));
   });
 
+  test('interprets explicit coordinates and handles malformed map URLs', () {
+    expect(
+      LocationService.pinFromQuery(' 13.7467785, 100.534954 ')?.latitude,
+      13.7467785,
+    );
+    expect(
+      LocationService.pinFromQuery(
+        'https://www.google.com/maps?q=13.7467785%2C100.534954',
+      )?.longitude,
+      100.534954,
+    );
+    expect(
+      LocationService.pinFromQuery(
+        'https://www.google.com/maps/search/?query=%FF',
+      ),
+      isNull,
+    );
+    expect(
+      LocationService.pinFromQuery(
+        'https://www.google.com/maps/@13.7467785,100.534954,17z',
+      ),
+      isNull,
+    );
+    expect(LocationService.pinFromQuery('13.7467785, 181'), isNull);
+  });
+
+  test(
+    'reverse geocoding near a landmark uses the actual pinned coordinates',
+    () async {
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            expect(options.path, '/api/locations/reverse');
+            expect(options.queryParameters, {'lat': 13.7118, 'lon': 100.4343});
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'name': 'ทางเข้าด้านข้าง',
+                  'display_name': 'ทางเข้าด้านข้าง ถนนเพชรเกษม',
+                  'latitude': 13.712,
+                  'longitude': 100.434,
+                },
+              ),
+            );
+          },
+        ),
+      );
+      final client = DioApiClient(dio: dio, appSecret: '');
+      addTearDown(client.close);
+      final result = await LocationService(
+        apiClient: client,
+      ).reverseGeocode(13.7118, 100.4343);
+      expect(result?.name, 'ทางเข้าด้านข้าง');
+      expect(result?.latitude, 13.7118);
+      expect(result?.longitude, 100.4343);
+    },
+  );
+
   test('known locations resolve to their own landmark coordinates', () {
     for (final landmark in LocationService.popularLandmarks) {
       final coordinates = LocationService.resolveCoordinates(
