@@ -133,7 +133,6 @@ void main() {
         find.byType(BookingLocationCard),
       );
       expect(location.location, 'สถานที่เดิม');
-      expect(location.isEditable, isFalse);
       await tester.tap(
         find.byKey(const ValueKey('submit-booking-request-button')),
       );

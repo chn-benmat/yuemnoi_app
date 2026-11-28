@@ -11,7 +11,7 @@ import 'package:frontend/core/services/booking_confirmation_tracker.dart';
 import 'package:frontend/features/booking/domain/entities/booking_request_model.dart';
 import 'package:frontend/features/chat/domain/entities/chat_message.dart';
 import 'package:frontend/features/chat/presentation/widgets/booking_request_bubble_card.dart';
-import 'package:frontend/features/profile/presentation/pages/rentals/rental_tracking_map_page.dart';
+import 'package:frontend/features/profile/presentation/pages/rentals/rental_handover_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -173,7 +173,7 @@ void main() {
       await tester.tap(pickupButton);
       await tester.tap(pickupButton);
       await tester.pump();
-      final pickupPage = find.byType(RentalTrackingMapPage);
+      final pickupPage = find.byType(RentalHandoverPage);
       expect(pickupPage, findsNothing);
 
       response.complete({'id': 36, 'status': status});
@@ -184,7 +184,7 @@ void main() {
         expect(pickupPage, findsNothing);
       } else {
         expect(pickupPage, findsOneWidget);
-        expect(tester.widget<RentalTrackingMapPage>(pickupPage).bookingId, 36);
+        expect(tester.widget<RentalHandoverPage>(pickupPage).bookingId, 36);
         Navigator.of(tester.element(pickupPage)).pop();
         await tester.pumpAndSettle();
         expect(pickupPage, findsNothing);
@@ -344,7 +344,7 @@ void main() {
       response.completeError(StateError('Temporary request failure'));
       await tester.pumpAndSettle();
       expect(tester.widget<ElevatedButton>(pickupButton).onPressed, isNull);
-      expect(find.byType(RentalTrackingMapPage), findsNothing);
+      expect(find.byType(RentalHandoverPage), findsNothing);
       expect(find.text('ยืนยันคำขอเช่าเรียบร้อยแล้ว'), findsOneWidget);
       expect(find.text('ตรวจสอบสถานะการเช่าไม่สำเร็จ'), findsOneWidget);
 

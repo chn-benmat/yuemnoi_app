@@ -1,84 +1,27 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/rental_return/data/datasources/rental_return_remote_data_source.dart';
 import 'package:frontend/features/rental_return/data/repositories/rental_return_repository_impl.dart';
 import 'package:frontend/features/rental_return/presentation/pages/rental_return_page.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:mocktail/mocktail.dart';
 
 class _Api extends Mock implements ApiClient {}
 
-const _initialPosition = LatLng(13.753, 100.481);
-const _returnPoint = LatLng(13.7115884, 100.4341077);
-const _navigationTooltip = 'นำทางด้วย Google Maps';
 const _confirmLabel = 'ยืนยันรับคืนสินค้า';
 const _returnLocation = {
   'pickup_location': 'ซีคอน บางแค',
-  'pickup_note': 'หน้าทางเข้าชั้น G',
+  'pickup_address': 'ถนนเพชรเกษม บางแค',
   'latitude': 13.7115884,
   'longitude': '100.4341077',
 };
 
-class _DeviceLocation extends GeolocatorPlatform {
-  final positions = StreamController<Position>.broadcast();
-
-  Position toPosition(LatLng point) => Position(
-    latitude: point.latitude,
-    longitude: point.longitude,
-    timestamp: DateTime(2026, 11, 25),
-    accuracy: 5,
-    altitude: 0,
-    altitudeAccuracy: 0,
-    heading: 0,
-    headingAccuracy: 0,
-    speed: 0,
-    speedAccuracy: 0,
-  );
-
-  @override
-  Future<bool> isLocationServiceEnabled() async => true;
-
-  @override
-  Future<LocationPermission> checkPermission() async =>
-      LocationPermission.whileInUse;
-
-  @override
-  Future<Position?> getLastKnownPosition({
-    bool forceLocationManager = false,
-  }) async => toPosition(_initialPosition);
-
-  @override
-  Future<Position> getCurrentPosition({
-    LocationSettings? locationSettings,
-  }) async => toPosition(_initialPosition);
-
-  @override
-  Stream<Position> getPositionStream({LocationSettings? locationSettings}) =>
-      positions.stream;
-}
-
 void main() {
   setUpAll(() => initializeDateFormatting('th'));
-  late _DeviceLocation location;
-  setUp(() {
-    final original = GeolocatorPlatform.instance;
-    location = _DeviceLocation();
-    GeolocatorPlatform.instance = location;
-    addTearDown(() async {
-      GeolocatorPlatform.instance = original;
-      await location.positions.close();
-    });
-  });
-
   for (final isLender in [false, true]) {
     testWidgets(
-      '${isLender ? 'lender' : 'renter'} sees both pins as soon as the return page opens',
+      '${isLender ? 'lender' : 'renter'} sees return details and the appropriate actions',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = const Size(390, 700);
@@ -93,41 +36,15 @@ void main() {
           bookingStatus: () => bookingStatus,
         );
 
-        expect(find.text('เส้นทางคืนสินค้า'), findsOneWidget);
-        expect(find.text('หน้าทางเข้าชั้น G'), findsOneWidget);
-        expect(find.byTooltip(_navigationTooltip), findsOneWidget);
-        expect(find.byType(FlutterMap), findsOneWidget);
-        final mapBounds = tester.getRect(find.byType(FlutterMap));
-        expect(mapBounds.left, 0);
-        expect(mapBounds.width, 390);
-        expect(
-          mapBounds.contains(tester.getCenter(find.text('เส้นทางคืนสินค้า'))),
-          isTrue,
-        );
+        expect(find.text('คืนสินค้า'), findsOneWidget);
+        expect(find.text('ถนนเพชรเกษม บางแค'), findsOneWidget);
+        expect(find.text('ซีคอน บางแค'), findsOneWidget);
         expect(
           tester.getTopLeft(find.textContaining('กำหนดคืน')).dy,
-          greaterThan(mapBounds.bottom),
-        );
-        expect(find.text('ตัวคุณ'), findsOneWidget);
-        expect(find.text('ซีคอน บางแค'), findsWidgets);
-        expect(_pins(tester), containsAll([_initialPosition, _returnPoint]));
-        final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
-        expect(
-          map.mapController!.camera.visibleBounds.contains(_initialPosition),
-          isTrue,
-        );
-        expect(
-          map.mapController!.camera.visibleBounds.contains(_returnPoint),
-          isTrue,
+          greaterThan(tester.getBottomLeft(find.text('คืนสินค้า')).dy),
         );
         expect(find.text('ชำระเงิน'), findsNothing);
         expect(find.text('ตรวจรับ & ชำระเงิน'), findsNothing);
-
-        const moved = LatLng(13.754, 100.482);
-        location.positions.add(location.toPosition(moved));
-        await tester.pump();
-        expect(_pins(tester), containsAll([moved, _returnPoint]));
-        expect(_pins(tester), isNot(contains(_initialPosition)));
 
         if (isLender) {
           final checkbox = find.byType(Checkbox);
@@ -139,7 +56,6 @@ void main() {
           await tester.pump();
           expect(tester.widget<Checkbox>(checkbox).value, isTrue);
           expect(tester.widget<ElevatedButton>(confirm).onPressed, isNotNull);
-          expect(_pins(tester), containsAll([moved, _returnPoint]));
         } else {
           expect(find.text('ส่งคืนสินค้า').hitTestable(), findsOneWidget);
           expect(find.text('นำสินค้าไปส่งที่จุดคืนตามนัด'), findsOneWidget);
@@ -151,40 +67,39 @@ void main() {
           await tester.pump();
           expect(find.text('รอร้านค้ายืนยันรับสินค้าคืน'), findsOneWidget);
           expect(find.text('นำสินค้าไปส่งที่จุดคืนตามนัด'), findsNothing);
-          expect(_pins(tester), containsAll([moved, _returnPoint]));
         }
       },
     );
   }
 
-  testWidgets('a legacy booking uses the listing pin for the same location', (
-    tester,
-  ) async {
-    await _showReturnPage(
-      tester,
-      bookingLocation: {'pickup_location': 'สยามพารากอน'},
-    );
+  testWidgets(
+    'a legacy booking uses the listing address for the same location',
+    (tester) async {
+      await _showReturnPage(
+        tester,
+        bookingLocation: {'pickup_location': 'สยามพารากอน'},
+      );
 
-    expect(_pins(tester), contains(const LatLng(13.746, 100.5349)));
-  });
+      expect(find.text('ถนนพระราม 1'), findsOneWidget);
+    },
+  );
 
-  testWidgets('an unusable pin leaves the saved return location visible', (
-    tester,
-  ) async {
-    await _showReturnPage(
-      tester,
-      bookingLocation: {
-        'pickup_location': 'ซีคอน บางแค',
-        'latitude': 13.7115884,
-        'longitude': 'NaN',
-      },
-    );
+  testWidgets(
+    'unusable GPS coordinates leave the saved return location visible',
+    (tester) async {
+      await _showReturnPage(
+        tester,
+        bookingLocation: {
+          'pickup_location': 'ซีคอน บางแค',
+          'latitude': 13.7115884,
+          'longitude': 'NaN',
+        },
+      );
 
-    expect(find.text('คืนสินค้า'), findsOneWidget);
-    expect(find.text('ซีคอน บางแค'), findsOneWidget);
-    expect(find.byType(FlutterMap), findsNothing);
-    expect(find.byTooltip(_navigationTooltip), findsNothing);
-  });
+      expect(find.text('คืนสินค้า'), findsOneWidget);
+      expect(find.text('ซีคอน บางแค'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'the inspection stays reachable with large text on a short screen',
@@ -217,7 +132,7 @@ void main() {
     },
   );
 
-  testWidgets('the return map closes when the completed status arrives', (
+  testWidgets('the completion dialog opens when the completed status arrives', (
     tester,
   ) async {
     var status = 'active';
@@ -227,7 +142,6 @@ void main() {
       bookingLocation: _returnLocation,
       bookingStatus: () => status,
     );
-    expect(find.byType(FlutterMap), findsOneWidget);
 
     status = 'completed';
     await tester.pump(const Duration(seconds: 10));
@@ -235,14 +149,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.text('คืนอุปกรณ์สำเร็จ!'), findsOneWidget);
-    expect(find.byType(FlutterMap, skipOffstage: false), findsNothing);
   });
 }
-
-Iterable<LatLng> _pins(WidgetTester tester) => tester
-    .widget<MarkerLayer>(find.byType(MarkerLayer))
-    .markers
-    .map((marker) => marker.point);
 
 Future<void> _showReturnPage(
   WidgetTester tester, {
@@ -276,6 +184,7 @@ Future<void> _showReturnPage(
           'id': 17,
           'item_name': 'Camera',
           'pickup_location': 'สยามพารากอน',
+          'pickup_address': 'ถนนพระราม 1',
           'pickup_latitude': 13.746,
           'pickup_longitude': 100.5349,
         },

@@ -19,14 +19,14 @@ begin
     select id, 'approved', 'ผู้ใช้ทดสอบ', '*********1234', md5(id::text) || md5(id::text), false
     from unnest(array[lender, renter, next_renter]) id;
   insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_note, pickup_latitude, pickup_longitude, damage_fee, damage_terms)
+    pickup_location, pickup_address, pickup_latitude, pickup_longitude, damage_fee, damage_terms)
     values (lender, 'กล้อง', 'ทดสอบ', 100, 'available', 'daily',
-      'จุดรับ', 'ที่อยู่ทดสอบ', 'นัดรับ', 13.75, 100.50, 200, 'เลนส์แตก')
+      'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50, 200, 'เลนส์แตก')
     returning id into damaged_item;
   insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_note, pickup_latitude, pickup_longitude, late_return_fee)
+    pickup_location, pickup_address, pickup_latitude, pickup_longitude, late_return_fee)
     values (lender, 'ขาตั้งกล้อง', 'ทดสอบ', 100, 'available', 'daily',
-      'จุดรับ', 'ที่อยู่ทดสอบ', 'นัดรับ', 13.75, 100.50, 50)
+      'จุดรับ', 'ที่อยู่ทดสอบ', 13.75, 100.50, 50)
     returning id into late_item;
   insert into public.rental_promptpay_account_tb(user_id, phone) values (lender, '0812345678');
 

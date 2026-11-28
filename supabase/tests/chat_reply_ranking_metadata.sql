@@ -19,12 +19,12 @@ begin
   insert into auth.users(id, email)
     select u, u || '@example.invalid' from unnest(array[customer, merchant, outsider]) u;
   insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_note, pickup_latitude, pickup_longitude)
-    values (merchant, 'Tripod', 'Test', 150, 'available', 'daily', 'Test', 'Test', 'Test', 13.75, 100.50)
+    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
+    values (merchant, 'Tripod', 'Test', 150, 'available', 'daily', 'Test', 'Test', 13.75, 100.50)
     returning id into listed;
   insert into public.item_tb(user_id, item_name, description, price, status, type,
-    pickup_location, pickup_address, pickup_note, pickup_latitude, pickup_longitude)
-    values (outsider, 'Lens', 'Test', 150, 'available', 'daily', 'Test', 'Test', 'Test', 13.75, 100.50)
+    pickup_location, pickup_address, pickup_latitude, pickup_longitude)
+    values (outsider, 'Lens', 'Test', 150, 'available', 'daily', 'Test', 'Test', 13.75, 100.50)
     returning id into unrelated;
   -- This account pair already had a room with the opposite roles.
   insert into messaging.conversation_tb(id, owner_id, renter_id) values (room, customer, merchant);

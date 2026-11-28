@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../../../core/models/pickup_location.dart';
 import '../../domain/entities/rental_booking.dart';
 
 // คำอธิบาย: Model สำหรับแปลงข้อมูลการจอง/เช่า/ปล่อยเช่าจาก booking_tb ในชั้น Data
@@ -20,9 +21,9 @@ class RentalBookingModel {
   final String duration;
   final double totalPrice;
   final String? pickupLocation;
+  final String? pickupAddress;
   final double? latitude;
   final double? longitude;
-  final String? pickupNote;
   final bool isOwner;
 
   const RentalBookingModel({
@@ -42,9 +43,9 @@ class RentalBookingModel {
     this.duration = '',
     this.totalPrice = 0.0,
     this.pickupLocation,
+    this.pickupAddress,
     this.latitude,
     this.longitude,
-    this.pickupNote,
     this.isOwner = false,
   });
 
@@ -72,6 +73,14 @@ class RentalBookingModel {
     final rawPrice = booking['total_price'] ?? booking['price'];
     final price = (rawPrice as num?)?.toDouble() ?? 0.0;
 
+    final pickupPoint =
+        mapPoint(booking['latitude'], booking['longitude']) ??
+        matchingListingPoint(
+          booking['pickup_location']?.toString(),
+          itemData?['pickup_location']?.toString(),
+          mapPoint(itemData?['pickup_latitude'], itemData?['pickup_longitude']),
+        );
+
     return RentalBookingModel(
       bookingId: (booking['id'] as num?)?.toInt(),
       itemId: itemId,
@@ -90,10 +99,9 @@ class RentalBookingModel {
       duration: duration,
       totalPrice: price,
       pickupLocation: booking['pickup_location']?.toString(),
-      // ใช้จุดที่เจ้าของเลือกไว้บนประกาศอุปกรณ์ ไม่อ่านพิกัดซ้ำจาก booking_tb
-      latitude: double.tryParse('${itemData?['pickup_latitude']}'),
-      longitude: double.tryParse('${itemData?['pickup_longitude']}'),
-      pickupNote: booking['pickup_note']?.toString(),
+      pickupAddress: booking['pickup_address']?.toString(),
+      latitude: pickupPoint?.latitude,
+      longitude: pickupPoint?.longitude,
       isOwner: isOwner,
     );
   }
@@ -116,9 +124,9 @@ class RentalBookingModel {
       duration: duration,
       totalPrice: totalPrice,
       pickupLocation: pickupLocation,
+      pickupAddress: pickupAddress,
       latitude: latitude,
       longitude: longitude,
-      pickupNote: pickupNote,
       isOwner: isOwner,
     );
   }

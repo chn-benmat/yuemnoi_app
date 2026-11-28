@@ -447,7 +447,7 @@ class ChatDetailBloc extends Bloc<ChatDetailEvent, ChatDetailState> {
           'location',
           'defaultLocation',
           'locationAddress',
-          'locationNote',
+          'locationNote', // ข้อความจองรุ่นเก่าอาจส่งค่านี้กลับมาจากเซิร์ฟเวอร์
           'ownerId',
           'conversationId',
         ]) {

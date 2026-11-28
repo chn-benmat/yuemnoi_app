@@ -8,7 +8,6 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/network/supabase_client.dart';
 import '../../../../core/services/booking_confirmation_tracker.dart';
-import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/rental_penalty_summary.dart';
 import '../../domain/entities/booking_request_model.dart';
@@ -56,19 +55,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
           startTime: const TimeOfDay(hour: 9, minute: 0),
           endTime: const TimeOfDay(hour: 17, minute: 0),
           location: 'ซีคอน บางแค',
-          locationNote: 'เลือกโดยผู้ปล่อยเช่า',
-          latitude: 13.7115884,
-          longitude: 100.4341077,
         );
-    final destination = LocationService.resolveCoordinates(
-      locationName: _bookingData.location,
-      latitude: _bookingData.latitude ?? _bookingData.item.latitude,
-      longitude: _bookingData.longitude ?? _bookingData.item.longitude,
-    );
-    if ((_bookingData.latitude ?? _bookingData.item.latitude) != null &&
-        (_bookingData.longitude ?? _bookingData.item.longitude) != null) {
-      unawaited(LocationService.instance.preloadDrivingRoute(destination));
-    }
   }
 
   bool get _isCurrentUserOwner {
@@ -532,13 +519,9 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                     const SizedBox(height: 18),
                     BookingLocationCard(
                       location: _bookingData.location,
-                      locationNote: _bookingData.locationNote,
                       locationAddress: _bookingData.locationAddress,
-                      latitude:
-                          _bookingData.latitude ?? _bookingData.item.latitude,
-                      longitude:
-                          _bookingData.longitude ?? _bookingData.item.longitude,
-                      isEditable: false,
+                      latitude: _bookingData.pickupCoordinates?.latitude,
+                      longitude: _bookingData.pickupCoordinates?.longitude,
                     ),
                     const SizedBox(height: 18),
                     BookingPriceSummaryCard(bookingData: _bookingData),
@@ -580,7 +563,7 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton.icon(
-                        key: const ValueKey('view-route-on-map-button'),
+                        key: const ValueKey('view-handover-details-button'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF10B981),
                           foregroundColor: Colors.white,
@@ -589,13 +572,13 @@ class _BookingConfirmationPageState extends State<BookingConfirmationPage> {
                             borderRadius: BorderRadius.circular(26),
                           ),
                         ),
-                        onPressed: () => AppRoutes.openRentalTrackingMap(
+                        onPressed: () => AppRoutes.openRentalHandover(
                           context,
                           bookingData: _bookingData,
                         ),
-                        icon: const Icon(Icons.near_me_rounded, size: 20),
+                        icon: const Icon(Icons.place_outlined, size: 20),
                         label: const Text(
-                          'ดูเส้นทางนัดรับบนแผนที่',
+                          'ดูรายละเอียดนัดรับ',
                           style: TextStyle(
                             fontFamily: AppTextStyles.fontFamily,
                             fontSize: 15,

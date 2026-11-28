@@ -29,7 +29,6 @@ final _initial = RentalItemFormValue(
     address: 'กรุงเทพมหานคร',
     latitude: 13.7,
     longitude: 100.5,
-    note: 'หน้าทางเข้า',
   ),
 );
 

@@ -66,9 +66,6 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
           startTime: const TimeOfDay(hour: 9, minute: 0),
           endTime: const TimeOfDay(hour: 17, minute: 0),
           location: 'ซีคอน บางแค',
-          locationNote: 'เลือกโดยผู้ปล่อยเช่า',
-          latitude: 13.7115884,
-          longitude: 100.4341077,
         );
     _selectedRentalType = _bookingData.rentalType;
     _hasSelectedLocation = _bookingData.location.trim().isNotEmpty;
@@ -720,11 +717,9 @@ class _BookingRequestPageState extends State<BookingRequestPage> {
               const SizedBox(height: 12),
               BookingLocationCard(
                 location: _bookingData.location,
-                locationNote: _bookingData.locationNote,
                 locationAddress: _locationAddress,
-                latitude: _bookingData.latitude,
-                longitude: _bookingData.longitude,
-                isEditable: false,
+                latitude: _bookingData.pickupCoordinates?.latitude,
+                longitude: _bookingData.pickupCoordinates?.longitude,
                 showError: _showLocationError,
               ),
               const SizedBox(height: 24),

@@ -13,8 +13,6 @@ import (
 
 // Config โครงสร้างเก็บคอนฟิกูเรชันทั้งหมดของระบบ Backend ผ่าน Struct Tag
 type Config struct {
-	PlaceSuggestionsURL     string        `env:"PLACE_SUGGESTIONS_URL" envDefault:"https://photon.komoot.io"`
-	GeocodingURL            string        `env:"GEOCODING_URL" envDefault:"https://nominatim.openstreetmap.org"`
 	OperationsEnabled       bool          `env:"OPERATIONS_ENABLED" envDefault:"false"`
 	IdentityEncryptionKey   string        `env:"IDENTITY_ENCRYPTION_KEY"`
 	IdentityHMACKey         string        `env:"IDENTITY_HMAC_KEY"`

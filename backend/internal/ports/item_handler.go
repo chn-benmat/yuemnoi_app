@@ -36,7 +36,6 @@ func NewItemHandler(r domain.ItemRepository, tokenVerifier domain.TokenVerifier)
 type createItemRequest struct {
 	PickupLocation  string   `json:"pickup_location" form:"pickup_location"`
 	PickupAddress   string   `json:"pickup_address" form:"pickup_address"`
-	PickupNote      string   `json:"pickup_note" form:"pickup_note"`
 	PickupLatitude  *float64 `json:"pickup_latitude" form:"pickup_latitude"`
 	PickupLongitude *float64 `json:"pickup_longitude" form:"pickup_longitude"`
 
@@ -55,7 +54,6 @@ type createItemRequest struct {
 type updateItemRequest struct {
 	PickupLocation  string   `json:"pickup_location" form:"pickup_location"`
 	PickupAddress   string   `json:"pickup_address" form:"pickup_address"`
-	PickupNote      string   `json:"pickup_note" form:"pickup_note"`
 	PickupLatitude  *float64 `json:"pickup_latitude" form:"pickup_latitude"`
 	PickupLongitude *float64 `json:"pickup_longitude" form:"pickup_longitude"`
 
@@ -200,7 +198,7 @@ func (h *ItemHandler) CreateItem(c fiber.Ctx) error {
 	}
 
 	if !validPickupLocation(req.PickupLocation, req.PickupLatitude, req.PickupLongitude) {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกจุดนัดรับสินค้าบนแผนที่"})
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุชื่อและพิกัดจุดนัดรับสินค้า"})
 	}
 	images, err := itemImagesFromRequest(c)
 	if err != nil {
@@ -211,7 +209,6 @@ func (h *ItemHandler) CreateItem(c fiber.Ctx) error {
 		UserID:          userID,
 		PickupLocation:  strings.TrimSpace(req.PickupLocation),
 		PickupAddress:   strings.TrimSpace(req.PickupAddress),
-		PickupNote:      strings.TrimSpace(req.PickupNote),
 		PickupLatitude:  req.PickupLatitude,
 		PickupLongitude: req.PickupLongitude,
 		ItemName:        strings.TrimSpace(req.ItemName),
@@ -329,11 +326,10 @@ func (h *ItemHandler) UpdateItem(c fiber.Ctx) error {
 		req.PickupLocation != "" || req.PickupLatitude != nil || req.PickupLongitude != nil
 	if listingContentChanged {
 		if !validPickupLocation(req.PickupLocation, req.PickupLatitude, req.PickupLongitude) {
-			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกจุดนัดรับสินค้าบนแผนที่"})
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุชื่อและพิกัดจุดนัดรับสินค้า"})
 		}
 		fields["pickup_location"] = strings.TrimSpace(req.PickupLocation)
 		fields["pickup_address"] = strings.TrimSpace(req.PickupAddress)
-		fields["pickup_note"] = strings.TrimSpace(req.PickupNote)
 		fields["pickup_latitude"] = *req.PickupLatitude
 		fields["pickup_longitude"] = *req.PickupLongitude
 	}

@@ -13,10 +13,15 @@ void main() {
         'status': 'confirmed',
         'total_price': 1500.0,
         'pickup_location': 'BTS Siam',
+        'pickup_address': 'Rama I Road, Bangkok',
+        'latitude': '13.746',
+        'longitude': '100.534',
       };
 
       final itemData = {
         'item_name': 'Sony A7 IV',
+        'pickup_latitude': 14.8,
+        'pickup_longitude': 101.5,
         'category': 'กล้อง',
         'item_image_url': 'https://example.com/camera.jpg',
       };
@@ -41,8 +46,27 @@ void main() {
       expect(model.status, 'ยืนยันแล้ว / นัดรับของ');
       expect(model.totalPrice, 1500.0);
       expect(model.pickupLocation, 'BTS Siam');
+      expect(model.latitude, 13.746);
+      expect(model.longitude, 100.534);
+      expect(model.toEntity().pickupAddress, 'Rama I Road, Bangkok');
       expect(model.isOwner, false);
       expect(model.duration, 'เช่า 2 วัน');
+    });
+
+    test('uses a listing pin only when it matches the saved meeting point', () {
+      RentalBookingModel booking(String listingLocation) =>
+          RentalBookingModel.fromSupabase(
+            booking: {'pickup_location': 'BTS Siam'},
+            itemData: {
+              'pickup_location': listingLocation,
+              'pickup_latitude': '13.746',
+              'pickup_longitude': '100.534',
+            },
+            isOwner: false,
+          );
+
+      expect(booking('BTS Siam').latitude, 13.746);
+      expect(booking('A different venue').latitude, isNull);
     });
 
     test('fromSupabase parses booking for owner with active status', () {

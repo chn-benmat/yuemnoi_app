@@ -85,7 +85,7 @@ func TestMultipartItemRetainsConfirmedPickup(t *testing.T) {
 		t.Fatalf("status %d", res.StatusCode)
 	}
 	item := repo.inserted
-	if item == nil || item.PickupLatitude == nil || *item.PickupLatitude != 0 || item.PickupLongitude == nil || *item.PickupLongitude != 100.5 || item.PickupNote != "Gate 1" || item.UserID != "owner" {
+	if item == nil || item.PickupLatitude == nil || *item.PickupLatitude != 0 || item.PickupLongitude == nil || *item.PickupLongitude != 100.5 || item.PickupAddress != "Bangkok" || item.UserID != "owner" {
 		t.Fatalf("unexpected item: %+v", item)
 	}
 }

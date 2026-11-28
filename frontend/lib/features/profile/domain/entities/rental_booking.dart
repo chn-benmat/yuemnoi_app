@@ -16,9 +16,9 @@ class RentalBooking {
   final String duration;
   final double totalPrice;
   final String? pickupLocation;
+  final String? pickupAddress;
   final double? latitude;
   final double? longitude;
-  final String? pickupNote;
   final bool isOwner;
 
   const RentalBooking({
@@ -38,9 +38,9 @@ class RentalBooking {
     this.duration = '',
     this.totalPrice = 0.0,
     this.pickupLocation,
+    this.pickupAddress,
     this.latitude,
     this.longitude,
-    this.pickupNote,
     this.isOwner = false,
   });
 }

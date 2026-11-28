@@ -7,7 +7,7 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_popup.dart';
-import '../../../profile/presentation/pages/rentals/rental_tracking_map_page.dart';
+import '../../../profile/presentation/pages/rentals/rental_handover_page.dart';
 import '../../data/repositories/rental_return_repository_impl.dart';
 import '../../domain/entities/rental_return_session.dart';
 import '../../domain/repositories/rental_return_repository.dart';
@@ -140,14 +140,13 @@ class _RentalReturnViewState extends State<_RentalReturnView> {
         final returnPoint = isCompleted ? null : session.returnPoint;
         final location = session.pickupLocation.trim();
 
-        return RentalTrackingMapPage(
+        return RentalHandoverPage(
           key: ValueKey((session.rentalId, returnPoint, location)),
           itemTitle: session.itemName,
           itemImageUrl: session.itemImageUrl,
           pickupLocation: location.isEmpty
               ? 'ยังไม่มีข้อมูลจุดคืนสินค้า'
               : location,
-          pickupNote: session.returnPoint?.note,
           periodText: isCompleted
               ? 'คืนสินค้าเรียบร้อยแล้ว'
               : 'กำหนดคืน ${session.endAtFormatted}',

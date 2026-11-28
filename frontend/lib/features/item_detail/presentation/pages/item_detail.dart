@@ -6,7 +6,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../../core/widgets/pickup_location_field.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
@@ -1011,42 +1010,28 @@ class _DetailContent extends StatelessWidget {
                 ],
                 if (location != null) ...[
                   const SizedBox(height: 12),
-                  Semantics(
-                    button: true,
-                    label: 'เปิดจุดนัดรับ ${location.name} ใน Google Maps',
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () =>
-                          openPickupLocationInGoogleMaps(context, location),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.location_on_outlined,
-                              size: 18,
-                              color: _DetailStyle.accent,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                location.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: _DetailStyle.secondary,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                            const Icon(
-                              Icons.chevron_right_rounded,
-                              size: 18,
-                              color: _DetailStyle.secondary,
-                            ),
-                          ],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 18,
+                          color: _DetailStyle.accent,
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            location.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _DetailStyle.secondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

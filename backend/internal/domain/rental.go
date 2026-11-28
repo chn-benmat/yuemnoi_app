@@ -42,7 +42,6 @@ type CreateRentalRequest struct {
 
 type RentalOrder struct {
 	PickupAddress string `json:"pickup_address"`
-	PickupNote    string `json:"pickup_note"`
 
 	ID               int64     `json:"id"`
 	UserID           string    `json:"user_id"`
