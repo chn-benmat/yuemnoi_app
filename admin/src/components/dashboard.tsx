@@ -791,41 +791,14 @@ export default function Dashboard({
               <span className="icon-tile">
                 <ShieldCheck />
               </span>
-              <h2>ตรวจบัตรเจ้าของประกาศเดิม</h2>
+              <h2>ข้อกำหนดยืนยันตัวตน</h2>
               <p className="muted">
-                ผู้เพิ่มสินค้าและผู้ส่งคำขอเช่าต้องผ่านการตรวจบัตรและบันทึกเบอร์โทร
-                เปิดการตั้งค่านี้เพื่อตรวจสถานะบัตรของเจ้าของประกาศเดิมก่อนรับการจองใหม่ด้วย
+                ทั้งผู้ลงประกาศ ผู้ส่งคำขอเช่า และเจ้าของที่รับการจองใหม่
+                ต้องผ่านการตรวจบัตรและบันทึกเบอร์โทรเสมอ ข้อกำหนดนี้ปิดไม่ได้
               </p>
               <p>
-                สถานะ:{" "}
-                <Badge
-                  value={
-                    result.data?.enforce_identity === true
-                      ? "เปิดใช้งาน"
-                      : result.data
-                        ? "ปิดใช้งาน"
-                        : "—"
-                  }
-                />
+                สถานะ: <Badge value="บังคับเสมอ" />
               </p>
-              <button
-                className="primary"
-                disabled={preview || !result.data}
-                onClick={() =>
-                  setOperation({
-                    action: "settings",
-                    target: "identity",
-                    title: result.data?.enforce_identity
-                      ? "ปิดข้อกำหนดยืนยันตัวตน"
-                      : "เปิดข้อกำหนดยืนยันตัวตน",
-                    data: { enforce_identity: !result.data?.enforce_identity },
-                    detail:
-                      "ข้อกำหนดนี้ใช้กับเจ้าของประกาศเดิมที่รับการจองใหม่",
-                  })
-                }
-              >
-                {result.data?.enforce_identity ? "ปิดข้อกำหนด" : "เปิดข้อกำหนด"}
-              </button>
               <hr />
               <h3>นโยบายหลักฐาน</h3>
               <p className="muted">
